@@ -8,225 +8,100 @@
 
 Agent Application with core [DSH](https://www.deepseek.com/harness/en/).
 
-Native cross-platform app and standard **dsh bundles**. The plugins are
-plain JavaScript, and the launchers run on **Windows, macOS and Linux** — the
-Windows half is PowerShell, the macOS/Linux half is plain POSIX shell.
+A native cross-platform app plus a pack of standard **dsh bundles**. The plugins
+are plain JavaScript with **zero npm dependencies**; the launchers run on
+**Windows, macOS and Linux** (PowerShell on one side, plain POSIX shell on the
+other, and the Unix half never needs PowerShell). Nothing patches a DeepSeek core
+file: every plugin registers its own rows, and the two surfaces it replaces - the
+right bar, and the file-manager half of *Open In…* - are **forked into this
+repository** and declared in a `cordis.patch.yml`.
 
 ![print](assets/vn-harness-20260920-164101.png)
 
 <p align="center">
-  <img src="assets/vn-harness-20260926-095353.png" alt="The vn-harness desktop window while the pinned harness starts: a dark splash showing the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
+  <img src="assets/vn-harness-20260926-095353.png" alt="The vn-harness window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
   <img src="assets/vn-harness-20260925-084844.png" alt="The same window once the harness is up, showing the pack's app in the light theme" width="49%">
   <br>
-  <em><code>run-desktop.bat</code>: the shell's splash while <code>npx</code> works, and the same window once the harness is listening.</em>
+  <em><code>run-desktop.bat</code>: the splash while <code>npx</code> works, and the same window once the harness is listening.</em>
 </p>
+
+## Install
+
+A release archive **is** the app - there is no installer and nothing to compile.
+Node.js 22 or newer is the only prerequisite; the pinned harness is fetched by
+`npx` on the first run. (Windows also wants the WebView2 runtime, which Windows 10
+and 11 already have.)
+
+| | Windows | macOS / Linux |
+|---|---|---|
+| **From a release** | extract the zip, then double-click `START-HERE.bat` | extract, then `./START-HERE.sh` |
+| **From a clone** | `install.bat` | `./install.sh` |
+| **Remove** | `uninstall.bat` | `./uninstall.sh` |
+| **Direct, no script** | `powershell -File scripts/install-all.ps1 -Force` | `sh scripts/install-all.sh -Force` |
+
+`START-HERE` and `install` add every bundle under `packages/` to the harness web
+profile (`~/.dsh/profiles/web`), copy the skills a bundle ships into
+`~/.dsh/skills`, and print what to do next; re-running either is safe.
+`START-HERE` then opens the app, `install.bat` never does, and `vn-harness.exe`
+only runs. Bundles are added as **live links** into this folder, so a code edit
+applies on restart and the folder is not a copy. `-Plugin`, `-DshHome`,
+`-ProfileName`, `-DshVersion` and `-Force` are in [docs/INSTALL.md](docs/INSTALL.md).
+
+## Run
+
+| | Windows | macOS / Linux |
+|---|---|---|
+| **Native window** | `run-desktop.bat` | `cargo build --release` in `app/src-tauri` |
+| **Browser tab** | `run-web.bat` | `./run-web.sh` |
+
+Both start `npx @deepseek-ai/dsh@<pin> web` and open the URL it prints: the native
+window loads it in a WebView2 / WKWebView / WebKitGTK window, the other in Chrome,
+falling back to your default browser. The URL is opened only when it names a
+**loopback** address, and the launch token is never written to a file - both rules
+are in [SECURITY.md](SECURITY.md).
+
+Flags: `-Port <n>` when 3080 is taken, `-NoBrowser` to start the server alone,
+`-DefaultBrowser` to skip Chrome, `-Help` anywhere.
+
+The desktop shell answers the two questions worth asking while it starts: whether
+a **DeepSeek key** was found and which layer supplied it (the environment,
+`$DSH_HOME/.credentials.yaml`, or a `.env`), and which **harness home** this run
+will use. That is why installing a newer release over an older one is a non-event:
+sessions, settings and the key live in `~/.dsh`, not in the folder you replaced.
+The key's value never leaves the shell. Details: [app/README.md](app/README.md).
 
 ## Plugins (all **alpha**)
 
-Each package's own README is the reference for what it does, why it is built that
-way and what it touches; the table below is the map.
+Every package's own README is the reference for what it does, why it is built that
+way and what it touches. The exact versions are in
+[`.dsh-version.json`](.dsh-version.json).
 
-| Package | What it does | Status |
-|---|---|---|
-| [`dsh-vn-master`](packages/dsh-vn-master/README.md) | [`README.md`](packages/dsh-vn-master/README.md) | alpha `0.1.0-alpha.1` |
-| [`dsh-rightbar`](packages/dsh-rightbar/README.md) | [`README.md`](packages/dsh-rightbar/README.md) | alpha `0.1.0-alpha.2` |
-| [`dsh-rightbar-files`](packages/dsh-rightbar-files/README.md) | [`README.md`](packages/dsh-rightbar-files/README.md) | alpha `0.1.0-alpha.1` |
-| [`dsh-editor`](packages/dsh-editor/README.md) | [`README.md`](packages/dsh-editor/README.md) | alpha `0.1.0-alpha.13` |
-| [`dsh-gittree`](packages/dsh-gittree/README.md) | [`README.md`](packages/dsh-gittree/README.md) | alpha `0.1.0-alpha.4` |
-| [`dsh-image`](packages/dsh-image/README.md) | [`README.md`](packages/dsh-image/README.md) | alpha `0.1.0-alpha.1` |
-| [`dsh-audio`](packages/dsh-audio/README.md) | [`README.md`](packages/dsh-audio/README.md) | alpha `0.1.0-alpha.2` |
-| [`dsh-diagrams`](packages/dsh-diagrams/README.md) | [`README.md`](packages/dsh-diagrams/README.md) | alpha `0.1.0-alpha.6` |
-| [`dsh-pdf`](packages/dsh-pdf/README.md) | [`README.md`](packages/dsh-pdf/README.md) | alpha `0.1.0-alpha.3` |
-| [`dsh-terminal`](packages/dsh-terminal/README.md) | [`README.md`](packages/dsh-terminal/README.md) | alpha `0.1.0-alpha.9` |
-| [`dsh-themes`](packages/dsh-themes/README.md) | [`README.md`](packages/dsh-themes/README.md) | alpha `0.1.0-alpha.19` |
-| [`dsh-ui-state`](packages/dsh-ui-state/README.md) | [`README.md`](packages/dsh-ui-state/README.md) | alpha `0.1.0-alpha.1` |
-| [`dsh-modal`](packages/dsh-modal/README.md) | [`README.md`](packages/dsh-modal/README.md) | alpha `0.1.0-alpha.1` |
-| [`dsh-open-in-app`](packages/dsh-open-in-app/README.md) | [`README.md`](packages/dsh-open-in-app/README.md) | alpha `0.1.0-alpha.1` |
+| Package | What it adds |
+|---|---|
+| [`dsh-vn-master`](packages/dsh-vn-master/README.md) | the blank master, installed **last** - the slot pack-wide patches go in |
+| [`dsh-rightbar`](packages/dsh-rightbar/README.md) | the pack's own right bar: tab strip, docking panel and the `sidebarRight` registry (a fork of the shipped bar) |
+| [`dsh-rightbar-files`](packages/dsh-rightbar-files/README.md) | the Files tab type on top of that bar |
+| [`dsh-editor`](packages/dsh-editor/README.md) | text and code tabs (vendored CodeMirror 6), with a Markdown preview and Save/Create |
+| [`dsh-gittree`](packages/dsh-gittree/README.md) | **read-only** History tab: the workspace's commits, and the files each one touched |
+| [`dsh-image`](packages/dsh-image/README.md) | an image viewer that fits, zooms, pans, and reads the source pixel under the pointer |
+| [`dsh-audio`](packages/dsh-audio/README.md) | a waveform surface: WAV/AIFF/FLAC, one track per channel, dBFS, selection and playback |
+| [`dsh-diagrams`](packages/dsh-diagrams/README.md) | Mermaid and TikZ as tabs *and* six agent tools, every write validated before it is stored |
+| [`dsh-pdf`](packages/dsh-pdf/README.md) | PDF as a surface the agent can read and **scan**, plus a reader tab with thumbnails and bookmarks |
+| [`dsh-terminal`](packages/dsh-terminal/README.md) | a real shell in a bottom dock (vendored xterm.js over the harness's own `node-pty`) |
+| [`dsh-themes`](packages/dsh-themes/README.md) | header controls (themes incl. Nord/Monokai/Hacker, screenshot, page zoom), the Markdown paper, VN branding |
+| [`dsh-ui-state`](packages/dsh-ui-state/README.md) | the pack's own UI state (zoom, theme, dock, column widths) remembered host-side |
+| [`dsh-modal`](packages/dsh-modal/README.md) | the shared dialog surface (`modals`) the pack's controls use |
+| [`dsh-open-in-app`](packages/dsh-open-in-app/README.md) | *Open In…* patched to open the OS file browser directly |
 
-> The pack used to ship its own Files panel (`dsh-files`, earlier `dsh-focus`)
-> with a private dock and header capsules; that was retired when the harness
-> grew a real right Sidebar. Now the pack goes one step further and **owns the
-> bar itself** by forking it — see `packages/dsh-rightbar/README.md` and the
-> `scripts/sync-vendored.ps1` re-sync path. The same fork-and-disable scheme
-> owns the **file-manager half of Open In…** (`dsh-open-in-app`).
->
-> The pack's **master** is a bundle of its own, `dsh-vn-master`, and it is
-> deliberately blank: the bundle layer plus one no-op row, with no browser half,
-> no service and no inject edge. So the right bar keeps only bar
-> responsibilities, and the master — installed last — is where pack-wide patches
-> go.
-
-## Quick start
-
-Three commands take you from a fresh clone to a running app. Everything else in
-this repository is documentation.
-
-**What you need:** Node.js 22 or newer, with `npm`/`npx`. That is the whole
-requirement. Chrome is optional — the launcher falls back to your default
-browser. Three features have optional extras: the **History** tab needs `git` on
-`PATH`, TikZ diagrams need a TeX engine (`pdflatex`, `xelatex` or `lualatex`),
-and **PDF page pictures** (`pdf_render`) need a rasterizer (`pdftoppm` from
-poppler, `mutool`, or Ghostscript). Without them, the rest of the pack works
-unchanged — reading and searching a PDF needs nothing at all, because the pdf.js
-engine is vendored inside `dsh-pdf`.
-
-**Windows** uses the `.bat` files, **macOS/Linux** the `.sh` ones — and the Unix
-side never needs PowerShell.
-
-| Step | Windows | macOS / Linux | What it does |
-|---|---|---|---|
-| **1. Install** | `install.bat` | `./install.sh` | adds every bundle under `packages/` to the web profile (`~/.dsh/profiles/web`) and copies the bundled skills into `~/.dsh/skills` |
-| **2. Run** | `run-web.bat` (double-click) | `./run-web.sh` | starts `npx @deepseek-ai/dsh@<pin> web` and opens the URL it prints — token included — in **Chrome**, falling back to the default browser |
-| **2b. Run (desktop)** | `run-desktop.bat` (double-click) | `cargo build --release` in `app/src-tauri` | the **same** harness in a native window instead of a browser tab: builds the small Rust/Tauri shell under `app/` when it is out of date, then starts the same pinned server on the harness's own default port when it is free (a free one otherwise) and shows it in a WebView2 / WKWebView / WebKitGTK window |
-| **3. Remove** | `uninstall.bat` | `./uninstall.sh` | removes the bundles, their patch layers and the skills the installer copied |
-
-```bat
-:: Windows - install/uninstall/run are all double-click friendly
-install.bat                  :: installs into the web profile (the only target)
-run-web.bat                      :: starts the harness and opens it in Chrome
-                             :: (the entry point; scripts\run-web.ps1 does the work)
-run-desktop.bat              :: the same harness in a NATIVE WINDOW instead of a
-                             :: browser tab (cargo builds app\src-tauri first)
-uninstall.bat                :: removes the pack
-```
-
-```sh
-# macOS / Linux - from the repo root
-./install.sh                 # the web profile (the only target)
-./run-web.sh                     # start the harness and open it in Chrome
-./uninstall.sh               # remove the pack
-```
-
-The run launcher keeps the harness in the foreground of that terminal, so the
-app's own output — including the `dsh web: http://127.0.0.1:3080/?token=…`
-line — stays visible and **Ctrl+C** stops it. Flags pass straight through:
-
-- `-Port 3099` when port 3080 is already taken,
-- `-DefaultBrowser` to skip Chrome,
-- `-NoBrowser` to start the server without opening a browser at all.
-
-The URL is opened only when it names a loopback address, and the launch token is
-never written to a file — both rules are explained in [SECURITY.md](SECURITY.md).
-
-**Prefer a window to a tab?** `run-desktop.bat` builds and runs the small
-Rust/Tauri shell in [`app/`](app/README.md) and shows the harness in a native
-WebView2 / WKWebView / WebKitGTK window. It is the same server, the same pin and
-the same profile — nothing is bundled and no plugin knows the difference, so the
-two launchers are interchangeable. The shell asks for the harness's **own default
-port** when nothing holds it — the same origin a `run-web.bat` tab opens on, which is
-what keeps the window's per-origin client state — and falls back to a free
-loopback port when something already has it, so it never collides with a `run-web.bat`
-server or the Web GUI. It opens its window immediately with a
-splash while `npx` works, holds the launch token to the same two rules the
-browser launcher does, and kills the harness when the window closes. It needs the
-Rust toolchain ([rustup.rs](https://rustup.rs)) in addition to Node.js; the first
-build compiles the shell's dependencies and takes a few minutes, after which it
-is instant. The same shell compiles on macOS and Linux with
-`cargo build --release` in `app/src-tauri`; only the Windows double-click wrapper
-is committed so far.
-
-Install flags: `-Force` re-adds bundles even when the versions match.
-`-Plugin` / `-DshHome` / `-ProfileName` / `-DshVersion` / `-Target web|cli`
-behave as documented in [`docs/INSTALL.md`](docs/INSTALL.md), which also has the
-no-script path:
-
-```powershell
-:: Windows (direct)
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-all.ps1 -Force
-```
-
-```sh
-# macOS / Linux (direct)
-sh scripts/install-all.sh -Force
-```
-
-Both installer halves do the same work, and re-running them is safe:
-
-1. pin the dsh version from `.dsh-version.json` and run everything through
-   `npx @deepseek-ai/dsh@<pinned>`,
-2. reuse a system pnpm when it is new enough for the profile, else bootstrap a
-   private copy under `./tools` (no admin rights, nothing global),
-3. resolve the web profile (`$DSH_HOME/profiles/web`, `$DSH_HOME` = env var or
-   `~/.dsh`),
-4. **prune retired bundle names** (`dsh-focus`, `dsh-files` — the pack's own
-   Files panel, now shipped by the harness itself) so an upgrade cannot
-   double-mount,
-5. run `dsh plugin --profile web add <bundle>` for every package under
-   `packages/` (bundles already at the repo version are skipped unless `-Force`),
-6. **copy the skills a bundle ships** (`packages/<bundle>/skills/<name>/SKILL.md`)
-   into `$DSH_HOME/skills`, where the harness' own filesystem skill provider
-   reads them. Every folder the installer creates carries a marker file, so a
-   person's own skill of the same name is never overwritten and uninstall only
-   removes what it wrote,
-7. print next steps. Neither half touches API keys — add yours in
-   **Settings → Models**.
-
-To remove the pack, run **`uninstall.bat`** (Windows) or **`./uninstall.sh`**
-(macOS/Linux); both take the same `-Plugin` / `-DshHome` / `-ProfileName`
-switches. Removing a bundle also removes its patch layer.
-
-## Distribution
-
-A release archive **is** the app: there is no installer to run and nothing to
-compile. The only prerequisite is Node.js 22 or newer — the pinned harness
-itself is fetched by `npx` on the first run.
-
-**On a machine that has never had the pack**
-
-1. Download the archive for the platform from
-   [Releases](https://github.com/vecnode/vn-harness/releases) —
-   `vn-harness-<version>-win-x64.zip`, `…-mac-x64.zip`, `…-mac-arm64.zip`,
-   `…-linux-x64.zip` (the ARM64 archives, `…-win-arm64.zip` and
-   `…-linux-arm64.zip`, appear too once those two experimental legs are green) —
-   and **extract it somewhere permanent**. The folder is the application: the
-   profile installs every bundle as a live link into `packages/`, so keep
-   `vn-harness.exe` beside everything it arrived with.
-2. Install Node.js 22+ from [nodejs.org](https://nodejs.org) if it is not already
-   on `PATH`. Windows additionally needs the WebView2 runtime, which Windows 10
-   and 11 already have.
-3. **Windows:** double-click `START-HERE.bat`. **macOS/Linux:** `./START-HERE.sh`.
-   That one step installs every bundle into the harness web profile
-   (`~/.dsh/profiles/web`) and the bundled skills into `~/.dsh/skills`, then
-   opens the app in its native window. It is safe to run again.
-4. Every run after that is just the app: `vn-harness.exe` (`./vn-harness`), or
-   `run-desktop.bat` for the same native window from a console, or `run-web.bat`
-   for a browser tab instead. All of them take `-Help`.
-5. Optional but recommended: check the download against `SHA256SUMS.txt`;
-   `BUILD-INFO.json` names the pack version, the harness pin, the commit and the
-   toolchain it was built with.
-
-Installing a newer release over an older one is a non-event, and the startup
-window says so before the harness is even listening: it names **which harness home
-this run will use** (`~/.dsh`) and whether a **DeepSeek key** was found there —
-green when it was, naming the layer it came from, amber with a pointer to
-*Settings → Models* when it was not. Sessions, settings and the key all live in
-that home rather than in the folder that was replaced, so a new download keeps
-everything you had. The key's value itself is never read out, logged or shown —
-only which layer supplied it.
-
-Three files, three different jobs — this is the part that is easy to get wrong:
-
-- **`START-HERE.bat` installs *and* runs.** It is the file to click first on a
-  new machine.
-- **`install.bat` only installs.** It never opens the app; it is what you re-run
-  after the folder moves.
-- **`vn-harness.exe` only runs.** On a machine that never installed the pack it
-  opens the plain harness with none of the plugins in it.
-
-**Cutting a release.** The tag must name the version in `package.json`, or the
-release job refuses to attach anything to it: this cut is `v0.1.0` against
-`"version": "0.1.0"`. Publishing a GitHub Release for that tag builds all six
-matrix targets — the four required legs (win-x64, mac-x64, mac-arm64, linux-x64)
-and the two non-blocking ARM64 ones — and attaches their archives plus
-`SHA256SUMS.txt`. The same thing can be run by hand from *Actions → distribute →
-Run workflow* with **release** ticked. What a distribution contains, what it
-deliberately leaves out and how it is verified end to end is in
-[`docs/DISTRIBUTE.md`](docs/DISTRIBUTE.md).
+The pack used to ship its own Files panel (`dsh-files`, earlier `dsh-focus`); that
+was retired when the harness grew a real right Sidebar, and the installer prunes
+the old names so an upgrade cannot double-mount.
 
 ## Security & license
 
-- MIT — see [LICENSE](LICENSE). Plugins are authored by **vecnode**.
-- Security policy (supported line, private reporting, hardening expectations):
-  [SECURITY.md](SECURITY.md). This pack never touches API keys and never patches
-  DeepSeek core files: it adds its own rows and (for the right bar) disables the
-  shipped rows, then supplies its own copied bundles.
+- MIT - see [LICENSE](LICENSE). Plugins are authored by **vecnode**.
+- [SECURITY.md](SECURITY.md): the threat model, the launch token, what the pack
+  deliberately does not do, and how `check-no-secrets.mjs` keeps a credential out
+  of a commit. Report a vulnerability privately, as described there.
+- [ARCHITECTURE.md](ARCHITECTURE.md) is the deep dive; [docs/](docs) holds install,
+  distribute, compatibility and per-host notes.
