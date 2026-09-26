@@ -1,21 +1,45 @@
 # ============================================================================
-#  .github/workflows/distribute.yml - build the vn-harness distribution for
-#  Windows, macOS (Intel and Apple silicon) and Linux.
+#  .github/workflows/distribute.yml - build, verify and publish vn-harness.
 #
-#  WHAT IT BUILDS, AND WHY IT IS THE SAME THING YOU BUILD LOCALLY
-#  -------------------------------------------------------------
-#  A distribution is a FOLDER, not an installer: app/ is a launcher that runs
-#  the pinned `npx @deepseek-ai/dsh@<pin> web`, and the plugins are installed
-#  into the harness web profile as LIVE LINKS into packages/. So the artifact is
-#  the built shell beside the whole pack, plus a zip of the two.
+#  WHAT IT BUILDS
+#  --------------
+#  A distribution is a FOLDER, not an installer: app/ is a launcher that runs the
+#  pinned `npx @deepseek-ai/dsh@<pin> web`, and the plugins are installed into the
+#  harness web profile as LIVE LINKS into packages/. So the artifact is the built
+#  shell beside the whole pack, plus a zip of the two.
 #
 #  The build, the ship list, the layout and the end-to-end check all live in
 #  scripts/dist.ps1 (Windows) and scripts/dist.sh (macOS/Linux) - the SAME files
-#  `distribute.bat` / `./distribute.sh` run on your machine. This workflow only
-#  picks the runner, calls them with -Verify, and uploads what they produced, so
-#  a local run and a CI run cannot drift. To see what a run does before pushing
-#  a tag: Actions -> distribute -> Run workflow (that trigger uploads artifacts
-#  and publishes nothing).
+#  `distribute.bat` / `./distribute.sh` run on a laptop. This workflow only picks
+#  the runner, calls them with -Verify, and uploads what they produced, so a local
+#  run and a CI run cannot drift.
+#
+#  WHAT RUNS ON WHICH EVENT, AND WHY IT IS SPLIT
+#  ---------------------------------------------
+#  Standard GitHub-hosted runners are FREE for a public repository, so the runner
+#  BILL is not the reason for this split - wall-clock time and waste are:
+#
+#    event              checks  rust tests  core legs  extra legs  uploads
+#    push / pull_request   yes      yes       3 of 6        -          no
+#    workflow_dispatch     yes      yes       6 of 6       yes         yes
+#    schedule (weekly)     yes      yes       6 of 6       yes         yes
+#    release: published    yes      yes       6 of 6       yes         yes
+#
+#  A push gets one leg per operating system (win-x64, mac-arm64, linux-x64) and
+#  uploads nothing: uploading six archives on every push only to expire them is
+#  the waste this removes. The three remaining legs - mac-x64, and the two ARM64
+#  ones no other leg can produce - run on the paths that PRODUCE something: a
+#  manual run, the weekly schedule and a release. The two ARM64 legs are
+#  REQUIRED, not `continue-on-error`: each has been green on every run since it
+#  was added, and an artifact that may silently not appear is worse than a leg
+#  that fails loudly.
+#
+#  The weekly schedule exists because the runner images move under us: the first
+#  cut asked for `macos-13`, which had been retired, and no amount of running the
+#  distributer locally could have caught that - only a runner can. macOS x64 is
+#  `macos-15-intel`, macOS arm64 is `macos-15`, and the ARM64 Linux image is
+#  `ubuntu-22.04-arm`; `ubuntu-22.04` is the oldest supported Ubuntu on purpose,
+#  because a binary built there runs on anything at or above its glibc.
 #
 #  WHAT THE VERIFY STEP PROVES
 #  ---------------------------
@@ -26,36 +50,26 @@
 #  line that does not name a loopback address refused rather than trusted. It
 #  never opens a window, which is why a runner with no screen can run it.
 #
-#  AND WHAT THIS WORKFLOW DELIBERATELY DOES NOT DO
-#  -----------------------------------------------
+#  AND WHAT IT DELIBERATELY DOES NOT DO
+#  ------------------------------------
 #  No .msi / .dmg / .deb / AppImage: app/src-tauri/tauri.conf.json keeps
 #  `bundle.active: false`, so nothing needs the Tauri CLI, a multi-size icon set
 #  or a signing identity. macOS therefore ships a bare binary in a zip (no .app
-#  bundle and no notarization, so Gatekeeper will need a right-click -> Open the
-#  first time), and Windows ships an unsigned .exe (SmartScreen will say
-#  "unknown publisher"). Both are recorded in docs/DISTRIBUTE.md.
+#  bundle and no notarization, so Gatekeeper needs a right-click -> Open the
+#  first time), and Windows ships an unsigned .exe (SmartScreen says "unknown
+#  publisher"). Both are recorded in docs/DISTRIBUTE.md.
 #
-#  RUNNER LABELS ARE PART OF THE BUILD
-#  -----------------------------------
-#  The matrix names images GitHub still publishes, and the checks job validates
-#  them rather than trusting them: the first cut asked for macos-13, which has
-#  been retired, and no amount of running the distributer locally could have
-#  caught that - only a runner can. macOS x64 is macos-15-intel, macOS arm64 is
-#  macos-15. The two ARM64 legs are marked `experimental` and run
-#  continue-on-error until each has been green twice; promotion is deleting one
-#  line.
-# ============================================================================
-#  ACTION VERSIONS ARE THE NODE-24 ONES
-#  ------------------------------------
-#  `checkout@v4`, `setup-node@v4`, `upload-artifact@v4` and `download-artifact@v4`
-#  run on Node 20, which GitHub now force-upgrades to Node 24 and reports as a
-#  deprecation warning on every job of every run. Each pin below is the FIRST
-#  release of that action whose `runs.using` is `node24` - checkout v5,
-#  setup-node v5, upload-artifact v6, download-artifact v7 - and deliberately NOT
-#  the latest major: upload-artifact v7 and download-artifact v8 also move to ESM,
-#  add direct (unzipped) transfers and make a digest mismatch a hard failure,
-#  none of which this workflow wants. The migration is a pin bump rather than a
-#  rewrite, and every one of the four is exercised by a build run.
+#  ACTION VERSIONS ARE PINNED, AND TO THE NODE-24 ONES
+#  ---------------------------------------------------
+#  The four GitHub-official actions are pinned to a commit SHA (the tag is mutable,
+#  the commit is not) and each pin is the FIRST release of that action whose
+#  `runs.using` is `node24` - checkout v5, setup-node v5, upload-artifact v6,
+#  download-artifact v7. Node 20 actions are force-upgraded by GitHub and warn on
+#  every job, and the artifact actions' v5 was still node20 by default: v6/v7 are
+#  the releases that changed it. NOT the latest majors on purpose -
+#  upload-artifact v7 and download-artifact v8 also move to ESM, add direct
+#  (unzipped) transfers and turn a digest mismatch into a hard failure, none of
+#  which this workflow wants.
 # ============================================================================
 name: distribute
 
@@ -78,8 +92,9 @@ on:
         required: false
         default: ''
 
-  # Every push to main that can change what ships. This uploads artifacts and
-  # publishes nothing - a release is a deliberate act (a tag, or the input above).
+  # Every push to main that can change what ships: the checks, the Rust tests and
+  # one build leg per operating system, with no artifact upload. A release is a
+  # deliberate act (a tag, or the input above), never a side effect of a push.
   push:
     branches: [main]
     paths:
@@ -105,6 +120,16 @@ on:
       - '.gitignore'
       - '.github/workflows/distribute.yml'
 
+  # Pull requests get the whole push path. No paths: filter here on purpose -
+  # `paths:` is parsed out of this file by scripts/checks/check-dist-layout.mjs
+  # and one tuned list beats two that can drift.
+  pull_request:
+
+  # The runner images move; only a runner can notice. Weekly, full matrix,
+  # publishes nothing.
+  schedule:
+    - cron: '17 6 * * 1'
+
   # Publishing a Release builds every matrix target's archive and attaches them
   # to it. `gh release create v0.1.0 --generate-notes` is the whole ritual; the
   # job below refuses to attach anything when the tag and package.json's version
@@ -112,8 +137,23 @@ on:
   release:
     types: [published]
 
+# Read-only by default; only the release job asks for more, on itself.
 permissions:
   contents: read
+
+# A superseded push or PR has nothing worth finishing. A release does: cancelling
+# one mid-flight would leave a tag with half its assets, so it is never cancelled.
+concurrency:
+  group: distribute-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
+
+# Colour and backtraces are for the log a failure is read from. The Node version
+# and the Rust toolchain are pinned INLINE where they are used (a step's `with:`
+# does not get the `env` context reliably), so there are no half-used variables
+# here.
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -124,9 +164,9 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
 
@@ -170,66 +210,95 @@ jobs:
         run: node scripts/checks/check-splash.mjs
 
   # ---------------------------------------------------------------------------
-  # 2. Build, assemble, verify, upload - once per target.
+  # 2. The shell's own unit tests. They ran NOWHERE before this job: the build
+  #    legs compile the crate with `cargo build --release`, which runs no test,
+  #    and every check above reads the Rust as TEXT. This is the one job that
+  #    executes keystate.rs / readyline.rs / windowstate.rs - including the two
+  #    that feed a key in and assert it never reaches the splash or the console.
+  #    It runs in PARALLEL with the builds (so it costs no wall clock) and the
+  #    release job waits on it, so publishing is gated on it too.
   # ---------------------------------------------------------------------------
-  build:
+  rust-tests:
+    name: rust tests (the shell's 56 unit tests)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          # The toolchain the 0.1.0 release was built with, read out of that
+          # release's BUILD-INFO.json. Pinned rather than `stable` so two cuts of
+          # the same commit compile with the same rustc: bump it deliberately,
+          # not by drift.
+          toolchain: '1.98.1'
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: app/src-tauri
+
+      # `cargo test` compiles the whole crate, so this job needs what a Linux
+      # build needs - the same list the build legs install, for the same reason.
+      - name: Linux webview dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential file pkg-config \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev librsvg2-dev patchelf
+
+      # -locked: the tests must not be the step that quietly moves Cargo.lock.
+      - name: cargo test
+        run: cargo test --locked --manifest-path app/src-tauri/Cargo.toml
+
+  # ---------------------------------------------------------------------------
+  # 3a. The core legs: one per operating system, on every event. These are the
+  #     three a push is judged by, and they upload only when the run is one that
+  #     produces something (dispatch / schedule / release).
+  # ---------------------------------------------------------------------------
+  build-core:
     name: build ${{ matrix.rid }}
     needs: checks
     runs-on: ${{ matrix.os }}
-    # An experimental leg (the ARM64 rows) may fail without failing the run, so a
-    # toolchain surprise on a newer image cannot block a release. The required
-    # legs have no `experimental` key, which makes this false for them.
-    continue-on-error: ${{ matrix.experimental || false }}
-    # 90, not 60: every leg now populates a ~223 MB harness dependency closure
-    # (and, from L2 on, unpacks a 26-36 MB Node archive) before it even starts
-    # compiling the shell, and the Intel macOS leg has no warm cache on a first
-    # run. A timeout that expires mid-build reads as a code failure and is not.
-    timeout-minutes: 90
+    # 45, not 90: the slowest leg measured 7.5 minutes (Windows, MSVC plus the
+    # harness dependency closure). A timeout that expires mid-build reads as a
+    # code failure and is not, so it stays generous - twice the measured worst.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          # --- required: the three operating systems, one artifact each -------
           # windows-2022 rather than windows-latest (Server 2025): the x64 leg is
           # the one users download, so it stays on the image whose WebView2 and
           # MSVC story is the most predictable.
           - os: windows-2022
             rid: win-x64
-          # macOS 13 is GONE as a runner image and macOS 14 is deprecated, so the
-          # Intel leg is macos-15-intel. There is no macos-13/macos-14 label left
-          # to fall back to; a native build per architecture beats a universal
-          # binary this cut does not attempt.
-          - os: macos-15-intel
-            rid: mac-x64
+          # macOS arm64 builds natively on the arm64 image; the Intel leg is a
+          # separate runner (macos-15-intel) because macOS 13 is gone as an image
+          # and macOS 14 is deprecated - a native build per architecture beats a
+          # universal binary this project does not attempt.
           - os: macos-15
             rid: mac-arm64
-          # The oldest supported Ubuntu on purpose: a binary built here runs on
-          # anything at or above its glibc, which a newer image cannot promise.
+          # The oldest supported Ubuntu: a binary built here runs on anything at
+          # or above its glibc, which a newer image cannot promise.
           - os: ubuntu-22.04
             rid: linux-x64
-
-          # --- ARM64: staged, non-blocking ------------------------------------
-          # These two produce real artifacts for machines that have none today,
-          # but their toolchains are the newer ones (Tauri on Windows ARM64 in
-          # particular), so a surprise there must not block a release. They are
-          # marked experimental and continue-on-error; promote one by deleting
-          # its `experimental: true` line once it has been green twice.
-          - os: windows-11-arm
-            rid: win-arm64
-            experimental: true
-          - os: ubuntu-22.04-arm
-            rid: linux-arm64
-            experimental: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          # The toolchain the 0.1.0 release was built with, read out of that
+          # release's BUILD-INFO.json. Pinned rather than `stable` so two cuts of
+          # the same commit compile with the same rustc: bump it deliberately,
+          # not by drift.
+          toolchain: '1.98.1'
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: app/src-tauri
 
@@ -284,8 +353,33 @@ jobs:
             exit 1
           fi
 
+      # What was built, on the run's own summary page: the pack version, the
+      # harness pin, the toolchain, the archive and its size. The per-file
+      # checksums stay in the folder's SHA256SUMS.txt, which is 340 lines.
+      - name: Summarize the leg
+        if: always()
+        shell: bash
+        run: |
+          info=$(ls dist/*/BUILD-INFO.json 2>/dev/null | head -n 1 || true)
+          archive=$(ls dist/*.zip dist/*.tar.gz 2>/dev/null | head -n 1 || true)
+          field() { sed -n "s/.*\"$1\": \"\([^\"]*\)\".*/\1/p" "$info" | head -n 1; }
+          {
+            echo "### ${{ matrix.rid }}"
+            echo
+            if [ -n "$archive" ]; then
+              printf -- '- archive: `%s` (%s bytes)\n' "$(basename "$archive")" "$(wc -c < "$archive" | tr -d ' ')"
+            fi
+            if [ -n "$info" ]; then
+              printf -- '- payload: %s files, %s bytes\n' "$(field payloadFiles)" "$(field payloadBytes)"
+              printf -- '- pack `%s`, harness pin `%s`, commit `%s`, dirty `%s`\n' \
+                "$(field packVersion)" "$(field dshPin)" "$(field commit)" "$(field dirty)"
+              printf -- '- toolchain: `%s`, `%s`\n' "$(field rustc)" "$(field node)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload the archives
-        uses: actions/upload-artifact@v6
+        if: github.event_name != 'push' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: vn-harness-${{ matrix.rid }}
           if-no-files-found: error
@@ -295,25 +389,159 @@ jobs:
             dist/*.tar.gz
 
   # ---------------------------------------------------------------------------
-  # 3. Attach the archives to a GitHub Release (tag or the manual input).
+  # 3b. The extra legs: the ones no core leg can produce - the Intel macOS
+  #     binary, and the two ARM64 ones. They run on the paths that PRODUCE an
+  #     artifact (a manual run, the weekly schedule, a release), never on a push.
+  #     Both ARM64 legs are required now: each has been green on every run since
+  #     it was added, and the `experimental` / continue-on-error staging this
+  #     replaced is what lets an artifact silently not appear. Reverting one to
+  #     optional is a deliberate two-file act - this matrix and the assertion in
+  #     scripts/checks/check-dist-layout.mjs.
+  # ---------------------------------------------------------------------------
+  build-extra:
+    name: build ${{ matrix.rid }} (extra)
+    needs: checks
+    if: github.event_name != 'push' && github.event_name != 'pull_request'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            rid: mac-x64
+          # ARM64 Linux: a standard runner since 2025 and free for public
+          # repositories, on the same old Ubuntu as the x64 leg so the two
+          # Linux archives agree about glibc.
+          - os: ubuntu-22.04-arm
+            rid: linux-arm64
+          # Windows ARM64 is the newest toolchain of the three, and the one the
+          # image notice below is about.
+          - os: windows-11-arm
+            rid: win-arm64
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          # The toolchain the 0.1.0 release was built with, read out of that
+          # release's BUILD-INFO.json. Pinned rather than `stable` so two cuts of
+          # the same commit compile with the same rustc: bump it deliberately,
+          # not by drift.
+          toolchain: '1.98.1'
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: app/src-tauri
+
+      - name: Linux webview dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential file pkg-config \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev librsvg2-dev patchelf \
+            zip lsof
+
+      - name: Build, assemble and verify the distribution (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          VERSION_INPUT: ${{ github.event.inputs.version }}
+        run: |
+          $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$env:GITHUB_WORKSPACE/scripts/dist.ps1", '-Verify')
+          if ($env:VERSION_INPUT) { $arguments += @('-Version', $env:VERSION_INPUT) }
+          & pwsh @arguments
+          exit $LASTEXITCODE
+
+      - name: Build, assemble and verify the distribution (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          VERSION_INPUT: ${{ github.event.inputs.version }}
+        run: |
+          if [ -n "$VERSION_INPUT" ]; then
+            sh scripts/dist.sh -Verify -Version "$VERSION_INPUT"
+          else
+            sh scripts/dist.sh -Verify
+          fi
+
+      - name: The release tag must name the version that was built
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          tag="${RELEASE_TAG#v}"
+          want=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$want" ]; then
+            echo "::error::The release tag is '$RELEASE_TAG' but package.json says '$want'. Bump the version and tag again, or retag the release."
+            exit 1
+          fi
+
+      - name: Summarize the leg
+        if: always()
+        shell: bash
+        run: |
+          info=$(ls dist/*/BUILD-INFO.json 2>/dev/null | head -n 1 || true)
+          archive=$(ls dist/*.zip dist/*.tar.gz 2>/dev/null | head -n 1 || true)
+          field() { sed -n "s/.*\"$1\": \"\([^\"]*\)\".*/\1/p" "$info" | head -n 1; }
+          {
+            echo "### ${{ matrix.rid }}"
+            echo
+            if [ -n "$archive" ]; then
+              printf -- '- archive: `%s` (%s bytes)\n' "$(basename "$archive")" "$(wc -c < "$archive" | tr -d ' ')"
+            fi
+            if [ -n "$info" ]; then
+              printf -- '- payload: %s files, %s bytes\n' "$(field payloadFiles)" "$(field payloadBytes)"
+              printf -- '- pack `%s`, harness pin `%s`, commit `%s`, dirty `%s`\n' \
+                "$(field packVersion)" "$(field dshPin)" "$(field commit)" "$(field dirty)"
+              printf -- '- toolchain: `%s`, `%s`\n' "$(field rustc)" "$(field node)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the archives
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: vn-harness-${{ matrix.rid }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+
+  # ---------------------------------------------------------------------------
+  # 4. Attach the archives to a GitHub Release (tag or the manual input). It waits
+  #    on the tests as well as the builds, so nothing is published from a tree
+  #    whose own unit tests have not run.
   # ---------------------------------------------------------------------------
   release:
     name: release
-    needs: build
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'true')
+    needs: [build-core, build-extra, rust-tests]
+    # `!cancelled() && !failure()` rather than a bare event test: a skipped or
+    # failed need must not end in "upload whatever survived".
+    if: |
+      !cancelled() && !failure() &&
+      (github.event_name == 'release' ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'true'))
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
 
       - name: Collect the archives
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           path: artifacts
           merge-multiple: true
@@ -349,3 +577,18 @@ jobs:
           # pattern instead of needing this line edited again.
           gh release upload "$tag" artifacts/* --clobber
           echo "Attached $(ls artifacts | wc -l) file(s) to $tag."
+
+      - name: Summarize the release
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Release assets"
+            echo
+            echo '| file | bytes |'
+            echo '|---|---|'
+            for f in artifacts/*; do
+              [ -f "$f" ] || continue
+              printf '| `%s` | %s |\n' "$(basename "$f")" "$(wc -c < "$f" | tr -d ' ')"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

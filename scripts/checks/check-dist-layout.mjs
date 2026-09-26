@@ -209,7 +209,7 @@ if (gitignore && !/^dist\/?$/m.test(gitignore)) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. The workflow: one matrix, the same scripts, three operating systems
+// 4. The workflow: the matrix, the same scripts, three operating systems
 // ---------------------------------------------------------------------------
 const workflow = read('.github/workflows/distribute.yml')
 if (workflow) {
@@ -235,13 +235,19 @@ if (workflow) {
     }
   }
 
-  // The ARM64 legs exist to produce artifacts no other leg can, and they are
-  // allowed to fail while their toolchains settle - but they must be MARKED as
-  // allowed to, or a preview-image surprise blocks a release.
-  if (!workflow.includes('windows-11-arm') || !workflow.includes('ubuntu-22.04-arm')) {
-    note('the ARM64 legs (windows-11-arm / ubuntu-22.04-arm) are not in the matrix')
-  } else if (!/continue-on-error:\s*\$\{\{\s*matrix\.experimental/.test(workflow) || !workflow.includes('experimental: true')) {
-    fail('.github/workflows/distribute.yml has ARM64 legs but does not mark them experimental / continue-on-error.')
+  // The ARM64 legs produce artifacts no other leg can, and they are REQUIRED.
+  // They were staged behind `experimental` / continue-on-error while the newer
+  // toolchains settled; each has been green on every run since, and a leg that
+  // may fail without failing the run is exactly how an ARM64 archive silently
+  // stops appearing in a release. Making one optional again is a deliberate
+  // two-file act - the workflow and this assertion.
+  for (const arm of ['windows-11-arm', 'ubuntu-22.04-arm']) {
+    if (!workflow.includes(arm)) {
+      fail(`.github/workflows/distribute.yml no longer builds on ${arm}, so that ARM64 archive would silently stop shipping.`)
+    }
+  }
+  if (/experimental:\s*true/.test(workflow) || /continue-on-error:/.test(workflow)) {
+    fail('.github/workflows/distribute.yml marks a leg experimental / continue-on-error - every leg in this matrix is required now.')
   }
 
   for (const script of ['scripts/dist.ps1', 'scripts/dist.sh']) {
@@ -253,6 +259,30 @@ if (workflow) {
   // without pushing a tag.
   if (!workflow.includes('workflow_dispatch')) fail('.github/workflows/distribute.yml has no workflow_dispatch trigger.')
   if (!workflow.includes('upload-artifact')) fail('.github/workflows/distribute.yml uploads no artifacts.')
+
+  // The shell's unit tests are the ONLY thing that executes keystate.rs /
+  // readyline.rs / windowstate.rs: the build legs run `cargo build --release`,
+  // which runs no test, and every check in this repository reads the Rust as
+  // TEXT. A workflow that never calls `cargo test` makes 56 passing tests
+  // invisible to CI - which is what it was until this assertion existed.
+  if (!workflow.includes('cargo test')) {
+    fail('.github/workflows/distribute.yml never runs `cargo test` - the shell\'s unit tests would only ever run on a laptop.')
+  }
+
+  // A push gets a fast answer, not artifact churn: six archives uploaded per
+  // push and expired unused. The upload is gated by event for exactly that.
+  if (!workflow.includes("github.event_name != 'push'")) {
+    fail('.github/workflows/distribute.yml does not gate its artifact upload by event - a push would upload archives nobody asked for.')
+  }
+
+  // The GitHub-official actions are pinned to a COMMIT, never to a tag. A tag is
+  // mutable, so `@v4` is a pin a compromised release can move under this
+  // repository; the comment beside each SHA records which major it is.
+  const mutablePins = [...workflow.matchAll(/uses:\s*(actions\/[A-Za-z0-9_.-]+)@(?![0-9a-f]{40}\b)(\S+)/g)]
+    .map((match) => `${match[1]}@${match[2]}`)
+  if (mutablePins.length > 0) {
+    fail(`.github/workflows/distribute.yml pins GitHub-official actions by a mutable ref (${mutablePins.join(', ')}) - pin the commit SHA and keep the major in a comment.`)
+  }
 
   // --- every entry point that ships must be able to trigger a rebuild --------
   // The push filter is a list of paths, and a file missing from it means a change

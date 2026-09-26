@@ -177,32 +177,77 @@ The throwaway home is deleted afterwards; `-KeepVerifyHome` keeps it.
 
 ## 4. CI: what it does, and how to see it
 
-`.github/workflows/distribute.yml`:
+`.github/workflows/distribute.yml` has five jobs, and which of them run depends on
+the event, because a push and a release want different things:
 
 | Job | What it is |
 |---|---|
-| `checks` | `node scripts/checks/check-dist-layout.mjs` (ship list, every bundle carried, both halves' flags/sentinels in step, `dist/` ignored), then a pinned `react` + `react-dom` 18.3.1 installed into `$DSH_HOME/profiles/node_modules` (the runtime the client check renders with - a fresh runner has none and that check throws rather than skipping), then the client-bundle and skill-example checks (which skip their host-dependent sections loudly) |
-| `build` (matrix) | `windows-2022` → win-x64, `macos-15-intel` → mac-x64, `macos-15` → mac-arm64, `ubuntu-22.04` → linux-x64, plus the two non-blocking ARM64 legs (`windows-11-arm` → win-arm64, `ubuntu-22.04-arm` → linux-arm64): checkout, Node 22, Rust stable, `Swatinem/rust-cache`, Linux webview deps, then **the same `dist.ps1` / `dist.sh` with `-Verify`**, then `upload-artifact` of `dist/*.zip` and `dist/*.tar.gz` |
-| `release` | collects all artifacts, writes a `SHA256SUMS.txt` over them, and attaches them to a GitHub Release |
+| `checks` | `check-no-secrets.mjs` (nothing credential-shaped reaches a commit), `check-dist-layout.mjs` (ship list, every bundle carried, both halves' flags/sentinels in step, the matrix policy, the action pins), then a pinned `react` + `react-dom` 18.3.1 installed into `$DSH_HOME/profiles/node_modules` (the runtime the client check renders with - a fresh runner has none and that check throws rather than skipping), then the client-bundle, skill-example and startup-window checks, each of which skips its host-dependent sections loudly |
+| `rust-tests` | `cargo test --locked` on the shell. This is the only job that EXECUTES `keystate.rs` / `readyline.rs` / `windowstate.rs`: the build legs run `cargo build --release`, which runs no test, and every check above reads the Rust as TEXT. It runs in parallel with the builds, and `release` waits on it |
+| `build-core` | one leg per operating system - `windows-2022` → win-x64, `macos-15` → mac-arm64, `ubuntu-22.04` → linux-x64: checkout, Node 22, Rust 1.98.1, `Swatinem/rust-cache`, Linux webview deps, then **the same `dist.ps1` / `dist.sh` with `-Verify`** |
+| `build-extra` | the legs no core leg can produce - `macos-15-intel` → mac-x64, `ubuntu-22.04-arm` → linux-arm64, `windows-11-arm` → win-arm64 - on the events that produce an artifact |
+| `release` | waits on the builds **and** the tests, collects every artifact, writes a `SHA256SUMS.txt` over them, and attaches them to a GitHub Release |
+
+Every leg writes a one-screen summary of what it produced - pack version, harness
+pin, commit, toolchain, archive and size - to that run's own summary page.
 
 `check-node-routes.mjs` and `check-pdf-node.mjs` are deliberately **not** part of
 the CI job: they want a real harness profile installed, which this workflow does
 not build. Run them locally.
 
-Triggers:
+### Which events run which legs
+
+Standard GitHub-hosted runners are **free for a public repository**, so this split
+is about wall-clock time and churn rather than the runner bill:
+
+| Event | checks | rust-tests | core legs | extra legs | uploads |
+|---|---|---|---|---|---|
+| push to `main` / pull request | yes | yes | 3 of 6 | – | no |
+| `workflow_dispatch` | yes | yes | 6 of 6 | yes | yes |
+| `schedule` (weekly, Monday 06:17 UTC) | yes | yes | 6 of 6 | yes | yes |
+| `release: published` | yes | yes | 6 of 6 | yes | yes |
+
+A push is judged by one leg per operating system and uploads nothing: six
+archives per push, expired unused, is the churn this removes. A superseded run is
+cancelled (`concurrency`) - except a release, which is never cancelled mid-flight,
+because a tag with half its assets attached is worse than a slow run.
+
+The **weekly schedule** exists because the runner images move under us: the first
+cut asked for `macos-13`, which had been retired, and only a runner can notice
+that. The full matrix runs on a clock so an image change is caught before a
+release rather than during one.
+
+**Both ARM64 legs are required.** They were staged behind `experimental` /
+continue-on-error while the newer toolchains settled; each has been green on every
+run since, and a leg that may fail without failing the run is exactly how an ARM64
+archive silently stops appearing. Making one optional again is a two-file act: the
+matrix and the assertion in `check-dist-layout.mjs`.
+
+### Triggers, one by one
 
 - **`workflow_dispatch`** (Actions → distribute → *Run workflow*): the way to
   watch the whole thing and download the artifacts without pushing anything.
   Inputs: `version` (override the name), `release` (publish a Release when
   green), `tag` (which tag that release uses).
-- **push to `main`** that touches anything that can change what ships: builds and
-  uploads artifacts, publishes nothing.
-- **`release: published`**: builds all six matrix targets — the four required
-  legs and the two ARM64 ones, which are non-blocking — and attaches their
+- **push to `main`** that touches anything that can change what ships: checks,
+  tests and three build legs, publishes nothing.
+- **pull request**: the same path as a push, with no `paths:` filter of its own -
+  `check-dist-layout.mjs` reads the one tuned list out of this file, and two lists
+  can drift.
+- **`release: published`**: builds all six matrix targets and attaches their
   archives to the release. `gh release create v0.1.0 --generate-notes` is the
   whole ritual. The release build **fails** when the tag (minus a leading `v`)
   does not equal `package.json`'s version, so a tag can never name a version that
   was never built.
+
+### Action pins
+
+The four GitHub-official actions are pinned to a **commit SHA** (a tag is mutable,
+a commit is not), each to the FIRST release of that action whose `runs.using` is
+`node24` - checkout v5, setup-node v5, upload-artifact v6, download-artifact v7 -
+because Node 20 actions are force-upgraded by GitHub and warn on every job, and
+v5 of the artifact actions was still `node20` by default. `check-dist-layout.mjs`
+fails on a mutable pin, so `@v4` cannot come back without the check failing too.
 
 ### Watching a run locally
 
@@ -213,7 +258,8 @@ do - and what this feature is built around - is make the local run and the CI ru
 
 | The workflow's step | What you run instead |
 |---|---|
-| `checks` job | `node scripts/checks/check-dist-layout.mjs` |
+| `checks` job | `node scripts/checks/check-dist-layout.mjs`, `check-no-secrets.mjs`, `check-splash.mjs` |
+| `rust-tests` job | `cargo test --manifest-path app/src-tauri/Cargo.toml` |
 | Linux webview deps | nothing on Windows; on Linux, the `apt-get` line in the workflow |
 | build + assemble + `-Verify` | `distribute.bat -Verify` / `./distribute.sh -Verify` |
 | tag/version guard | `node -p "require('./package.json').version"` vs your tag |
