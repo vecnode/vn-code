@@ -326,5 +326,14 @@ jobs:
           # existing one just gets the assets added (or replaced).
           gh release view "$tag" >/dev/null 2>&1 || \
             gh release create "$tag" --title "$tag" --generate-notes --target "$GITHUB_SHA"
-          gh release upload "$tag" artifacts/*.zip artifacts/*.tar.gz artifacts/SHA256SUMS.txt --clobber
+          # `artifacts/*`, NOT a list of extensions. Every leg runs the same
+          # distributer, and dist.sh PREFERS `zip` and writes a `.tar.gz` only
+          # when zip is absent - and this job installs zip on Linux and macOS
+          # has it - so `artifacts/*.tar.gz` matched nothing on every cut, and an
+          # unmatched glob under `set -eu` killed this step: the first release
+          # built all six targets and then published a release with no assets.
+          # Whatever was collected is what gets attached, checksums included,
+          # and a leg that ever does produce a `.tar.gz` is covered by the same
+          # pattern instead of needing this line edited again.
+          gh release upload "$tag" artifacts/* --clobber
           echo "Attached $(ls artifacts | wc -l) file(s) to $tag."
