@@ -192,6 +192,9 @@ fi
 dist_dir="$dist_root/$artifact"
 zip_path="$dist_root/$artifact.zip"
 tarball_path="$dist_root/$artifact.tar.gz"
+# The single-file build. Windows takes `.exe`; here the bare artifact name is
+# already the FOLDER's, so it takes the conventional `.run`.
+one_file_path="$dist_root/$artifact.run"
 
 step 'vn-harness distributer (build a distribution folder)'
 step "Platform: $platform   Repo: $repo_root"
@@ -467,8 +470,10 @@ chmod 755 "$start_here"
   printf '%s\n' "Built $built_at from commit $git_commit."
   printf '\n'
   printf '%s\n' 'WHAT THIS IS'
-  printf '%s\n' '  The DeepSeek Harness, with this pack installed into it, in a native'
-  printf '%s\n' '  window instead of a browser tab.'
+  printf '%s\n' '  vn-harness - an agent application that runs on the DeepSeek Harness'
+  printf '%s\n' '  (DSH). A native cross-platform app plus a pack of standard dsh'
+  printf '%s\n' '  bundles: the plugins are plain JavaScript with ZERO npm dependencies,'
+  printf '%s\n' '  and the launchers run on Windows, macOS and Linux.'
   printf '\n'
   printf '%s\n' '  The window is a LAUNCHER: ./vn-harness starts the pinned harness'
   printf '\n'
@@ -479,6 +484,24 @@ chmod 755 "$start_here"
   printf '%s\n' '  window. The plugins are not compiled into the binary - the harness web'
   printf '%s\n' '  profile installs every bundle in packages/ as a LIVE LINK, which is'
   printf '%s\n' '  why this folder must stay where it is.'
+  printf '\n'
+  printf '%s\n' 'WHAT THE AGENT CAN DO'
+  printf '%s\n' '  Every surface below comes from this pack (all alpha), and it opens the'
+  printf '%s\n' '  files that are in the conversation workspace:'
+  printf '\n'
+  printf '%s\n' '  - Files / Editor ....... text and code tabs (CodeMirror 6), a rendered'
+  printf '%s\n' '                           Markdown preview, and create/save'
+  printf '%s\n' '  - History .............. the git commits of the workspace - read-only'
+  printf '%s\n' '  - Images ............... fit, zoom and pan, plus the source pixel and'
+  printf '%s\n' '                           its colour under the pointer'
+  printf '%s\n' '  - Audio ................ a waveform: WAV/AIFF/FLAC, one track per'
+  printf '%s\n' '                           channel, dBFS, selection and playback'
+  printf '%s\n' '  - Diagrams ............. Mermaid and TikZ as tabs AND as agent tools,'
+  printf '%s\n' '                           every diagram validated before it is stored'
+  printf '%s\n' '  - PDF .................. read, search and SCAN documents (OCR), with a'
+  printf '%s\n' '                           reader tab carrying thumbnails and bookmarks'
+  printf '%s\n' '  - Terminal ............. a real shell in a bottom dock'
+  printf '%s\n' '  - Themes / zoom / shot . header controls, incl. Nord, Monokai, Hacker'
   printf '\n'
   printf '%s\n' 'REQUIREMENTS'
   printf '%s\n' '  - Node.js 22 or newer on PATH .......... https://nodejs.org'
@@ -576,21 +599,80 @@ total_files=$(find "$dist_dir" -type f | wc -l | tr -d ' ')
 total_bytes=$(find "$dist_dir" -type f -exec wc -c {} + | awk '$NF != "total" { sum += $1 } END { printf "%d\n", sum + 0 }')
 step "Distribution: $total_files files, $((total_bytes / 1048576)) MB"
 
-# --- 4. the archive --------------------------------------------------------
+# A 64-bit integer as eight little-endian bytes.
+#
+# Written with printf's octal escapes rather than od or dd: those differ enough
+# between macOS and Linux to be a portability trap, and printf is the one tool
+# both halves of this repository already rely on. The length check in
+# build_single_file is what catches a shell whose printf will not emit a NUL.
+le64() {
+  _le_value=$1
+  _le_index=0
+  while [ "$_le_index" -lt 8 ]; do
+    printf "\\$(printf '%03o' $(( (_le_value >> (8 * _le_index)) & 255 )))"
+    _le_index=$((_le_index + 1))
+  done
+}
+
+# Append the distribution zip - and a trailer describing it - to a copy of the
+# shell binary, so the whole distribution is ONE file to hand somebody.
+#
+# THE LAYOUT IS A CONTRACT WITH src/payload.rs, and with scripts/dist.ps1: all
+# three have to agree byte for byte.
+#
+#   [ the shell binary      ]
+#   [ the distribution zip  ]   zipStart, zipLen
+#   [ trailer JSON, utf-8   ]   its own byte length
+#   [ that length as u64 LE ]
+#   [ "VNHRNS01"            ]   the last 8 bytes of the file
+#
+# The trailer is what makes the payload findable without a signature scan: the
+# shell's own bytes can contain anything at all, this repository's zip included.
+# The single-file build cannot replace the folder - the web profile live-links
+# every bundle into packages/, so the payload has to become a real directory -
+# so it unpacks itself on its first run and then runs that folder's own
+# START-HERE, exactly as if the folder had been extracted by hand.
+build_single_file() {
+  rm -f "$one_file_path"
+  cat "$binary" > "$one_file_path" || fail 'Could not copy the shell binary.'
+  # Measured from the COPY, not from the source binary.
+  zip_start=$(wc -c < "$one_file_path" | tr -d ' ')
+  zip_len=$(wc -c < "$zip_path" | tr -d ' ')
+  cat "$zip_path" >> "$one_file_path" || fail 'Could not append the payload.'
+  trailer=$(printf '{"version":"%s","rid":"%s","zipStart":%s,"zipLen":%s}' \
+    "$pack_version" "$rid" "$zip_start" "$zip_len")
+  printf '%s' "$trailer" >> "$one_file_path"
+  le64 "${#trailer}" >> "$one_file_path"
+  printf 'VNHRNS01' >> "$one_file_path"
+  chmod 755 "$one_file_path"
+
+  expected=$((zip_start + zip_len + ${#trailer} + 16))
+  actual=$(wc -c < "$one_file_path" | tr -d ' ')
+  [ "$expected" = "$actual" ] \
+    || fail "The single-file build is $actual bytes, not the $expected its parts add up to."
+  step "One file: $one_file_path"
+}
+
+# --- 4. the archive, and the single file built from it ----------------------
 archive_path=''
 if [ "$no_zip" = 0 ]; then
   if command -v zip >/dev/null 2>&1; then
     rm -f "$zip_path"
     ( cd "$dist_root" && zip -q -r -X "$artifact.zip" "$artifact" ) || fail 'zip failed.'
     archive_path=$zip_path
+    build_single_file
   else
     rm -f "$tarball_path"
     ( cd "$dist_root" && tar -czf "$artifact.tar.gz" "$artifact" ) || fail 'tar failed.'
     archive_path=$tarball_path
+    # The single-file build carries a ZIP, because the shell reads exactly one
+    # container format on all three hosts. Without a zip tool there is nothing
+    # to append, and saying so beats shipping a file that cannot unpack.
+    step 'No zip tool, so no single-file build - install zip and re-run for one.'
   fi
   step "Archive: $archive_path"
 else
-  step 'Skipping the archive (-NoZip).'
+  step 'Skipping the archive and the single-file build (-NoZip).'
 fi
 
 # ---------------------------------------------------------------------------
@@ -732,6 +814,9 @@ step 'Done.'
 note "Folder to click: $dist_dir"
 note '  ./START-HERE.sh (it installs the pack, then opens the window)'
 if [ -n "$archive_path" ]; then note "Archive to hand over: $archive_path"; fi
+if [ -f "$one_file_path" ]; then
+  note "One file to hand over: $one_file_path  (it unpacks itself into your user folder, then starts)"
+fi
 note 'dist/ is gitignored on purpose: it is build output, and it is a copy - re-run this after editing a plugin.'
 
 if [ "$run_dist" = 1 ]; then

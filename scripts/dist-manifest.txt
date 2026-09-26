@@ -7,13 +7,19 @@
 #  scripts/checks/check-dist-layout.mjs fails when a bundle appears under
 #  packages/ that this list does not carry.
 #
-#  WHY A DISTRIBUTION IS A FOLDER AND NOT AN .exe
-#  ----------------------------------------------
+#  WHY A DISTRIBUTION IS A FOLDER - AND ALSO ONE FILE
+#  --------------------------------------------------
 #  app/ is a LAUNCHER, not a bundle: the shell binary walks up for
 #  .dsh-version.json, runs the pinned `npx @deepseek-ai/dsh@<pin> web --no-open`
 #  and shows that URL in a native window. The plugins are not compiled into it -
 #  the web profile installs every bundle as a LIVE LINK into packages/, so the
 #  folder IS the application. Ship the folder, keep it in place, click it.
+#
+#  The single-file build (vn-harness-<version>-<rid>.exe on Windows, .run
+#  elsewhere) does not change any of that. It carries THIS folder inside itself,
+#  unpacks it into a stable per-user directory on its first run, and then runs
+#  the unpacked folder's own START-HERE - so what it unpacks is exactly the list
+#  below, because the file is this list zipped and appended to the shell binary.
 #
 #  SO WHAT MUST ALWAYS BE HERE
 #  ---------------------------

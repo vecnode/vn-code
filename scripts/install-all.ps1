@@ -224,7 +224,16 @@ function Ensure-PnpmForMajor {
     $existing = Get-ToolPath -Names (Get-ToolNames -Name 'pnpm')
     if ($existing) {
         # System pnpm is fine when it is new enough for the requested major.
-        $vText = (& $existing --version 2>$null)
+        # The probe's answer is optional and its output is noise, so the call is
+        # made non-terminating: `2>$null` still makes PowerShell build a
+        # NativeCommandError record out of anything pnpm writes to stderr, and
+        # under $ErrorActionPreference 'Stop' - which this script sets at the
+        # top - that record is TERMINATING. Reading a version number must never
+        # be the thing that aborts an install.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { $vText = (& $existing --version 2>$null) }
+        finally { $ErrorActionPreference = $prevEap }
         $v = 0
         if ($vText -and [int]::TryParse(($vText -split '\.')[0], [ref]$v) -and $v -ge $Major) {
             return Split-Path $existing
@@ -237,7 +246,14 @@ function Ensure-PnpmForMajor {
         Write-Step "Bootstrapping local pnpm@$Major under ./tools (no admin needed)..."
         $npm = Get-ToolPath -Names (Get-ToolNames -Name 'npm')
         if (-not $npm) { throw 'npm was not found (install Node.js first).' }
-        & $npm install --prefix $prefix "pnpm@$Major" --no-audit --no-fund 2>&1 | Out-Host
+        # `2>&1` is deliberately NOT used here. This script sets
+        # $ErrorActionPreference 'Stop' at the top and this call is NOT inside a
+        # guard, so merging npm's stderr would turn the first deprecation
+        # warning - `npm warn deprecated ...`, which npm emits freely - into a
+        # terminating NativeCommandError that aborts the bootstrap it was only
+        # informing about. Left unmerged, that text reaches the console as an
+        # ordinary line and the exit code is the only verdict.
+        & $npm install --prefix $prefix "pnpm@$Major" --no-audit --no-fund | Out-Host
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) { throw "Failed to bootstrap pnpm@$Major into ./tools." }
     }
     return $binDir
@@ -292,15 +308,19 @@ function Invoke-Dsh {
     Write-Verbose "DSH_HOME=$DshHome"
     Write-Verbose "pnpm=$pnpmBin  storeMajor=$($storeInfo.Major) maxLen=$($storeInfo.MaxLength)"
     Write-Verbose "dsh $($Arguments -join ' ')"
-    # A native command writing to stderr (npm warnings do this constantly)
-    # becomes a terminating NativeCommandError under $ErrorActionPreference
-    # 'Stop' as soon as its output is merged. Keep this call non-terminating and
-    # judge it by its exit code alone.
+    # stderr is deliberately NOT merged into this pipeline. `2>&1` makes
+    # PowerShell build a NativeCommandError RECORD out of every line a native
+    # command writes to stderr - and npm warns constantly - which then prints a
+    # full "At line:... CategoryInfo..." block: it reads as a failure in a CI
+    # log, and it IS one under $ErrorActionPreference 'Stop'. Left alone, the
+    # same text reaches the console as an ordinary line. The guard below stays
+    # for a host that opted into $PSNativeCommandUseErrorActionPreference, and
+    # either way the exit code is the only verdict.
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     $exitCode = 0
     try {
-        & $npx --yes $spec @Arguments 2>&1 | Out-Host
+        & $npx --yes $spec @Arguments | Out-Host
         $exitCode = $LASTEXITCODE
     }
     finally {

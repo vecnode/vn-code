@@ -489,6 +489,108 @@ if (manifest) {
 }
 
 // ---------------------------------------------------------------------------
+// 6. The single-file build: one container, three halves that must agree
+// ---------------------------------------------------------------------------
+// scripts/dist.ps1 writes it, scripts/dist.sh writes it, and
+// app/src-tauri/src/payload.rs reads it. Nothing type-checks across that seam:
+// the Rust tests build their own container by hand, and this check never runs
+// either distributer. So the three are pinned against each other here.
+//
+// The magic is the sharpest of these, and it is not cosmetic. It is the ONLY
+// thing that decides whether a file is a single-file build - there is no
+// signature scan, on purpose, because the shell's own bytes can contain
+// anything. A typo in one half therefore does not fail loudly: it turns every
+// download into "this is an ordinary shell with no folder", which is a shell
+// that starts nothing at all.
+const payload = read('app/src-tauri/src/payload.rs')
+const MAGIC = 'VNHRNS01'
+const TAIL = 16
+if (payload !== null) {
+  if (!payload.includes(`b"${MAGIC}"`)) {
+    fail(`app/src-tauri/src/payload.rs does not read the container magic "${MAGIC}".`)
+  }
+  // The reader takes the magic plus a u64 length off the end of the file, and
+  // the producers append exactly that. The number lives in both; pin it.
+  if (!payload.includes(`const TAIL_LEN: u64 = ${TAIL};`)) {
+    fail(`app/src-tauri/src/payload.rs no longer reads a ${TAIL} byte tail, which is what the distributers append.`)
+  }
+  for (const key of ['zipStart', 'zipLen']) {
+    if (!payload.includes(`"${key}"`)) {
+      fail(`app/src-tauri/src/payload.rs does not read the trailer field "${key}".`)
+    }
+  }
+}
+
+for (const [name, text] of [['scripts/dist.ps1', ps], ['scripts/dist.sh', sh]]) {
+  if (text === null) continue
+  if (!text.includes(`'${MAGIC}'`)) {
+    fail(`${name} never writes the container magic "${MAGIC}", so what it builds would not be a payload.`)
+  }
+  // The trailer's keys are a wire format between a PowerShell script, a POSIX
+  // script and a Rust reader; each half naming them itself is the failure.
+  for (const key of ['"zipStart"', '"zipLen"']) {
+    if (!text.includes(key)) fail(`${name} does not write the trailer field ${key}.`)
+  }
+  // The self-check that catches a shell whose printf will not emit a NUL byte,
+  // or a write that stopped short: the file must be exactly as long as its
+  // three parts add up to.
+  if (!text.includes(`+ ${TAIL}`) && !text.includes(`+ 16`)) {
+    fail(`${name} does not check that the single-file build is as long as its parts add up to.`)
+  }
+}
+
+// The single-file build sits BESIDE the folder, so its name has to differ from
+// it: on unix the bare artifact name is already the directory's, which is why
+// that half takes .run and not a name matching the folder.
+if (ps !== null && !ps.includes("$script:OneFileSuffix = '.exe'")) {
+  fail('scripts/dist.ps1 no longer names the Windows single-file build .exe.')
+}
+if (sh !== null && !sh.includes('$artifact.run')) {
+  fail('scripts/dist.sh no longer names the unix single-file build .run - it would collide with the folder of the same name.')
+}
+
+// ---------------------------------------------------------------------------
+// 7. The PowerShell installers never capture a native command's stderr
+// ---------------------------------------------------------------------------
+// Windows PowerShell 5.1 makes an ERROR RECORD out of every line a native
+// command writes to stderr the moment that stderr is captured at all - `2>&1`
+// and `2>$null` BOTH do it. With `2>&1` the record is printed as a full
+// "At line:... CategoryInfo... FullyQualifiedErrorId : NativeCommandError"
+// block, so npm's own deprecation warnings read as failures in a CI log; and
+// under `$ErrorActionPreference = 'Stop'`, which both installers set at the top,
+// the record is TERMINATING.
+//
+// That second half is the one that bites: the pnpm bootstrap sits under 'Stop'
+// with no guard of its own, so a single `npm warn deprecated` would abort the
+// install it was only informing about. Measured on Windows PowerShell 5.1, not
+// assumed - `2>&1` throws there, while an unmerged call writes the same text as
+// an ordinary line and leaves the exit code as the only verdict.
+//
+// `code()` drops the `#` lines, which matters here: the comments explaining this
+// rule have to name the very token the rule is about.
+for (const worker of ['scripts/install-all.ps1', 'scripts/uninstall-all.ps1']) {
+  const text = read(worker)
+  if (text === null) continue
+  code(text)
+    .split('\n')
+    .forEach((line, index) => {
+      if (line.includes('2>&1')) {
+        fail(
+          `${worker}:${index + 1} merges a native command's stderr (${line.trim()}) - Windows PowerShell 5.1 turns that into a NativeCommandError, and under $ErrorActionPreference 'Stop' it is terminating.`
+        )
+      }
+    })
+  // The two calls that drive npm and npx, named so that an edit which adds the
+  // redirect back is caught even if it is written differently.
+  if (!/&\s*\$npm install[^\n]*\|\s*Out-Host/.test(text)) {
+    fail(`${worker} no longer runs the pnpm bootstrap as a plain, unmerged native call.`)
+  }
+  if (!/&\s*\$npx --yes \$spec @Arguments \| Out-Host/.test(text)) {
+    fail(`${worker} no longer runs dsh as a plain, unmerged native call.`)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // report
 // ---------------------------------------------------------------------------
 console.log('check-dist-layout: the ship list, the two halves, the entry points and the workflow')

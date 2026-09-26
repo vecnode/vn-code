@@ -412,12 +412,16 @@ jobs:
         run: |
           info=$(ls dist/*/BUILD-INFO.json 2>/dev/null | head -n 1 || true)
           archive=$(ls dist/*.zip dist/*.tar.gz 2>/dev/null | head -n 1 || true)
+          onefile=$(ls dist/*.exe dist/*.run 2>/dev/null | head -n 1 || true)
           field() { sed -n "s/.*\"$1\": \"\([^\"]*\)\".*/\1/p" "$info" | head -n 1; }
           {
             echo "### ${{ matrix.rid }}"
             echo
             if [ -n "$archive" ]; then
               printf -- '- archive: `%s` (%s bytes)\n' "$(basename "$archive")" "$(wc -c < "$archive" | tr -d ' ')"
+            fi
+            if [ -n "$onefile" ]; then
+              printf -- '- one file: `%s` (%s bytes)\n' "$(basename "$onefile")" "$(wc -c < "$onefile" | tr -d ' ')"
             fi
             if [ -n "$info" ]; then
               printf -- '- payload: %s files, %s bytes\n' "$(field payloadFiles)" "$(field payloadBytes)"
@@ -437,6 +441,12 @@ jobs:
           path: |
             dist/*.zip
             dist/*.tar.gz
+            # The single-file build is an artifact like any other, and the leg
+            # that produces an artifact is the leg that must upload it: without
+            # these two lines the release would carry the folder and the zip and
+            # silently omit the one file most people would download.
+            dist/*.exe
+            dist/*.run
 
   # ---------------------------------------------------------------------------
   # 3b. The extra legs: the ones no core leg can produce - the Intel macOS
@@ -570,12 +580,16 @@ jobs:
         run: |
           info=$(ls dist/*/BUILD-INFO.json 2>/dev/null | head -n 1 || true)
           archive=$(ls dist/*.zip dist/*.tar.gz 2>/dev/null | head -n 1 || true)
+          onefile=$(ls dist/*.exe dist/*.run 2>/dev/null | head -n 1 || true)
           field() { sed -n "s/.*\"$1\": \"\([^\"]*\)\".*/\1/p" "$info" | head -n 1; }
           {
             echo "### ${{ matrix.rid }}"
             echo
             if [ -n "$archive" ]; then
               printf -- '- archive: `%s` (%s bytes)\n' "$(basename "$archive")" "$(wc -c < "$archive" | tr -d ' ')"
+            fi
+            if [ -n "$onefile" ]; then
+              printf -- '- one file: `%s` (%s bytes)\n' "$(basename "$onefile")" "$(wc -c < "$onefile" | tr -d ' ')"
             fi
             if [ -n "$info" ]; then
               printf -- '- payload: %s files, %s bytes\n' "$(field payloadFiles)" "$(field payloadBytes)"
@@ -594,6 +608,12 @@ jobs:
           path: |
             dist/*.zip
             dist/*.tar.gz
+            # The single-file build is an artifact like any other, and the leg
+            # that produces an artifact is the leg that must upload it: without
+            # these two lines the release would carry the folder and the zip and
+            # silently omit the one file most people would download.
+            dist/*.exe
+            dist/*.run
 
   # ---------------------------------------------------------------------------
   # 4. Attach the archives to a GitHub Release (tag or the manual input). It waits

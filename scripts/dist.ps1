@@ -90,6 +90,11 @@ if (-not $script:IsWindowsHost) { $script:BinaryName = 'vn-harness' }
 # What cargo names it (Cargo.toml's package name).
 $script:CargoBinaryName = 'vn-harness-desktop.exe'
 if (-not $script:IsWindowsHost) { $script:CargoBinaryName = 'vn-harness-desktop' }
+# The suffix of the single-file build that sits BESIDE the folder and the zip.
+# Windows gets an `.exe`; on macOS and Linux the bare artifact name is already
+# the FOLDER's, so the self-extracting file takes the conventional `.run`.
+$script:OneFileSuffix = '.exe'
+if (-not $script:IsWindowsHost) { $script:OneFileSuffix = '.run' }
 
 function Write-Step($Message) { Write-VnStep $Message }
 function Write-Note($Message) { Write-VnNote $Message }
@@ -523,8 +528,10 @@ function New-DistReadme {
         "Built $BuiltAt from commit $Commit.",
         '',
         'WHAT THIS IS',
-        '  The DeepSeek Harness, with this pack installed into it, in a native',
-        '  window instead of a browser tab.',
+        '  vn-harness - an agent application that runs on the DeepSeek Harness',
+        '  (DSH). A native cross-platform app plus a pack of standard dsh',
+        '  bundles: the plugins are plain JavaScript with ZERO npm dependencies,',
+        '  and the launchers run on Windows, macOS and Linux.',
         '',
         '  The window is a LAUNCHER: vn-harness.exe (./vn-harness on macOS and',
         '  Linux) starts the pinned harness',
@@ -536,6 +543,24 @@ function New-DistReadme {
         '  WebKitGTK window. The plugins are not compiled into the binary - the',
         '  harness web profile installs every bundle in packages/ as a LIVE LINK,',
         '  which is why this folder must stay where it is.',
+        '',
+        'WHAT THE AGENT CAN DO',
+        '  Every surface below comes from this pack (all alpha), and it opens the',
+        '  files that are in the conversation workspace:',
+        '',
+        '  - Files / Editor ....... text and code tabs (CodeMirror 6), a rendered',
+        '                           Markdown preview, and create/save',
+        '  - History .............. the git commits of the workspace - read-only',
+        '  - Images ............... fit, zoom and pan, plus the source pixel and',
+        '                           its colour under the pointer',
+        '  - Audio ................ a waveform: WAV/AIFF/FLAC, one track per',
+        '                           channel, dBFS, selection and playback',
+        '  - Diagrams ............. Mermaid and TikZ as tabs AND as agent tools,',
+        '                           every diagram validated before it is stored',
+        '  - PDF .................. read, search and SCAN documents (OCR), with a',
+        '                           reader tab carrying thumbnails and bookmarks',
+        '  - Terminal ............. a real shell in a bottom dock',
+        '  - Themes / zoom / shot . header controls, incl. Nord, Monokai, Hacker',
         '',
         'REQUIREMENTS',
         '  - Node.js 22 or newer on PATH .......... https://nodejs.org',
@@ -672,6 +697,89 @@ function New-ZipArchive {
         }
     }
     finally { $archive.Dispose() }
+}
+
+# ---------------------------------------------------------------------------
+# The single-file build
+# ---------------------------------------------------------------------------
+<#
+    Append the distribution zip - and a trailer describing it - to a copy of the
+    shell binary, so the whole distribution is ONE file to hand somebody.
+
+    This cannot replace the folder, and does not try to: the web profile
+    installs every bundle as a LIVE LINK into packages/, so the payload has to
+    exist as a real directory somewhere the user will not move. The single-file
+    build therefore unpacks itself into a stable per-user directory on its first
+    run (src/payload.rs decides where and does the unpacking) and then runs that
+    folder's own START-HERE, exactly as if the folder had been extracted by hand.
+
+    THE LAYOUT IS A CONTRACT WITH src/payload.rs - change one half and the other
+    stops working, which the tests there will not catch and the verify step will:
+
+        [ the shell binary          ]
+        [ the distribution zip      ]   zipStart, zipLen
+        [ trailer JSON, utf-8       ]   its own byte length
+        [ that length as u64 LE     ]
+        [ "VNHRNS01"                ]   the last 8 bytes of the file
+
+    The trailer is what makes the payload findable without a signature scan: the
+    shell's own bytes can contain anything at all, this repository's zip
+    included. The ONLY thing that decides whether a file is a single-file build
+    is that magic in its last eight bytes.
+#>
+function New-StandaloneExecutable {
+    param([string]$Binary, [string]$ZipPath, [string]$OutPath, [string]$Version, [string]$Rid)
+    if (Test-Path -LiteralPath $OutPath) {
+        try { Remove-Item -LiteralPath $OutPath -Force }
+        catch {
+            throw "Could not replace $OutPath ($($_.Exception.Message)). The single-file build that is RUNNING holds itself open - close the vn-harness window it started and run this again."
+        }
+    }
+
+    $shell = [System.IO.File]::ReadAllBytes($Binary)
+    $start = [int64]$shell.Length
+    $length = [int64](Get-Item -LiteralPath $ZipPath).Length
+    $json = '{"version":"' + $Version + '","rid":"' + $Rid + '","zipStart":' + $start + ',"zipLen":' + $length + '}'
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $magic = [System.Text.Encoding]::ASCII.GetBytes('VNHRNS01')
+    # Little-endian, and written byte by byte rather than with BitConverter,
+    # which follows the machine: the reader is little-endian by definition and
+    # this script has to produce the same bytes whichever host runs it.
+    $tail = New-Object byte[] 8
+    $size = [uint64]$bytes.Length
+    for ($i = 0; $i -lt 8; $i++) { $tail[$i] = [byte](($size -shr (8 * $i)) -band 0xFF) }
+
+    # ONE handle, opened once and held to the end. Copying the binary and then
+    # REOPENING it to append is the obvious shape and the one that failed here:
+    # the close between those two steps is a window in which a virus scanner
+    # takes a freshly written 8 MB .exe, and the reopen then dies with "being
+    # used by another process".
+    $target = [System.IO.File]::Open($OutPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+    try {
+        $target.Write($shell, 0, $shell.Length)
+        $source = [System.IO.File]::OpenRead($ZipPath)
+        try { $source.CopyTo($target) }
+        finally { $source.Dispose() }
+        $written = $target.Position - $start
+        if ($written -ne $length) {
+            throw "Copied $written bytes of a $length byte payload into the single-file build."
+        }
+        $target.Write($bytes, 0, $bytes.Length)
+        $target.Write($tail, 0, $tail.Length)
+        $target.Write($magic, 0, $magic.Length)
+    }
+    finally { $target.Dispose() }
+
+    if (-not $script:IsWindowsHost) { try { & chmod 755 $OutPath | Out-Null } catch { } }
+
+    # What was written is exactly as long as its three parts say it should be. A
+    # short write would otherwise only show up as "not a payload" on a user's
+    # machine, where nothing can be done about it.
+    $expected = $start + $length + $bytes.Length + 16
+    $actual = (Get-Item -LiteralPath $OutPath).Length
+    if ($actual -ne $expected) {
+        throw "The single-file build is $actual bytes, not the $expected its parts add up to."
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -920,6 +1028,7 @@ if ($OutDir) {
 $distRoot = [System.IO.Path]::GetFullPath($distRoot)
 $distDir = Join-Path $distRoot $artifact
 $zipPath = Join-Path $distRoot "$artifact.zip"
+$oneFilePath = Join-Path $distRoot ($artifact + $script:OneFileSuffix)
 
 Write-Step "Pack version: $packVersion   Harness pin: $pin   Target: $rid"
 
@@ -991,14 +1100,20 @@ Write-Note "Generated START-HERE, DIST-README.txt, BUILD-INFO.json and SHA256SUM
 $total = Measure-Tree -Root $distDir
 Write-Step ("Distribution: {0} files, {1:N1} MB" -f $total.Files, ($total.Bytes / 1MB))
 
-# --- 4. the zip ------------------------------------------------------------
+# --- 4. the zip, and the single file built from it -------------------------
 if ($NoZip) {
-    Write-Step 'Skipping the zip (-NoZip).'
+    Write-Step 'Skipping the zip and the single-file build (-NoZip).'
 }
 else {
     Write-Step "Zipping into $zipPath ..."
     New-ZipArchive -SourceDir $distDir -ZipPath $zipPath -RootName $artifact
     Write-Step ("Zip: {0} ({1:N1} MB)" -f $zipPath, ((Get-Item -LiteralPath $zipPath).Length / 1MB))
+
+    # Built from the zip that ships, in the same run, so the two can never
+    # describe different folders.
+    Write-Step "Building the single-file build $oneFilePath ..."
+    New-StandaloneExecutable -Binary $binary -ZipPath $zipPath -OutPath $oneFilePath -Version $packVersion -Rid $rid
+    Write-Step ("One file: {0} ({1:N1} MB)" -f $oneFilePath, ((Get-Item -LiteralPath $oneFilePath).Length / 1MB))
 }
 
 # --- 5. what was asked for next -------------------------------------------
@@ -1013,6 +1128,7 @@ Write-Note "Folder to click: $distDir"
 if ($script:IsWindowsHost) { Write-Note "  double-click START-HERE.bat (it installs the pack, then opens the window)" }
 else { Write-Note "  ./START-HERE.sh (it installs the pack, then opens the window)" }
 if (-not $NoZip) { Write-Note "Zip to hand over: $zipPath" }
+if (-not $NoZip) { Write-Note "One file to hand over: $oneFilePath  (it unpacks itself into your user folder, then starts)" }
 Write-Note 'The output folder is build output, never content - re-run this after editing a plugin.'
 
 if ($Run) {

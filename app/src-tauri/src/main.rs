@@ -55,6 +55,7 @@
 //! crate has two dependencies.
 
 mod keystate;
+mod payload;
 mod readyline;
 mod windowstate;
 
@@ -972,9 +973,148 @@ fn kill_child_tree() {
 }
 
 // ---------------------------------------------------------------------------
+// The single-file build
+// ---------------------------------------------------------------------------
+/// Unpack the distribution this executable carries, then hand over to it.
+///
+/// `Some(code)` means this file IS a single-file build - the caller exits with
+/// that code and never reaches the ordinary shell. `None` means it is a shell
+/// in a folder, which is every other way this binary is built and run.
+///
+/// The shell still only RUNS. It unpacks, then executes the unpacked folder's
+/// own `START-HERE`, which installs the pack and then starts the unpacked
+/// `vn-harness`; that keeps the rule the launchers are built on - `install.bat`
+/// installs and never opens the app, `vn-harness.exe` opens the app and never
+/// installs - instead of teaching this binary to install things.
+fn run_standalone_payload() -> Option<i32> {
+    // A real folder ALWAYS wins. The same binary dropped into the repository,
+    // or beside an unpacked distribution, is the ordinary shell and must not
+    // unpack a second copy of itself somewhere in the user's profile.
+    if repo_root().is_some() {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+    let trailer = match payload::read_trailer(&exe) {
+        Ok(Some(trailer)) => trailer,
+        Ok(None) => return None,
+        Err(message) => {
+            eprintln!("[vn-harness] {message}");
+            return Some(1);
+        }
+    };
+
+    // Answered BEFORE anything is written, and by this file rather than by the
+    // shell's own usage: what a single file takes is not what the shell inside
+    // it takes, and answering the question must cost the user nothing.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|arg| arg == "-Help" || arg == "-h" || arg == "--help" || arg == "/?") {
+        print_standalone_usage(&trailer);
+        return Some(0);
+    }
+
+    let data_root = match payload::data_root() {
+        Some(root) => root,
+        None => {
+            eprintln!("[vn-harness] could not work out a per-user data directory to unpack into");
+            return Some(1);
+        }
+    };
+    let directory = payload::payload_dir(&data_root, &trailer);
+    if payload::is_extracted(&directory, &trailer) {
+        println!("[vn-harness] Using the copy already unpacked at {}", directory.display());
+    } else {
+        println!(
+            "[vn-harness] Unpacking vn-harness {} ({}) into {}",
+            trailer.version,
+            trailer.rid,
+            directory.display()
+        );
+    }
+    let root = match payload::ensure_extracted(&exe, &trailer, &directory) {
+        Ok(root) => root,
+        Err(message) => {
+            eprintln!("[vn-harness] {message}");
+            return Some(1);
+        }
+    };
+    hand_over(&root, &args)
+}
+
+/// What a single-file build says when it is asked what it takes.
+///
+/// Deliberately NOT the shell's usage: the flags here are the LAUNCHER's, which
+/// the shell would refuse, plus every flag `START-HERE` forwards.
+fn print_standalone_usage(trailer: &payload::Trailer) {
+    println!("[vn-harness] vn-harness {} ({}) - one file that unpacks itself, then starts.", trailer.version, trailer.rid);
+    println!();
+    println!("Usage: vn-harness-{}-{}.exe [flags]", trailer.version, trailer.rid);
+    println!();
+    println!("  Double-clicking it needs no flags: it unpacks the distribution into");
+    println!("      <your user data folder>/vn-harness/{}-{}", trailer.version, trailer.rid);
+    println!("  and then runs that folder's own START-HERE, which installs the pack into");
+    println!("  the harness web profile and opens the window. Running it again reuses");
+    println!("  what is already unpacked.");
+    println!();
+    println!("  Flags are passed straight through to START-HERE:");
+    println!("    -NoPause            never hold the window open");
+    println!("    -NoTerminal         stay in this console");
+    println!("    -DshHome <dir>      use this harness home instead of ~/.dsh");
+    println!("    -DshVersion <ver>   override the pinned harness version");
+    println!("    -Port <n>           listen on this port instead of a free one");
+    println!("    -Help               print this help");
+}
+
+/// Run the unpacked folder's own `START-HERE`, in that folder.
+///
+/// The arguments are passed through untouched: `START-HERE` owns the launcher
+/// flags (`-NoPause`, `-NoTerminal`), strips them, and forwards the rest to the
+/// installer and then to the shell - so a double-click passes nothing and
+/// `-Port 3099` still arrives where it is meant to.
+///
+/// `sh` rather than the script's own shebang on unix, and a bare relative name
+/// rather than a path on Windows: both are the forms that survive a mode bit
+/// lost in transit and a path with spaces in it.
+fn hand_over(root: &Path, args: &[String]) -> Option<i32> {
+    let mut command = if cfg!(windows) {
+        let mut command = Command::new("cmd");
+        command.arg("/c").arg("START-HERE.bat");
+        command
+    } else {
+        let mut command = Command::new("sh");
+        command.arg("START-HERE.sh");
+        command
+    };
+    let status = command
+        .args(args)
+        .current_dir(root)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status();
+    match status {
+        Ok(status) => Some(status.code().unwrap_or(1)),
+        Err(error) => {
+            eprintln!("[vn-harness] could not start {}: {error}", root.display());
+            Some(1)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 fn main() {
+    // FIRST, before this shell's own flags are parsed. A single-file build is
+    // handed the LAUNCHER's flags (`-NoPause`, `-NoTerminal`) and everything
+    // START-HERE takes, and this binary deliberately NAMES an argument it does
+    // not declare - so parsing first would turn `-NoTerminal` on a double-click
+    // into "unknown flag" instead of an unpack. `-Help` is answered inside, on
+    // purpose: asking a single file what it takes must not unpack a whole
+    // distribution into the user's profile to answer.
+    if let Some(code) = run_standalone_payload() {
+        std::process::exit(code);
+    }
+
     let options = match parse_args(std::env::args().skip(1)) {
         Ok(options) => options,
         Err(message) => {

@@ -26,6 +26,14 @@ tauri = { version = "2", features = [] }
 # missing-pack nudge. Already in the tree behind tauri, so it adds no crate of
 # its own to compile.
 serde_json = "1"
+# Inflates the payload of a single-file build, and for one call: the zip is
+# produced with deflate, and writing an inflater is not a thing to do by hand.
+# It is already in the tree behind tauri for the same reason serde_json is, so
+# it adds no crate of its own to compile. Everything AROUND it - the trailer,
+# the central directory, the local headers, the CRC-32, the path rules - is
+# read by src/payload.rs, which is pure and unit-tested, so this dependency
+# stays one call wide.
+flate2 = "1"
 
 # Windows only, for ONE call: a Job Object with KILL_ON_JOB_CLOSE, so the
 # harness dies with this shell even when the shell is killed outright rather

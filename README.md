@@ -31,10 +31,15 @@ and 11 already have.)
 
 | | Windows | macOS / Linux |
 |---|---|---|
+| **One file** | double-click `vn-harness-<version>-win-x64.exe` | `./vn-harness-<version>-<rid>.run` (add the executable bit if the download lost it) |
 | **From a release** | extract the zip, then double-click `START-HERE.bat` | extract, then `./START-HERE.sh` |
 | **From a clone** | `install.bat` | `./install.sh` |
 | **Remove** | `uninstall.bat` | `./uninstall.sh` |
 | **Direct, no script** | `powershell -File scripts/install-all.ps1 -Force` | `sh scripts/install-all.sh -Force` |
+
+The one-file column is the same distribution with the folder inside it: it unpacks
+itself into your user data folder, then does exactly what `START-HERE` does from an
+extracted folder.
 
 `START-HERE` and `install` add every bundle under `packages/` to the harness web
 profile (`~/.dsh/profiles/web`), copy the skills a bundle ships into

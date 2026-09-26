@@ -179,7 +179,13 @@ function Ensure-PnpmForMajor {
     param([int]$Major)
     $existing = Get-ToolPath -Names (Get-ToolNames -Name 'pnpm')
     if ($existing) {
-        $vText = (& $existing --version 2>$null)
+        # See install-all.ps1: the probe's answer is optional, and `2>$null`
+        # still builds a TERMINATING NativeCommandError under this script's
+        # $ErrorActionPreference 'Stop' if pnpm writes to stderr.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { $vText = (& $existing --version 2>$null) }
+        finally { $ErrorActionPreference = $prevEap }
         $v = 0
         if ($vText -and [int]::TryParse(($vText -split '\.')[0], [ref]$v) -and $v -ge $Major) {
             return Split-Path $existing
@@ -192,7 +198,11 @@ function Ensure-PnpmForMajor {
         Write-Step "Bootstrapping local pnpm@$Major under ./tools (no admin needed)..."
         $npm = Get-ToolPath -Names (Get-ToolNames -Name 'npm')
         if (-not $npm) { throw 'npm was not found (install Node.js first).' }
-        & $npm install --prefix $prefix "pnpm@$Major" --no-audit --no-fund 2>&1 | Out-Host
+        # See install-all.ps1: `2>&1` would turn npm's own stderr - a
+        # deprecation warning, say - into a terminating NativeCommandError here,
+        # because this call sits under $ErrorActionPreference 'Stop' with no
+        # guard of its own.
+        & $npm install --prefix $prefix "pnpm@$Major" --no-audit --no-fund | Out-Host
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) { throw "Failed to bootstrap pnpm@$Major into ./tools." }
     }
     return $binDir
@@ -233,13 +243,15 @@ function Invoke-Dsh {
     if ($storeInfo.MaxLength) { $env:npm_config_virtual_store_dir_max_length = $storeInfo.MaxLength }
     $env:npm_config_ignore_workspace_root_check = 'true'
     Write-Verbose "DSH_HOME=$DshHome pnpm=$pnpmBin storeMajor=$($storeInfo.Major) maxLen=$($storeInfo.MaxLength)"
-    # See install-all.ps1: stderr from a native command would otherwise become a
-    # terminating NativeCommandError under $ErrorActionPreference 'Stop'.
+    # See install-all.ps1: stderr is NOT merged, so npm's warnings stay ordinary
+    # lines instead of becoming NativeCommandError records - which under
+    # $ErrorActionPreference 'Stop' would be terminating. The guard stays for a
+    # host that opted into $PSNativeCommandUseErrorActionPreference.
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     $exitCode = 0
     try {
-        & $npx --yes $spec @Arguments 2>&1 | Out-Host
+        & $npx --yes $spec @Arguments | Out-Host
         $exitCode = $LASTEXITCODE
     }
     finally {

@@ -13,7 +13,7 @@ same story: the GitHub workflow calls the very scripts you run on your machine.
 
 ---
 
-## 1. Why a distribution is a folder and not an `.exe`
+## 1. Why a distribution is a folder - and one file built from it
 
 `app/` is a **launcher**, not a bundle:
 
@@ -35,6 +35,14 @@ That is why:
 - the target machine needs **Node.js 22+** and, on the first run, **network
   access** (the pinned harness is fetched through `npx` once and cached).
 
+The **single-file build** is the same folder, addressed to somebody who wants one
+thing to download. It is the zip appended to a copy of the shell binary, with a
+small trailer saying where the payload is; on its first run it unpacks that
+payload into `<local app data>/vn-harness/<version>-<rid>/` and then runs the
+unpacked folder's own `START-HERE`. It cannot replace the folder - the live links
+above need a directory that stays put - and it does not try to: it delegates, so
+`vn-harness` still only *runs* and the installer still only *installs*.
+
 ## 2. What comes out
 
 ```text
@@ -55,6 +63,9 @@ dist/
     assets/vn-harness.svg  docs/  README.md  LICENSE  SECURITY.md
     install.bat/.sh  uninstall.bat/.sh  run-web.bat/.sh  run-desktop.bat
   vn-harness-<version>-<rid>.zip       <- the same folder, archived
+  vn-harness-<version>-<rid>.exe       <- Windows: the zip above appended to the
+  vn-harness-<version>-<rid>.run          shell binary; unpacks itself, then runs
+                                          the unpacked folder's START-HERE
 ```
 
 `<rid>` is `win-x64`, `win-arm64`, `mac-x64`, `mac-arm64`, `linux-x64` or
@@ -294,6 +305,18 @@ systems and the artifact plumbing.
   so there is no `.msi`, `.dmg`, `.deb` or `.AppImage`, no Tauri CLI in CI, no
   icon ladder and no signing identity. Turning that on is the next step if the
   zip stops being enough.
+- **The single-file build is bigger than the zip, deliberately.** It IS the zip
+  appended to a full copy of the shell binary, so the payload is carried twice:
+  ~15 MB against the zip's ~7 MB. What that buys is one file to hand somebody,
+  with nothing to extract by hand.
+- **Its files are not hidden, and cannot be.** A payload the app can execute is a
+  payload the user can read: they are ordinary files under
+  `<local app data>/vn-harness/<version>-<rid>/`. Deleting that folder is safe -
+  the next run unpacks it again - but deleting it while the app is running is
+  not, on Windows where a running binary is locked.
+- **A new version unpacks beside the old one**, never over it, so an upgrade
+  cannot pull the folder out from under a running window. The unpack directory
+  is keyed on `<version>-<rid>` for exactly that reason.
 - **macOS ships a bare binary**, not a `.app` bundle (see above), so there is no
   Dock icon or `Info.plist` identity yet.
 - **Node.js 22+ and network on the target machine** - the shell is a launcher
