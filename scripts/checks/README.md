@@ -255,6 +255,12 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
   Every root entry point must also appear in the workflow's `paths:` filter, or a
   change to it would build nothing.
 
+  **All of that is skipped LOUDLY while the workflow is parked.**
+  `.github/workflows/distribute.yml` was removed on purpose for now, so this one
+  file is read OPTIONALLY (`skip the workflow section ...`) and every assertion
+  above comes back the moment the file does - it is not a check that quietly
+  stopped looking.
+
   And it pins the CONSOLE CONTRACT, which is what keeps five Windows launchers
   and four POSIX ones behaving the same way: each Windows entry point must call
   `scripts/console/adapt.cmd`, keep the `if not defined VN_HARNESS_CONSOLE set

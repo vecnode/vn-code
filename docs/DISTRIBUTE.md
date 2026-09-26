@@ -188,6 +188,16 @@ The throwaway home is deleted afterwards; `-KeepVerifyHome` keeps it.
 
 ## 4. CI: what it does, and how to see it
 
+> **Parked, not deleted forever.** `.github/workflows/distribute.yml` was removed
+> on purpose for now, so nothing runs on a push - `gh run list` shows only the
+> runs that already happened, and `check-dist-layout.mjs` skips its workflow
+> section loudly instead of failing. The file is one `git` command away:
+> `git log --diff-filter=D --name-only -- .github/workflows/distribute.yml` names
+> the deleting commit, and `git checkout <sha>^ -- .github/workflows/distribute.yml`
+> brings it back - with every assertion in §4 and §7 below applying again. Until
+> then, run the same work locally: `distribute.bat -Verify` (or
+> `./distribute.sh -Verify`), which is what the build legs call.
+
 `.github/workflows/distribute.yml` has five jobs, and which of them run depends on
 the event, because a push and a release want different things:
 

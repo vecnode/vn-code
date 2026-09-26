@@ -211,7 +211,17 @@ if (gitignore && !/^dist\/?$/m.test(gitignore)) {
 // ---------------------------------------------------------------------------
 // 4. The workflow: the matrix, the same scripts, three operating systems
 // ---------------------------------------------------------------------------
-const workflow = read('.github/workflows/distribute.yml')
+// PARKED, NOT DELETED FOREVER. `.github/workflows/distribute.yml` was removed on
+// purpose for now (the push that removed it says so), so this file reads it
+// OPTIONALLY: the section below is skipped LOUDLY rather than failing, and every
+// assertion in it comes back the moment the workflow does. Restore it with
+//   git log --diff-filter=D --name-only -- .github/workflows/distribute.yml
+// and then `git checkout <sha>^ -- .github/workflows/distribute.yml`.
+const workflowPath = '.github/workflows/distribute.yml'
+const workflow = existsSync(path.join(repo, workflowPath)) ? readFileSync(path.join(repo, workflowPath), 'utf8') : null
+if (workflow === null) {
+  console.log('skip the workflow section                          (' + workflowPath + ' is parked - no CI for now)')
+}
 if (workflow) {
   // The matrix's own `os:` values, and nothing else. The comments above the
   // matrix name the retired labels on purpose - to record why they left - so a

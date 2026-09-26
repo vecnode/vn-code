@@ -448,8 +448,9 @@ and asserts it appears in neither the startup window's payload nor the console
 line. The launch token is held to the same rule (see
 [The launch token](#the-launch-token)).
 
-**The check.** `scripts/checks/check-no-secrets.mjs` runs in CI on every push and
-scans `git ls-files -co --exclude-standard` — which is exactly what `git add -A`
+**The check.** `scripts/checks/check-no-secrets.mjs` runs on every push in CI -
+and by hand while the workflow is parked (see `docs/DISTRIBUTE.md` §4) - scanning
+`git ls-files -co --exclude-standard` — which is exactly what `git add -A`
 would stage, so an unignored credentials file is caught *before* it is committed.
 It fails on:
 
