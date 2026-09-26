@@ -11,10 +11,7 @@ Agent Application with core [DSH](https://www.deepseek.com/harness/en/).
 A native cross-platform app plus a pack of standard **dsh bundles**. The plugins
 are plain JavaScript with **zero npm dependencies**; the launchers run on
 **Windows, macOS and Linux** (PowerShell on one side, plain POSIX shell on the
-other, and the Unix half never needs PowerShell). Nothing patches a DeepSeek core
-file: every plugin registers its own rows, and the two surfaces it replaces - the
-right bar, and the file-manager half of *Open In…* - are **forked into this
-repository** and declared in a `cordis.patch.yml`.
+other, and the Unix half never needs PowerShell).
 
 ![print](assets/vn-harness-20260920-164101.png)
 
