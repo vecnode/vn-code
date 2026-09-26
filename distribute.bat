@@ -3,10 +3,12 @@ rem ============================================================
 rem  vn-harness DISTRIBUTER - Windows (double-click friendly).
 rem
 rem  Builds the distribution you can hand to somebody (or run
-rem  yourself) as ONE folder:
+rem  yourself) three ways:
 rem
 rem    dist\vn-harness-<version>-win-x64\      <- click this one
 rem    dist\vn-harness-<version>-win-x64.zip    <- or hand this over
+rem    dist\vn-harness-<version>-win-x64.exe    <- or hand over ONE file,
+rem                                              which unpacks itself and starts
 rem
 rem  The folder holds the built shell (vn-harness.exe) beside the
 rem  whole plugin pack it live-links from, plus START-HERE.bat,

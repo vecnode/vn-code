@@ -33,7 +33,7 @@
         -Version <v>      override the pack version used in the names
                           (default: package.json's version)
         -SkipBuild        reuse the binary under app/src-tauri/target/release
-        -NoZip            assemble the folder only
+        -NoZip            assemble the folder only (no .zip, no single file)
         -Run              assemble, then RUN the produced distribution
                           (foreground: the shell's console output stays here)
         -Verify           assemble, then install into a throwaway DSH_HOME and
@@ -131,7 +131,7 @@ function Show-Usage {
     Write-Host ''
     Write-Host '  -Version <v>      override the pack version used in the names'
     Write-Host '  -SkipBuild        reuse the binary already under app/src-tauri/target/release'
-    Write-Host '  -NoZip            assemble the folder only (no .zip)'
+    Write-Host '  -NoZip            assemble the folder only (no .zip, no single file)'
     Write-Host '  -Run              assemble, then run the produced distribution'
     Write-Host '  -Verify           assemble, then install into a throwaway DSH_HOME and boot'
     Write-Host '                    the pinned harness from it (the CI end-to-end check)'
@@ -526,6 +526,18 @@ function New-DistReadme {
     $lines = @(
         "vn-harness $Version - $Rid",
         "Built $BuiltAt from commit $Commit.",
+        '',
+        'TWO WAYS TO GET THIS',
+        '  If you were handed ONE file - vn-harness-<version>-<rid>.exe on',
+        '  Windows, vn-harness-<version>-<rid>.run on macOS and Linux - just run',
+        '  it. That file IS this folder: it unpacks itself into your own user',
+        '  data folder (<local app data>/vn-harness/<version>-<rid>, so the live',
+        '  links the pack installs have somewhere permanent to point) and then',
+        '  does everything CLICK THIS describes. You never handle the files.',
+        '',
+        '  If you have this folder, or the .zip, use CLICK THIS instead. Either',
+        '  way the result is the same: the pack is installed into the harness web',
+        '  profile and the window opens.',
         '',
         'WHAT THIS IS',
         '  vn-harness - an agent application that runs on the DeepSeek Harness',

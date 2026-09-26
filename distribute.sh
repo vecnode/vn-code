@@ -3,10 +3,12 @@
 #  vn-harness DISTRIBUTER - macOS / Linux.
 #
 #  The twin of distribute.bat: builds the distribution folder you
-#  can hand to somebody (or run yourself) as ONE thing -
+#  can hand to somebody (or run yourself) three ways -
 #
 #      dist/vn-harness-<version>-<rid>/     <- click this one
 #      dist/vn-harness-<version>-<rid>.zip  <- or hand this over
+#      dist/vn-harness-<version>-<rid>.run  <- or hand over ONE file,
+#                                              which unpacks itself and starts
 #
 #  - and dist/ is gitignored on purpose: it is a COPY of this
 #  repository (minus the trees named in scripts/dist-manifest.txt)

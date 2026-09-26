@@ -25,7 +25,7 @@
 #  FLAGS (distribute.bat / scripts/dist.ps1 take the same ones)
 #      -Version <v>      override the pack version used in the names
 #      -SkipBuild        reuse the binary under app/src-tauri/target/release
-#      -NoZip            assemble the folder only
+#      -NoZip            assemble the folder only (no .zip, no single file)
 #      -Run              assemble, then run the produced distribution
 #      -Verify           assemble, then install into a throwaway DSH_HOME and
 #                        boot the pinned harness from it, waiting for the ready
@@ -67,7 +67,7 @@ usage() {
     '' \
     '  -Version <v>      override the pack version used in the names' \
     '  -SkipBuild        reuse the binary already under app/src-tauri/target/release' \
-    '  -NoZip            assemble the folder only (no archive)' \
+    '  -NoZip            assemble the folder only (no .zip, no single file)' \
     '  -Run              assemble, then run the produced distribution' \
     '  -Verify           assemble, then install into a throwaway DSH_HOME and boot' \
     '                    the pinned harness from it (the CI end-to-end check)' \
@@ -468,6 +468,18 @@ chmod 755 "$start_here"
 {
   printf '%s\n' "vn-harness $pack_version - $rid"
   printf '%s\n' "Built $built_at from commit $git_commit."
+  printf '\n'
+  printf '%s\n' 'TWO WAYS TO GET THIS'
+  printf '%s\n' '  If you were handed ONE file - vn-harness-<version>-<rid>.exe on'
+  printf '%s\n' '  Windows, vn-harness-<version>-<rid>.run on macOS and Linux - just run'
+  printf '%s\n' '  it. That file IS this folder: it unpacks itself into your own user'
+  printf '%s\n' '  data folder (<local app data>/vn-harness/<version>-<rid>, so the live'
+  printf '%s\n' '  links the pack installs have somewhere permanent to point) and then'
+  printf '%s\n' '  does everything CLICK THIS describes. You never handle the files.'
+  printf '\n'
+  printf '%s\n' '  If you have this folder, or the .zip, use CLICK THIS instead. Either'
+  printf '%s\n' '  way the result is the same: the pack is installed into the harness web'
+  printf '%s\n' '  profile and the window opens.'
   printf '\n'
   printf '%s\n' 'WHAT THIS IS'
   printf '%s\n' '  vn-harness - an agent application that runs on the DeepSeek Harness'
