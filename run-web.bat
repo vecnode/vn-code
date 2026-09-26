@@ -65,7 +65,9 @@ rem Terminal. scripts\run-web.ps1 declares no such parameter, and PowerShell sto
 rem on an argument it cannot bind, so forwarding it would turn a documented flag
 rem into a failed run. Only that one flag is dropped: -NoPause IS the worker's own
 rem (it holds its window open), and -Port, -DshHome, -DshVersion, -NoBrowser and
-rem -DefaultBrowser pass through untouched.
+rem -DefaultBrowser pass through untouched. Safe with no arguments at all (where
+rem VN_SHELL_ARGS used to be undefined and this line aborted the file) because
+rem scripts\console\adapt.cmd stores "no arguments" as ONE SPACE.
 set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 

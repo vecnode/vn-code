@@ -62,6 +62,10 @@ rem --- help, in every spelling ----------------------------------------------
 rem -Help is unambiguous wherever it appears; -h and /? are checked on the FIRST
 rem argument only, so a -DshHome path containing "-h" cannot print help instead
 rem of starting the app.
+rem It is safe on the double-click path - where VN_HARNESS_ARGS used to be
+rem UNDEFINED and this very line aborted the whole file with "set was unexpected
+rem at this time." - because scripts\console\adapt.cmd stores "no arguments" as ONE
+rem SPACE, a defined value that holds no flag. The full account is there.
 if not "%VN_HARNESS_ARGS:-Help=%"=="%VN_HARNESS_ARGS%" goto :help
 set "VN_FIRST="
 for /f "tokens=1 delims= " %%A in ("%VN_HARNESS_ARGS%") do set "VN_FIRST=%%A"

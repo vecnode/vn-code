@@ -62,7 +62,11 @@ rem spelling from it) is also what keeps this safe for a -DshHome path that
 rem legitimately contains "-h".
 if defined VN_HELPREQ set "VN_HARNESS_ARGS=-Help"
 
-rem The implied -Force, skipped for a help request.
+rem The implied -Force, skipped for a help request. Safe with no arguments at all
+rem (where VN_HARNESS_ARGV used to be undefined and this line aborted the whole
+rem file) because scripts\console\adapt.cmd stores "no arguments" as ONE SPACE: a
+rem defined value holding no flag, so this test reads it exactly as it reads an
+rem argument string that merely lacks -Force - which is the answer wanted here.
 set "VN_EXTRA="
 if not defined VN_HELPREQ if "%VN_HARNESS_ARGV:-Force=%"=="%VN_HARNESS_ARGV%" set "VN_EXTRA=-Force"
 
@@ -71,6 +75,7 @@ rem is the file that acts on it, deciding whether to relaunch into Windows Termi
 rem scripts\install-all.ps1 declares no such parameter, and PowerShell stops on an
 rem argument it cannot bind - so forwarding it would turn a documented flag into a
 rem failed install. Only that one flag is dropped; -NoPause IS the worker's own.
+rem (Safe with no arguments at all: adapt.cmd guarantees the variable is defined.)
 set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 

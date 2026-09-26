@@ -10,7 +10,9 @@
 // checked.
 //
 // Run:  node scripts/checks/check-dist-layout.mjs
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -388,6 +390,84 @@ for (const entry of windowsEntries) {
   // Every one of them answers help, whether by routing to a worker (-Help) or by
   // owning the text itself (run-desktop.bat, which has no worker).
   if (!/-Help/.test(text)) fail(`${entry} never mentions -Help.`)
+}
+
+// ---------------------------------------------------------------------------
+// 5b. A NO-ARGUMENT run must not be able to abort a launcher
+// ---------------------------------------------------------------------------
+// THE BUG THIS EXISTS FOR, because nothing else here could see it. A double-click
+// passes NO arguments, so the entry point's `set "VN_HARNESS_ARGV=%*"` left the
+// variable UNDEFINED - cmd removes a variable that is set to nothing - and cmd
+// CANNOT expand a `:-flag=` substitution on an undefined variable. It emits the
+// modifier as literal text instead, so the console layer's pause rule
+//   if not "%VN_HARNESS_ARGS:-NoPause=%"=="%VN_HARNESS_ARGS%" set "VN_HARNESS_PAUSE=0"
+// became `if not "-NoPause=VN_HARNESS_ARGS"=="VN_HARNESS_ARGS" set ...` - an `if`
+// with ONE token - which cmd answers with "set was unexpected at this time." and
+// which aborts the whole file on the spot. Every Windows launcher therefore
+// flashed a console and died having printed NOTHING when it was double-clicked,
+// while every run WITH flags worked perfectly: and every check had only ever
+// driven the flagged path, so nothing here could see it.
+//
+// An `if defined ...` on the same line cannot repair it: cmd expands every `%VAR%`
+// on a line BEFORE it runs any of that line, so the garbage appears even inside a
+// branch that is skipped (measured - the guard was tried first and the same line
+// still aborted). The variable has to BE DEFINED, and scripts\console\adapt.cmd is
+// where that happens: it stores "no arguments" as ONE SPACE, a defined value that
+// holds no flag and that never reaches a child as an argument, so every
+// substitution downstream reads the double-click exactly as it reads a flagged
+// run.
+//
+// Asserted TWICE on purpose, because the static half alone cannot prove it: the
+// normalisation must still be in adapt.cmd, AND calling adapt.cmd with no
+// arguments must really come back with both names defined and no parse error. The
+// second is the only test in this file that executes any of this.
+if (consoleText.adapt) {
+  if (!/if not defined VN_HARNESS_ARGV set "VN_HARNESS_ARGV= "/.test(consoleText.adapt)) {
+    fail('scripts/console/adapt.cmd no longer stores "no arguments" as one space; on a double-click both argument variables are then UNDEFINED and cmd aborts the launcher with "set was unexpected at this time."')
+  }
+  if (!/set "VN_HARNESS_ARGS=%VN_HARNESS_ARGV%"/.test(code(consoleText.adapt))) {
+    fail('scripts/console/adapt.cmd does not derive VN_HARNESS_ARGS from VN_HARNESS_ARGV.')
+  }
+  if (process.platform !== 'win32') {
+    note('skipped the no-argument launcher run (cmd.exe only exists on Windows)')
+  } else {
+    // A DOUBLE-CLICK, reproduced: the documented three-line contract with nothing
+    // in `%*`, then adapt.cmd, then whatever it left behind. VN_HARNESS_NO_WT keeps
+    // it from opening a Windows Terminal window, and the file lives in a temp
+    // directory, so a check never touches the tree or the desktop.
+    const probeDir = mkdtempSync(path.join(tmpdir(), 'vn-harness-args-'))
+    const probe = path.join(probeDir, 'probe.bat')
+    try {
+      writeFileSync(probe, [
+        '@echo off',
+        'if not defined VN_HARNESS_CONSOLE set "VN_HARNESS_ARGV=%*"',
+        `call "${path.join(repo, 'scripts', 'console', 'adapt.cmd')}" "%~f0" "vn-harness"`,
+        'if errorlevel 10 exit /b 0',
+        'if errorlevel 2 exit /b 2',
+        'echo ARGV=[%VN_HARNESS_ARGV%]',
+        'echo ARGS=[%VN_HARNESS_ARGS%]',
+        'echo PAUSE=[%VN_HARNESS_PAUSE%]',
+        'exit /b 0',
+        '',
+      ].join('\r\n'), 'ascii')
+      const result = spawnSync('cmd.exe', ['/d', '/c', probe], {
+        encoding: 'utf8',
+        env: { ...process.env, VN_HARNESS_NO_WT: '1' },
+        windowsHide: true,
+        timeout: 30000,
+      })
+      const output = `${result.stdout || ''}${result.stderr || ''}`
+      if (/unexpected at this time/i.test(output)) {
+        fail('a launcher with NO arguments aborts: cmd reports "set was unexpected at this time.", so an argument variable is undefined and a `%VAR:-flag=%` substitution cannot expand.')
+      } else if (!/^ARGS=\[ \]$/m.test(output) || !/^ARGV=\[ \]$/m.test(output)) {
+        fail(`calling scripts/console/adapt.cmd with no arguments did not leave one space in both argument variables; it answered: ${output.trim()}`)
+      } else {
+        note('a no-argument launcher run reaches the end of the console layer (the double-click path)')
+      }
+    } finally {
+      rmSync(probeDir, { recursive: true, force: true })
+    }
+  }
 }
 
 for (const entry of posixEntries) {

@@ -67,18 +67,31 @@ generated `START-HERE.bat` - gets its console behaviour from ONE file,
 first, Windows PowerShell 5.1 second - BOTH are first class, and 5.1 is the only
 one on the machine this was written on, so nothing may assume 7), whether the
 window is held open (exported as `VN_HARNESS_PAUSE`, so a scripted run is never
-held) and hands the caller's REAL arguments over as `VN_HARNESS_ARGS`. Three
+held) and hands the caller's REAL arguments over as `VN_HARNESS_ARGS`. Four
 rules are load-bearing: an entry point forwards `%VN_HARNESS_ARGS%` and NEVER
 `%*` (after the relaunch `%*` is only the `--from-terminal` marker - which is
 exactly what the `VN_HARNESS_CONSOLE` guard on the first line protects);
 `adapt.cmd` must not `setlocal`, because its decisions have to stay visible to
-the caller; and a `wt.exe` that fails to launch must fall through to the current
-console rather than losing the run. The colour policy - a terminal gets colour, a
+the caller; a `wt.exe` that fails to launch must fall through to the current
+console rather than losing the run; and an ABSENT argument string is stored as
+ONE SPACE (`if not defined VN_HARNESS_ARGV set "VN_HARNESS_ARGV= "`), because
+cmd has no empty variable - `set "X="` REMOVES X - and `%X:-flag=%` on an
+undefined X expands to literal text instead of failing quietly: the `if` around
+it becomes a one-token statement and cmd aborts the WHOLE FILE with "set was
+unexpected at this time." That is what killed every launcher on the path a
+person actually uses - a double-click, which passes no flags - while every
+flagged run worked, and an `if defined X` on the same line does NOT repair it,
+since cmd expands every `%VAR%` on a line before running any of that line
+(measured). `adapt.cmd` therefore repairs both names once, for all five entry
+points, and the one space is invisible downstream (a child sees no argument).
+The colour policy - a terminal gets colour, a
 redirected log never does, `NO_COLOR` always wins - and the shared wording live
 in `scripts/console/theme.ps1`, dot-sourced by the PowerShell workers, and in its
 POSIX twin `scripts/console/theme.sh`, sourced by the `.sh` entry points.
-`check-dist-layout.mjs` pins all of it, including that `theme.sh` stays POSIX and
-that the macOS/Linux half never runs PowerShell.
+`check-dist-layout.mjs` pins all of it, including that `theme.sh` stays POSIX,
+that the macOS/Linux half never runs PowerShell, and - by actually RUNNING it -
+that a launcher with NO arguments reaches the end of the console layer instead of
+aborting.
 
 **The run launcher.** `run-web.bat` / `run-web.sh` start the pinned
 `npx @deepseek-ai/dsh@<pin> web --no-open`, stream the app's own output to the

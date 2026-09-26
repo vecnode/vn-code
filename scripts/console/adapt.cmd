@@ -75,6 +75,29 @@ rem --- the arguments to act on ------------------------------------------------
 rem Derived from the caller's VN_HARNESS_ARGV, never from `%*`: on the relaunched
 rem pass `%*` is the marker only. Refreshed on every call so a caller that
 rem exported nothing still reads as "no arguments".
+rem
+rem AN ABSENT ARGUMENT STRING IS STORED AS ONE SPACE, AND EVERY LAUNCHER DEPENDS ON
+rem THAT. cmd has no empty variable: `set "X="` REMOVES X, and a `%X:-flag=%`
+rem substitution on an UNDEFINED X is not an empty string - cmd emits the modifier
+rem as literal text instead. So on a DOUBLE-CLICK, where both names are derived
+rem from an empty `%*`, the pause rule below became
+rem   if not "-NoPause=VN_HARNESS_ARGS"=="VN_HARNESS_ARGS" set "VN_HARNESS_PAUSE=0"
+rem an `if` with ONE token, which cmd answers with "set was unexpected at this
+rem time." and which aborts the WHOLE FILE on the spot: the window flashed and
+rem closed having printed nothing at all, while every run WITH flags worked
+rem perfectly. An `if defined ...` on the same line cannot repair it either - cmd
+rem expands every `%VAR%` on a line BEFORE it runs any of that line, so the garbage
+rem appears even inside a branch that is skipped (measured).
+rem
+rem One space is the defined value that fixes it: it holds no flag, so every test
+rem below reads it exactly as it reads a flagged run, and it is harmless wherever
+rem it is forwarded - cmd and Rust both split argv on whitespace, so a lone space
+rem never arrives as an argument (measured: run-desktop.bat with no arguments
+rem starts the shell normally). This file is the ONLY place that has to know,
+rem because it must NOT setlocal - its decisions stay visible to the caller by
+rem design - so repairing both names here, once, covers all five entry points.
+rem check-dist-layout.mjs asserts this normalisation is still here.
+if not defined VN_HARNESS_ARGV set "VN_HARNESS_ARGV= "
 set "VN_HARNESS_ARGS=%VN_HARNESS_ARGV%"
 
 rem --- the PowerShell that will run the work ---------------------------------
@@ -97,7 +120,8 @@ rem The test is cmd's own substring substitution rather than `echo | findstr`.
 rem That matters: `%VAR:...=%` is quoted end to end, so an argument holding `&`,
 rem `|`, `>` or a quote - a -DshHome with a space and an ampersand in it - is
 rem data, while the same value piped through echo would be re-parsed as syntax.
-rem The substitution is case-insensitive, so -nopause works too.
+rem The substitution is case-insensitive, so -nopause works too - and it is safe on
+rem the double-click path because VN_HARNESS_ARGS is guaranteed DEFINED above.
 set "VN_HARNESS_PAUSE=1"
 if defined VN_HARNESS_NOPAUSE set "VN_HARNESS_PAUSE=0"
 if defined VN_HARNESS_QUIET set "VN_HARNESS_PAUSE=0"

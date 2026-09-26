@@ -442,6 +442,8 @@ function New-StartHere {
             'rem acted on it, it is not a flag of the installer or of vn-harness.exe, and',
             'rem both refuse an argument they do not declare.',
             'set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"',
+            'rem Safe with no arguments at all: scripts\console\adapt.cmd stores',
+            'rem "no arguments" as one space, so VN_SHELL_ARGS is always defined.',
             'set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"',
             '"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-all.ps1" %VN_SHELL_ARGS%',
             'if errorlevel 1 goto :failed',

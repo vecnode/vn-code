@@ -50,7 +50,9 @@ if defined VN_HELPREQ set "VN_HARNESS_ARGS=-Help"
 
 rem -NoTerminal is the LAUNCHER's flag and scripts\uninstall-all.ps1 declares no
 rem such parameter; forwarding it would make PowerShell stop on an argument it
-rem cannot bind. See install.bat for the whole reason.
+rem cannot bind. See install.bat for the whole reason. Safe with no arguments at
+rem all: scripts\console\adapt.cmd stores "no arguments" as one space, so
+rem VN_SHELL_ARGS is always defined.
 set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 

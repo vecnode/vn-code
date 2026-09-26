@@ -274,3 +274,14 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
   hard error in all of them, so a flag the entry forwards and the worker never
   heard of breaks the run); `adapt.cmd` must not `setlocal`; and `theme.sh` must
   stay POSIX - no `[[ ]]`, no `function`, no arrays.
+
+  It also RUNS the no-argument path, which is the one path a person actually uses
+  and the only one nothing here ever drove: `adapt.cmd` is called through a
+  temporary batch with nothing in `%*` (a double-click), and the run must reach
+  its end with both argument variables defined as one space rather than aborting
+  with `set was unexpected at this time.` The trap is that cmd has no empty
+  variable - `set "X="` REMOVES X - and `%X:-flag=%` on an undefined X expands to
+  literal text, turning the `if` around it into a one-token statement that kills
+  the WHOLE file. Every launcher therefore flashed a window and closed, printing
+  nothing, while every flagged run worked; an `if defined X` guard does not help,
+  because cmd expands every `%VAR%` on a line before running any of it.
