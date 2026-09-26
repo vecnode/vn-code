@@ -68,6 +68,7 @@ while [ $# -gt 0 ]; do
     -Target|--target) shift; target_arg=${1:-} ;;
     -Target=*|--target=*) target_arg=${1#*=} ;;
     -NoPause|--no-pause) ;;   # the entry point owns the window; accepted so it is never "unknown"
+    -NoTerminal|--no-terminal) ;;   # the console is a Windows decision; same reason
     -Help|--help|-h) usage; exit 0 ;;
     *)
       printf 'vn-harness: unknown option "%s"\n' "$1" >&2

@@ -93,8 +93,8 @@ on:
       - '.gitignore'
       - '.github/workflows/distribute.yml'
 
-  # Publishing a Release builds the three OS archives and attaches them to it.
-  # `gh release create v0.1.0-alpha.0 --generate-notes` is the whole ritual; the
+  # Publishing a Release builds every matrix target's archive and attaches them
+  # to it. `gh release create v0.1.0 --generate-notes` is the whole ritual; the
   # job below refuses to attach anything when the tag and package.json's version
   # disagree, so a release tag can never name a version that was never built.
   release:
@@ -117,6 +117,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      # This repository is public, and a credential in a commit is on GitHub for
+      # as long as the repository exists. The check scans exactly what
+      # `git add -A` would stage and fails on a credential-shaped string, on a
+      # missing credential ignore rule, and on itself if it stops firing.
+      - name: Nothing secret reaches a commit
+        run: node scripts/checks/check-no-secrets.mjs
 
       - name: Distribution layout and payload
         run: node scripts/checks/check-dist-layout.mjs
@@ -142,6 +149,13 @@ jobs:
 
       - name: Shipped skill examples
         run: node scripts/checks/check-skill-examples.mjs
+
+      # The startup window's two halves speak two languages: keystate.rs decides
+      # and emits a JSON payload, ui/index.html draws the line from it. Nothing
+      # type-checks across that seam, so this renders the page in both states
+      # (key loaded / no key) against a DOM stub and asserts the names agree.
+      - name: The startup window
+        run: node scripts/checks/check-splash.mjs
 
   # ---------------------------------------------------------------------------
   # 2. Build, assemble, verify, upload - once per target.
@@ -269,7 +283,7 @@ jobs:
             dist/*.tar.gz
 
   # ---------------------------------------------------------------------------
-  # 3. Attach the three archives to a GitHub Release (tag or the manual input).
+  # 3. Attach the archives to a GitHub Release (tag or the manual input).
   # ---------------------------------------------------------------------------
   release:
     name: release

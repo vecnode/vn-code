@@ -57,6 +57,7 @@ param(
     [switch]$Run,
     [switch]$Verify,
     [switch]$KeepVerifyHome,
+    [string]$OutDir,
     [switch]$Clean,
     [switch]$NoPause,
     [switch]$Help
@@ -130,7 +131,9 @@ function Show-Usage {
     Write-Host '  -Verify           assemble, then install into a throwaway DSH_HOME and boot'
     Write-Host '                    the pinned harness from it (the CI end-to-end check)'
     Write-Host '  -KeepVerifyHome   keep that throwaway home for inspection'
-    Write-Host '  -Clean            delete dist/ first'
+    Write-Host '  -OutDir <dir>     assemble under this folder instead of dist/ (a relative'
+    Write-Host '                    path resolves against the repository root)'
+    Write-Host '  -Clean            delete the output folder first'
     Write-Host '  -NoPause          never hold this window open'
     Write-Host '  -Help / -h / /?   print this help'
     Write-Host ''
@@ -309,8 +312,10 @@ function Assert-Sentinels {
         'scripts/install-all.sh',
         'docs/INSTALL.md',
         'assets/vn-harness.svg',
-        'app/src-tauri/src/main.rs',
-        'app/src-tauri/tauri.conf.json',
+        # The shell family's sentinel is its README, not its source: a
+        # distribution ships the binary and app/README.md and nothing else of
+        # app/, so asserting on a .rs file would fail every correct build.
+        'app/README.md',
         'packages/dsh-vn-master/package.json',
         'packages/dsh-vn-master/cordis.patch.yml',
         'packages/dsh-rightbar/lib/client.js',
@@ -428,12 +433,24 @@ function New-StartHere {
             '  goto :failed',
             ')',
             'echo [vn-harness] Making sure the harness web profile has this pack...',
-            '"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-all.ps1" %VN_HARNESS_ARGS%',
+            'rem -NoTerminal is the LAUNCHER''s flag: scripts\console\adapt.cmd already',
+            'rem acted on it, it is not a flag of the installer or of vn-harness.exe, and',
+            'rem both refuse an argument they do not declare.',
+            'set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"',
+            'set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"',
+            '"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-all.ps1" %VN_SHELL_ARGS%',
             'if errorlevel 1 goto :failed',
             'echo.',
             'echo [vn-harness] Starting vn-harness. Close the window to stop it.',
             'echo.',
-            '"%~dp0vn-harness.exe" %VN_HARNESS_ARGS%',
+            'rem The shell takes -Port / -DshHome / -DshVersion / -Help and NOTHING',
+            'rem else: it NAMES an unknown flag and exits 1 rather than ignoring it, so',
+            'rem that a typo is never silently dropped. -NoPause is this launcher''s own',
+            'rem flag (-NoTerminal is already gone above), and run-desktop.bat drops the',
+            'rem same set before the shell sees it.',
+            'set "VN_APP_ARGS=%VN_SHELL_ARGS%"',
+            'set "VN_APP_ARGS=%VN_APP_ARGS:-NoPause=%"',
+            '"%~dp0vn-harness.exe" %VN_APP_ARGS%',
             'if errorlevel 1 goto :failed',
             'exit /b 0',
             ':failed',
@@ -889,14 +906,25 @@ $packVersion = $Version
 if (-not $packVersion) { $packVersion = Get-PackVersion }
 $rid = Get-HostRid
 $artifact = "vn-harness-$packVersion-$rid"
+# The output root. `dist/` unless -OutDir chose somewhere else, and the reason it
+# exists is not tidiness: a distribution that is RUNNING holds its own
+# vn-harness.exe open, and Windows will not let that file be overwritten or
+# deleted - so the folder this script is being read from cannot also be the
+# folder it assembles into. A relative -OutDir resolves against the repository
+# root, so `-OutDir dist2` means `<repo>/dist2`.
 $distRoot = Join-Path $script:RepoRoot 'dist'
+if ($OutDir) {
+    $distRoot = $OutDir
+    if (-not [System.IO.Path]::IsPathRooted($distRoot)) { $distRoot = Join-Path $script:RepoRoot $distRoot }
+}
+$distRoot = [System.IO.Path]::GetFullPath($distRoot)
 $distDir = Join-Path $distRoot $artifact
 $zipPath = Join-Path $distRoot "$artifact.zip"
 
 Write-Step "Pack version: $packVersion   Harness pin: $pin   Target: $rid"
 
 if ($Clean -and (Test-Path -LiteralPath $distRoot)) {
-    Write-Step 'Cleaning dist/ ...'
+    Write-Step "Cleaning $distRoot ..."
     Remove-Item -LiteralPath $distRoot -Recurse -Force
 }
 
@@ -985,7 +1013,7 @@ Write-Note "Folder to click: $distDir"
 if ($script:IsWindowsHost) { Write-Note "  double-click START-HERE.bat (it installs the pack, then opens the window)" }
 else { Write-Note "  ./START-HERE.sh (it installs the pack, then opens the window)" }
 if (-not $NoZip) { Write-Note "Zip to hand over: $zipPath" }
-Write-Note 'dist/ is gitignored on purpose: it is build output, and it is a copy - re-run this after editing a plugin.'
+Write-Note 'The output folder is build output, never content - re-run this after editing a plugin.'
 
 if ($Run) {
     Write-Host ''

@@ -26,12 +26,12 @@ rem  and needs nothing else - not even Rust. A SOURCE CHECKOUT has no
 rem  built shell, so it builds one with cargo (a no-op while it is
 rem  current, because cargo's own freshness check IS the cache).
 rem
-rem  The order is not a preference. A distribution also ships app\ -
-rem  the shell's own source, so the folder is complete - which means
-rem  "is there a Cargo.toml?" cannot tell the two apart. Only the
-rem  presence of the built executable can, and building inside a
-rem  distribution would demand a Rust toolchain from somebody who was
-rem  only ever asked to click a file.
+rem  The order is not a preference. Both kinds of folder have an app\ -
+rem  a distribution ships the shell's README there, a source checkout
+rem  ships the Rust source - so "is there a Cargo.toml?" cannot tell the
+rem  two apart. Only the presence of the built executable can, and
+rem  building inside a distribution would demand a Rust toolchain from
+rem  somebody who was only ever asked to click a file.
 rem
 rem  Flags (forwarded to the shell; the same set as run-web.bat):
 rem    -Port <n>          listen on this port instead of a free one

@@ -56,17 +56,16 @@ include LICENSE
 include SECURITY.md
 include docs
 
-# --- the shell's own source, so the folder is complete ----------------------
-# The binary is what RUNS; these are here so a distribution is a whole source
-# tree for it (the same files a clone would have, minus the build output).
+# --- the shell DOCUMENTED, not the shell in SOURCE ---------------------------
+# The binary is what RUNS. app/src-tauri (the Rust source, its Cargo manifests,
+# the build script and the tauri config), app/src-tauri/icons and app/ui are
+# build INPUTS: tauri-build compiles the icons into the binary's resources and
+# `frontendDist` folds the splash page into it, so nothing at runtime ever opens
+# one of them. Shipping them would hand every recipient a readable copy of the
+# shell for no benefit - and `run-desktop.bat` does not need them to choose its
+# path either: it decides between "run the binary beside me" and "build from
+# source" on the presence of vn-harness.exe, never on a Cargo.toml.
 include app/README.md
-include app/ui
-include app/src-tauri/Cargo.toml
-include app/src-tauri/Cargo.lock
-include app/src-tauri/build.rs
-include app/src-tauri/tauri.conf.json
-include app/src-tauri/src
-include app/src-tauri/icons
 
 # --- the branding source (dsh-themes inlines assets/vn-harness.svg) ---------
 # One file, not the folder: assets/ also holds the screenshots the pack's own
@@ -105,6 +104,18 @@ skipfile *.log
 # invites a nested dist/ inside a distribution.
 skippath scripts/dist.ps1
 skippath scripts/dist.sh
+
+# --- maintainer tooling is not part of a distribution ------------------------
+# `include scripts` sweeps the whole folder in, and three things under it are
+# the workshop rather than the product. scripts/checks runs AGAINST A CHECKOUT -
+# it reads packages/, the Rust source and a git history, none of which a
+# distribution promises. scripts/sync-vendored.ps1 moves the vendored forks
+# forward and wants pwsh on every host. scripts/make-desktop-icon.mjs regenerates
+# app/src-tauri/icons, which is itself not shipped - and would leave a recipient
+# holding a generator whose only output they do not have.
+skippath scripts/checks
+skippath scripts/sync-vendored.ps1
+skippath scripts/make-desktop-icon.mjs
 
 # Nothing with an editor's or the OS's fingerprints on it.
 skipfile .DS_Store

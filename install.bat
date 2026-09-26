@@ -66,7 +66,15 @@ rem The implied -Force, skipped for a help request.
 set "VN_EXTRA="
 if not defined VN_HELPREQ if "%VN_HARNESS_ARGV:-Force=%"=="%VN_HARNESS_ARGV%" set "VN_EXTRA=-Force"
 
-"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-all.ps1" %VN_HARNESS_ARGS% %VN_EXTRA%
+rem -NoTerminal belongs to the LAUNCHER, not to the install: scripts\console\adapt.cmd
+rem is the file that acts on it, deciding whether to relaunch into Windows Terminal.
+rem scripts\install-all.ps1 declares no such parameter, and PowerShell stops on an
+rem argument it cannot bind - so forwarding it would turn a documented flag into a
+rem failed install. Only that one flag is dropped; -NoPause IS the worker's own.
+set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
+set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
+
+"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-all.ps1" %VN_SHELL_ARGS% %VN_EXTRA%
 set "VN_EXIT=%ERRORLEVEL%"
 
 echo.

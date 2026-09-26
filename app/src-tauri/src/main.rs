@@ -54,6 +54,7 @@
 //! printed here; there is no dialog plugin, which is the whole reason this
 //! crate has two dependencies.
 
+mod keystate;
 mod readyline;
 mod windowstate;
 
@@ -67,6 +68,7 @@ use std::thread;
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use keystate::KeyState;
 use windowstate::WindowState;
 
 /// The harness process, kept here so the exit hook can find it. It is `None`
@@ -443,7 +445,12 @@ fn open_external(url: &str) {
 /// here: WHICH geometry may be restored - and every rule about when a saved
 /// record can be trusted - lives in [`windowstate`], so all of it is decided by
 /// a `cargo test` rather than by reading this function.
-fn build_window(app: &AppHandle, state_path: Option<&Path>) -> tauri::Result<()> {
+fn build_window(
+    app: &AppHandle,
+    state_path: Option<&Path>,
+    key_state: &KeyState,
+    splash_home: Option<&str>,
+) -> tauri::Result<()> {
     let remembered = match state_path.map(windowstate::load) {
         // No harness home could be resolved, so there is nowhere honest to
         // read from or write to: this window simply has no memory (see
@@ -475,6 +482,13 @@ fn build_window(app: &AppHandle, state_path: Option<&Path>) -> tauri::Result<()>
             .inner_size(remembered.width, remembered.height)
             .min_inner_size(windowstate::MIN_WIDTH, windowstate::MIN_HEIGHT)
             .resizable(true)
+            // What the splash says about the key and the harness home. It is
+            // INJECTED, not fetched: the page has no IPC channel and no command,
+            // and this way it needs none - Tauri runs the script after the global
+            // object exists and before the document is parsed, so the page's own
+            // inline script finds the answer already waiting. The state carries a
+            // boolean and a layer NAME, never the key itself (see `keystate`).
+            .initialization_script(keystate::splash_script(key_state, splash_home))
             .on_navigation(|url| {
                 if is_internal(url) {
                     return true;
@@ -687,7 +701,7 @@ fn fail(app: &AppHandle, message: &str) {
 // ---------------------------------------------------------------------------
 // The supervisor
 // ---------------------------------------------------------------------------
-fn supervise(app: AppHandle, options: Options) {
+fn supervise(app: AppHandle, options: Options, key_state: KeyState) {
     let version = match resolve_version(&options) {
         Ok(version) => version,
         Err(message) => return fail(&app, &message),
@@ -705,6 +719,10 @@ fn supervise(app: AppHandle, options: Options) {
             "[vn-harness] DSH_HOME: not set, and no home directory to default to; the harness will decide"
         ),
     }
+    // The same answer the splash window shows, in the console as well - the log
+    // is what a bug report quotes, and "which key did it find" is the first
+    // question when a model call fails. It names the LAYER and never the value.
+    println!("{}", keystate::console_line(&key_state));
     warn_when_pack_missing(&options);
     println!("[vn-harness] Starting the harness on 127.0.0.1:{port} (npx --yes @deepseek-ai/dsh@{version} web --no-open)");
     println!("  Keep this window open - the harness runs in the window that opens. Ctrl+C stops it.");
@@ -974,16 +992,31 @@ fn main() {
     // window that restores it and the exit hook that writes it. `None` means no
     // harness home could be resolved at all, and then the window simply has no
     // memory - a path is never invented (see `reported_home`).
-    let state_path = reported_home(&options).map(|home| windowstate::state_path(&home));
+    //
+    // The same home answers the other question the window is asked before the
+    // server exists: where this run's sessions, settings and key come from. A
+    // distribution installed over an older one keeps every one of them, because
+    // they live HERE and not in the folder that was replaced - which is exactly
+    // what the splash window now says out loud.
+    let home = reported_home(&options);
+    let state_path = home.as_ref().map(|home| windowstate::state_path(home));
+    let key_state = keystate::read(home.as_deref());
+    let splash_home = home.as_ref().map(|home| home.display().to_string());
 
     let setup_path = state_path.clone();
+    let setup_key_state = key_state.clone();
     let app = match tauri::Builder::default()
         .setup(move |app| {
             // The window first, so something is on screen while npx works.
-            build_window(app.handle(), setup_path.as_deref())?;
+            build_window(
+                app.handle(),
+                setup_path.as_deref(),
+                &setup_key_state,
+                splash_home.as_deref(),
+            )?;
             let handle = app.handle().clone();
             let options = options.clone();
-            thread::spawn(move || supervise(handle, options));
+            thread::spawn(move || supervise(handle, options, key_state));
             Ok(())
         })
         .build(tauri::generate_context!())

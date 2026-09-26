@@ -4,6 +4,29 @@ tools/
 .scratch/
 *.log
 
+# CREDENTIALS. Nothing of these shapes may ever be staged, because a secret in a
+# commit is a secret on GitHub for as long as the repository exists - in every
+# fork and every clone - even after the file is deleted. The harness keeps its
+# own credentials in `$DSH_HOME/.credentials.yaml`, which defaults to `~/.dsh`
+# and is therefore OUTSIDE this tree; these rules are the belt for the case where
+# DSH_HOME is pointed inside it, or a copy is dropped here by hand.
+# `scripts/checks/check-no-secrets.mjs` asserts every line below still exists AND
+# fails the build if a credential-shaped string reaches any staged file.
+.env
+.env.*
+.credentials.yaml
+*.credentials.yaml
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+.netrc
+# An .npmrc can carry a registry token. Nothing in this pack needs one (it ships
+# zero npm dependencies); if you ever need a committed one, force-add it.
+.npmrc
+
 # The DISTRIBUTION folder built by distribute.bat / distribute.sh. It is a COPY
 # of this repository (minus the trees listed in scripts/dist-manifest.txt) plus
 # the built shell binary, and it is a build OUTPUT like any other: it is rebuilt
@@ -11,6 +34,13 @@ tools/
 # content. It must never be committed - a 22 MB tree of copies would also make
 # every plugin edit show up twice in a diff.
 dist/
+
+# The SECOND output folder. `distribute.bat -OutDir dist2` (or any other path)
+# exists because a distribution that is RUNNING holds its own vn-harness.exe
+# open, and Windows refuses to overwrite or delete a file in use - so a new cut
+# has to be assembled somewhere else and swapped in once the window is closed.
+# Build output for exactly the same reasons as dist/ above.
+dist2/
 
 # The desktop shell's Rust build tree (app/). Cargo writes hundreds of
 # megabytes of objects and binaries under app/src-tauri/target/, and none of it
@@ -30,8 +60,16 @@ app/src-tauri/gen/
 # conversation plus one shared library under $DSH_HOME/dsh-diagrams/, and
 # $DSH_HOME defaults to ~/.dsh (outside this repo). These rules are the belt for
 # the case where DSH_HOME is pointed inside the tree, or a copy is dropped here.
-dsh-diagrams/
-library.json
+#
+# They are ANCHORED to the repository root on purpose. An unanchored
+# `dsh-diagrams/` also matches `packages/dsh-diagrams/` - the PACKAGE of the same
+# name - which silently ignored all 18 of its tracked files, so the NEXT file
+# added inside that package would have been invisible to `git status` and skipped
+# by `git add -A`: present locally, passing local tests, never committed.
+# check-no-secrets.mjs fails if any tracked file is ignored, which is what keeps
+# these two rules anchored.
+/dsh-diagrams/
+/library.json
 
 # Exported diagram sources are LOCAL material, not repo content: they are
 # verbatim copies of what the library stores, so committing them would put the

@@ -147,7 +147,7 @@ if (ps && sh) {
 
   // The same flags, both halves. A flag only one half knows is a run that fails
   // on half the matrix.
-  const flags = ['-Version', '-SkipBuild', '-NoZip', '-Run', '-Verify', '-KeepVerifyHome', '-Clean', '-NoPause', '-Help']
+  const flags = ['-Version', '-SkipBuild', '-NoZip', '-Run', '-Verify', '-KeepVerifyHome', '-OutDir', '-Clean', '-NoPause', '-Help']
   for (const flag of flags) {
     if (!ps.includes(flag)) fail(`scripts/dist.ps1 does not handle ${flag}.`)
     if (!sh.includes(flag)) fail(`scripts/dist.sh does not handle ${flag}.`)
@@ -173,7 +173,7 @@ if (ps && sh) {
     'packages/dsh-diagrams/lib/vendor/mermaid.min.js',
     'packages/dsh-editor/lib/vendor/cm6.min.js',
     'packages/dsh-terminal/lib/vendor/xterm.js',
-    'app/src-tauri/src/main.rs',
+    'app/README.md',
     'assets/vn-harness.svg',
   ]
   for (const sentinel of wanted) {
@@ -299,6 +299,15 @@ for (const entry of windowsEntries) {
   const text = read(entry)
   if (text === null) continue
 
+  // -NoTerminal is the LAUNCHER's flag: adapt.cmd above is the file that acts on
+  // it, and not one Windows worker declares a parameter for it. PowerShell stops
+  // on an argument it cannot bind, so a launcher that forwards it turns a
+  // documented flag into a failed run - which is exactly what every one of them
+  // did until this assertion existed.
+  if (!/:-NoTerminal=%/.test(text)) {
+    fail(`${entry} does not strip -NoTerminal before forwarding; its worker declares no such parameter, so the run would fail with a PowerShell parameter error.`)
+  }
+
   // It must consult the shared layer...
   if (!text.includes('scripts\\console\\adapt.cmd')) {
     fail(`${entry} does not call scripts\\console\\adapt.cmd - its console behaviour is its own.`)
@@ -356,13 +365,39 @@ for (const entry of posixEntries) {
 
 // The sh workers must ACCEPT the entry points' flags. An unknown option is a
 // hard error in all of them (exit 2), so a flag the entry forwards and the
-// worker has never heard of breaks the run rather than being ignored.
-for (const worker of ['scripts/install-all.sh', 'scripts/uninstall-all.sh', 'scripts/dist.sh']) {
+// worker has never heard of breaks the run rather than being ignored. -NoTerminal
+// is the sharpest case: it is a WINDOWS console decision, so on macOS/Linux it
+// means nothing at all - and install.sh / START-HERE.sh still hand it straight
+// through, which makes "accepted and ignored" the only correct answer. run-web.sh
+// parses its own flags and is therefore its own worker, so it belongs here too.
+for (const worker of ['scripts/install-all.sh', 'scripts/uninstall-all.sh', 'scripts/dist.sh', 'run-web.sh']) {
   const text = read(worker)
   if (text === null) continue
-  for (const flag of ['-Help', '-NoPause']) {
+  for (const flag of ['-Help', '-NoPause', '-NoTerminal']) {
     if (!text.includes(flag)) fail(`${worker} does not accept ${flag}, which its entry point can forward.`)
   }
+}
+
+// The generated START-HERE.bat has to hold the same rule the hand-written
+// launchers do, and it is emitted as TEXT by dist.ps1 - so the strip is asserted
+// where it is written. Its POSIX twin needs no counterpart: START-HERE.sh hands
+// the caller's flags to install-all.sh, which accepts the flag (above) instead of
+// being shielded from it.
+if (ps && !ps.includes('%VN_SHELL_ARGS:-NoTerminal=%')) {
+  fail('scripts/dist.ps1 generates a START-HERE.bat that forwards -NoTerminal to install-all.ps1 / vn-harness.exe, neither of which declares it.')
+}
+
+// ...and the APP gets a third, narrower set again. -NoPause is the installer's
+// own switch but NOT the shell's, and the shell names an unknown flag instead of
+// ignoring it - so a generated START-HERE that handed -NoPause to vn-harness.exe
+// would install the pack correctly and then report "vn-harness FAILED". That is
+// measured, not hypothetical: it is what the first version of this assertion
+// caught. run-desktop.bat drops the same flag for the same reason.
+if (ps && !ps.includes('%VN_APP_ARGS:-NoPause=%')) {
+  fail('scripts/dist.ps1 generates a START-HERE.bat that forwards -NoPause to vn-harness.exe, which does not declare it - the app would refuse to start.')
+}
+if (sh && !sh.includes('-NoPause|--no-pause|-NoTerminal|--no-terminal) ;;')) {
+  fail('scripts/dist.sh does not filter the launcher-owned flags out of what its generated START-HERE.sh hands to ./vn-harness.')
 }
 
 // adapt.cmd MUST NOT use setlocal: its whole job is to leave VN_HARNESS_PS,

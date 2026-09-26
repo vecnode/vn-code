@@ -86,6 +86,7 @@ while [ $# -gt 0 ]; do
     -NoBrowser|--no-browser) no_browser=1 ;;
     -DefaultBrowser|--default-browser) default_browser=1 ;;
     -NoPause|--no-pause) VN_HARNESS_PAUSE=0 ;;
+    -NoTerminal|--no-terminal) ;;   # the console is a Windows decision; accepted so it is never "unknown"
     -Help|--help|-h) usage; exit 0 ;;
     *)
       printf 'vn-harness: unknown option "%s"\n' "$1" >&2

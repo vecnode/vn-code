@@ -58,6 +58,7 @@ run_dist=0
 do_verify=0
 keep_home=0
 do_clean=0
+out_dir_arg=''
 show_help=0
 
 usage() {
@@ -71,11 +72,14 @@ usage() {
     '  -Verify           assemble, then install into a throwaway DSH_HOME and boot' \
     '                    the pinned harness from it (the CI end-to-end check)' \
     '  -KeepVerifyHome   keep that throwaway home for inspection' \
-    '  -Clean            delete dist/ first' \
-    '  -Help             print this help'
+    '  -OutDir <dir>     assemble under this folder instead of dist/ (a relative' \
+    '                    path resolves against the repository root)' \
+    '  -Clean            delete the output folder first' \
     '  -NoPause          never hold this window open' \
+    '  -NoTerminal       accepted and ignored here; the console is a Windows decision' \
+    '  -Help             print this help' \
     '' \
-    'Builds dist/vn-harness-<version>-<rid>/ from scripts/dist-manifest.txt plus the' \
+    'Builds <out>/vn-harness-<version>-<rid>/ from scripts/dist-manifest.txt plus the' \
     'built shell, and archives it beside itself. dist/ is never committed.'
 }
 
@@ -98,8 +102,11 @@ while [ $# -gt 0 ]; do
     -Run|--run) run_dist=1 ;;
     -Verify|--verify) do_verify=1 ;;
     -KeepVerifyHome|--keep-verify-home) keep_home=1 ;;
+    -OutDir|--out-dir) shift; out_dir_arg=${1:-} ;;
+    -OutDir=*|--out-dir=*) out_dir_arg=${1#*=} ;;
     -Clean|--clean) do_clean=1 ;;
     -NoPause|--no-pause) ;;   # the entry point owns the window; accepted so it is never "unknown"
+    -NoTerminal|--no-terminal) ;;   # the console is a Windows decision; accepted so it is never "unknown"
     -Help|--help|-h|-\?) show_help=1 ;;
     *) usage >&2; fail "Unknown flag: $1" ;;
   esac
@@ -170,7 +177,18 @@ fi
 [ -n "$pack_version" ] || fail 'package.json has no "version".'
 
 artifact="vn-harness-$pack_version-$rid"
+# The output root. `dist/` unless -OutDir chose somewhere else, and the reason it
+# exists is not tidiness: assembling into a folder that is RUNNING fails on
+# Windows, where a live vn-harness.exe cannot be overwritten or deleted - and the
+# same flag has to work on both halves or the matrix drifts. A relative -OutDir
+# resolves against the repository root, so `-OutDir dist2` means `<repo>/dist2`.
 dist_root="$repo_root/dist"
+if [ -n "$out_dir_arg" ]; then
+  case "$out_dir_arg" in
+    /*) dist_root="$out_dir_arg" ;;
+    *) dist_root="$repo_root/$out_dir_arg" ;;
+  esac
+fi
 dist_dir="$dist_root/$artifact"
 zip_path="$dist_root/$artifact.zip"
 tarball_path="$dist_root/$artifact.tar.gz"
@@ -180,7 +198,7 @@ step "Platform: $platform   Repo: $repo_root"
 step "Pack version: $pack_version   Harness pin: $pin   Target: $rid"
 
 if [ "$do_clean" = 1 ] && [ -d "$dist_root" ]; then
-  step 'Cleaning dist/ ...'
+  step "Cleaning $dist_root ..."
   rm -rf "$dist_root"
 fi
 
@@ -320,8 +338,7 @@ check_sentinels() {
     scripts/install-all.sh \
     docs/INSTALL.md \
     assets/vn-harness.svg \
-    app/src-tauri/src/main.rs \
-    app/src-tauri/tauri.conf.json \
+    app/README.md \
     packages/dsh-vn-master/package.json \
     packages/dsh-vn-master/cordis.patch.yml \
     packages/dsh-rightbar/lib/client.js \
@@ -424,6 +441,23 @@ start_here="$dist_dir/START-HERE.sh"
   printf '%s\n' '  exit 1'
   printf '%s\n' '}'
   printf '%s\n' 'vn_step "Starting vn-harness. Close the window to stop it."'
+  printf '%s\n' '# The shell takes -Port / -DshHome / -DshVersion / -Help and NOTHING else: it'
+  printf '%s\n' '# NAMES an unknown flag and exits 1 rather than ignoring it, so that a typo is'
+  printf '%s\n' '# never silently dropped. -NoPause and -NoTerminal are THIS launcher'"'"'s flags -'
+  printf '%s\n' '# the installer above takes -NoPause itself, which is why "$@" goes to it'
+  printf '%s\n' '# unfiltered - so they are dropped from what the app is handed. Each argument'
+  printf '%s\n' '# is rotated through the positional parameters rather than rebuilt into a'
+  printf '%s\n' '# string, because a -DshHome with a space in it must survive as ONE argument.'
+  printf '%s\n' '_vn_left=$#'
+  printf '%s\n' 'while [ "$_vn_left" -gt 0 ]; do'
+  printf '%s\n' '  _vn_arg=$1'
+  printf '%s\n' '  shift'
+  printf '%s\n' '  case "$_vn_arg" in'
+  printf '%s\n' '    -NoPause|--no-pause|-NoTerminal|--no-terminal) ;;'
+  printf '%s\n' '    *) set -- "$@" "$_vn_arg" ;;'
+  printf '%s\n' '  esac'
+  printf '%s\n' '  _vn_left=$((_vn_left - 1))'
+  printf '%s\n' 'done'
   printf '%s\n' 'exec ./vn-harness "$@"'
 } > "$start_here"
 chmod 755 "$start_here"

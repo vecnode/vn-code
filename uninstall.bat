@@ -48,7 +48,13 @@ rem other flags. Rewriting the whole string is what keeps this safe for a -DshHo
 rem path that legitimately contains "-h". See install.bat.
 if defined VN_HELPREQ set "VN_HARNESS_ARGS=-Help"
 
-"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\uninstall-all.ps1" %VN_HARNESS_ARGS%
+rem -NoTerminal is the LAUNCHER's flag and scripts\uninstall-all.ps1 declares no
+rem such parameter; forwarding it would make PowerShell stop on an argument it
+rem cannot bind. See install.bat for the whole reason.
+set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
+set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
+
+"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\uninstall-all.ps1" %VN_SHELL_ARGS%
 set "VN_EXIT=%ERRORLEVEL%"
 
 echo.

@@ -31,6 +31,23 @@
   .mark { width: 64px; height: 64px; color: #f4f4f6; display: block; margin: 0 auto 1.25rem; }
   h1 { font-size: 18px; font-weight: 600; margin: 0 0 .5rem; letter-spacing: .01em; }
   .step { margin: 0; color: #b9b9bf; }
+  /* The key line. Its colour is the whole message at a glance - a green dot for
+     "the harness will find a key", amber for "it will not" - and the words carry
+     the part a colour cannot: WHICH layer answered. */
+  .key {
+    margin: 1.25rem 0 0; font-size: 13px; line-height: 18px;
+    display: flex; gap: .5rem; align-items: baseline; justify-content: center;
+  }
+  .key::before {
+    content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor; transform: translateY(-1px);
+  }
+  .key.ok { color: #7fd18b; }
+  .key.warn { color: #e0b872; }
+  .where {
+    margin: 1rem 0 0; font-size: 11.5px; line-height: 16px; color: #82828b;
+    word-break: break-all;
+  }
   .hint {
     margin: 1.5rem 0 0; padding: .75rem 1rem; text-align: left;
     color: #cfcfd4; background: #16181d; border: 1px solid #24262c; border-radius: 6px;
@@ -44,6 +61,8 @@
   </svg>
   <h1>vn-harness</h1>
   <p class="step" id="step">Starting the harness&hellip;</p>
+  <p class="key" id="key" hidden></p>
+  <p class="where" id="where" hidden></p>
   <p class="hint" id="hint" hidden>
     This is taking longer than usual. The first run downloads the pinned harness
     and can take a minute. If this window never changes, look at the console
@@ -52,6 +71,42 @@
   </p>
 </main>
 <script>
+  // There is still no IPC channel on this page and no command is exposed - the
+  // shell cannot be called from here. What it CAN do is hand one read-only fact
+  // over before this document is parsed: `initialization_script` in main.rs
+  // defines `window.__VN_HARNESS_SPLASH__` (and only on this page - the script
+  // runs on every navigation, so it guards on the pathname, or the harness page
+  // would inherit a global it has no use for).
+  //
+  // It carries a boolean, the NAME of the layer the key was found in and the
+  // resolved harness home. It never carries the key: nothing on this page can
+  // leak a secret it was never given, and this page is replaced by the harness
+  // wholesale on success.
+  (function () {
+    var state = window.__VN_HARNESS_SPLASH__;
+    if (!state) return;
+    var key = document.getElementById('key');
+    var where = document.getElementById('where');
+    if (key && state.key) {
+      if (state.key.loaded) {
+        key.className = 'key ok';
+        key.textContent = 'DeepSeek key loaded - from ' + (state.key.source || 'this machine') + '.';
+      } else {
+        key.className = 'key warn';
+        key.textContent = 'No DeepSeek key yet - add one in Settings \u2192 Models.';
+      }
+      key.hidden = false;
+    }
+    // The home is the answer to "does a new version pick up where the last one
+    // left off": sessions, settings and the key all live here, not in the folder
+    // that was replaced.
+    if (where && state.home) {
+      where.textContent = 'Harness home: ' + state.home +
+        ' (sessions, settings and the key from every earlier version live here)';
+      where.hidden = false;
+    }
+  })();
+
   // Nothing here can talk to the shell - there is no IPC channel on this page
   // and no command is exposed - so the only honest thing it does is say when
   // the wait has gone on too long. The shell replaces the page wholesale on

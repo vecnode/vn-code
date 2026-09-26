@@ -310,6 +310,10 @@ $t=$null;$e=$null; [System.Management.Automation.Language.Parser]::ParseFile(
 sh -n scripts/console/theme.sh                          # POSIX, dash-compatible
 node scripts/checks/check-dist-layout.mjs               # the ship list, the
                                                         # matrix, the console contract
+node scripts/checks/check-no-secrets.mjs                 # nothing credential-shaped
+                                                        # may reach a commit
+node scripts/checks/check-splash.mjs                    # the startup window's two
+                                                        # halves and the names they share
 # Entry points. ALWAYS pass -NoPause and VN_HARNESS_NO_WT when checking them from
 # a script: without -NoPause a failure waits for a keypress, and without the env
 # var a check would open a real Windows Terminal window.

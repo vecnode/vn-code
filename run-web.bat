@@ -59,7 +59,17 @@ rem other flags. Rewriting the whole string is what keeps this safe for a -DshHo
 rem path that legitimately contains "-h". See install.bat.
 if defined VN_HELPREQ set "VN_HARNESS_ARGS=-Help"
 
-"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run-web.ps1" %VN_HARNESS_ARGS%
+rem -NoTerminal belongs to the LAUNCHER, not to the run: scripts\console\adapt.cmd
+rem is the file that acts on it, deciding whether to relaunch into Windows
+rem Terminal. scripts\run-web.ps1 declares no such parameter, and PowerShell stops
+rem on an argument it cannot bind, so forwarding it would turn a documented flag
+rem into a failed run. Only that one flag is dropped: -NoPause IS the worker's own
+rem (it holds its window open), and -Port, -DshHome, -DshVersion, -NoBrowser and
+rem -DefaultBrowser pass through untouched.
+set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
+set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
+
+"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run-web.ps1" %VN_SHELL_ARGS%
 set "VN_EXIT=%ERRORLEVEL%"
 
 rem Exactly 1 is how the worker reports its own failures - a missing manifest, a
