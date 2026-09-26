@@ -1,0 +1,26 @@
+# dsh-video bundle layer (alpha).
+#
+# One row ('video') ships the browser half: the `video` tab type for the pack's
+# right bar, its player, its facts panel and its remux/transcode action.
+#
+# The HOST half of what this tab shows belongs to dsh-media (row `media`): the
+# Range-capable file route that streams a file to the <video> element, the probe
+# summary behind the facts panel, and the remux/transcode job. ffmpeg has one
+# owner in this pack, and the video tab is a surface over it - so this package
+# ships no route, no host state and no path policy of its own, and its Node half
+# is one no-op row whose only job is to put the browser bundle in the boot graph.
+#
+# Nothing shipped is patched and no core row is disabled. The one surface this
+# package SUPERSEDES it supersedes by REGISTRATION, not by disabling: the bar's
+# tab registry ranks a type in the `extension` band above the shipped document
+# preview's `text` type in the `fallback` band, so a `*.mp4` (or any other video
+# container) address opens here while every other file type keeps exactly the
+# surface it had. Audio formats are deliberately NOT claimed: WAV/AIFF/FLAC are
+# dsh-audio's waveform, and MP3/M4A/Ogg are the shipped preview's own player.
+#
+# There is therefore no `disabled: true` here and nothing for
+# scripts/sync-vendored.ps1 to keep in sync: this package is hand-written and
+# forks nothing.
+- insert:
+    - id: video
+      name: 'dsh-video'

@@ -1,0 +1,29 @@
+{
+  "name": "dsh-video",
+  "version": "0.1.0-alpha.1",
+  "description": "Video as a surface that actually plays. A right-bar tab type (row `video`, kind `video`) for MP4, MOV, WebM, MKV, AVI, WMV, FLV, OGV, MPEG-TS and 3GP: the film streams through dsh-media's Range-capable route (so a 2 GB file seeks instead of being read into memory), plays in a pane that fits it, and carries a facts panel with the container, every stream, the chapters as jump targets and what a browser can and cannot decode. When a container or codec is one no browser opens, the tab offers the one action that fixes it - a remux or a transcode through dsh-media's ffmpeg, into a cached MP4 it then plays - with ffmpeg's own progress while it runs. Client-only: the bytes, the probe and the conversion all belong to dsh-media, which says so in a sentence when it is not installed. Alpha.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-session",
+        "dsh-rightbar"
+      ]
+    }
+  },
+  "license": "MIT"
+}

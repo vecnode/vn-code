@@ -122,6 +122,18 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
     truncated file reported as unknown rather than silent, an unsupported codec
     refused by name, and the peak pyramid's bucket arithmetic - including that a
     WINDOWED decode builds the same pyramid as a whole-file one.
+  - `dsh-video` - the video type and its seat, the extension band and the
+    `canOpen` refusals (including that it claims both address shapes and that
+    audio formats are deliberately NOT claimed), the chip title and the absence
+    of a guide entry, the opening and address-less markup, and the tab's
+    load-bearing rules by name: the **bytes stay on the host** (`<video>` is
+    handed a URL to dsh-media's Range-capable route, with no `arrayBuffer`, no
+    blob and no `workspaceFiles` read anywhere in the bundle), the aborted
+    in-flight probe, the POST-then-poll conversion whose poll keys on the job's
+    ID rather than the job object, the "play it anyway" overlay, and the
+    sentence a profile without dsh-media is shown. Its pure half is driven too:
+    the POSIX / Windows-drive / UNC absolute addresses all reassemble correctly,
+    which is the parser a wrong answer would turn into another file.
 - `check-node-routes.mjs` imports each Node half, captures the handlers it
   registers on the `connection` service, and drives them with real `Request`s
   against temp workspaces and a temp `DSH_HOME`:
@@ -174,6 +186,44 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
   proves on any host that the raster handed to the engine is the one drawn for
   that page, that a second call is a cache hit, that another dpi/psm/language is
   a new recognition, and that the per-call cap names the pages it left.
+- `check-media-node.mjs` drives `dsh-media`'s host half the way the agent and the
+  video tab do - module import, `apply(context)`, then real tool calls and real
+  `Request`s against the captured route table. It is deliberately split by what it
+  can promise on ANY host:
+  - the **pin** is exercised completely without ffmpeg and without the network:
+    this file builds a synthetic build tree, packs it with the host's own `tar`,
+    hashes it, serves it over a loopback HTTP server and drives the whole
+    provisioning pipeline - download, SHA-256 verification, `tar` unpack, the
+    atomic `.partial`+rename install, the `install.json` stamp, the lock, the
+    cleanup - then asserts the resolution order (explicit env path, then PATH,
+    then the provisioned copy), that a second call is a no-op, that a hash
+    MISMATCH installs nothing and leaves no stamp, and that an unpinned platform
+    is refused in words. `DSH_MEDIA_NO_INSTALL=1` and a temp `DSH_HOME` are set
+    before the module is imported, so no check run can ever start a real
+    download or touch `~/.dsh`;
+  - the **ffmpeg-dependent half** (real probing, `media_run`'s argv handling and
+    its no-overwrite default, frames and contact sheets, the routes, a real
+    remux and a real transcode) runs when the host has ffmpeg and **skips
+    loudly** when it does not, because a check that downloads 170 MB to pass is
+    not a check. It builds its own fixtures (`testsrc2` + `sine` to H.264/AAC, an
+    mpeg4 AVI, an MKV copy, a PNG) so it needs no files on disk;
+  - the **route contracts** are asserted by name either way: `/file` answers
+    200/206/416 with matching `content-length`/`content-range` for whole, closed,
+    suffix and unsatisfiable ranges, HEAD answers without a body, the video
+    extension gate is 415 for anything else, `/report` is the same facts the tool
+    prints, the remux job hands back a 32-hex cache key which `/file?cache=` then
+    serves (seekably), asking twice joins the finished job, a file the browser
+    already plays starts no job at all, and `parseRange` is driven directly on
+    seven shapes including the nonsense ones;
+  - the **host with NO ffmpeg** is a section of its own, because "a machine
+    without ffmpeg degrades in a sentence" is a promise the video tab's whole
+    no-ffmpeg overlay rests on: a SEPARATE module instance is imported with
+    broken `DSH_MEDIA_FFMPEG`/`DSH_MEDIA_FFPROBE` paths and
+    `DSH_MEDIA_NO_INSTALL=1`, and must load, must answer `/report` with
+    `200 {ok:true, unavailable:true}` rather than a 500, must name the file it
+    could not inspect, and must let a tool call explain itself instead of
+    throwing. The environment is restored in a `finally`, so nothing later in
+    the run inherits it.
 - `check-skill-examples.mjs` extracts every fenced example from `skills/**/*.md`
   and parses or compiles it with the plugin's own engines, so a copy-pasteable
   source that no longer works fails the run instead of misleading the next

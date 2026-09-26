@@ -2562,6 +2562,244 @@ check(
 const imageNoTabMarkup = renderToStaticMarkup(h(ImageBody, { useTabInfo: () => ({ tab: { id: 'tab10', contentId: '' } }), sessionId: 's1' }))
 check('an address-less image tab still renders', imageNoTabMarkup.includes('data-image-state="loading"'))
 
+// ---------------------------------------------------------------- dsh-video
+//
+// The video tab is the pack's one surface whose data comes from ANOTHER
+// package's host routes (dsh-media owns the bytes, the probe and the ffmpeg), so
+// this section pins three separate promises: the tab type ranks and refuses the
+// way the image and audio types do; the player is handed a URL rather than
+// bytes, because the host route supports HTTP Range and reading a 2 GB film into
+// memory is the one thing that must never happen here; and a profile without
+// dsh-media is told which package is missing instead of showing a dead player.
+const video = loadBundle('packages/dsh-video/lib/client.js', {})
+const videoCssTag = video.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-video/video.css').pop()
+const videoCss = videoCssTag ? videoCssTag.textContent : ''
+const videoSource = readFileSync(path.join(repo, 'packages/dsh-video/lib/client.js'), 'utf8')
+check('video bundle id', video.id, 'dsh-video')
+check('video inject', JSON.stringify(video.exports.inject), '["slots","sidebarRightTabs"]')
+check('video stylesheet injected', videoCss.includes('.dsv-root{') && videoCss.includes('.dsv-tools{'))
+check(
+  'video top bar is the 38px pane header',
+  videoCss.includes('.dsv-tools{flex:none;display:flex;align-items:center;gap:6px;box-sizing:border-box;height:38px;'),
+)
+// The player FITS the pane: a real layout size, never a scale transform, so a
+// 4K film is visible whole and a phone clip is not stretched across the pane.
+check(
+  'the player fits the pane by layout, never a transform',
+  videoCss.includes('.dsv-video{display:block;max-width:100%;max-height:100%;width:auto;height:auto') && videoCss.includes('transform:') === false,
+)
+// The stage is the black box the video is centred in, which is what makes the
+// fitted picture read as a player rather than as a hole in the tab.
+check('the stage is the letterboxed one', videoCss.includes('.dsv-stage{flex:1;min-width:0;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;background:#0a0a0a'))
+// THE RULE THIS TAB EXISTS FOR: the <video> element is handed a URL to a
+// Range-capable route. No byte is ever read into the tab, no blob is built.
+check(
+  'the bytes stay on the host: <video> gets a URL, never a buffer',
+  videoSource.includes('src: source.url') &&
+    videoSource.includes("FILE_ROUTE + '?' + addressParams(parsed, sessionId).toString()") &&
+    videoSource.includes('arrayBuffer(') === false &&
+    videoSource.includes('createObjectURL') === false &&
+    videoSource.includes('readAll') === false,
+)
+check('the route it streams through is dsh-media range-capable file route', video.exports.__internals.FILE_ROUTE, '/api/dsh-media/file')
+check('the probe is one request to dsh-media, with the credentials a route needs', videoSource.includes('fetchJson(url, { signal: controller.signal })') && videoSource.includes("credentials: 'same-origin'"))
+check(
+  'a tab that changes address aborts the request it started',
+  videoSource.includes('const controller = new AbortController()') && videoSource.includes('controller.abort()') && videoSource.includes('live = false'),
+)
+check(
+  'a conversion is a POST of the address, then a poll of the job',
+  videoSource.includes('fetchJson(REMUX_ROUTE, {') && videoSource.includes("JOB_ROUTE + '?id=' + encodeURIComponent(jobId)"),
+)
+// The poll must key on the job's ID and whether it runs, never on the job
+// object: every poll replaces that object, and an effect depending on it would
+// restart its own timer on every tick (the bug this comment exists to prevent).
+check('the job poll keys on the id, not the object', videoSource.includes('}, [running, jobId])'))
+check(
+  'a profile without dsh-media says which package is missing',
+  videoSource.includes("phase === 'missing'") && /dsh-media is not installed/.test(videoSource) && videoSource.includes('/api/dsh-media/*'),
+)
+check(
+  'the overlay keeps "play it anyway" reachable when the probe fails',
+  videoSource.includes("'data-dsh-video': 'play-anyway'") && videoSource.includes('const overlay = dismissed ? null : overlayFor('),
+)
+check('chapters are jump targets in both the bar and the panel', videoSource.includes("'data-dsh-video': 'chapter'") && videoSource.includes('onChapter(chapter.startSec)'))
+check(
+  'the conversion is offered with its real cost named',
+  videoSource.includes("'Remux it (instant, no quality loss)'") && videoSource.includes("'Convert it to H.264'"),
+)
+check('the version marker is in the toolbar', videoSource.includes("h('span', { className: 'dsv-meta dsv-ver' }, 'v' + props.version)"))
+
+const videoTypes = []
+const videoSeats = {}
+video.exports.apply({
+  slots: {
+    inject: (name, fn) => fn(),
+    register(spec, component) {
+      videoSeats[spec.name + (spec.key ? '#' + spec.key : '')] = { spec, component }
+      return () => {}
+    },
+  },
+  sidebarRightTabs: { register: (definition) => (videoTypes.push(definition), () => {}), entries: () => [] },
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+check('video type registered', videoTypes.length === 1 && videoTypes[0].id + '/' + videoTypes[0].kind, 'dsh-video/video')
+check('video outranks the shipped preview band', videoTypes[0].priority, 'extension')
+// Pinned against the SAME literal dsh-media's VIDEO_EXTENSIONS is pinned to in
+// check-media-node.mjs: a tab that claims a format the host route refuses to
+// stream would open a player that can never load.
+check(
+  'video claims exactly the video containers',
+  JSON.stringify(videoTypes[0].patterns),
+  JSON.stringify(['*.mp4', '*.m4v', '*.mov', '*.webm', '*.mkv', '*.avi', '*.wmv', '*.flv', '*.ogv', '*.ts', '*.m2ts', '*.mpg', '*.mpeg', '*.3gp', '*.mts']),
+)
+check(
+  'video canOpen takes videos and refuses everything else',
+  videoTypes[0].canOpen('dsh-resource://file/session/s1/clips/HOLIDAY.MP4') === true &&
+    videoTypes[0].canOpen('dsh-resource://file/session/s1/clips/render.mkv') === true &&
+    videoTypes[0].canOpen('dsh-resource://file/absolute/home/me/clip.webm') === true &&
+    videoTypes[0].canOpen('dsh-resource://file/session/s1/song.mp3') === false &&
+    videoTypes[0].canOpen('dsh-resource://file/session/s1/wave.wav') === false &&
+    videoTypes[0].canOpen('dsh-resource://file/session/s1/shot.png') === false &&
+    videoTypes[0].canOpen('dsh-resource://pdf/absolute/x.mp4') === false,
+)
+check('the video chip title is the file name', videoTypes[0].title('dsh-resource://file/session/s1/clips/holiday%20clip.mp4'), 'holiday clip.mp4')
+// A blank video is not a document anyone opens from the "+" control.
+check('the video type adds no guide entry', videoTypes[0].guide === undefined)
+check(
+  'video seats',
+  Object.keys(videoSeats).sort().join(','),
+  'sidebar.right.pane.tab#dsh-video,sidebar.right.pane.tab.title#dsh-video',
+)
+// The pure half: both address shapes, and the one that is easy to get wrong.
+const videoInternals = video.exports.__internals
+check(
+  'a POSIX absolute address gets its leading slash back',
+  JSON.stringify(videoInternals.parseVideoAddress('dsh-resource://file/absolute/home/me/clip.mp4')),
+  JSON.stringify({ absolute: '/home/me/clip.mp4' }),
+)
+check(
+  'a Windows absolute address is left alone',
+  JSON.stringify(videoInternals.parseVideoAddress('dsh-resource://file/absolute/C:/Users/me/clip.mp4')),
+  JSON.stringify({ absolute: 'C:/Users/me/clip.mp4' }),
+)
+check(
+  'a UNC absolute address keeps its empty first segment',
+  JSON.stringify(videoInternals.parseVideoAddress('dsh-resource://file/absolute//server/share/clip.mp4')),
+  JSON.stringify({ absolute: '//server/share/clip.mp4' }),
+)
+check(
+  'a session address decodes its path segments',
+  JSON.stringify(videoInternals.parseVideoAddress('dsh-resource://file/session/s1/clips/holiday%20clip.mp4')),
+  JSON.stringify({ sessionId: 's1', path: 'clips/holiday clip.mp4' }),
+)
+check('an unknown address shape is refused', videoInternals.parseVideoAddress('dsh-resource://diagram/session/s1/x') === null && videoInternals.parseVideoAddress('') === null)
+check('a browser error code is explained in words', /will not play this container or codec at all/.test(videoInternals.mediaErrorText({ error: { code: 4 } })))
+check('...and an unknown one is not blamed on the file', /without saying why/.test(videoInternals.mediaErrorText(null)))
+
+const VideoBody = videoSeats['sidebar.right.pane.tab#dsh-video'].component
+const videoTab = { id: 'tab11', contentId: 'dsh-resource://file/session/s1/clips/holiday%20clip.mp4', title: 'holiday clip.mp4' }
+const videoMarkup = renderToStaticMarkup(h(VideoBody, { useTabInfo: () => ({ tab: videoTab }), sessionId: 's1' }))
+check('video body renders its opening state', videoMarkup.includes('data-dsv-state="loading"') && videoMarkup.includes('Reading the file'))
+check('the opening state names the file it is opening', videoMarkup.includes('clips/holiday clip.mp4'))
+check(
+  'video title seat draws the chip',
+  renderToStaticMarkup(h(videoSeats['sidebar.right.pane.tab.title#dsh-video'].component, { useTabInfo: () => ({ tab: videoTab }) })),
+  '<span class="dsv-name" data-dsh-video="title">holiday clip.mp4</span>',
+)
+const videoNoTabMarkup = renderToStaticMarkup(h(VideoBody, { useTabInfo: () => ({ tab: { id: 'tab12', contentId: '' } }), sessionId: 's1' }))
+check('an address-less video tab still renders', videoNoTabMarkup.includes('data-dsv-state="bad-address"'))
+// The facts panel and the conversion affordances are props -> markup, and the
+// tab body's own render can never reach them (a server render runs no effect, so
+// it always stops at the loading state). They are driven directly instead - this
+// is the markup a person reads while deciding what to do with a file, and the
+// checked-jump and one-click-repair promises live here.
+const videoFacts = {
+  path: 'clips/holiday clip.mkv',
+  name: 'holiday clip.mkv',
+  size: 1_234_567,
+  sizeText: '1.2 MB',
+  container: { name: 'matroska,webm', longName: 'Matroska / WebM', tags: { encoder: 'Lavf60.6.100' } },
+  durationSec: 62.5,
+  durationText: '1:02.500',
+  bitRate: 1_900_000,
+  bitRateText: '1.9 Mb/s',
+  streams: [
+    {
+      index: 0,
+      type: 'video',
+      codec: 'h264',
+      profile: 'High',
+      width: 1920,
+      height: 1080,
+      dar: '16:9',
+      rate: { rational: '24000/1001', decimal: 23.98, text: '23.98 fps' },
+      pixelFormat: 'yuv420p',
+      bitDepth: 8,
+      bitRate: 1_500_000,
+      frames: 1500,
+      language: '',
+      title: '',
+      dispositions: ['default'],
+      rotation: null,
+      fieldOrder: 'progressive',
+    },
+    { index: 1, type: 'audio', codec: 'aac', profile: 'LC', sampleRate: 48_000, channels: 2, channelLayout: 'stereo', bitRate: 128_000, language: 'eng', title: '', dispositions: ['default'] },
+  ],
+  video: [],
+  audio: [],
+  subtitles: [],
+  others: [],
+  chapters: [
+    { index: 0, startSec: 0, endSec: 30, title: 'Intro' },
+    { index: 1, startSec: 30, endSec: 62.5, title: 'Main feature' },
+  ],
+  notes: [],
+  error: '',
+  playable: { verdict: 'remux', container: 'matroska', reason: 'the streams are browser-decodable, but the matroska container is not one a browser opens', command: 'ffmpeg -i "holiday clip.mkv" -c copy "holiday clip-playable.mp4"' },
+}
+videoFacts.video = [videoFacts.streams[0]]
+videoFacts.audio = [videoFacts.streams[1]]
+const videoInternals2 = video.exports.__internals
+const factsMarkup = renderToStaticMarkup(
+  h(videoInternals2.FactsPanel, { facts: videoFacts, kind: 'matroska', onChapter: () => {} }),
+)
+check('the facts panel names the container and the duration', factsMarkup.includes('Matroska / WebM') && factsMarkup.includes('1:02.500'))
+check('...draws one block per stream', (factsMarkup.match(/dsv-streamHead/g) ?? []).length, 2)
+check('...with the real pixel size and the exact frame-rate rational', factsMarkup.includes('1920 x 1080') && factsMarkup.includes('24000/1001'))
+check('...and the audio layout', factsMarkup.includes('48000 Hz') && factsMarkup.includes('stereo'))
+check('...lists the tags', factsMarkup.includes('encoder') && factsMarkup.includes('Lavf60.6.100'))
+check('every chapter is a jump target', (factsMarkup.match(/data-dsh-video="chapter"/g) ?? []).length, 2)
+check('...and the chapter titles are shown', factsMarkup.includes('Intro') && factsMarkup.includes('Main feature'))
+check('the panel states the browser verdict', factsMarkup.includes('data-verdict="remux"') && /not one a browser opens/.test(factsMarkup))
+check('...and prints the command that would fix it', factsMarkup.includes('ffmpeg -i &quot;holiday clip.mkv&quot; -c copy') && factsMarkup.includes('Copy command'))
+const toolbarMarkup = renderToStaticMarkup(
+  h(videoInternals2.Toolbar, {
+    name: 'holiday clip.mkv',
+    version: '0.1.0-alpha.1',
+    facts: videoFacts,
+    needsWork: true,
+    verdict: 'remux',
+    showFacts: false,
+    onToggleFacts: () => {},
+    chapters: videoFacts.chapters,
+    onChapter: () => {},
+    onNudge: () => {},
+    onConvert: () => {},
+  }),
+)
+check('the bar offers the REMUX, not a blind transcode', toolbarMarkup.includes('Remux to MP4') && toolbarMarkup.includes('data-dsh-video="convert"'))
+check('...carries the file facts and the honest verdict chip', toolbarMarkup.includes('1:02.500') && toolbarMarkup.includes('1920x1080') && toolbarMarkup.includes('data-dsh-video="verdict-chip"'))
+check('...offers the chapter picker and the seek steps', toolbarMarkup.includes('data-dsh-video="chapters"') && toolbarMarkup.includes('−5s') && toolbarMarkup.includes('+5s'))
+check('...and the Facts toggle', toolbarMarkup.includes('data-dsh-video="facts-toggle"'))
+check('the transcode wording is used when the codec is the problem', renderToStaticMarkup(h(videoInternals2.Toolbar, { name: 'x.avi', version: 'v', facts: { ...videoFacts, playable: { ...videoFacts.playable, verdict: 'transcode' } }, needsWork: true, verdict: 'transcode', onConvert: () => {} })).includes('Convert for the browser'))
+const noFfmpegOverlay = renderToStaticMarkup(h(videoInternals2.overlayFor, { phase: 'unavailable', message: 'No ffmpeg on this machine yet' }, { provisioning: false, onProvision: () => {}, onRetry: () => {}, onDismiss: () => {} }))
+check('the no-ffmpeg overlay offers the pinned download AND a way to play', noFfmpegOverlay.includes('data-dsh-video="get-ffmpeg"') && noFfmpegOverlay.includes('data-dsh-video="play-anyway"'))
+const unreadableOverlay = renderToStaticMarkup(h(videoInternals2.overlayFor, { phase: 'unreadable', message: 'ffprobe found no container' }, { provisioning: false, onProvision: () => {}, onRetry: () => {}, onDismiss: () => {} }))
+check('an unreadable probe keeps the file reachable', unreadableOverlay.includes('data-dsh-video="play-anyway"') && unreadableOverlay.includes('Read it again'))
+check('a ready phase draws no overlay at all', videoInternals2.overlayFor({ phase: 'ready' }, {}) === null)
+
 // ---------------------------------------------------------------- dsh-audio
 //
 // The audio bundle is the pack's one surface whose real work is ARITHMETIC: a

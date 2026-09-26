@@ -1,0 +1,81 @@
+{
+  "comment": "The pinned ffmpeg/ffprobe copies dsh-media may provision. One entry per platform-arch. Nothing here is downloaded until a machine asks for it AND has no ffmpeg of its own (see ../ffmpeg.js for the resolution order), and nothing here is executed until its SHA-256 has been verified against the bytes that arrived. Refresh with: node packages/dsh-media/tools/binaries.mjs --update (it re-reads BtbN's release assets and evermeet's own release info, downloads each archive, and rewrites this file with the hashes it measured). Validate the same way a check does with --check.",
+  "generated": "2026-09-26",
+  "platforms": {
+    "win32-x64": {
+      "build": "BtbN FFmpeg-Builds autobuild-2026-09-26-13-03",
+      "version": "N-126889-gb139ba11d8",
+      "license": "LGPL-2.1-or-later (static, no GPL components)",
+      "archives": [
+        {
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-26-13-03/ffmpeg-N-126889-gb139ba11d8-win64-lgpl.zip",
+          "sha256": "13fc24259828c291b5aff24d2c9be3903e0aaeb8130c472d8ef8057923dc8352",
+          "bytes": 173535440,
+          "kind": "zip"
+        }
+      ]
+    },
+    "win32-arm64": {
+      "build": "BtbN FFmpeg-Builds autobuild-2026-09-26-13-03",
+      "version": "N-126889-gb139ba11d8",
+      "license": "LGPL-2.1-or-later (static, no GPL components)",
+      "archives": [
+        {
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-26-13-03/ffmpeg-N-126889-gb139ba11d8-winarm64-lgpl.zip",
+          "sha256": "8d5f7414504d98857635031b9d482fff67d7385e1bb95917909d9c593a3dc34d",
+          "bytes": 119292198,
+          "kind": "zip"
+        }
+      ]
+    },
+    "linux-x64": {
+      "build": "BtbN FFmpeg-Builds autobuild-2026-09-26-13-03",
+      "version": "N-126889-gb139ba11d8",
+      "license": "LGPL-2.1-or-later (static, no GPL components)",
+      "archives": [
+        {
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-26-13-03/ffmpeg-N-126889-gb139ba11d8-linux64-lgpl.tar.xz",
+          "sha256": "1c1e885e35be75a9242d11415833ab576a3a7fd359515dcd0d1cf76fc06f7fbb",
+          "bytes": 139503916,
+          "kind": "tar.xz"
+        }
+      ]
+    },
+    "linux-arm64": {
+      "build": "BtbN FFmpeg-Builds autobuild-2026-09-26-13-03",
+      "version": "N-126889-gb139ba11d8",
+      "license": "LGPL-2.1-or-later (static, no GPL components)",
+      "archives": [
+        {
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-26-13-03/ffmpeg-N-126889-gb139ba11d8-linuxarm64-lgpl.tar.xz",
+          "sha256": "407550a18205c4100f4d0f885c488caf1dd0e88399ef881e0275d1ba22deb691",
+          "bytes": 118231108,
+          "kind": "tar.xz"
+        }
+      ]
+    },
+    "darwin-x64": {
+      "build": "evermeet.cx release 9.0.2 (x86_64; runs on Apple Silicon under Rosetta 2)",
+      "version": "9.0.2",
+      "license": "GPL-3.0-or-later (the evermeet builds are GPL)",
+      "archives": [
+        {
+          "url": "https://evermeet.cx/ffmpeg/ffmpeg-9.0.2.zip",
+          "sha256": "4acc0be580f9b2788029eb7bd4d645ff87968911b0a62aeeb3940d42d54558d5",
+          "bytes": 26198325,
+          "kind": "zip"
+        },
+        {
+          "url": "https://evermeet.cx/ffmpeg/ffprobe-9.0.2.zip",
+          "sha256": "24a9c968cd4da72d99c7245e914b921815835eb6dff01d99868031aebaf1d439",
+          "bytes": 26104193,
+          "kind": "zip"
+        }
+      ]
+    }
+  },
+  "notPinned": {
+    "darwin-arm64": "No Apple-Silicon build publishes both a versioned URL and a checksum that this plugin could verify, and pinning a URL that moves would break the verification rather than strengthen it. On Apple Silicon ffmpeg comes from `brew install ffmpeg` or from a PATH install, and DSH_MEDIA_FFMPEG / DSH_MEDIA_FFPROBE point at any build you already have.",
+    "anything else": "Any platform-arch absent above says so in a sentence (see unsupportedMessage in ../ffmpeg.js) instead of guessing at a download."
+  }
+}

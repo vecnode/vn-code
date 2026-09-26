@@ -397,10 +397,40 @@ cookie leaks, rotate the signing secret.
   `GENERATED - do not edit by hand` banner; `scripts/sync-vendored.ps1 -Check`
   reports drift without writing, and `.gitattributes` pins their line endings so
   a Windows checkout cannot create phantom drift.
+- **One binary is downloaded, and only when the machine has none.**
+  `dsh-media` runs ffmpeg, and the repository deliberately does NOT commit a
+  130-170 MB static build per platform. It ships a **pin** instead
+  (`packages/dsh-media/lib/binaries.json`: per platform-arch, the official
+  build's URL and its SHA-256), and provisions it into
+  `$DSH_HOME/dsh-media/bin/<platform>-<arch>/` under four rules that exist to
+  make that safe:
+  1. **`PATH` wins.** A machine that already has ffmpeg downloads nothing at
+     all, and `DSH_MEDIA_FFMPEG` / `DSH_MEDIA_FFPROBE` point at binaries you
+     already have. `DSH_MEDIA_NO_INSTALL=1` forbids the download entirely and
+     turns it into a sentence instead.
+  2. **Verify before exec.** The archive is hashed **as it arrives** and
+     compared with the pin **before anything is executed**; a mismatch deletes
+     it, installs nothing, writes no stamp, and reports both hashes.
+  3. **Two hosts, both documented.** `github.com` (BtbN/FFmpeg-Builds, LGPL
+     static) and `evermeet.cx` (macOS x86_64, GPL); the manifest's own
+     `--check` refuses any other host, and `tools/binaries.mjs --verify`
+     re-downloads every pinned archive and compares hashes. The Windows
+     archive's shipped hash was confirmed by downloading all 173,535,440 bytes;
+     the macOS pair is hashed by the updater, because evermeet publishes a GPG
+     signature rather than a checksum.
+  4. **Nothing partial is ever run.** Unpacking uses the host's own `tar`, each
+     binary is copied in under a `.partial` name and renamed, and a stale lock
+     from a killed process is stolen after 30 minutes rather than wedging the
+     install. `darwin-arm64` is deliberately unpinned, because no Apple-Silicon
+     build publishes both a versioned URL and a checksum - a pin that moves is
+     worse than an honest gap.
 - **Behaviour is pinned by tracked checks** (`scripts/checks/*.mjs`), including
   the security-relevant ones: workspace containment, create-only writes, the
   option-injection guard on git, the screenshot write refusals, the diagram
-  budget, and the terminal's refusal of an unauthenticated upgrade.
+  budget, the terminal's refusal of an unauthenticated upgrade, and - for
+  `dsh-media` - the whole provisioning pipeline against a synthetic archive
+  (hash verification, the mismatch refusal, the atomic install) plus the
+  workspace containment every media tool and route re-validates.
 
 ## Secrets never enter this repository
 
@@ -467,7 +497,13 @@ enabling on this repository as a second net behind this check.
   folders you open, and the Desktop for the two features that save pictures
   there.
 - No core-file or profile-file edits beyond what `dsh plugin add|remove` does.
-- No network access, no telemetry, no auto-update.
+- No telemetry and no auto-update. The pack makes exactly one kind of network
+  request of its own — `dsh-media` fetching a **pinned, hash-verified** ffmpeg
+  build — and only on a machine that has no ffmpeg of its own, never on a
+  schedule, and never without a SHA-256 to check it against
+  (`DSH_MEDIA_NO_INSTALL=1` forbids even that; see
+  [Supply chain](#supply-chain)). Everything else it needs is either committed
+  or comes from the harness.
 - No HTTPS server of its own; the app is a loopback HTTP server, and loopback is
   what makes the browser's screen-capture API available at all (`localhost` is a
   secure context).

@@ -48,26 +48,32 @@ root** — with the three exceptions in §3.
 | `.credentials.yaml` | the model API key | `dsh-credentials-local` |
 | `.anonymous-user-id` | one random id, created on first run | `dsh-anonymous-user-id` |
 | `attachments/v1/files/…` | files pasted/attached into a conversation | `dsh-attachment-local` |
-| `skills/` | the pack's copied skills (`mermaid-diagrams`, `tikz-diagrams`, `pdf-analysis`), each under a `.vn-harness-<package>` marker | both installers |
+| `skills/` | the pack's copied skills (`mermaid-diagrams`, `tikz-diagrams`, `pdf-analysis`, `ffmpeg-cli`, `ffprobe-cli`), each under a `.vn-harness-<package>` marker | both installers |
 | `profiles/<name>/` | the profile: `package.json`, `cordis.yml`, `cordis.patch.yml`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `node_modules/`, `.dsh-module-fallback/` | `dsh-app-boot`, pnpm, the installers |
 | `profiles/node_modules/` | **junctions/symlinks into the installation** — see §2 | `healProfilesModuleFallback`, at every boot |
 | `dsh-pdf/artifacts/<sha256>/…` | PDF parse cache: `index.json`, `stats.json`, `pages/`, `ocr/`, `images/` | `dsh-pdf` |
 | `dsh-diagrams/sessions/<session>.json`, `library.json`, `artifacts/…` | diagram state and the shared library | `dsh-diagrams` |
+| `dsh-media/bin/<platform>-<arch>/` | the **provisioned ffmpeg/ffprobe copy** plus its `install.json` stamp (URL, SHA-256, version, date) — and nothing at all on a machine that already has ffmpeg on `PATH` | `dsh-media` |
+| `dsh-media/playable/<key>.mp4` | the browser-playable remux/transcode cache, keyed by `sha256(realpath+size+mtime+mode)` | `dsh-media` |
 | `vn-harness/window.json` | the desktop window's size/position (`{version,width,height,x,y,maximized}`) | the Rust shell (`app/src-tauri/src/windowstate.rs`) |
 
-The last three are this pack's own, and they follow the harness's rule rather
+The pack's own trees are the last five, and they follow the harness's rule rather
 than inventing one: a plugin's state goes under the harness home and nowhere
-else. `dsh-pdf` and `dsh-diagrams` each keep a **content-addressed cache** under
-it (LRU-capped at 512 MiB and 200 MiB) — so the home grows with use, and that
-growth is bounded by design, not by luck.
+else. Three of them are **caches**, each with a ceiling rather than luck -
+`dsh-pdf`'s artifacts at 512 MiB, `dsh-diagrams`' at 200 MiB, and
+`dsh-media/playable` at 8 GiB (a remuxed film is far larger than a parsed page) -
+so the home grows with use and its growth is bounded by design. The one entry
+that is not state but a **program** is `dsh-media/bin`: it is the only place this
+pack ever writes an executable, and only after the bytes have matched the
+SHA-256 the package pins.
 
 ### The profile is mostly links
 
 `$DSH_HOME/profiles/web/node_modules` holds **two** kinds of entry:
 
 - the pack's own bundles, as `link:` junctions into `packages/` (the
-  distribution folder). Measured: `dsh-audio`, `dsh-editor`, … `dsh-vn-master`,
-  15 of them;
+  distribution folder) — one per bundle under `packages/` (16 today); measured:
+  `dsh-audio`, `dsh-editor`, … `dsh-vn-master`;
 - `.pnpm/`, which holds **only** `lock.yaml` — the profile has no
   registry-installed tree of its own.
 

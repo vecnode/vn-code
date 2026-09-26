@@ -1,0 +1,23 @@
+{
+  "name": "dsh-media",
+  "version": "0.1.0-alpha.1",
+  "description": "Media the agent can actually work with: media_probe (ffprobe's reading of any image, video or audio file, translated into a report and a browser-playability verdict with the exact ffmpeg command that would fix it), media_run (a real ffmpeg or ffprobe command as an ARGV array - no shell, a deadline, an output cap, and no overwrite unless asked), and media_frames (frames out of a video at named timestamps, sampled evenly, or tiled into one contact sheet). Ships the pin for a static ffmpeg/ffprobe copy per platform (SHA-256 verified, installed into $DSH_HOME/dsh-media/bin on first need, used only when the machine has none of its own), two bundled skills (ffmpeg-cli, ffprobe-cli), and the host routes dsh-video's tab reads: a Range-capable file stream, the same probe summary as JSON, and a background remux/transcode that turns a container a browser cannot open into a cached MP4.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "tools",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT"
+}

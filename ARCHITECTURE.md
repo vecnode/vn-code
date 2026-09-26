@@ -1442,7 +1442,8 @@ passes that through as the batch's own exit code).
 - **Live links**: the web profile installs every bundle (`dsh-vn-master` — the
   blank master, so a profile that lists it still gets no client half — plus
   `dsh-rightbar`, `dsh-rightbar-files`, `dsh-editor`, `dsh-gittree`,
-  `dsh-image`, `dsh-audio`, `dsh-diagrams`, `dsh-pdf`, `dsh-terminal`, `dsh-modal`,
+  `dsh-image`, `dsh-audio`, `dsh-media`, `dsh-video`, `dsh-diagrams`, `dsh-pdf`,
+  `dsh-terminal`, `dsh-modal`,
   `dsh-ui-state`, `dsh-themes`, `dsh-open-in-app`) as `pnpm link:` symlinks straight into this repo (detected by
   `Test-LiveLink` / `is_live_link()`, comparing realpaths case-insensitively on
   Windows). Code edits then already apply - a restart of
@@ -2134,3 +2135,151 @@ so reopening it would either show an empty panel or - once the server's five
 minute PTY retention has lapsed - start a shell nobody asked for. A height is a
 preference; "a shell was running" is not. The right bar's open tab is per
 conversation and belongs to the bar's own store; it is left for a later pass.
+
+## 18. The media engine (dsh-media)
+
+**The problem it solves is not "play a video".** It is that the `read` tool
+refuses a binary file, so until this package existed an image, a video and an
+audio file were all *invisible* to the agent: it could not report a PNG's
+dimensions, a film's codec or a recording's sample rate, and it could not answer
+"will this play in a browser". The one thing it could have done - shell out to
+ffmpeg - needs an ffmpeg the machine may not have.
+
+So the package is three things in one row: **three tools** (`lib/tools.js`),
+**two bundled skills** (`skills/ffmpeg-cli`, `skills/ffprobe-cli`), and **the
+pinned copy** of ffmpeg that makes both honest (`lib/ffmpeg.js`,
+`lib/binaries.json`). It is HOST-ONLY - no `dsh.client`, no browser bundle - and
+its routes exist for `dsh-video`'s tab, so that the interface and the model read
+the same probe through the same code.
+
+**Why the tools are not one command runner.** `media_probe` is the shape a model
+actually needs from a media file: one ffprobe run, one report, and a verdict
+(`playable` / `image` / `remux` / `transcode`) that says what a browser can do
+with it *and* the exact ffmpeg command that would change the answer. `media_run`
+is the escape hatch - a real argv array, never a shell string, so an argument is
+an argument - and `media_frames` is the one *derived* artifact worth producing:
+frames, or a single contact sheet, with their real dimensions read back out of
+the files' own headers. A model that can only run commands spends its turns
+rediscovering the same ffprobe invocation; a model that gets the report can ask
+the next question.
+
+**The pin, not a binary.** A static ffmpeg is 130-170 MB per platform. Committing
+one per platform would multiply into every clone, distribution and CI cache, and
+a committed Windows build helps nobody on macOS. `lib/binaries.json` therefore
+records, per platform-arch, the official static build's URL and SHA-256, and
+`lib/ffmpeg.js` resolves in this order: `DSH_MEDIA_FFMPEG`/`DSH_MEDIA_FFPROBE`,
+then `PATH` (the machine's own ffmpeg rather than a second copy), then the
+provisioned copy under `$DSH_HOME/dsh-media/bin/<platform>-<arch>/`, then
+nothing. "Nothing" is answered **immediately**: the tool call returns the
+sentence, the pinned download starts in the background, and the next call finds
+it. `DSH_MEDIA_NO_INSTALL=1` disables that, and `DSH_MEDIA_PREFER_BUNDLED=1`
+makes the provisioned copy win over `PATH` as well.
+
+The provisioning pipeline is the part that has to be careful, because it ends in
+`exec`:
+
+1. a lock directory (stolen after 30 minutes, so a killed process cannot wedge
+   the machine's install forever);
+2. a streamed download hashed **as it arrives**, with a stall detector, a
+   deadline and a byte cap derived from the pin;
+3. the hash compared with the pin **before anything is executed** - a mismatch
+   deletes the archive, installs nothing, writes no stamp, and reports both
+   hashes;
+4. unpacking through the host's own `tar` (bsdtar reads ZIP and tar.xz on
+   Windows 10+ and macOS; GNU tar reads the Linux tar.xz) so the plugin carries
+   no npm archive dependency at all;
+5. each binary copied in under a `.partial` name and renamed, so a file that
+   exists is always complete, then `chmod 0o755` on POSIX and an `install.json`
+   stamp.
+
+`tools/binaries.mjs` is the maintainer's half of that contract: `--check`
+(offline, and a tracked check runs it), `--update` (re-reads BtbN's release
+digests from the GitHub API and hashes evermeet's macOS zips for real), and
+`--verify` (downloads every pinned archive and compares). The Windows archive's
+shipped hash was confirmed by downloading all 173,535,440 bytes, not by trusting
+the API's word for it. **darwin-arm64 is deliberately unpinned**: no
+Apple-Silicon build publishes both a versioned URL and a checksum, and pinning a
+moving URL would break verification instead of strengthening it - so that
+platform gets a sentence naming `brew install ffmpeg` and the two environment
+variables.
+
+**The routes are the video tab's contract.** `GET /file` streams a media file
+with real HTTP Range support (206, `Content-Range`, suffix ranges, 416,
+`HEAD` without a body) because a `<video>` element must be able to seek in a
+2 GB file, and reading it into memory is exactly what cannot happen;
+`?cache=<32-hex>` serves this package's own conversions, and a caller never names
+a cache path. `GET /report` is the same summary the tool prints, as JSON, and it
+answers `200 {ok:true, unavailable:true}` when the host has no ffprobe - a fact
+about the machine, not a bad request. `POST /remux` starts *or joins* a job whose
+id **is** the content key (`sha256(realpath+size+mtime+mode)`), so asking twice
+joins the first, a finished conversion is answered from the cache, and an edited
+file can never serve a stale copy; `GET /job` reports ffmpeg's own `-progress`
+percentage. The cache is LRU-pruned at 8 GiB, and a partial file from a failed
+conversion is deleted rather than served.
+
+**Path policy is stated, not implied** (mirroring dsh-pdf's): a session-relative
+path resolves inside that conversation's workspace with `realpath` on both sides,
+so a symlink out is refused; an absolute path is read as given, which is the door
+a chat attachment and a file in Downloads come through; the target must be a
+regular file; and `/file` additionally accepts only the video extensions the tab
+claims, so the route is never a general "stream any file" surface.
+
+**What is NOT claimed, and why.** Audio formats: WAV/AIFF/FLAC are `dsh-audio`'s
+waveform and MP3/M4A/Ogg are the shipped preview's player, so claiming them would
+remove a surface to add a worse one. Images: `dsh-image` owns them (though
+`media_probe` still describes one, and `media_frames` can cut one up).
+
+## 19. The video surface (dsh-video)
+
+**A client-only bundle over §18.** `dsh-video` registers the `video` tab type,
+draws the player, the facts panel and the conversion controls, and reads
+everything from `/api/dsh-media/*`. Its Node half is one no-op row whose only job
+is to put the browser bundle in the boot graph - the same shape `dsh-image` and
+`dsh-audio` have, and for the same reason: the surface and the engine are
+different concerns, and ffmpeg has exactly one owner in this pack.
+
+The dependency direction is why the tab degrades in a SENTENCE rather than
+breaking when `dsh-media` is absent: the report route answers 404, the client
+recognises that (or the typed `NOT_FOUND`) and renders "dsh-media is not
+installed" naming the package that owns the routes. A profile can install either
+one alone.
+
+**The load-bearing rule: the bytes never enter the tab.** The `<video>` element
+is handed a URL to the Range-capable route - no `fetch` of the file, no
+`arrayBuffer`, no blob, no `workspaceFiles` read - so the browser streams and
+seeks. The tracked check asserts the ABSENCE of every one of those calls, because
+a well-meaning refactor that "just reads the bytes" would turn a 2 GB film into an
+impossible one and quietly destroy scrubbing.
+
+**Addresses.** The type claims both the ordinary session shape and
+`dsh-resource://file/absolute/<path>`, and the absolute form is reassembled rather
+than passed through: the grammar drops a leading `/`, so a POSIX path needs it
+back, a Windows path (`C:/…`) carries its own root, and a UNC path
+(`//server/share/…`) keeps an EMPTY first segment that must not be collapsed.
+`check-client-bundles.mjs` pins all three, because getting one wrong points the
+tab at another file - which is the only failure mode here that could be silent.
+
+**The player fits the pane by layout, never by a transform** - the pack's rule
+from the image viewer and the diagram canvas - and the stage is a black
+letterboxed box, which is what makes a fitted picture read as a player rather
+than as a hole in the tab.
+
+**A failed probe is not a failed file.** ffprobe refusing a container says
+nothing about whether the browser can decode it, so `unreadable` and `error` are
+an OVERLAY on the live player with "Play it anyway" and "Read it again", not a
+screen that replaced the player. `unavailable` (no ffmpeg) offers the pinned
+download and then re-probes. Only two phases get a screen of their own: a tab
+with no address, and a tab whose first probe is still in flight.
+
+**The conversion is where the two packages meet.** An MKV of H.264/AAC needs
+`-c copy` (instant, lossless); an mpeg4 AVI needs a transcode (H.264/AAC). The
+verdict decides which button appears, `POST /remux` starts or joins the job, the
+tab polls every 700 ms with ffmpeg's own percentage on a thin bar, and the
+finished cache URL is then played through the same file route. The poll's effect
+depends on `[running, jobId]` - **never on the job object**, which every poll
+replaces: an effect depending on it would tear down and rebuild its own interval
+on every tick, a polling loop feeding itself.
+
+**Chapters are jump targets, in both the panel and the toolbar picker**, and a
+chapter click moves the playhead AND starts playback, because a chapter is a
+place you wanted to watch.

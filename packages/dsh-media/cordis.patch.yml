@@ -1,0 +1,21 @@
+# dsh-media bundle layer (alpha).
+#
+# One row ('media') owns every piece of media machinery in this pack that is not
+# a browser surface: the three agent tools (media_probe, media_run,
+# media_frames), the two bundled skills (ffmpeg-cli, ffprobe-cli), the pinned
+# ffmpeg/ffprobe copy's resolution and provisioning, and the host routes the
+# dsh-video tab reads - a Range-capable file stream, the probe summary as JSON,
+# and the background remux/transcode.
+#
+# It is a HOST-ONLY bundle: no `dsh.client`, no browser bundle, nothing in the
+# boot graph but itself. dsh-video is the surface; this is the engine, shared by
+# the agent and by that surface so the two cannot disagree about a file.
+#
+# Nothing shipped is patched and no core row is disabled: no shipped row offers
+# ffmpeg, media probing or a video container, so there is nothing to sit in front
+# of. There is therefore no `disabled: true` here and nothing for
+# scripts/sync-vendored.ps1 to keep in sync - this package is hand-written and
+# forks nothing.
+- insert:
+    - id: media
+      name: 'dsh-media'
