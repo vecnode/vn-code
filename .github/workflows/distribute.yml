@@ -45,6 +45,18 @@
 #  continue-on-error until each has been green twice; promotion is deleting one
 #  line.
 # ============================================================================
+#  ACTION VERSIONS ARE THE NODE-24 ONES
+#  ------------------------------------
+#  `checkout@v4`, `setup-node@v4`, `upload-artifact@v4` and `download-artifact@v4`
+#  run on Node 20, which GitHub now force-upgrades to Node 24 and reports as a
+#  deprecation warning on every job of every run. Each pin below is the FIRST
+#  release of that action whose `runs.using` is `node24` - checkout v5,
+#  setup-node v5, upload-artifact v6, download-artifact v7 - and deliberately NOT
+#  the latest major: upload-artifact v7 and download-artifact v8 also move to ESM,
+#  add direct (unzipped) transfers and make a digest mismatch a hard failure,
+#  none of which this workflow wants. The migration is a pin bump rather than a
+#  rewrite, and every one of the four is exercised by a build run.
+# ============================================================================
 name: distribute
 
 on:
@@ -112,9 +124,9 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -209,9 +221,9 @@ jobs:
             rid: linux-arm64
             experimental: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -273,7 +285,7 @@ jobs:
           fi
 
       - name: Upload the archives
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: vn-harness-${{ matrix.rid }}
           if-no-files-found: error
@@ -294,14 +306,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
       - name: Collect the archives
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
           merge-multiple: true
