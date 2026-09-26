@@ -29,9 +29,14 @@ is in the state you think it is.
 
 ## The short version
 
-- **No secrets in this repository.** API keys live in your own harness settings
-  (`Settings → Models`); no plugin or installer reads, writes, prompts for or
-  transmits them. The pack writes no token, password or credential anywhere.
+- **No secrets in this repository — and that is enforced, not promised.** API keys
+  live in your own harness settings (`Settings → Models`) or in
+  `$DSH_HOME/.credentials.yaml`, which is outside this tree; no plugin or
+  installer reads, writes, prompts for or transmits them. The pack writes no
+  token, password or credential anywhere, and
+  `scripts/checks/check-no-secrets.mjs` fails the build if a credential-shaped
+  string reaches anything `git add -A` would stage. See
+  [Secrets never enter this repository](#secrets-never-enter-this-repository).
 - **No core patching.** Every plugin is a standard dsh **bundle**
   (`dsh.bundle` + `cordis.patch.yml` + a `dsh.client` browser half). The pack owns
   its right bar by **forking** the shipped bar bundles into this repo and
@@ -397,10 +402,62 @@ cookie leaks, rotate the signing secret.
   option-injection guard on git, the screenshot write refusals, the diagram
   budget, and the terminal's refusal of an unauthenticated upgrade.
 
+## Secrets never enter this repository
+
+A secret in a commit is a secret on GitHub for as long as the repository exists —
+in every fork, every clone and every cache — even after the file is deleted. So
+this is a rule with a check behind it rather than a good intention.
+
+**Where credentials actually live.** The harness keeps them in
+`$DSH_HOME/.credentials.yaml`, and `$DSH_HOME` defaults to `~/.dsh`, which is
+**outside this tree** and never part of a distribution. The pack reads that file
+in exactly one place, and only to answer "is a key present": `keystate.rs` reports
+a boolean and the name of the layer that supplied it, never the value — pinned by
+`a_real_shaped_key_never_reaches_the_page`, which feeds a key-shaped value through
+and asserts it appears in neither the startup window's payload nor the console
+line. The launch token is held to the same rule (see
+[The launch token](#the-launch-token)).
+
+**The check.** `scripts/checks/check-no-secrets.mjs` runs in CI on every push and
+scans `git ls-files -co --exclude-standard` — which is exactly what `git add -A`
+would stage, so an unignored credentials file is caught *before* it is committed.
+It fails on:
+
+- a key-shaped string, a credential ref with a value attached, a generic
+  `apiKey`/`password`/`client_secret` assignment, a launch token pasted into a URL,
+  a GitHub/AWS/Slack/Stripe key, a private-key block or a bearer JWT;
+- a missing credential rule in `.gitignore` (`.env`, `.credentials.yaml`,
+  `*.pem`, `*.key`, `id_rsa*`, `.npmrc`, …);
+- **its own silence** — a self-test asserts the scanner fires on a synthetic key
+  and stays quiet on clean text, because a guard that has never been shown to fire
+  is decoration.
+
+It never prints what it found: a failure names the file, the line, the rule and a
+masked preview, because a scanner that echoes the secret into a CI log has moved
+the leak rather than closed it. Its allowlist is empty by design — if a fixture
+trips a rule, the fix is to make the fixture not look like a credential (the test
+values in `keystate.rs` carry a `/` for exactly that reason), not to loosen the
+rule for everyone.
+
+**Two things the check cannot do.** It skips binary files, so **committed
+screenshots are reviewed by hand** — they are whole-screen captures and can show a
+session, a path, a notification or a key. And it sees the working tree, not the
+past.
+
+**If a credential is ever committed.** Rotate it **first** — assume it is public
+the moment it is pushed, because it is. Then remove it from history
+(`git filter-repo` or the BFG) and force-push; deleting the file in a new commit
+does not remove it. GitHub's own secret scanning and push protection are worth
+enabling on this repository as a second net behind this check.
+
 ## What this pack does not do
 
-- No API keys, no credentials store access beyond the harness's own
-  browser-session record, no prompts for secrets.
+- No API keys are read, and the **only** credential file the pack itself touches
+  is `$DSH_HOME/.credentials.yaml` — through the desktop shell's `keystate.rs`,
+  and for PRESENCE only: a boolean and the name of the layer that supplied the
+  key, never its value (see
+  [Secrets never enter this repository](#secrets-never-enter-this-repository)).
+  No prompts for secrets.
 - **No way to weaken the harness's authentication.** The pack mounts every route
   it owns inside the harness's gated `/api` channel, and this repository has no
   flag, setting or environment variable that turns the session check off. The

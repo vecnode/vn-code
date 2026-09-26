@@ -50,7 +50,8 @@ dist/
     scripts/                           <- the installers the folder installs itself with,
                                           including scripts/console/ (the shared launcher
                                           console layer every entry point calls)
-    app/                               <- the shell's source, so the folder is complete
+    app/README.md                      <- the shell's README; the shell itself
+                                          ships built, so its source is not here
     assets/vn-harness.svg  docs/  README.md  LICENSE  SECURITY.md
     install.bat/.sh  uninstall.bat/.sh  run-web.bat/.sh  run-desktop.bat
   vn-harness-<version>-<rid>.zip       <- the same folder, archived
@@ -79,6 +80,25 @@ the generated `START-HERE.bat` behaves like the launchers beside it instead of
 like a hand-written one-off, and it ships inside `scripts/`. `run-desktop.bat` is
 shipped for the same reason it exists: in this folder it runs `vn-harness.exe`
 directly and needs no Rust toolchain, which is what `-NoBuild` pins down.
+
+**The shell ships BUILT, not in source.** `app/src-tauri/` (the Rust source, its
+Cargo manifests, `build.rs`, `tauri.conf.json`), `app/src-tauri/icons/` and
+`app/ui/` are build **inputs**: tauri-build compiles the icons and the splash
+page into the binary's own resources, so nothing at runtime ever opens one of
+them, and `app/README.md` is the only file of `app/` in the folder. The same
+rule takes the maintainer tooling out of `scripts/`: `scripts/checks/` runs
+against a checkout (`packages/`, the Rust source, a git history),
+`scripts/sync-vendored.ps1` moves the vendored forks forward and wants `pwsh` on
+every host, and `scripts/make-desktop-icon.mjs` regenerates icons that are not
+shipped either. `run-desktop.bat` does not miss them: it decides between "run
+the binary beside me" and "build from source" on the presence of `vn-harness.exe`,
+never on a `Cargo.toml`.
+
+> The **plugins** are the exception, and it is structural rather than a choice:
+> the web profile installs every bundle as a **live link** into `packages/`, so
+> `packages/` has to be there as readable JavaScript for the app to have plugins
+> at all. Hiding the plugin source means giving up live links and installing
+> copies instead - see section 1.
 
 **What is deliberately NOT in it** (`scripts/dist-manifest.txt` is the one list,
 read by both halves): `app/src-tauri/target/` (the Rust build tree),
@@ -111,19 +131,30 @@ distribute.bat -Verify
 :: start over; name the version something else
 distribute.bat -Clean
 distribute.bat -Version 0.2.0
+
+:: assemble somewhere else, leaving dist/ alone - the case that NEEDS it is a
+:: distribution that is still RUNNING: Windows will not let a live
+:: vn-harness.exe be overwritten, so the new cut is built beside it and swapped
+:: in after the window is closed
+distribute.bat -OutDir dist2
 ```
 
 ```sh
 # macOS / Linux - the same flags, one file
 ./distribute.sh -SkipBuild
 ./distribute.sh -Verify
+./distribute.sh -OutDir dist2      # assemble beside dist/, leaving it alone
 sh ./distribute.sh -Help          # if the executable bit was lost
 ```
 
-Every run prints the folder and the archive to click. `-Verify` is the useful
-one while you are changing something: it proves the **folder** works, not just
-that it assembled, and it never opens a window (which is exactly why CI can run
-it too).
+Every run prints the folder and the archive to click. `-OutDir` exists for the
+one case that cannot be worked around: a distribution that is **running** holds
+its own `vn-harness.exe` open, and Windows refuses to overwrite or delete a file
+in use - so a new cut is assembled beside it and swapped in once the window is
+closed (`dist2/` is gitignored for that reason). `-Verify` is the useful one
+while you are changing something: it proves the **folder** works, not just that
+it assembled, and it never opens a window (which is exactly why CI can run it
+too).
 
 ### What `-Verify` actually does
 
@@ -151,7 +182,7 @@ The throwaway home is deleted afterwards; `-KeepVerifyHome` keeps it.
 | Job | What it is |
 |---|---|
 | `checks` | `node scripts/checks/check-dist-layout.mjs` (ship list, every bundle carried, both halves' flags/sentinels in step, `dist/` ignored), then a pinned `react` + `react-dom` 18.3.1 installed into `$DSH_HOME/profiles/node_modules` (the runtime the client check renders with - a fresh runner has none and that check throws rather than skipping), then the client-bundle and skill-example checks (which skip their host-dependent sections loudly) |
-| `build` (matrix) | `windows-latest` â†’ win-x64, `macos-13` â†’ mac-x64, `macos-14` â†’ mac-arm64, `ubuntu-22.04` â†’ linux-x64: checkout, Node 22, Rust stable, `Swatinem/rust-cache`, Linux webview deps, then **the same `dist.ps1` / `dist.sh` with `-Verify`**, then `upload-artifact` of `dist/*.zip` and `dist/*.tar.gz` |
+| `build` (matrix) | `windows-2022` → win-x64, `macos-15-intel` → mac-x64, `macos-15` → mac-arm64, `ubuntu-22.04` → linux-x64, plus the two non-blocking ARM64 legs (`windows-11-arm` → win-arm64, `ubuntu-22.04-arm` → linux-arm64): checkout, Node 22, Rust stable, `Swatinem/rust-cache`, Linux webview deps, then **the same `dist.ps1` / `dist.sh` with `-Verify`**, then `upload-artifact` of `dist/*.zip` and `dist/*.tar.gz` |
 | `release` | collects all artifacts, writes a `SHA256SUMS.txt` over them, and attaches them to a GitHub Release |
 
 `check-node-routes.mjs` and `check-pdf-node.mjs` are deliberately **not** part of
@@ -160,17 +191,18 @@ not build. Run them locally.
 
 Triggers:
 
-- **`workflow_dispatch`** (Actions â†’ distribute â†’ *Run workflow*): the way to
+- **`workflow_dispatch`** (Actions → distribute → *Run workflow*): the way to
   watch the whole thing and download the artifacts without pushing anything.
   Inputs: `version` (override the name), `release` (publish a Release when
   green), `tag` (which tag that release uses).
 - **push to `main`** that touches anything that can change what ships: builds and
   uploads artifacts, publishes nothing.
-- **`release: published`**: builds all four targets and attaches them to the
-  release. `gh release create v0.1.0-alpha.0 --generate-notes` is the whole
-  ritual. The release build **fails** when the tag (minus a leading `v`) does not
-  equal `package.json`'s version, so a tag can never name a version that was
-  never built.
+- **`release: published`**: builds all six matrix targets — the four required
+  legs and the two ARM64 ones, which are non-blocking — and attaches their
+  archives to the release. `gh release create v0.1.0 --generate-notes` is the
+  whole ritual. The release build **fails** when the tag (minus a leading `v`)
+  does not equal `package.json`'s version, so a tag can never name a version that
+  was never built.
 
 ### Watching a run locally
 
@@ -195,7 +227,7 @@ systems and the artifact plumbing.
 ## 5. Tradeoffs and known limits
 
 - **Unsigned binaries.** Windows SmartScreen will say "unknown publisher"
-  (More info â†’ Run anyway). macOS quarantines an unsigned binary - right-click â†’
+  (More info → Run anyway). macOS quarantines an unsigned binary - right-click →
   **Open**, or `xattr -d com.apple.quarantine ./vn-harness`, and the first launch
   from Finder rather than Terminal is the one that gets flagged.
 - **No installers.** `app/src-tauri/tauri.conf.json` keeps `bundle.active: false`,

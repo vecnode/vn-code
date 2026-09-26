@@ -43,8 +43,10 @@ Node.js 22 or newer exactly as the browser launcher does.
    remembers its own geometry* below), because it has to be known **before** the
    window is built.
 4. Opens the window **immediately**, on its own splash (`ui/index.html`), because
-   the first run of a dsh version spends a while inside `npx`. After 45 seconds
-   the splash says the wait is long and points at the console.
+   the first run of a dsh version spends a while inside `npx`. The splash says
+   which harness home this run will use and whether a DeepSeek key was found
+   there (see *The splash answers the two questions worth asking first* below).
+   After 45 seconds it says the wait is long and points at the console.
 5. Runs the pinned CLI, streaming its stdout and stderr to this console.
 6. Watches that output for `dsh web: http://127.0.0.1:<port>/?token=<token>`,
    parses the URL and navigates the window there.
@@ -112,6 +114,62 @@ beside the real `.dsh`. Unit tests in `src-tauri/src/main.rs` pin the rule
 (`chosen_home`, `default_dsh_home`, `pick_home_variable`), and the console still
 *reports* the resolved home  -  `~/.dsh` included  -  without exporting it.
 
+## The splash answers the two questions worth asking first
+
+The window opens before the server exists, on `ui/index.html`, and the two things a
+person actually wonders while it starts are *"will the harness find my key"* and
+*"is this the profile I have been using"*. So the splash says both:
+
+- **DeepSeek key loaded  -  from the credentials file** (green), or **No DeepSeek
+  key yet  -  add one in Settings → Models** (amber);
+- **Harness home: `C:\Users\you\.dsh`**, with the reminder that sessions, settings
+  and the key live *there* and not in the folder that was replaced. That is what
+  makes installing a newer distribution a non-event: the plugins come from the new
+  folder (the profile live-links them), and everything you accumulated stays put.
+
+`keystate.rs` decides, and it walks **the harness's own four layers**, highest
+first  -  precisely because `dsh-credentials-local` owns the real lookup and a splash
+that disagreed with it would be worse than no splash at all:
+
+```text
+inherited process environment   DEEPSEEK_API_KEY=… dsh          (wins)
+> $DSH_HOME/.credentials.yaml   what Settings > Models writes
+> <cwd>/.env                    the launcher's directory
+> $DSH_HOME/.env
+```
+
+The document's real shape matters and is easy to get wrong: the ref is nested one
+level inside `refs:`, **not** at the margin  - 
+
+```yaml
+version: 1
+refs:
+  DEEPSEEK_API_KEY: sk-…        <- here
+records:
+  client-connection/browser-session:
+    payload:
+      secret: …
+```
+
+  -  and the first cut of this module missed it for exactly that reason: it looked at
+column 0, its own tests agreed with it, and the built shell then reported "no key"
+on a machine whose key was present. `the_real_document_shape_is_read` pins the real
+layout now, and `a_ref_inside_a_record_is_not_a_credential` pins the half that must
+*not* count.
+
+**The value never leaves the module.** The splash is handed a boolean and the NAME
+of the layer (`the credentials file`), never the key  -  same rule as the launch
+token. `the_splash_script_never_carries_the_secret` feeds a real-looking key in and
+asserts it does not appear in the injected script or in the console line, and the
+console line is the other place people paste from.
+
+The page still has **no IPC channel and no command**: Tauri's
+`initialization_script` injects the payload after the global object exists and
+before the document is parsed, which is why the page needs neither. The script
+guards on the pathname, because it runs on *every* top-level navigation and this
+window is later navigated to the harness URL  -  the harness page must not inherit
+the global.
+
 ## The two rules that are load-bearing
 
 The ready line carries the **launch token**, a live credential for the running
@@ -136,10 +194,11 @@ browser, so a rendered document can never replace the app's only window.
 |---|---|
 | `src-tauri/src/main.rs` | The supervisor: flags, the repository/pin lookup, the port and harness-home choices, spawning npx, the window, the geometry write-back, the exit hook |
 | `src-tauri/src/readyline.rs` | The pure half - ANSI stripping, URL extraction, the loopback refusal, `redact` - and its tests |
+| `src-tauri/src/keystate.rs` | Whether the harness will find a DeepSeek key, and which of the four layers supplied it (`keystate` docs the layering, which is `dsh-credentials-local`'s own). Parses the credentials document and `.env` files; emits the read-only payload the splash reads. **The key's value never leaves this module** - one test feeds a key in and asserts it does not come out |
 | `src-tauri/src/windowstate.rs` | The window's own memory - the record's shape, the five rules that decide whether a record can be trusted, atomic save - and its tests. Refers to no `tauri` type |
 | `src-tauri/Cargo.toml` | Two dependencies: `tauri`, and `serde_json` (already in the tree behind tauri) |
 | `src-tauri/tauri.conf.json` | Identifier, the `ui/` folder as `frontendDist`, no declared window (it is built in Rust so the navigation filter can live with it), `bundle.active: false` |
-| `ui/index.html` | The splash. One file, no request of any kind |
+| `ui/index.html` | The splash. One file, no request of any kind. The key line and the harness home are **injected** before the document parses (`initialization_script`), not fetched - the page still has no IPC channel and no command; `scripts/checks/check-splash.mjs` renders it in both states |
 | `src-tauri/icons/` | **Generated** by `scripts/make-desktop-icon.mjs` from `assets/vn-harness.svg`, and committed so a clone builds without running the generator |
 
 ## Failures
@@ -156,8 +215,9 @@ screen.
 
 Measured on Windows 11 (Rust 1.94, Node 22.20, WebView2 153) rather than assumed:
 
-- `cargo test`  -  38/38 (`main.rs` 9, `readyline.rs` 14, `windowstate.rs` 15): the
-  launch-token rules below plus the home, port and window-geometry rules;
+- `cargo test`  -  56/56 (`main.rs` 9, `readyline.rs` 14, `windowstate.rs` 15,
+  `keystate.rs` 18): the launch-token rules below plus the home, port,
+  window-geometry and key-state rules;
 - the port rule: a free port is chosen whenever 3080 is taken (61203, 62066, 60927
   across the runs that were measured while the Web GUI was serving 3080), and 3080
   itself is asked for first once nothing holds it;

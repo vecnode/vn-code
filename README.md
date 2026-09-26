@@ -15,7 +15,7 @@ Windows half is PowerShell, the macOS/Linux half is plain POSIX shell.
 ![print](assets/vn-harness-20260920-164101.png)
 
 <p align="center">
-  <img src="assets/vn-harness 26_09_2026 09_53_53.png" alt="The vn-harness desktop window while the pinned harness starts: a dark splash showing the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
+  <img src="assets/vn-harness-20260926-095353.png" alt="The vn-harness desktop window while the pinned harness starts: a dark splash showing the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
   <img src="assets/vn-harness-20260925-084844.png" alt="The same window once the harness is up, showing the pack's app in the light theme" width="49%">
   <br>
   <em><code>run-desktop.bat</code>: the shell's splash while <code>npx</code> works, and the same window once the harness is listening.</em>
@@ -164,6 +164,64 @@ Both installer halves do the same work, and re-running them is safe:
 To remove the pack, run **`uninstall.bat`** (Windows) or **`./uninstall.sh`**
 (macOS/Linux); both take the same `-Plugin` / `-DshHome` / `-ProfileName`
 switches. Removing a bundle also removes its patch layer.
+
+## Distribution
+
+A release archive **is** the app: there is no installer to run and nothing to
+compile. The only prerequisite is Node.js 22 or newer — the pinned harness
+itself is fetched by `npx` on the first run.
+
+**On a machine that has never had the pack**
+
+1. Download the archive for the platform from
+   [Releases](https://github.com/vecnode/vn-harness/releases) —
+   `vn-harness-<version>-win-x64.zip`, `…-mac-x64.zip`, `…-mac-arm64.zip`,
+   `…-linux-x64.zip` (the ARM64 archives, `…-win-arm64.zip` and
+   `…-linux-arm64.zip`, appear too once those two experimental legs are green) —
+   and **extract it somewhere permanent**. The folder is the application: the
+   profile installs every bundle as a live link into `packages/`, so keep
+   `vn-harness.exe` beside everything it arrived with.
+2. Install Node.js 22+ from [nodejs.org](https://nodejs.org) if it is not already
+   on `PATH`. Windows additionally needs the WebView2 runtime, which Windows 10
+   and 11 already have.
+3. **Windows:** double-click `START-HERE.bat`. **macOS/Linux:** `./START-HERE.sh`.
+   That one step installs every bundle into the harness web profile
+   (`~/.dsh/profiles/web`) and the bundled skills into `~/.dsh/skills`, then
+   opens the app in its native window. It is safe to run again.
+4. Every run after that is just the app: `vn-harness.exe` (`./vn-harness`), or
+   `run-desktop.bat` for the same native window from a console, or `run-web.bat`
+   for a browser tab instead. All of them take `-Help`.
+5. Optional but recommended: check the download against `SHA256SUMS.txt`;
+   `BUILD-INFO.json` names the pack version, the harness pin, the commit and the
+   toolchain it was built with.
+
+Installing a newer release over an older one is a non-event, and the startup
+window says so before the harness is even listening: it names **which harness home
+this run will use** (`~/.dsh`) and whether a **DeepSeek key** was found there —
+green when it was, naming the layer it came from, amber with a pointer to
+*Settings → Models* when it was not. Sessions, settings and the key all live in
+that home rather than in the folder that was replaced, so a new download keeps
+everything you had. The key's value itself is never read out, logged or shown —
+only which layer supplied it.
+
+Three files, three different jobs — this is the part that is easy to get wrong:
+
+- **`START-HERE.bat` installs *and* runs.** It is the file to click first on a
+  new machine.
+- **`install.bat` only installs.** It never opens the app; it is what you re-run
+  after the folder moves.
+- **`vn-harness.exe` only runs.** On a machine that never installed the pack it
+  opens the plain harness with none of the plugins in it.
+
+**Cutting a release.** The tag must name the version in `package.json`, or the
+release job refuses to attach anything to it: this cut is `v0.1.0` against
+`"version": "0.1.0"`. Publishing a GitHub Release for that tag builds all six
+matrix targets — the four required legs (win-x64, mac-x64, mac-arm64, linux-x64)
+and the two non-blocking ARM64 ones — and attaches their archives plus
+`SHA256SUMS.txt`. The same thing can be run by hand from *Actions → distribute →
+Run workflow* with **release** ticked. What a distribution contains, what it
+deliberately leaves out and how it is verified end to end is in
+[`docs/DISTRIBUTE.md`](docs/DISTRIBUTE.md).
 
 ## Security & license
 
