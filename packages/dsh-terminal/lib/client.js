@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
     // Constants
     // ---------------------------------------------------------------------
     /** Shown on the dock's bar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.9'
+    const PLUGIN_VERSION = '0.1.0-alpha.10'
     /** The header list this control joins (Open In... is -10). */
     const HEADER_SLOT = 'conversation.session.header.utilities'
     /** The root-scoped overlay list the layout package renders inside the frame. */
@@ -261,15 +261,24 @@ body.dst-dragging{cursor:row-resize;user-select:none}
 .dst-noticeTitle{color:var(--dsw-alias-label-secondary,#666);font-size:13px}
 .dst-noticeErr{color:var(--dsw-alias-state-error-primary,#d3382c)}
 .dst-noticeCode{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:11px;opacity:.85;max-width:640px;white-space:pre-wrap}
-/* ---- the agent's own terminal use (alpha.7) ---------------------------- */
-/* The toggle reads as a mode: filled while the log is the view on screen. */
+/* ---- the agent's own terminal use (alpha.7; ONE affordance since alpha.10) ---
+   The Agent button in the bar is the ONLY Agent control. It is a TOGGLE between
+   the log and the terminal that was last on screen, so it is ON exactly while
+   the log is the view, and it wears that log's own state: the pulse while a
+   command runs, the count of what failed, and the warning tone when this
+   conversation's log cannot be read. There is deliberately NO Agent chip in the
+   strip - a second affordance for one view is what made switching to the log
+   look like it had opened a second tab. */
 .dst-actToggle{position:relative;gap:5px}
 .dst-actToggle[data-on]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));border-color:var(--dsw-alias-border-l3,rgba(127,127,127,.34))}
+/* The one state nothing else on the dock can show: the log exists but cannot be
+   read here, so the control that opens it says so before it is opened. */
+.dst-actToggle[data-state=warning],.dst-actToggle[data-state=warning] .dst-glyph{color:var(--dsw-alias-state-warning-primary,#d29922)}
+.dst-warn{flex:none;font-size:11px;line-height:1;color:var(--dsw-alias-state-warning-primary,#d29922)}
 .dst-pulse{flex:none;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-warning-primary,#d29922);animation:dst-pulse 1.1s ease-in-out infinite}
 .dst-headDot{position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;box-sizing:border-box;border:1.5px solid var(--dsw-alias-bg-layer-1,#fff);background:var(--dsw-alias-state-warning-primary,#d29922)}
 .dst-headDot[data-state=running]{animation:dst-pulse 1.1s ease-in-out infinite}
 .dst-headDot[data-state=failed]{background:var(--dsw-alias-state-error-primary,#d3382c)}
-.dst-chipAct[data-state=running] .dst-dot{animation:dst-pulse 1.1s ease-in-out infinite}
 .dst-badge{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;padding:0 4px;box-sizing:border-box;border-radius:8px;font-size:10.5px;font-variant-numeric:tabular-nums;background:var(--dsw-alias-state-error-primary,#d3382c);color:#fff}
 @keyframes dst-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 /* The view fills the body exactly the way an emulator host does, so switching
@@ -538,7 +547,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
      * durable schema, which is a change to another package's data contract.
      *
      * @param sessionId - the conversation the dock belongs to.
-     * @returns whether the activity chip belongs in the strip.
+     * @returns whether the view last picked for it was the agent log.
      */
     function activityOn(sessionId) {
       if (typeof sessionId !== 'string' || sessionId === '') return false
@@ -559,8 +568,16 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       }
     }
 
-    /** Remember the toggle and publish. The VIEW is the caller's business. */
-    function setActivityOn(sessionId, on) {
+    /**
+     * Remember the picked view WITHOUT publishing - `selectView` is the only
+     * writer and it bumps.
+     *
+     * alpha.10: the switch and the view are the SAME thing now. There is one
+     * Agent affordance, so "the log is on" must never be true while a terminal
+     * is on screen; the remembered copy exists only so a reload reopens on the
+     * view that was last picked.
+     */
+    function rememberActivity(sessionId, on) {
       if (typeof sessionId !== 'string' || sessionId === '') return
       if (activityOn(sessionId) === on) return
       dock.activity.set(sessionId, on)
@@ -569,7 +586,6 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       } catch (err) {
         /* not persisting is not a failure */
       }
-      bump()
     }
 
     /**
@@ -587,7 +603,33 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       if (typeof sessionId !== 'string' || sessionId === '') return
       dock.active.set(sessionId, view)
       if (view !== ACTIVITY_VIEW) dock.lastSlot.set(sessionId, view)
+      // The Agent button IS this view (alpha.10): on while the log is what the
+      // panel shows, off the moment a terminal is picked, so the control can
+      // never read "on" while a shell is the thing on screen.
+      rememberActivity(sessionId, view === ACTIVITY_VIEW)
       bump()
+    }
+
+    /**
+     * The view one conversation opens on, seeded ONCE from the remembered
+     * switch.
+     *
+     * The seed is written into the store rather than derived on every render, so
+     * a reader who reopens the app on the log is `ACTIVITY_VIEW` to everything
+     * that asks - `killTerminal` in particular, whose whole job is to leave a
+     * reader who is looking at the log exactly where they are.
+     *
+     * @param sessionId - the conversation the dock belongs to.
+     * @param remembered - the switch as it came out of storage.
+     * @returns a slot index, or `ACTIVITY_VIEW`.
+     */
+    function viewFor(sessionId, remembered) {
+      const known = typeof sessionId === 'string' && sessionId !== ''
+      const current = known ? dock.active.get(sessionId) : undefined
+      if (current !== undefined) return current
+      const seed = remembered ? ACTIVITY_VIEW : 0
+      if (known) dock.active.set(sessionId, seed)
+      return seed
     }
 
     /** The terminal "Run in Terminal" should target, given the recorded slots. */
@@ -1878,7 +1920,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
     }
 
     /**
-     * The Agent chip's tooltip: the counts the strip cannot fit.
+     * The Agent button's tooltip: the counts the bar has no room for.
      *
      * @param activity - the feed's model.
      * @returns one sentence a reader can act on.
@@ -2244,14 +2286,19 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       const [mode, setMode] = useState(appearance())
       const slots = open || sessionId === null ? slotsFor(sessionId) : []
       // The agent's own terminal use, live. Subscribed even while the dock is
-      // closed: the chip's badge and the header control's dot are the whole
-      // point of "follow it without opening the panel", and the feed publishes
-      // at most once per new event this view actually draws.
+      // closed: the Agent button's badge and the header control's dot are the
+      // whole point of "follow it without opening the panel", and the feed
+      // publishes at most once per new event this view actually draws.
       const activity = useActivity(sessionId)
       const showActivity = activityOn(sessionId)
       const activityBusy = activity.counts.running > 0
       const activityFailed = !activityBusy && activity.counts.failed > 0
-      const activityTone = activityBusy ? 'running' : activityFailed ? 'failed' : 'idle'
+      // `available: false` with NO reason is the first read still in flight; with
+      // a reason it is this host saying the conversation's log cannot be read.
+      // That is the one condition worth warning about on the control itself: a
+      // reader who never opens the panel would otherwise never learn it.
+      const activityUnreadable = activity.available !== true && activity.reason !== null
+      const activityTone = activityBusy ? 'running' : activityUnreadable ? 'warning' : activityFailed ? 'failed' : 'idle'
 
       // Geometry, part one: PLACE the dock and take its room from the middle and
       // right columns ONLY - never from the frame, whose single grid row is
@@ -2527,7 +2574,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
         [sessionId],
       )
 
-      const active = dock.active.get(sessionId) ?? 0
+      const active = viewFor(sessionId, showActivity)
 
       // Picking a chip goes through the STORE, always. `runtime.show()` writes
       // `dock.active` straight into the map and re-fits the visible emulator, but
@@ -2548,18 +2595,19 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       )
 
       /**
-       * Switch the agent log on or off; switching it ON shows it.
+       * The one Agent control: switch the log on or off.
        *
-       * The toggle is not just a filter over the strip: it is a view, so turning
-       * it on has to be one gesture. Turning it off returns to the terminal that
-       * was last on screen rather than to slot 0, because a reader who was in
-       * terminal 3 is going back to terminal 3.
+       * It is a TOGGLE between the two views, not a filter over the strip, so one
+       * click is one switch of what the panel shows - and the button's state is
+       * read back off the VIEW, never off a separate flag. Turning it off returns
+       * to the terminal that was last on screen rather than to slot 0, because a
+       * reader who was in terminal 3 is going back to terminal 3. `selectSlot`
+       * mirrors the pick into the remembered switch, so this writes nothing of
+       * its own.
        */
       const toggleActivity = useCallback(() => {
-        const on = !activityOn(sessionId)
-        setActivityOn(sessionId, on)
-        selectSlot(on ? ACTIVITY_VIEW : targetSlot(sessionId) ?? 0)
-      }, [sessionId, selectSlot])
+        selectSlot(active === ACTIVITY_VIEW ? targetSlot(sessionId) ?? 0 : ACTIVITY_VIEW)
+      }, [sessionId, selectSlot, active])
 
       /** Type one recorded command into the active terminal, WITHOUT submitting it. */
       const runInTerminal = useCallback(
@@ -2677,7 +2725,14 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       // rather than the cwd of a terminal nobody is looking at.
       const activeSlot = active === ACTIVITY_VIEW ? null : slots.find((slot) => slot.index === active) || slots[0] || null
       const facts = activeSlot && activeSlot.detail ? activeSlot.detail : ''
-      const showActivityView = showActivity && active === ACTIVITY_VIEW
+      const showActivityView = active === ACTIVITY_VIEW
+      // The button's tooltip is where the counts that the bar has no room for
+      // live, plus the reason when this conversation's log cannot be read.
+      const activityTitle =
+        (showActivityView ? 'Hide the agent\u2019s commands' : 'Show the commands the agent ran in this conversation') +
+        ' \u2014 ' +
+        activityFactsTitle(activity) +
+        (activityUnreadable ? '. Not readable here: ' + String(activity.reason) : '')
       const notice = health !== null && health.available !== true ? health : engineError === null ? null : { reason: engineError }
       const canRunInTerminal = slots.length > 0
 
@@ -2698,51 +2753,37 @@ body.dst-dragging{cursor:row-resize;user-select:none}
           'div',
           { className: 'dst-bar' },
           h('span', { className: 'dst-brand' }, h('span', { className: 'dst-glyph' }, h(TerminalGlyph, { size: 14 })), 'Terminal'),
-          // The switch for the agent's own terminal use. It is a BUTTON, not a
-          // chip state: turning it on is what puts the Agent chip in the strip,
-          // and turning it off takes the chip away and hands the panel back to
-          // the terminal that was last on screen.
+          // The agent log's ONE control (alpha.10). It is the TOGGLE between the
+          // two views, so it is filled while the log is what the panel shows,
+          // and it wears that log's state - the pulse while a command runs, the
+          // count of what failed, and the warning tone when this conversation's
+          // log cannot be read - because a reader who never opens the panel has
+          // nowhere else to learn any of it. There is deliberately NO Agent chip
+          // in the strip below: a second affordance for one view is what made
+          // switching to the log look like it had opened a second tab.
           h(
             'button',
             {
               type: 'button',
               className: 'dst-btn dst-actToggle',
               'data-dsh-terminal-activity': '',
-              'data-on': showActivity ? '' : undefined,
+              'data-on': showActivityView ? '' : undefined,
               'data-state': activityTone,
-              'aria-pressed': showActivity ? 'true' : 'false',
-              title: showActivity ? 'Hide the agent\u2019s commands' : 'Show the commands the agent ran in this conversation',
+              'aria-pressed': showActivityView ? 'true' : 'false',
+              title: activityTitle,
               onClick: toggleActivity,
             },
             h('span', { className: 'dst-glyph' }, h(ActivityGlyph, { size: 13 })),
             'Agent',
             activityBusy ? h('span', { className: 'dst-pulse', 'data-state': 'running' }) : null,
+            activityUnreadable ? h('span', { className: 'dst-warn', title: String(activity.reason) }, '\u26a0') : null,
+            activityFailed
+              ? h('span', { className: 'dst-badge', 'data-tone': 'failed', title: String(activity.counts.failed) + ' failed' }, String(activity.counts.failed))
+              : null,
           ),
           h(
             'div',
             { className: 'dst-chips', ref: chipsRef },
-            showActivity
-              ? h(
-                  'div',
-                  {
-                    key: 'activity',
-                    ref: (el) => {
-                      if (el === null) chipRefs.current.delete(ACTIVITY_VIEW)
-                      else chipRefs.current.set(ACTIVITY_VIEW, el)
-                    },
-                    className: 'dst-chip dst-chipAct',
-                    'data-active': active === ACTIVITY_VIEW ? '' : undefined,
-                    'data-state': activityTone,
-                    title: activityFactsTitle(activity),
-                    onClick: () => selectSlot(ACTIVITY_VIEW),
-                  },
-                  h('span', { className: 'dst-dot', 'data-state': activityBusy ? 'connecting' : activityFailed ? 'error' : 'live' }),
-                  h('span', { className: 'dst-chipName' }, 'Agent'),
-                  activity.counts.failed > 0
-                    ? h('span', { className: 'dst-badge', 'data-tone': 'failed', title: String(activity.counts.failed) + ' failed' }, String(activity.counts.failed))
-                    : null,
-                )
-              : null,
             slots.map((slot) =>
               h(
                 'div',
@@ -2866,7 +2907,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
                     'div',
                     { className: 'dst-notice' },
                     h('div', { className: 'dst-noticeTitle' }, 'No terminals'),
-                    h('div', null, 'Use + in the bar above to open a shell in this conversation\u2019s folder.', h('br'), 'Or switch on Agent to see the commands the agent ran here.'),
+                    h('div', null, 'Use + in the bar above to open a shell in this conversation\u2019s folder.', h('br'), 'Or press Agent in the bar above to see the commands the agent ran here.'),
                   )
                 : null,
         ),

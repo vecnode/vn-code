@@ -13,11 +13,12 @@ WebSocket: ConPTY PowerShell on Windows, the login shell on macOS/Linux. Prompts
 colors, TUI programs, `Ctrl+C`, resizes and scrollback all behave like a terminal
 because it is one.
 
-Right beside it — behind one **Agent** switch — is a **live transcript of the
-agent's own terminal use**: every `bash`/`pwsh`/`run_code`/`terminal_send` call
-this conversation recorded, grouped under the prompt that asked for it, with its
-exit status, duration and output. It is a *second view of the conversation you
-are already in*, not a second shell: see below.
+Right beside it — behind one **Agent** button, which toggles between the two — is
+a **live transcript of the agent's own terminal use**: every
+`bash`/`pwsh`/`run_code`/`terminal_send` call this conversation recorded, grouped
+under the prompt that asked for it, with its exit status, duration and output. It
+is a *second view of the conversation you are already in*, not a second shell: see
+below.
 
 ## How it plugs in
 
@@ -116,10 +117,12 @@ nodes into a React-managed container), so it positions itself:
   is bound to the conversation that opened it; **switching conversation closes
   it**.
 - **The agent's own terminal use, beside your shell** (alpha.7): the bar's
-  **Agent** switch puts an `Agent` chip at the head of the strip whose view is a
-  read-only transcript of every command this conversation ran — grouped under the
-  prompt that asked for it, with the tool, the working folder, the duration, the
-  exit status and the output. See *The agent's own terminal use* below.
+  **Agent** button toggles the panel to a read-only transcript of every command
+  this conversation ran — grouped under the prompt that asked for it, with the
+  tool, the working folder, the duration, the exit status and the output. It is the
+  **only** Agent control (alpha.10): it used to also put an `Agent` chip at the head
+  of the strip, which read as the button having opened a second tab. See *The
+  agent's own terminal use* below.
 - **The chip strip scrolls sideways** once the terminals outgrow it. While there
   is real overflow the strip grows a `‹` and a `›` — one page per click, and they
   dim at the ends — a bare wheel over the strip moves it, and the chip on screen
@@ -153,9 +156,16 @@ conversation recorded**, drawn in the dock because that is where you are already
 looking. You keep your shell, and you can see — without reading a single message
 — what the agent ran.
 
-**The switch is a mode.** `Agent` in the dock's bar adds an `Agent` chip at the
-head of the strip and shows it; switching it off takes the chip away and hands
-the panel back to the terminal you were on (not to slot 1). The toggle is
+**The switch is a toggle, and it is the only one.** `Agent` in the dock's bar
+switches the panel to the log and switches it back to the terminal you were on
+(not to slot 1) — one control, one meaning: the button is *on* exactly while the
+log is what the panel shows, and picking any terminal chip turns it off. Alpha.7
+also put an `Agent` chip at the head of the strip; that second affordance read as
+the button having opened a second tab, so **alpha.10 removed it**, and the state
+it carried moved onto the button: a pulse while a command runs, the count of what
+failed as a badge, the counts in its tooltip, and — the one warning nothing else
+on the dock could show — the warning tone and a `⚠` when this conversation's log
+*cannot be read here*, with the host's own reason in the tooltip. The toggle is
 remembered per origin in `localStorage` — a *view* preference, which is exactly
 why it may be remembered while the dock's **open** state deliberately is not: the
 panel is a window onto a process, and a boolean that resets merely re-hides the
@@ -384,8 +394,10 @@ answers with its **tail** (newest kept, `hasMore` set) and one oversized newest
 command is still sent. The **client** check pins that the bundle reads that route
 and no longer reaches for the browser's own session window, that the poll stops
 when nothing is subscribed and pauses in a hidden tab, that the switch is a
-**mode** (off by default, `aria-pressed`, and no `Agent` chip in the strip until
-it is on), that the stylesheet carries the view's rules — including alpha.9's
+**toggle** (off by default, `aria-pressed`, driven by the view itself rather than
+by a second flag, and with **no `Agent` chip anywhere in the strip** since
+alpha.10 — the failure count, the running pulse and the unreadable warning ride
+the button), that the stylesheet carries the view's rules — including alpha.9's
 status dress: a rail on **both** sides, the tone in one custom property per
 `data-status`, and the head's light wash — that killing a chip does
 not move a reader looking at the log, and that **Run in Terminal** refuses a
@@ -403,6 +415,19 @@ same log from re-folding it.
 
 ## Alpha notes
 
+- **alpha.10** — switching to the agent log looked like it had opened a **second
+  tab**. `Agent` in the dock's bar added an `Agent` chip at the head of the strip as
+  well as showing the log, and the log's state was split across the two controls: the
+  button pulsed while a command ran, the chip carried the failure count. The button is
+  now the **only** Agent control and it is the toggle — on exactly while the log is
+  the view (read back off the view itself, never a second flag, so picking a terminal
+  chip turns it off), and off to hand the panel back to the terminal you were on —
+  and it wears what the chip wore (the running pulse, the failed count as a badge, the
+  counts in its tooltip) **plus** the one warning that had nowhere else to live: this
+  conversation's log *cannot be read here*, drawn as the warning tone and a `⚠` with
+  the host's own reason in the tooltip. No chip, no second affordance, one control
+  with one meaning; the tracked client check pins that the strip never carries an
+  `Agent` chip again.
 - **alpha.9** — a row's status was nearly invisible in the common case: only a
   **failure** drew anything (a 2px red edge on the LEFT of the block) while a
   command that succeeded — the overwhelmingly common row — drew a transparent
@@ -447,12 +472,16 @@ same log from re-folding it.
   3. **the fold in the browser, exported for the check.** Keeping it client-side
      means one implementation of "what a command is" — the panel and the tracked
      check cannot drift — while the host stays a filtered, bounded reader.
-  4. **the view is the toggle.** An `Agent` chip at the head of the strip reads
-     as one more thing to switch to, reuses the strip's own scrolling, arrows and
-     scroll-into-view, and needs no geometry change: `ACTIVITY_VIEW = -1` is an
-     index no slot has, so the runtime hides every emulator with the code it
-     already had and the emulators stay mounted (a shell is a process — hiding it
-     must not detach it).
+  4. **the view is the toggle** — one control, and alpha.10 finished the job.
+     `ACTIVITY_VIEW = -1` is an index no slot has, so the runtime hides every
+     emulator with the code it already had and the emulators stay mounted (a shell
+     is a process — hiding it must not detach it). Alpha.7 put an `Agent` **chip**
+     at the head of the strip as the way in, which reused the strip's own
+     scrolling, arrows and scroll-into-view. But in this bar a chip *is* a tab, so
+     switching to the log read as the button having opened a second one, and the
+     log's state was split across two controls (a pulse on the button, the failure
+     count on the chip). The chip is gone: the bar's button is the toggle, it is on
+     exactly while the log is the view, and it wears the state.
   5. **honest about what a terminal cannot know.** Output arrives at settle, not
      live (the harness has no tool-output stream); a persistent shell claims no
      exit status; a call outside the tail names no tool; `Run in Terminal` refuses

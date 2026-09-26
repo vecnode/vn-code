@@ -1539,7 +1539,7 @@ check('terminal adopt: a height already in force moves nothing', adopt({ shared:
 check('terminal adopt: an unready section waits', adopt({ ready: false }), null)
 check('terminal adopt: an absent value is not a height of zero', adopt({ shared: null }), null)
 check('terminal adopt: another window still moves the dock', adopt({ shared: 350, known: 400, current: 280 }), 350)
-check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.9'))
+check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.10'))
 
 // ------------------------------------------------- the agent's own terminal use
 // alpha.7. The dock's second view is a TRANSCRIPT of what the conversation
@@ -1549,13 +1549,27 @@ check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0
 // ones the harness's own assembler reads (`event.data.message.content[0]` for a
 // result, `event.data.source.kind === 'user'` for a prompt).
 //
-// The switch is a MODE, not a filter over the strip: it is off by default, it is
-// what puts the Agent chip in the strip, and it wears the running/failed tone.
+// The Agent log has ONE control (alpha.10): the button in the dock's bar, which
+// is a TOGGLE between the two views and wears the log's own state. Alpha.7 also
+// put an `Agent` chip at the head of the strip, and that second affordance read
+// as the button having opened a second tab - so the chip is gone, and the state
+// it carried (the running pulse, the failure count, the unreadable warning) is
+// worn by the button instead. The switch is still off by default.
 check(
   'terminal dock offers the agent switch',
   termDockMarkup.includes('data-dsh-terminal-activity') && termDockMarkup.includes('aria-pressed="false"'),
 )
-check('terminal activity chip is off by default', termDockMarkup.includes('dst-chipAct') === false)
+check('terminal strip never carries an Agent chip', termSource.includes('dst-chipAct') === false)
+check(
+  'terminal activity button is a toggle wearing the log state',
+  termCss.includes('.dst-actToggle[data-on]{') &&
+    termCss.includes('.dst-actToggle[data-state=warning]') &&
+    termCss.includes('.dst-warn{') &&
+    termSource.includes('const showActivityView = active === ACTIVITY_VIEW') &&
+    termSource.includes('rememberActivity(sessionId, view === ACTIVITY_VIEW)') &&
+    termSource.includes('activityUnreadable') &&
+    termSource.includes('activityFactsTitle(activity)'),
+)
 check(
   'terminal activity styles are injected',
   termCss.includes('.dst-activity{position:absolute;inset:0;') &&
@@ -1589,7 +1603,7 @@ check(
   termSource.includes("h('span', { className: 'dst-headDot'") &&
     termSource.includes("'data-agent-state'") &&
     termCss.includes('.dst-headDot{') &&
-    termCss.includes('.dst-chipAct[data-state=running] .dst-dot{'),
+    termCss.includes('.dst-headDot[data-state=running]{'),
 )
 // The read moved to the HOST: a browser-side session window has to be STAGED
 // first, which is exactly what left the panel on "Reading the conversation..."

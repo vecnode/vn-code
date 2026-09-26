@@ -1228,9 +1228,16 @@ connection's own authentication, and the dock exists only where `webServer` and
 The dock's second view: a reading of the conversation, not a second shell. The
 agent's `bash`/`pwsh` run in the harness's own process through its shell tool and
 cannot be attached to the PTY in this panel, so the view is a *transcript* - it
-adds no PTY and no host state, and its one route is read-only. An `Agent` switch
-in the bar puts an `Agent` chip at the head of the existing strip and shows it;
-switching it off hands the panel back to the terminal that was last on screen.
+adds no PTY and no host state, and its one route is read-only. An `Agent` button in
+the bar **is** the toggle between the two views (alpha.10): it is on exactly while
+the log is what the panel shows - read back off the view itself, never a second flag,
+so picking any terminal chip turns it off - and switching it off hands the panel back
+to the terminal that was last on screen. Alpha.7 also put an `Agent` chip at the head
+of the strip as the way in, which read as the button having opened a second tab and
+split the log's state across two controls; alpha.10 removed the chip and moved that
+state onto the button (a pulse while a command runs, the failed count as a badge, the
+counts in its tooltip, and the warning tone with a mark when this conversation's log
+cannot be read here, with the host's own reason in the tooltip).
 The view is `ACTIVITY_VIEW = -1`, an index no slot has, which is what lets it ride
 the SAME `dock.active` cell and the SAME `DockRuntime.show()` the terminals use:
 showing `-1` hides every emulator, and the emulators stay mounted behind it

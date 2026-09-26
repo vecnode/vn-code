@@ -70,8 +70,11 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
     scrolling box with `+` outside it, the arrows are gated on measured overflow
     and the wheel listener is native and non-passive - and the strip's
     scroll-into-view arithmetic is DRIVEN, through the bundle's pure
-    `__internals.revealDelta`. alpha.7 adds the agent view on the same terms: the
-    switch is a MODE (off by default, no `Agent` chip until it is on), the bundle
+    `__internals.revealDelta`. alpha.7 adds the agent view on the same terms, and
+    alpha.10 finishes the switch: it is a TOGGLE and the ONLY Agent control (off
+    by default, `aria-pressed` read back off the view itself, no `Agent` chip
+    anywhere in the strip, with the running pulse, the failure count and the
+    unreadable-log warning worn by the button). The bundle
     reads this package's own `/activity` route rather than the browser's session
     window and polls only while something is subscribed and the tab is visible,
     killing a chip must not move a reader who is looking at the log, and **Run in
