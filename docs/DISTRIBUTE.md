@@ -249,7 +249,7 @@ matrix and the assertion in `check-dist-layout.mjs`.
   `check-dist-layout.mjs` reads the one tuned list out of this file, and two lists
   can drift.
 - **`release: published`**: builds all six matrix targets and attaches their
-  archives to the release. `gh release create v0.1.0 --generate-notes` is the
+  archives to the release. `gh release create v0.1.1 --generate-notes` is the
   whole ritual. The release build **fails** when the tag (minus a leading `v`)
   does not equal `package.json`'s version, so a tag can never name a version that
   was never built.

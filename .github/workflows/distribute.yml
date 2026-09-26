@@ -144,7 +144,7 @@ on:
     - cron: '17 6 * * 1'
 
   # Publishing a Release builds every matrix target's archive and attaches them
-  # to it. `gh release create v0.1.0 --generate-notes` is the whole ritual; the
+  # to it. `gh release create v0.1.1 --generate-notes` is the whole ritual; the
   # job below refuses to attach anything when the tag and package.json's version
   # disagree, so a release tag can never name a version that was never built.
   release:
