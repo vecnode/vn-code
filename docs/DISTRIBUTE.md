@@ -200,17 +200,31 @@ not build. Run them locally.
 Standard GitHub-hosted runners are **free for a public repository**, so this split
 is about wall-clock time and churn rather than the runner bill:
 
-| Event | checks | rust-tests | core legs | extra legs | uploads |
-|---|---|---|---|---|---|
-| push to `main` / pull request | yes | yes | 3 of 6 | – | no |
-| `workflow_dispatch` | yes | yes | 6 of 6 | yes | yes |
-| `schedule` (weekly, Monday 06:17 UTC) | yes | yes | 6 of 6 | yes | yes |
-| `release: published` | yes | yes | 6 of 6 | yes | yes |
+| Event | checks | rust-tests | core legs | extra legs | `-Verify` | uploads |
+|---|---|---|---|---|---|---|
+| push to `main` / pull request | yes | yes | 3 of 6 | – | linux-x64 | no |
+| `workflow_dispatch` | yes | yes | 6 of 6 | yes | all | yes |
+| `schedule` (weekly, Monday 06:17 UTC) | yes | yes | 6 of 6 | yes | all | yes |
+| `release: published` | yes | yes | 6 of 6 | yes | all | yes |
 
 A push is judged by one leg per operating system and uploads nothing: six
 archives per push, expired unused, is the churn this removes. A superseded run is
 cancelled (`concurrency`) - except a release, which is never cancelled mid-flight,
 because a tag with half its assets attached is worse than a slow run.
+
+**Where the minutes actually go** (measured on a real run, not estimated): the
+Windows leg sets the wall clock at ~7 minutes, and **275 s of that is the
+`-Verify` install**. Breaking that step down from its own log: the pnpm bootstrap
+is 9 s, and fetching the harness's own dependency closure into a throwaway home is
+~230 s (~223 MB through npm's and pnpm's stores, with Windows Defender inspecting
+every file), while the Rust build and the assembly are ~95 s of it. Linux and
+macOS verify in a fraction of that time.
+
+That is why a push verifies **once**, on the cheapest leg, rather than three
+times; why the package stores are cached (keyed on `.dsh-version.json`, so a new
+harness pin misses and refills rather than serving a stale closure); and why the
+legs that actually produce an artifact still all verify - there, "does this folder
+really run" is the question being answered.
 
 The **weekly schedule** exists because the runner images move under us: the first
 cut asked for `macos-13`, which had been retired, and only a runner can notice

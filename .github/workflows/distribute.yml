@@ -19,11 +19,11 @@
 #  Standard GitHub-hosted runners are FREE for a public repository, so the runner
 #  BILL is not the reason for this split - wall-clock time and waste are:
 #
-#    event              checks  rust tests  core legs  extra legs  uploads
-#    push / pull_request   yes      yes       3 of 6        -          no
-#    workflow_dispatch     yes      yes       6 of 6       yes         yes
-#    schedule (weekly)     yes      yes       6 of 6       yes         yes
-#    release: published    yes      yes       6 of 6       yes         yes
+#    event              checks  rust tests  core legs  extra legs  -Verify   uploads
+#    push / pull_request   yes      yes       3 of 6        -      linux-x64    no
+#    workflow_dispatch     yes      yes       6 of 6       yes       all       yes
+#    schedule (weekly)     yes      yes       6 of 6       yes       all       yes
+#    release: published    yes      yes       6 of 6       yes       all       yes
 #
 #  A push gets one leg per operating system (win-x64, mac-arm64, linux-x64) and
 #  uploads nothing: uploading six archives on every push only to expire them is
@@ -33,6 +33,19 @@
 #  REQUIRED, not `continue-on-error`: each has been green on every run since it
 #  was added, and an artifact that may silently not appear is worse than a leg
 #  that fails loudly.
+#
+#  WHERE THE MINUTES GO, MEASURED, AND WHAT THAT CHANGED
+#  ----------------------------------------------------
+#  The Windows leg sets the wall clock at ~7 minutes, and 275 s of that is the
+#  `-Verify` install: the installer bootstraps pnpm (9 s) and then fetches the
+#  harness's OWN dependency closure into a throwaway home (~230 s for ~223 MB,
+#  npm's and pnpm's stores, with Windows Defender looking at every file), while
+#  the Rust build plus the assembly is ~95 s. The same verification on Linux is
+#  a fraction of that. So a push verifies ONCE, on the cheapest leg, instead of
+#  three times; the package stores are cached (keyed on the pin, so a new harness
+#  version refills instead of lying); and the legs that produce an artifact - the
+#  ones where "does this folder actually run" is the question being answered -
+#  still all verify.
 #
 #  The weekly schedule exists because the runner images move under us: the first
 #  cut asked for `macos-13`, which had been retired, and no amount of running the
@@ -281,8 +294,15 @@ jobs:
             rid: mac-arm64
           # The oldest supported Ubuntu: a binary built here runs on anything at
           # or above its glibc, which a newer image cannot promise.
+          #
+          # `verify: true` makes THIS the leg that proves the distribution boots
+          # on a push: the installer runs and the pinned harness answers from the
+          # assembled folder, on the cheapest runner of the three. The Windows
+          # and macOS legs assemble without it there and verify on every path
+          # that produces an artifact (dispatch, weekly, release).
           - os: ubuntu-22.04
             rid: linux-x64
+            verify: true
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -301,6 +321,29 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: app/src-tauri
+
+      # `-Verify` installs the ENTIRE harness dependency closure (~223 MB) into a
+      # throwaway home on every run, through two content-addressed stores: npm's
+      # (`npx` fetches `@deepseek-ai/dsh@<pin>`) and pnpm's (the profile's own
+      # install). Measured on the Windows leg: 275 s of install, of which ~230 s
+      # is that closure. Both stores are keyed on the pin, so a new harness
+      # version misses and refills rather than serving a stale answer.
+      - name: Prepare the package caches
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.npm"
+          mkdir -p "$HOME/.local/share/pnpm/store" "$HOME/Library/pnpm/store" "$HOME/AppData/Local/pnpm/store"
+
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.npm
+            ~/.local/share/pnpm/store
+            ~/Library/pnpm/store
+            ~/AppData/Local/pnpm/store
+          key: packages-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.dsh-version.json') }}
+          restore-keys: |
+            packages-${{ runner.os }}-${{ runner.arch }}-
 
       # Tauri 2 links against WebKitGTK on Linux. Everything here is needed by
       # wry/tao (webkit2gtk-4.1, gtk3, libsoup3, javascriptcoregtk-4.1) or by the
@@ -322,8 +365,12 @@ jobs:
         shell: pwsh
         env:
           VERSION_INPUT: ${{ github.event.inputs.version }}
+          # `-Verify` is 70% of this leg and is proven once per push on the
+          # cheapest leg, then on EVERY leg of a run that produces something.
+          VERIFY: ${{ (github.event_name != 'push' && github.event_name != 'pull_request') || matrix.verify == true }}
         run: |
-          $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$env:GITHUB_WORKSPACE/scripts/dist.ps1", '-Verify')
+          $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$env:GITHUB_WORKSPACE/scripts/dist.ps1")
+          if ($env:VERIFY -eq 'true') { $arguments += '-Verify' }
           if ($env:VERSION_INPUT) { $arguments += @('-Version', $env:VERSION_INPUT) }
           & pwsh @arguments
           exit $LASTEXITCODE
@@ -333,11 +380,14 @@ jobs:
         shell: bash
         env:
           VERSION_INPUT: ${{ github.event.inputs.version }}
+          VERIFY: ${{ (github.event_name != 'push' && github.event_name != 'pull_request') || matrix.verify == true }}
         run: |
+          verify_flag=''
+          if [ "$VERIFY" = 'true' ]; then verify_flag='-Verify'; fi
           if [ -n "$VERSION_INPUT" ]; then
-            sh scripts/dist.sh -Verify -Version "$VERSION_INPUT"
+            sh scripts/dist.sh $verify_flag -Version "$VERSION_INPUT"
           else
-            sh scripts/dist.sh -Verify
+            sh scripts/dist.sh $verify_flag
           fi
 
       - name: The release tag must name the version that was built
@@ -438,6 +488,29 @@ jobs:
         with:
           workspaces: app/src-tauri
 
+      # `-Verify` installs the ENTIRE harness dependency closure (~223 MB) into a
+      # throwaway home on every run, through two content-addressed stores: npm's
+      # (`npx` fetches `@deepseek-ai/dsh@<pin>`) and pnpm's (the profile's own
+      # install). Measured on the Windows leg: 275 s of install, of which ~230 s
+      # is that closure. Both stores are keyed on the pin, so a new harness
+      # version misses and refills rather than serving a stale answer.
+      - name: Prepare the package caches
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.npm"
+          mkdir -p "$HOME/.local/share/pnpm/store" "$HOME/Library/pnpm/store" "$HOME/AppData/Local/pnpm/store"
+
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.npm
+            ~/.local/share/pnpm/store
+            ~/Library/pnpm/store
+            ~/AppData/Local/pnpm/store
+          key: packages-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.dsh-version.json') }}
+          restore-keys: |
+            packages-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Linux webview dependencies
         if: runner.os == 'Linux'
         run: |
@@ -453,8 +526,12 @@ jobs:
         shell: pwsh
         env:
           VERSION_INPUT: ${{ github.event.inputs.version }}
+          # `-Verify` is 70% of this leg and is proven once per push on the
+          # cheapest leg, then on EVERY leg of a run that produces something.
+          VERIFY: ${{ (github.event_name != 'push' && github.event_name != 'pull_request') || matrix.verify == true }}
         run: |
-          $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$env:GITHUB_WORKSPACE/scripts/dist.ps1", '-Verify')
+          $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$env:GITHUB_WORKSPACE/scripts/dist.ps1")
+          if ($env:VERIFY -eq 'true') { $arguments += '-Verify' }
           if ($env:VERSION_INPUT) { $arguments += @('-Version', $env:VERSION_INPUT) }
           & pwsh @arguments
           exit $LASTEXITCODE
@@ -464,11 +541,14 @@ jobs:
         shell: bash
         env:
           VERSION_INPUT: ${{ github.event.inputs.version }}
+          VERIFY: ${{ (github.event_name != 'push' && github.event_name != 'pull_request') || matrix.verify == true }}
         run: |
+          verify_flag=''
+          if [ "$VERIFY" = 'true' ]; then verify_flag='-Verify'; fi
           if [ -n "$VERSION_INPUT" ]; then
-            sh scripts/dist.sh -Verify -Version "$VERSION_INPUT"
+            sh scripts/dist.sh $verify_flag -Version "$VERSION_INPUT"
           else
-            sh scripts/dist.sh -Verify
+            sh scripts/dist.sh $verify_flag
           fi
 
       - name: The release tag must name the version that was built
