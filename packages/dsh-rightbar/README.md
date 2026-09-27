@@ -51,35 +51,32 @@ contract:
 - **The "+" control** opens the Start page, which lists each registered type's
   `guide` entries; picking one calls `openTab(kind, { replaceTab: true })`.
 
-`dsh-rightbar-files` (the Files tab) and `dsh-editor` (the editor tab) are the
-pack's own tab types on top of this bar.
+The pack's own tab types resolve these services: `dsh-rightbar-files` (Files),
+`dsh-editor` (editor), `dsh-gittree` (History), `dsh-image`, `dsh-audio`,
+`dsh-video`, `dsh-pdf` and `dsh-diagrams`, as does the shipped document preview
+for its Markdown / code / image / PDF renderers.
 
-## Four panes, not two (alpha.2)
+## Four panes, not two
 
 The docking kit this bar is built on allows **four** docked panes
 (`MAX_DOCK_PANES`, with its own `canSplit` meaning *fewer than four*) and offers
-**five** drop bands per pane (centre, left, right, top, bottom). The shipped
-sidebar-right bundle caps the dock at **two** in five places, and the fork had
-inherited that verbatim. Alpha.2 lifts it, so the limit is the kit's own:
+**five** drop bands per pane (centre, left, right, top, bottom). The fork's
+**seven** patches lift the shipped bundle's **two**-pane cap in the five places
+it is enforced — the split intent, the edge-drop intent (top and bottom
+included), the surface's `canSplit` prop and the split command — and re-open the
+top/bottom drop bands, so the ceiling is the kit's own `canSplit`: **four docked
+panes**, with the disabled-hint label in both languages naming that ceiling:
 
-- **Split** (the strip button) still adds a column to the **right** of the pane it
-  is pressed on — that is the kit's own `planSplitPane`, unchanged — up to four
-  panes in a row.
-- **Dragging a tab** into a pane's **top or bottom quarter** stacks a pane there
-  instead, which is how a **2×2** is built. The drop hints for those bands
-  ("Add top split" / "Add bottom split") and their glyphs were already in the core
-  bundle; only the fork's own refusal of the `top`/`bottom` zones kept them from
-  ever being offered.
-- **Room still wins over count.** The kit hides the Split control and refuses a
-  drop when a pane cannot hold two strips (~100px chip + 48px body each side), so
-  four panes want a widened bar or the panel's **fullscreen** mode. The pack keeps
-  its own `minPaneFraction: .2`, so a divider drag never leaves a pane under 20%.
-- **Floating panels are not counted** against the four: a tab dragged out to float
-  has no pane ceiling of its own, so it stays the way to see more than four at
-  once.
-- Panes beyond the first are created by a normal `split` op with a new split id,
-  so the session store, undo/redo and the close-time merge of empty panes all
-  handle a 2×2 exactly as they handled a single split — no format change.
+- **Split** (the strip button) adds a column to the **right** of the pane it is
+  pressed on — the kit's own `planSplitPane`, unchanged — up to four panes in a
+  row.
+- **Dragging a tab** into a pane's **top or bottom quarter** stacks a pane
+  there, which is how a **2×2** is built; the labels for those bands
+  ("Add top split" / "Add bottom split") and their glyphs are part of the core
+  bundle's locales.
+- **Floating panels do not count** against the four: a tab dragged out to float
+  faces no pane ceiling of its own, so it remains the way to see more than four
+  at once.
 
 ## Re-syncing the fork
 
@@ -95,11 +92,11 @@ scripts\sync-vendored.ps1` works just as well: the script is OS-neutral.)
 
 The script finds the harness `node_modules` (profile first, then the npm caches
 - the Windows npm cache, `~/.npm/_npx`, and the POSIX global module
-directories), copies each forked bundle, rewrites the module id, applies that
-fork's patch list, stamps the banner and prints hashes. `-Check` reports drift
-without writing (exit 1 when out of sync). If the bar's slot/service surface
-changed in the new line, review the diff before installing — a fork does not
-silently track upstream.
+directories), copies each forked bundle, rewrites the module-table id, applies
+that fork's patch list, stamps the banner and prints hashes. `-Check` reports
+drift without writing (exit 1 when out of sync). If the bar's slot/service
+surface changed in the new line, review the diff before installing — a fork does
+not silently track upstream.
 
 ## Layout
 

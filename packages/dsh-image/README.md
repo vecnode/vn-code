@@ -11,8 +11,8 @@ behaves the way an image viewer is expected to: **fit on open, a zoom ladder fro
 pointer, and drag to pan.**
 
 It is a **client-only** package: bytes come from the harness's own
-`workspaceFiles` remote, so there is no route, no host-side state, and no path
-policy of its own to get wrong.
+`remote.workspaceFiles` remote, so there is no route, no host-side state, and no
+path policy of its own.
 
 ## What it adds
 
@@ -27,7 +27,7 @@ policy of its own to get wrong.
 | **Keyboard** | `+` / `-` zoom, `0` fit, `1` actual size, arrows scroll. |
 | **Transparency** | A checkerboard behind the picture, so a transparent PNG reads as transparent instead of as whatever the pane's background happens to be. |
 | **Pixel peeping** | Past 300% the image is drawn with nearest-neighbour sampling, so a zoomed pixel is a square and not a smear. |
-| **Status line** | The picture's true dimensions, its size on disk, its format, and the **source pixel under the pointer with its colour** (`x,y · #rrggbb · 42%` for a partially transparent one). |
+| **Status line** | The picture's true dimensions, its size on disk, its format, and the **source pixel under the pointer with its colour** (`x,y · #rrggbb · 42%` for a partially transparent one), sampled through a 1×1 canvas. |
 | **Honest failure** | A codec this browser does not have (TIFF in Chrome, say) says exactly that, names the format, and offers to read the file again - rather than drawing nothing. |
 
 ## How it plugs in
@@ -46,13 +46,13 @@ policy of its own to get wrong.
 
 It replaces nothing by patching. The bar's tab registry ranks by band
 (`extension` 3, `builtin` 2, `fallback` 1) and then by the length of the pattern
-that matched; the shipped preview claims `dsh-resource://file/**` at `fallback`,
-and this type registers the image suffixes at `extension`, so an image opens here
-while **every other file type keeps exactly the surface it had**. `canOpen`
-refuses anything that is not an image address, so the ranking can never leak. The
-shipped preview stays mounted as the fallback for a profile without this package
-- the same arrangement `dsh-pdf` makes for `*.pdf` and `dsh-editor` makes for
-text. The editor is unaffected: it already vetoes image extensions.
+that matched; the shipped preview claims `dsh-resource://file/**` with its `text`
+type at `fallback` (1), and this type registers the image suffixes at `extension`
+(3), so an image opens here **by ranking** while every other file type keeps
+exactly the surface it had. `canOpen` refuses anything that is not a claimed
+image address, so the ranking can never leak. The shipped preview stays mounted
+as the fallback for a profile without this package, and the editor is unaffected:
+it vetoes image extensions outright.
 
 ## Addresses
 
@@ -72,9 +72,10 @@ surface had it - the conversation's own attachment renderer, for instance.
 sized `naturalPixels * zoom` inside a scrollable pane, so panning is the pane's
 own `scrollLeft` / `scrollTop` and everything the browser already does - wheel
 scrolling, scrollbars, keyboard scrolling, overscroll - keeps working untouched.
-A `transform: scale()` would scale into a clipped box with no scrollable area,
-which is the bug the pack's diagram viewer shipped first; a zoomed picture must
-stay scrollable to its edge.
+A `transform: scale()` would draw into a clipped box with no scrollable area; a
+zoomed picture stays scrollable to its edge. `margin:auto` on the box is the
+centring that survives overflow: a flex item centred with `justify-content`
+cannot be scrolled back to its own top-left corner.
 
 **A zoom keeps the point the reader was looking at.** The point under the
 pointer (or the pane's centre for a button) is remembered as a *fraction* of the
@@ -101,8 +102,8 @@ between an instant open and a visible stall.
 "bytes-complete" document - already resolves the path against the conversation
 workspace, refuses a symlink out of it, requires a regular file, and enforces the
 single-file byte cap (32 MiB by default) on the **host** side. A plugin route
-would have had to re-implement all of that. So this package ships no route and no
-host state; its Node half is one no-op row whose only job is to put the browser
+would have to re-implement all of that. So this package ships no route and no
+host state; `lib/index.js` is one no-op row whose only job is to put the browser
 bundle in the boot graph.
 
 **The blob URL is revoked.** A reader flipping through a folder of photographs
@@ -120,7 +121,7 @@ one.
 | not claimed | HEIC/HEIF, RAW, PSD, and every other format no browser decodes - those keep the shipped preview |
 | no editing | this tab reads. There is no crop, rotate, resize, convert or save. |
 
-TIFF is claimed deliberately: Chrome cannot decode it, and a viewer that says
+TIFF is claimed on purpose: Chrome cannot decode it, and a viewer that says
 "this browser could not decode a TIFF file - the bytes are here and intact, it is
 the codec that is missing" is more useful than a generic binary-file message.
 
@@ -152,16 +153,6 @@ This one is a **new bundle**, so the app's profile has to learn about it: run th
 installer once, then restart `npx @deepseek-ai/dsh web` and hard-refresh the
 browser (Ctrl+F5). After that it is a live link, and editing `lib/client.js`
 needs only a restart.
-
-## Alpha roadmap
-
-- **alpha.1** (this release): the viewer - fit, the zoom ladder, pointer-anchored
-  wheel zoom, drag-to-pan, the checkerboard, pixelated rendering past 300%, the
-  pointer/pixel readout, and honest failure for an undecodable format.
-- **Next, if the pictures you look at ask for it**: a per-image remembered zoom
-  and scroll position, an EXIF/metadata drawer (dimensions, camera, date, GPS) for
-  JPEG and PNG, an image index page beside the PDFs one, and rotation - which is
-  the one edit a viewer can hold in memory without touching the file.
 
 This package is also the shape the **`dsh-audio`** viewer reuses: the same
 zoom-moves-the-layout rule, the same pointer anchoring, the same

@@ -3,83 +3,49 @@
 **The pack's conversation-header package.** It owns four controls on that header
 and the appearance overrides that dress it.
 
-**1. Themes** — one small control in the web GUI's conversation header: a button,
-the size and dress of the header's other icon buttons, sitting immediately **left
-of the shipped "Open In…" control**. Pressing it opens a menu with the three
-appearances the product already offers — **Light**, **Dark** and **System** — plus
-every theme **registered into the shipped theme registry** (alpha.12), which is
-where this package's own **Nord**, **Monokai** (alpha.13) and **Hacker**
-(alpha.19) come from. The button
-wears one static appearance mark rather than the active preference's sun/moon. See
-[Registered themes](#registered-themes-nord-alpha12-monokai-alpha13-and-hacker-alpha19).
-
-**2. The Session-log download seat** (alpha.9) — the shipped
-`@deepseek-ai/dsh-session-log-export` browser half put a **three-dot "more
-actions" button** in that same header group whose menu held exactly **one** item,
-"Download session log": one click to open a menu, a second to pick the only thing
-in it. This package takes that seat and draws **one plain download icon button**
-on it — one click and the export starts. The export itself is not reimplemented:
-the shipped row stays mounted and its `sessionLogDownload` controller does the
-work, so the button and the `/export` command stay one implementation. See [The
-Session-log download seat](#the-session-log-download-seat-alpha9).
-
-**3. The Screenshot control** (alpha.10) — one more button on the same row, left of
-the Themes control. It captures the **whole window** (the app is a fixed-viewport
-shell, so the page's 100% width and 100% height are exactly the tab's box) and
-saves the PNG to the **Desktop of the machine running the app**, through this
-package's own host route. Since alpha.11 the picture is **the interface as it
-stands**, the header's own buttons included; only an open tooltip bubble is kept
-out of the frame. See [The screenshot control](#the-screenshot-control-alpha10).
-
-**4. The Page-zoom control** (alpha.15) — the leftmost button of the four. It drops
-a menu holding the level in force plus the two steps, **Zoom in** and **Zoom out**,
-and those two do what the browser's own **Ctrl+ / Ctrl- page zoom** does: `zoom` on
-the document element, along Chrome's own ladder, and — since alpha.17 — remembered
-in the pack's own host-side settings section, with the per-origin `localStorage`
-copy underneath as the fallback. It exists because that keyboard gesture belongs to
-the browser — a Chrome tab has it, and the native window the desktop launcher opens
-(a Tauri shell over the very same `dsh web`) does not. See
-[The page-zoom control](#the-page-zoom-control-alpha15).
+- **Themes** (order `-20`) — the size and dress of the header's other icon buttons,
+  immediately **left of the shipped "Open In…" control** (`-10`). Its menu holds
+  **Light**, **Dark** and **System** plus every theme **registered into the shipped
+  theme registry**, which is where this package's own **Nord**, **Monokai** and
+  **Hacker** come from; the button wears one static appearance mark rather than the
+  active preference's sun/moon. See [Registered themes](#registered-themes).
+- **The Session-log download seat** (order `0`) — one plain **download icon
+  button** where the shipped three-dot "more actions" button sits, which starts the
+  session-log export behind a one-item menu, so one click starts the export. See
+  [The Session-log download seat](#the-session-log-download-seat).
+- **The Screenshot control** (order `-30`) — captures the **whole window** (the app
+  is a fixed-viewport shell, so the page's 100% width and 100% height are exactly
+  the tab's box) and saves the PNG to the **Desktop of the machine running the
+  app** through this package's own host route. See
+  [The screenshot control](#the-screenshot-control).
+- **The Page-zoom control** (order `-40`, the leftmost) — a menu holding the level
+  in force plus **Zoom in** and **Zoom out**, doing what the browser's own
+  **Ctrl+ / Ctrl- page zoom** does: `zoom` on the document element along Chrome's
+  own ladder. It exists because that gesture belongs to the browser — a Chrome tab
+  has it, and the native window the desktop launcher opens (a Tauri shell over the
+  very same `dsh web`) does not. See
+  [The page-zoom control](#the-page-zoom-control).
 
 It also carries the pack's **appearance overrides** — rules that hold one surface
-on a fixed palette or a fixed shape whatever the app theme is. The first is the
-**Markdown paper** (alpha.2): the rendered Markdown view stays white in the dark
-theme. The second is the **Markdown chrome** (alpha.3): that same page has exactly
-one viewer, so the preview header's viewer menu is hidden on Markdown tabs. The
-third is the left column's **top bar** (alpha.4): the sidebar's branding row
-becomes the same 76px band, ending in the same hairline, that the middle and right
-columns open with — and, since alpha.6, that row wears the pack's own **VN
-branding** (a 24px black disc and the text *vn-harness*) instead of the shipped
-fish and wordmark. The fourth (alpha.9) is the **header ring**: the right bar's
-own collapse/expand toggle in the header corner is the one icon button on that bar
-that could not be given the group's round outline where it lives (it belongs to a
-GENERATED forked bundle), so one rule keyed on the header's stable corner marker
-gives it the same ring this package's own header buttons draw themselves. See
-below. All of them are plain engine-neutral CSS, so they hold in whichever browser
-the Web GUI is opened in.
+on a fixed palette or a fixed shape whatever the app theme is: the **Markdown
+paper**, the **Markdown chrome**, the left column's **top bar** with the pack's
+**VN branding**, the **header ring**, and the **right bar's resize seam**. All of
+them are plain engine-neutral CSS, so they hold in whichever browser the Web GUI
+is opened in. It is a thin control, not a second theme system, and the
+**preference** stays owned by the shipped `@deepseek-ai/dsh-client-ui-theme`: its
+`theme` client service persists the choice in the `ui-theme` settings namespace,
+resolves `system` through `prefers-color-scheme`, and ui-layout applies every
+snapshot to the document (`body[data-ds-dark-theme]` + the `--dsw-*` tokens). This
+bundle only **reads** the published snapshot and calls `setTheme(id)`, exactly like
+the Settings → General → **Appearance** row — one preference, one persistence path,
+one palette. The service is resolved lazily (`ctx.get('theme')`, never in
+`inject`), so a profile that never mounts ui-theme keeps its header, with the
+button disabled and reading "The theme service is unavailable". It can also
+**register** themes through that same service (`ctx.theme.register`, ui-theme's
+documented third-party surface).
 
-It is a thin control, not a second theme system:
+## Registered themes
 
-- the **preference** stays owned by the shipped
-  `@deepseek-ai/dsh-client-ui-theme` — its `theme` client service persists the
-  choice in the `ui-theme` settings namespace, resolves `system` through
-  `prefers-color-scheme`, and ui-layout applies every snapshot to the document
-  (`body[data-ds-dark-theme]` + the `--dsw-*` tokens);
-- this bundle only **reads** the published snapshot and calls `setTheme(id)` for
-  that switch, exactly like the Settings → General → **Appearance** row.
-  Switching here updates Settings, and switching in Settings updates this
-  control: there is one preference, one persistence path for it, and one palette.
-  The one choice that schema cannot hold — a **registered** theme — is remembered
-  in this pack's own section instead (alpha.17/18); see
-  [Registered themes](#registered-themes-nord-alpha12-monokai-alpha13-and-hacker-alpha19).
-
-It can also **register** themes through that same service (`ctx.theme.register`,
-ui-theme's documented third-party surface) — see
-[Registered themes](#registered-themes-nord-alpha12-monokai-alpha13-and-hacker-alpha19).
-
-## Registered themes: Nord (alpha.12), Monokai (alpha.13) and Hacker (alpha.19)
-
-The **registry is the extension point**, and this package uses it.
 `@deepseek-ai/dsh-client-ui-theme` exposes `register({ id, colorScheme, tokens })`;
 ui-layout's presenter writes a registered theme's alias tokens as **inline CSS
 variables on `body`**, over whichever base palette `colorScheme` selects, and
@@ -92,14 +58,17 @@ variables on `body`**, over whichever base palette `colorScheme` selects, and
   `system` preference appended last), so a theme becomes selectable by being
   registered — there is no second list to keep in step;
 - draws the header button with **one static appearance mark** (a half-filled
-  disc) instead of the active preference's sun/moon. A registered palette has no
-  shipped glyph to wear, and the menu — plus the tooltip, which names the active
-  theme — is where the choice is.
+  disc), because a registered palette has no shipped glyph to wear.
+
+All three sit on the **dark** base palette in the same **93-token** shape — 73
+alias tokens, 11 `--dsw-specific-*` and the nine shiki syntax tokens — so one
+theme cannot quietly become a subset of another. `THEME_EXTENSIONS` order is the
+menu order: Light / Dark / Nord / Monokai / Hacker / System.
 
 ### Nord
 
-**Nord** ([nordtheme.com](https://www.nordtheme.com/)) is registered on the
-**dark** base palette and recolors the alias layer with the palette's own colours:
+**Nord** ([nordtheme.com](https://www.nordtheme.com/)) recolors the alias layer
+with the palette's own colours:
 
 | Nord | Values | What they paint here |
 |---|---|---|
@@ -108,19 +77,17 @@ variables on `body`**, over whichever base palette `colorScheme` selects, and
 | Frost | `#8fbcbb` `#88c0d0` `#81a1c1` `#5e81ac` | brand, links, primary button, switches, focus rings, muted text |
 | Aurora | `#bf616a` `#d08770` `#ebcb8b` `#a3be8c` `#b48ead` | the error / warn / success states and the syntax tokens |
 
-`nord0` is the page for the conversation **and** the sidebar (the way
-vscode-nord draws editor and sidebar alike — the columns are separated by the
-frame's own hairline, not by a lighter rail), a code fence sits one step above it,
-and the syntax colours follow the rules nord-vim follows: keywords and comments in
-Frost `#81a1c1`, functions and links in `#88c0d0`, strings in Aurora green,
-numbers in `#b48ead`.
+`nord0` is the page for the conversation **and** the sidebar (the way vscode-nord
+draws editor and sidebar alike — the columns are separated by the frame's own
+hairline, not by a lighter rail), a code fence sits one step above it, and the
+syntax colours follow the rules nord-vim follows: keywords and comments in Frost
+`#81a1c1`, functions and links in `#88c0d0`, strings in Aurora green, numbers in
+`#b48ead`.
 
-### Monokai (alpha.13)
+### Monokai
 
 **Monokai** ([monokai.nl](https://monokai.nl/)) is the classic TextMate palette
-Wimer Hazenberg wrote for Coda, registered on the **dark** base palette with the
-same 93 token overrides Nord carries — 73 alias, 11 `--dsw-specific-*` and the
-nine shiki syntax tokens:
+Wimer Hazenberg wrote for Coda:
 
 | Monokai | Values | What they paint here |
 |---|---|---|
@@ -133,29 +100,25 @@ nine shiki syntax tokens:
 highlight (`#3e3d32`) is one step above it and its selection (`#49483e`) the step
 above that, so a code fence, a menu and a selected row are all steps of the same
 near-black. The syntax tokens carry the classic Monokai roles unchanged — keywords
-and tags pink, constants purple, strings yellow, comments the olive grey,
-parameters orange, functions green, punctuation the off-white body.
+and tags pink, constants purple, strings yellow, comments the olive grey, parameters
+orange, functions green, punctuation the off-white body. Steps the classic palette
+does not define are **derived from its own colours** rather than invented: the
+primary button's hover is Monokai Pro's pink `#ff6188`, its dimmed fill is the pink
+darkened 28% (`#b31b52`), the cyan's hover is the cyan lifted a fifth toward white
+(`#85e1f2`), and the two text tiers between the body and the comment grey are the
+body darkened 12% (`#dadad5`) and the comment grey lifted halfway back to the body
+(`#b6b4a8`).
 
-Steps the classic palette does not define are **derived from its own colours**
-rather than invented: the primary button's hover is Monokai Pro's pink `#ff6188`,
-its dimmed fill is the pink darkened 28% (`#b31b52`), the cyan's hover is the cyan
-lifted a fifth toward white (`#85e1f2`), and the two text tiers between the body
-and the comment grey are the body darkened 12% (`#dadad5`) and the comment grey
-lifted halfway back to the body (`#b6b4a8`).
-
-### Hacker (alpha.19)
+### Hacker
 
 **Hacker** is the phosphor terminal — the palette a monochrome CRT and a hacker
-film are both drawn with — registered on the **dark** base palette with the same
-93 token overrides Nord and Monokai carry (73 alias, 11 `--dsw-specific-*` and
-the nine shiki syntax tokens). It sits after Monokai in `THEME_EXTENSIONS`, so
-the menu reads Light / Dark / Nord / Monokai / Hacker / System:
+film are both drawn with:
 
 | Hacker | Values | What they paint here |
 |---|---|---|
 | Surfaces | `#0a0e0a` `#101710` `#162116` `#1c2c1c` | the page and the sidebar alike, the raised step, menus, bubbles and code blocks, then the selection and the toolbar one step above |
 | Text | `#d8ffe0` `#bee0c5` `#8bb595` `#3f6b4a` | the phosphor body, its 12% darker step, the quiet tier halfway back to the body, and the dim green as the quietest tier |
-| Signal green | `#00ff41` `#33ff67` `#00b82f` | brand, primary button, focus rings, switches, success, and the keyword and function syntax tokens (hover and dimmed derived from the green) |
+| Signal green | `#00ff41` `#33ff67` `#00b82f` | brand, primary button, focus rings, switches, success, and the keyword syntax token (the function token is the lighter step `#5cff85`; hover and dimmed are derived from the green) |
 | Amber | `#ffb000` `#ffd166` | the warn state and its label, and the string tokens |
 | Cyan | `#00d9ff` `#33e1ff` `#7dd3fc` | links, the info/business state, the ghost-active border, constants, parameters |
 | Error red | `#ff4d4d` | the error state — Monokai's pink would be off-palette here |
@@ -165,59 +128,50 @@ step a menu, a bubble and a code fence sit on, and `#1c2c1c` is the selection an
 the inline chip, so a menu, a fence and a selected row are all steps of one
 near-black with a green cast. The syntax tokens are one terminal's worth of
 colour — keywords and functions green, strings amber, parameters and constants
-cyan, comments the dim green, punctuation the phosphor body.
+cyan, comments the dim green, punctuation the phosphor body. Steps the palette
+does not define are **derived from its own colours** by the same arithmetic the
+Monokai section documents: the signal green lifts a fifth toward white for its
+hover (`#33ff67`) and darkens 28% when dimmed (`#00b82f`), the cyan lifts the same
+fifth (`#33e1ff`), and the two text tiers between the body and the dim green are
+the body darkened 12% (`#bee0c5`) and the dim green lifted halfway back to the
+body (`#8bb595`).
 
-Steps the palette does not define are **derived from its own colours** by the
-same arithmetic the Monokai section documents rather than invented: the signal
-green lifts a fifth toward white for its hover (`#33ff67`) and darkens 28% when
-dimmed (`#00b82f`), the cyan lifts the same fifth (`#33e1ff`), and the two text
-tiers between the body and the dim green are the body darkened 12% (`#bee0c5`)
-and the dim green lifted halfway back to the body (`#8bb595`).
+### Why the alias layer, and how the choice is kept
 
-**Why the alias layer and not the `--dsw-static-*` ramp.** A static is shared by
-roles that are not the same role — in the dark palette `neutral-bluish-50` is both
-the primary label *and* the brand fill — so recoloring the ramp drags unrelated
-surfaces along with it. The alias layer is the semantic one, and the layer
-ui-theme documents as the third-party surface. Aliases a theme does not name
-keep their shipped dark value: the scrims (`bg-mask-*`), the elevation strokes and
-the shadow scale are scheme-neutral black/white alphas and read correctly on
-either registered dark theme unchanged.
+A static is shared by roles that are not the same role — in the dark palette
+`neutral-bluish-50` is both the primary label *and* the brand fill — so recoloring
+the `--dsw-static-*` ramp drags unrelated surfaces along with it. The alias layer
+is the semantic one, and the layer ui-theme documents as the third-party surface.
+Aliases a theme does not name keep their shipped dark value: the scrims
+(`bg-mask-*`), the elevation strokes and the shadow scale are scheme-neutral
+black/white alphas and read correctly on any registered dark theme unchanged.
 
-**The choice is remembered, and kept in force.** ui-theme's durable preference
-schema accepts `light` / `dark` / `system` only, so an extension theme id is
-written to the pack's own `vn-harness` section instead (alpha.17, through the
-`uiState` service `dsh-ui-state` publishes) and put back on the next load; the
-shipped preference is never faked, and picking a built-in clears that field so it
-reads as inherited again. Keeping it in force is the other half (alpha.18).
-ui-theme's `ThemeRuntime.adopt()` re-assigns its `preference` from its DURABLE
-section whenever its settings scope notifies, and that scope notifies whenever the
-settings DOCUMENT changes — any write to any namespace, this pack's own zoom and
-dock writes included — so an extension theme, which is never written durably, was
-applied by the click and discarded by the next settings write; that predates
-alpha.17, and ANY Settings change reverted Nord. This control therefore treats an
-extension theme as a DESIRED STATE it keeps applied (`desiredTheme` +
-`reconcileTheme` on every `theme/change`) rather than a one-shot choice, with
-ui-theme's own namespace REVISION as the tie-break between the two cases that
-otherwise look identical: a re-adopt (revision unmoved — nobody chose anything, so
-the theme goes back) and a deliberate built-in chosen in the shipped Settings →
-Appearance row (revision moved — that decision wins and the remembered id is
-cleared). Re-picking the built-in that was ALREADY durable is the one case the
+ui-theme's durable preference schema accepts `light` / `dark` / `system` only, so
+an extension theme id is written to the pack's own `vn-harness` section instead
+(through the `uiState` service `dsh-ui-state` publishes) and put back on the next
+load; picking a built-in clears that field so it reads as inherited again, and the
+shipped preference is never faked. Keeping it in force is the other half: ui-theme
+re-adopts its durable preference whenever the settings DOCUMENT changes, and an
+extension theme is never in that section, so this control treats it as a DESIRED
+STATE it keeps applied (`desiredTheme` + `reconcileTheme` on every `theme/change`)
+rather than a one-shot choice. ui-theme's own namespace REVISION is the tie-break:
+a re-adopt (revision unmoved) puts the theme back, while a built-in chosen in the
+shipped Settings → Appearance row (revision moved) wins and the remembered id is
+cleared. Re-picking the built-in that was ALREADY durable is the one case the
 revision cannot see, so the extension is re-applied there and this control's own
-menu is the escape. The tracked check now runs the REAL ui-theme bundle rather than
-a stub — which is what let the bug ship — and skips loudly where no copy exists.
+menu is the escape.
 
 **Adding another theme** is one entry in `THEME_EXTENSIONS` (id, label key,
 `colorScheme`, token map, menu glyph) plus its `theme.<id>` copy in both
 dictionaries. The menu picks it up from the registry; nothing else changes.
 
-## The Markdown paper (alpha.2)
+## The Markdown paper
 
 The shipped document preview draws rendered Markdown into a container marked
-`data-document-markdown` and paints it from the `--dsw-*` tokens. Those tokens
-are declared on `body` (light) and **overridden** on `body[data-ds-dark-theme]`
-(dark), so a subtree cannot un-dark itself by referencing them — it just inherits
-the dark values, which is why the rendered document used to go dark with the app.
-
+`data-document-markdown` and paints it from the `--dsw-*` tokens. Those tokens are
+declared on `body` (light) and **overridden** on `body[data-ds-dark-theme]` (dark),
+so a subtree cannot un-dark itself by referencing them — it just inherits the dark
+values, which is why the rendered document would otherwise go dark with the app.
 This package injects **one rule** that re-declares ui-theme's own **light**
 declarations on that container (the static palette, the ~80 alias tokens, and the
 shiki token colours), then paints `background:#fff` on it:
@@ -227,73 +181,67 @@ body [data-document-markdown]{ /* the theme's light layer, verbatim */ backgroun
 ```
 
 - **Read, not hardcoded.** The light layer is copied out of ui-theme's own
-  stylesheets at boot (every top-level `:root` / `body` rule that is *not* the
-  dark one), so a palette change on a harness bump carries over by itself instead
-  of freezing today's hex values here. The read uses the CSSOM and falls back to
-  the rule's text where an engine does not enumerate custom properties.
+  stylesheets at boot (every top-level `:root` / `body` rule that is *not* the dark
+  one), so a palette change on a harness bump carries over by itself instead of
+  freezing today's hex values here. The read uses the CSSOM and falls back to the
+  rule's text where an engine does not enumerate custom properties.
 - **All or nothing.** If the stylesheets cannot be read, nothing is injected:
   forcing white without the light tokens would paint light text on a white page,
   which is worse than leaving the view on the app theme.
 - **Scoped.** Only the rendered Markdown document is pinned — chat Markdown, code
-  previews and every other surface keep following the app theme. A second
-  selector paints the preview's scrollport (`[data-textpreview-body]`, matched
-  with `:has([data-document-markdown])`) white as well, so a short document does
-  not sit on the app's dark canvas underneath; where `:has()` is unsupported that
-  one rule is dropped and the document itself is still white. Because
-  `--dsl-code-block-*` and `--shiki-*` resolve *inside* the document, the copied
-  tokens also give the code blocks, inline code, links and lists their light
-  styling for free.
-- **Re-installed on every `theme/change`** (a palette swap re-registers the
-  sheets), and once more on the tick after boot, in case ui-theme's stylesheets
-  land after this row.
+  previews and every other surface keep following the app theme. A second selector
+  paints the preview's scrollport (`[data-textpreview-body]`, matched with
+  `:has([data-document-markdown])`) white as well, so a short document does not sit
+  on the app's dark canvas underneath; where `:has()` is unsupported that one rule
+  is dropped and the document itself is still white. Because `--dsl-code-block-*`
+  and `--shiki-*` resolve *inside* the document, the copied tokens also give the
+  code blocks, inline code, links and lists their light styling for free.
+- **Re-installed on every `theme/change`**, and once more on the tick after boot,
+  in case ui-theme's stylesheets land after this row.
 
 The editor's **Preview** button is what reaches this view for a Markdown file; the
 white page is this package's doing.
 
-## The Markdown chrome (alpha.3)
+## The Markdown chrome
 
 A rendered Markdown page in this pack has exactly **one** viewer, but the shipped
 preview header builds its viewer menu out of *every* candidate implementation it
-resolved for the file: the Markdown body plus the shipped **plain-text** fallback.
-A Markdown tab therefore offered "Markdown" / "Plain text", and the second entry is
-never what the pack wants — plain text is what the editor's own text surface is for,
-and the deliberate way there is the **Edit** button the editor's document body draws
-on the page.
-
-So the menu is hidden on Markdown tabs:
+resolved for the file — the Markdown body plus the shipped **plain-text** fallback
+— so a Markdown tab offers "Markdown" / "Plain text". The second entry is never
+what the pack wants: plain text is what the editor's own text surface is for, and
+the deliberate way there is the **Edit** button the editor's document body draws on
+the page. So the menu is hidden on Markdown tabs:
 
 ```css
 body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown"]
   [data-document-viewer-menu]{display:none}
 ```
 
-- **Scoped by renderer, not by guesswork.** The preview stamps the selected
-  implementation's id into `data-document-preview` on the document root, so the rule
-  matches the shipped Markdown id alone and a code or plain-text preview keeps its
-  menu (there the choice is real, and the pack has no opinion about it).
-- **Static CSS, installed once.** Unlike the paper there is no palette to read, so a
-  single install at activation is enough. It gets its own style tag
-  (`dsh-themes/markdown-chrome.css`) so it does not depend on the paper's read
-  succeeding.
-- **Only the header control goes.** The path, the reload tool and the document
-  itself are untouched, as is the page's **Edit** button.
+The preview stamps the selected implementation's id into `data-document-preview`
+on the document root, so the rule is **scoped by renderer, not by guesswork**: it
+matches the shipped Markdown id alone and a code or plain-text preview keeps its
+menu, where the choice is real and the pack has no opinion about it. It is **static
+CSS, installed once** (there is no palette to read) in its own tag
+(`dsh-themes/markdown-chrome.css`), so it does not depend on the paper's read
+succeeding. Only the header control goes: the path, the reload tool, the document
+itself and the page's **Edit** button are untouched.
 
-## The left column's top bar (alpha.4, gap alpha.5, branding alpha.6)
+## The left column's top bar
 
 The frame opens with one band per column, and every column's band ends in the same
 hairline at **y=76**:
 
 | column | its band | its line |
 |---|---|---|
-| left | `.hHd-Xa_logoRow` — was a vertically centred 60px row under the root's 6px padding, so it ended at 66 | **none at all** |
+| left | `.hHd-Xa_logoRow` — the sidebar branding row | **none at all** |
 | middle | the conversation header (`min-height:76px`, `padding:10px 28px 0 20px`) | `.5px solid var(--dsw-alias-border-l3)` at 76 |
 | right | the docking kit's 38px tab strip, then the open tab's own 38px header (the shipped Files tab) | the same hairline at 38+38 = **76** |
 
-The left column was the odd one out twice over: no rule under its branding row, and
-a collapsed rail that changed **both** the root's top padding (6px → 18px) and the
-row's height (60px → 36px) — so anything drawn under that row moved with the
-toggle. The override gives the branding row the other two columns' band, in both
-rail states:
+The left column is the odd one out twice over: no rule under its branding row, and
+a collapsed rail that changes **both** the root's top padding (6px → 18px) and the
+row's height (60px → 36px), so anything drawn under that row moves with the toggle.
+The override gives the branding row the other two columns' band, in both rail
+states:
 
 ```css
 html .hHd-Xa_root.hHd-Xa_collapsed{padding-top:6px}
@@ -309,20 +257,18 @@ html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1
 
 - **The band, not the row.** The `4px` top / `35.5px` bottom split leaves a **30px**
   content strip at the band's top — the strip the conversation's own `titleRow`
-  occupies — so the fish mark, the brand name and the collapse control sit **on**
-  the top bar with a common centre at the frame's **y=25**, level with the
-  conversation title, instead of being centred in a 60px row.
-- **Nothing moves when the rail collapses.** The rail keeps the frame's own 6px
-  top padding and its row is the same 70px band (its strip is 36px, the rail
+  occupies — so the mark, the brand name and the collapse control sit **on** the top
+  bar with a common centre at the frame's **y=25**, level with the conversation
+  title. **Nothing moves when the rail collapses**: the rail keeps the frame's own
+  6px top padding and its row is the same 70px band (its strip is 36px, the rail
   toggle's own size, centred on the same y=25), so the hairline stays at y=76 and
   the icon does not jump.
-- **Edge to edge.** The row bleeds past the root's inline padding by exactly that
-  padding (12px open, 10px in the rail), so the left line meets the middle line and
-  the column's own vertical border as one continuous rule.
-- **Breathing room under the line** (alpha.5). The row's bottom edge *is* the
-  hairline, so its bottom margin is the gap before **New session** — the core's own
-  8px when the sidebar is open and 12px in the rail. Zeroing that margin (as the
-  alpha.4 rule did) left the button flush against the rule.
+- **Edge to edge, with breathing room under the line.** The row bleeds past the
+  root's inline padding by exactly that padding (12px open, 10px in the rail), so
+  the left line meets the middle line and the column's own vertical border as one
+  continuous rule; and because the row's bottom edge *is* the hairline, its bottom
+  margin is the gap before **New session** — the core's own 8px when the sidebar is
+  open and 12px in the rail.
 - **Pinned, and harmless if it drifts.** The selectors are the sidebar module's
   hashed class names, which belong to the harness line in `.dsh-version.json`
   (0.1.5-rc.1). On a bump that renames them this matches nothing — a no-op, never a
@@ -331,85 +277,65 @@ html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1
   carries a literal fallback for a profile that never mounts ui-theme, so it gets
   its own tag (`dsh-themes/left-topbar.css`) and needs no `theme/change` refresh.
 
-### The VN branding (alpha.6, icon alpha.8)
+### The VN branding
 
 The same rule set also replaces what that row *shows*: the product's mark becomes
-the **app icon** and its name the text **vn-harness** (alpha.14; the draw string read **VN Harness** through alpha.13).
+the **app icon** and its name the text **vn-harness**.
 
 ```css
 /* hide whatever occupies the brand slots, then draw the replacements */
-html .hHd-Xa_root .hHd-Xa_brandMark>*,
-html .hHd-Xa_root .hHd-Xa_brandName>*,
+html .hHd-Xa_root .hHd-Xa_brandMark>*,html .hHd-Xa_root .hHd-Xa_brandName>*,
 html .hHd-Xa_root .hHd-Xa_railMark>*{display:none!important}
-html .hHd-Xa_root .hHd-Xa_brandMark::before,
-html .hHd-Xa_root .hHd-Xa_railMark::before{
+html .hHd-Xa_root .hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{
   content:"";width:24px;height:24px;flex:none;display:block;
-  background:url("<the icon, inlined>") center/contain no-repeat
-}
+  background:url("<the icon, inlined>") center/contain no-repeat}
 html .hHd-Xa_root .hHd-Xa_brandName::before{content:"vn-harness"}
 /* and the same icon where the empty conversation's whale sits */
 html .pXSMma_fishHitbox>*{display:none!important}
-html .pXSMma_fishHitbox::before{
-  content:"";width:26px;height:26px;background:url("<the icon>") center/contain no-repeat
-}
+html .pXSMma_fishHitbox::before{content:"";width:26px;height:26px;
+  background:url("<the icon>") center/contain no-repeat}
 ```
 
 - **An override, not a slot registration.** The mark and the name are slots —
   `sidebar.brand.mark` and `sidebar.brand.name`, both **`single`** — and the
   shipped `@deepseek-ai/dsh-client-ui-brand-official` row already occupies both.
   Registering our own would be a fight over a one-occupant seat, and the row is
-  `aria-hidden` decoration inside the band this package already owns.
-- **The empty conversation's whale too** (alpha.8): "Into the Unknown" draws the
-  same fish from its own single slot, `conversation.hero.brand.mark`, wrapped in
-  `div[data-slot]` exactly like the sidebar's. Same treatment, and the icon is
-  26px so it sits on the headline's 32px line without moving it.
-- **It hides children, not an `<svg>`.** The shipped brand plugin wraps each
-  occupant in `<div data-slot="sidebar.brand.mark" style="display: contents">`
-  (verified in the running app), so the rule targets the children — which also
-  covers the layout's own `FishLogo` fallback, used when no brand plugin is
-  mounted at all. `!important` is what beats that inline `display: contents`.
-- **Both rail states.** The collapsed rail draws the mark alone, in its own
-  element (`.hHd-Xa_railMark`), and gets the same icon.
+  `aria-hidden` decoration inside the band this package already owns. **It hides
+  children, not an `<svg>`**: the shipped brand plugin wraps each occupant in
+  `<div data-slot="sidebar.brand.mark" style="display: contents">`, so the rule
+  targets the children — which also covers the layout's own `FishLogo` fallback,
+  used when no brand plugin is mounted at all — and `!important` is what beats that
+  inline `display: contents`. **Both rail states** are covered: the collapsed rail
+  draws the mark alone, in its own element (`.hHd-Xa_railMark`).
+- **The empty conversation's whale too.** "Into the Unknown" draws the same fish
+  from its own single slot, `conversation.hero.brand.mark`, wrapped in
+  `div[data-slot]` exactly like the sidebar's; the icon there is 26px so it sits on
+  the headline's 32px line without moving it.
 - **The icon is `assets/vn-harness.svg`** at the pack root: a black circle centred
-  on (12,12) in a 24px box — with a **1px transparent margin**, which is the fix
-  for alpha.7's "cut" disc. That disc was drawn edge-to-edge inside boxes the app
-  paints with `overflow:hidden` (the sidebar's brand button is exactly 24px tall),
-  where the circle lost a fraction of a pixel on each side. The artwork carries
-  the inset instead, so no container can shave it.
-- **Inlined as a data URI rather than served.** The mark is a few hundred bytes,
-  so inlining costs nothing and the branding needs no route, no request and no
-  Node half. `assets/vn-harness.svg`
-  stays the source of truth, and the tracked check compares the inlined copy's
-  viewBox and circle geometry against that file, so the two cannot drift. The
-  asset sits at the repository root because it is the *source*; like the vendored
-  engine in `dsh-terminal`, a package never depends on a file outside itself.
-- **The name wears the chat title's type** (alpha.7): the shipped brand name is
-  `18px/600`, while the conversation's own title — the current crumb in the strip
-  this band is levelled with — is `14px/20px/500`, so the product text takes the
-  title's:
+  on (12,12) in a 24px box, with a **1px transparent margin** so a container that
+  paints with `overflow:hidden` (the sidebar's brand button is exactly 24px tall)
+  cannot shave a fraction of a pixel off each side. It is **inlined as a data URI
+  rather than served** — the mark is a few hundred bytes, so the branding needs no
+  route, no request and no Node half — while the asset file stays the source of
+  truth, and the tracked check compares the inlined copy's viewBox and circle
+  geometry against it so the two cannot drift. The asset sits at the repository root
+  because it is the *source*; like the vendored engine in `dsh-terminal`, a package
+  never depends on a file outside itself.
+- **The name wears the chat title's type.** The shipped brand name is `18px/600`,
+  while the conversation's own title — the current crumb in the strip this band is
+  levelled with — is `14px/20px/500`, so the product text takes the title's (two
+  sizes a few pixels apart read as a mistake):
 
   ```css
   html .hHd-Xa_root .hHd-Xa_brandName{font-size:14px;font-weight:500;line-height:20px;letter-spacing:0}
   ```
-- **Verified, not assumed.** In the running app the shipped art computes to
-  `display:none`, the sidebar and rail marks draw the icon at `24px × 24px`, the
-  hero draws it at `26px × 26px`, the name reads `"vn-harness"` at
-  `14px/20px/500` — the same numbers the **served** `ui-conversation` bundle
-  declares for its title crumb. The icon's own pixels were checked by drawing the
-  asset to canvases and reading them back: at 24px and 26px the opaque box is
-  exactly square (22×22 and 24×24), the margin is exactly 1px on all four sides,
-  every row and column mirrors, the corners are transparent, and **nothing
-  touches the canvas edge** in any size tested.
 
-## The Session-log download seat (alpha.9)
+## The Session-log download seat
 
-The shipped `@deepseek-ai/dsh-session-log-export` browser half put a **three-dot
-"more actions" button** into the same header group, and its menu held exactly one
-item: "Download session log". So downloading a session's log was one click to
-open a menu and a second to pick the only thing in it. This package takes that
-seat and draws the download glyph on it directly.
-
-**How the seat is taken — the slot system's own shadowing rule.**
+The shipped `@deepseek-ai/dsh-session-log-export` browser half puts a **three-dot
+"more actions" button** into the same header group, whose menu holds exactly one
+item, "Download session log". This package takes that seat and draws the download
+glyph on it directly, by **the slot system's own shadowing rule**:
 
 ```js
 ctx.slots.register({
@@ -421,58 +347,53 @@ ctx.slots.register({
 }, SessionLogDownloadAction)
 ```
 
-`conversation.session.header.utilities` is a **list** slot, and a list slot
-renders the **lowest priority** registration for a given occupant `id` and keeps
-one occupant per id — so registering the shipped id one priority lower makes this
+`conversation.session.header.utilities` is a **list** slot, and a list slot renders
+the **lowest priority** registration for a given occupant `id` and keeps one
+occupant per id — so registering the shipped id one priority lower makes this
 component the rendered one and leaves the shipped registration in the registry,
 unrendered. That is the same rule `dsh-editor` uses to shadow the shipped
 rendered-Markdown body (`key` + a lower `priority`). It matters that this is the
-registry's rule and not CSS:
+registry's rule and not CSS: no `display:none` on a hashed class (so a harness bump
+that renames classes cannot resurrect the three-dot button beside this one), no DOM
+is touched, nothing shipped is disabled, and the seat does not move — it keeps the
+shipped occupant's `order: 0`.
 
-- no `display:none` on a hashed class, so a harness bump that renames classes
-  cannot resurrect the three-dot button beside this one;
-- no DOM is touched, and nothing shipped is disabled;
-- the seat does not move: it keeps the shipped occupant's `order: 0`.
+**What is NOT reimplemented: the export.** The shipped row `session-log-download`
+stays mounted **because** it is dual-face: its host half owns the feature — the
+authenticated `/api/session.export` stream and the `/export` slash command — so
+disabling that row would take the export away, not the button. Its browser half
+publishes the `sessionLogDownload` controller (one export per Session, a HEAD of
+the export URL, the browser's own download, and `downloading` / `success` /
+`error` state), which this control resolves lazily (`ctx.get('sessionLogDownload')`)
+and calls. So the header button and `/export` are **one implementation with one
+busy state** (the button also renders disabled while the controller reports
+`downloading`, so a second click cannot start another export), and a profile that
+never mounts that row gets a **disabled** button reading `Session export is
+unavailable` instead of one that pretends to work.
 
-**What is NOT reimplemented: the export.** The shipped row
-`session-log-download` stays mounted **because** it is dual-face. Its host half
-owns the feature — the authenticated `/api/session.export` stream and the
-`/export` slash command — so disabling that row would take the export away, not
-the button. Its browser half publishes the `sessionLogDownload` controller: one
-export per Session, a HEAD of the export URL, the browser's own download, and
-`downloading` / `success` / `error` state. This control resolves that controller
-lazily (`ctx.get('sessionLogDownload')`) and calls it, so:
+**The seat's dialog came with the seat.** The shipped registration is the pair
+`[Menu, Dialog]`, so shadowing the seat takes the export's **preparing / success /
+error** dialog along with the menu. This bundle renders that dialog from the same
+store, with the same three states and the same Close button, so `/export` keeps its
+feedback. What is gone is the dropdown; what is left is one button and one dialog.
+**The button's dress** is the Themes button's own `.dst-button` (28×28, `6px`
+padding, a 15px glyph, `border-radius: 28px`, the group's hairline ring), and its
+glyph is the shipped `IconDownloadOutline16` — the same glyph the shipped menu item
+wears.
 
-- the header button and `/export` are **one implementation with one busy state**
-  (the button also renders disabled while the controller reports `downloading`,
-  so a second click cannot start another export);
-- if the service is absent (a profile that never mounts that row), the button
-  renders **disabled** and says `Session export is unavailable` instead of
-  pretending to work.
+## The page-zoom control
 
-**The seat's dialog came with the seat.** The shipped registration was the pair
-`[Menu, Dialog]`, so shadowing the seat takes the export's
-**preparing / success / error** dialog along with the menu. This bundle renders
-that dialog from the same store, with the same three states and the same Close
-button, so `/export` keeps the feedback it always had. What is gone is the
-dropdown; what is left is one button and one dialog.
+The **leftmost** button of the four (order `-40`). It drops a small menu holding
+**the level in force** and the two steps, **Zoom in** and **Zoom out** — the same
+act as the browser's own **Ctrl+ / Ctrl-** (and Ctrl+wheel) **page zoom**. The ends
+of the ladder are disabled rather than silently inert, the way a browser greys out
+its own Zoom in / Zoom out.
 
-**The button's dress** is the Themes button's own `.dst-button`: 28×28, `6px`
-padding, a 15px glyph, `border-radius: 28px` and the group's hairline ring. The
-glyph is the shipped `IconDownloadOutline16` — the icon the removed menu item
-carried.
-
-## The page-zoom control (alpha.15)
-
-The **leftmost** button of the four (order `-40`, one step left of the capture
-control). It drops a small menu holding **the level in force** and the two steps,
-**Zoom in** and **Zoom out** — the same act as the browser's own **Ctrl+ / Ctrl-**
-(and Ctrl+wheel) **page zoom**.
-
-**Why it exists.** That zoom is the *browser's*, and no page can invoke it. A
-Chrome tab has the keyboard gesture; the **native window the desktop launcher
-opens** — `run-desktop.bat`, a Tauri shell over the very same `dsh web` — has no
-such gesture at all. So the pack draws it.
+**Why it exists.** That zoom is the *browser's*, and no page can invoke it: a Chrome
+tab has the keyboard gesture, while the **native window the desktop launcher opens**
+— `run-desktop.bat`, a Tauri shell over the very same `dsh web` — has no such gesture
+at all. It never listens for a key, because swallowing Ctrl+ and Ctrl- in the page
+would **double** the zoom in a browser, where the gesture already works.
 
 **How a page zooms itself.** One declaration on the document element:
 
@@ -490,44 +411,31 @@ bundle stays browser-only. Chromium divides the initial containing block by the
 root's zoom, so the shell's own dress (`html,body,#root{height:100%}`) still fills
 the window exactly and the layout viewport it sees really is the narrower one. That
 reflow is what makes this a *page zoom* rather than a magnifier — and it is also
-the reason the ladder is cut where it is, below.
+the reason the ladder is cut where it is.
 
-**The ladder is Chrome's own, cut at 50% and 200%**, and the cut at the top is
-**measured, not guessed**:
-
-| level | this button's right edge at a 1378×802 window | |
-|---|---|---|
-| 200% | 877 | inside |
-| 250% | 870 | inside |
-| 300% | 1044 | inside |
-| 400% | 1392 | **past the right edge** |
-
-The button lives **inside the page it zooms**, and a page zoom shrinks the layout
-viewport, so the header's utilities row — a crumb plus four 28px buttons, roughly
-400px of min-content — eventually needs more room than the window has left. A rung
-whose top hides the way back down is not offered: without it the only rescues would
-be Ctrl+- in a browser (which the shell does not have) or clearing the remembered
-level by hand (`localStorage` or the pack's own section). The bottom rung is 50%
-for the same kind of reason, one of degree — this
-is a shell an agent works in, and 25% renders its text unreadable. Everything in
-between is Chrome's own rung.
+**The ladder is Chrome's own, cut at 50% and 200%**: `50, 67, 75, 80, 90, 100,
+110, 125, 150, 175, 200`. The button lives **inside the page it zooms**, and a page
+zoom shrinks the layout viewport, so the header's utilities row — a crumb plus four
+28px buttons, roughly 400px of min-content — eventually needs more room than the
+window has left. At a 1378×802 window the row still fits with room to spare at
+200%, while 400% puts this control at x=1392, past the right edge. A rung whose top
+hides the way back down is not offered: without it the only rescues would be Ctrl+-
+in a browser (which the shell does not have) or clearing the remembered level by
+hand. The bottom rung is 50% for the same kind of reason, one of degree — this is a
+shell an agent works in, and 25% renders its text unreadable. The levels in between
+are Chrome's own.
 
 **The level is durable, and it is re-applied before the control's first render.**
-Since alpha.17 the level goes to the pack's own host-side section
-(`vn-harness.pageZoom`, through the `uiState` service `dsh-ui-state` publishes),
-which is one document a Chrome tab and the shell's WebView both read — so it
-survives a host restart and a port change, which the per-origin store never did.
+The level goes to the pack's own host-side section (`vn-harness.pageZoom`, through
+the `uiState` service `dsh-ui-state` publishes), which is one document a Chrome tab
+and the shell's WebView both read, so it survives a host restart and a port change.
 The `localStorage` copy under `dsh-themes.page-zoom` is written alongside it and
-read as the fallback for a profile that installed this bundle without that
-package, which is why the service is resolved lazily (`ctx.get`, never `inject`)
-and its absence costs the sharing rather than the memory. A value that is not on
-the ladder is ignored rather than applied — the ladder is the only thing this
-control ever writes — and a browser that refuses storage (private mode, a
-locked-down WebView) still zooms: the level is simply not remembered.
-
-**It never listens for a key.** Swallowing Ctrl+ and Ctrl- in the page would
-**double** the zoom in a browser, where the gesture already works, and the shell is
-the only place the button is needed.
+read as the fallback for a profile that installed this bundle without that package,
+which is why the service is resolved lazily (`ctx.get`, never `inject`) and its
+absence costs the sharing rather than the memory. A value that is not on the ladder
+is ignored rather than applied — the ladder is the only thing this control ever
+writes — and a browser that refuses storage (private mode, a locked-down WebView)
+still zooms: the level is simply not remembered.
 
 **The menu stays open over a step** — the browser's own zoom submenu behaves the
 same way, and a level is usually walked to — and the shipped `Menu` closes it on a
@@ -535,42 +443,33 @@ pointer press outside the anchor and its list, or on Escape. The button carries 
 level in `data-dsh-page-zoom` and in its tooltip (`Page zoom: 125%`) the way the
 Themes button carries the active preference.
 
-**Two honest limits, both measured rather than assumed.** `vh` is resolved against
-the real viewport and CSS `zoom` does not change it, while `window.innerWidth` keeps
-reporting unscaled pixels — the shell's own dress is laid out in percentages, so
-nothing there is affected, but the few `max-height: calc(100vh - X)` rules on
-portalled menus and dialogs (shipped CSS, not this package's) are a little more
-generous than a browser zoom at the same level. Nothing overflows the window:
-`position: fixed; inset: 0` surfaces still span it. And **pointer coordinates stay
-unscaled too**: a real `mousedown` at x=100 inside a page zoomed to 200% still
-reports `clientX === 100`, while `getBoundingClientRect()` on the element under it
-reports the doubled values. Clicking, scrolling, hit-testing and every menu are
-exact (the browser maps the pointer itself), but a drag that compares pointer
-deltas against a rect — a pane's drag-to-pan, the terminal dock's grip — moves by
-the zoom factor off the pointer. At the levels people actually use (110–150%) that
-is a small offset on a secondary gesture, and it is the price of the one mechanism
-that works in both hosts; the alternative, a webview API that zooms the engine
-itself, would be desktop detection in a bundle that must stay plain.
+**Two honest limits.** `vh` is resolved against the real viewport and CSS `zoom`
+does not change it, while `window.innerWidth` keeps reporting unscaled pixels — so
+the few `max-height: calc(100vh - X)` rules on shipped portalled menus and dialogs
+are a little more generous than a browser zoom at the same level; nothing overflows
+the window, because `position: fixed; inset: 0` surfaces still span it. And
+**pointer coordinates stay unscaled too**: a `mousedown` at x=100 inside a page
+zoomed to 200% still reports `clientX === 100`, while `getBoundingClientRect()` on
+the element under it reports the doubled values. Clicking, scrolling, hit-testing
+and every menu are exact, but a drag that compares pointer deltas against a rect —
+a pane's drag-to-pan, the terminal dock's grip — moves by the zoom factor off the
+pointer; at the levels people actually use (110–150%) that is a small offset on a
+secondary gesture, and it is the price of the one mechanism that works in both
+hosts.
 
-One more was found the hard way and is **fixed rather than documented**: the right
-bar's outer resize seam, below.
+## The right bar's resize seam
 
-## The right bar's resize seam, put back (alpha.16)
-
-**The bug the desktop window reported as "the right bar stops being resizable after
-I zoom".** A root `zoom` divides the initial containing block, so the frame's own
+A root `zoom` divides the initial containing block, so the frame's own
 `getBoundingClientRect().width` comes back **scaled** while every `left` the frame
 writes on a child is in **layout pixels**. The frame solves its three column widths
 from that measured rect and then places the right bar's **outer resize seam** with
 `left: viewport - rightbar` — the one piece of frame geometry where the two spaces
-meet. At 100% they are the same number and nothing shows. With a level in force the
-seam slides towards the middle of the conversation: at 80% on a 1440px frame it sat
-**288px** left of the right column's edge, so the bar could no longer be dragged at
-all. The **left** bar's seam stayed exactly where it belongs, and that asymmetry is
-what made the report so specific: its `left` is a layout-pixel width, with no
-measurement folded into it.
+meet. At 100% they are the same number; with a level in force the seam slides
+towards the middle of the conversation, away from the right column's edge, and the
+bar cannot be dragged. The **left** bar's seam is unaffected, because its `left` is
+a layout-pixel width with no measurement folded into it.
 
-**The fix places the seam from the layout instead.** While a zoom is in force the
+So the seam is placed **from the layout instead**. While a zoom is in force the
 right column is named as a CSS **anchor** and the seam is set to that anchor's left
 edge:
 
@@ -591,38 +490,21 @@ turn the rule into one that matches nothing.
 **It is inert at the resting level.** Both rules are gated on
 `html[data-dsh-page-zoomed]`, the marker `applyZoom` writes beside the declaration
 it belongs to: at 100% the attribute is absent, no rule of this package's matches
-the seam, and the frame's own inline `left` places it exactly as before. A browser
-without CSS anchor positioning drops both declarations and leaves the behaviour
-that shipped before this change. Nothing is forked and no core row is disabled —
-this is dress, the same shape as the header-ring override above.
+the seam, and the frame's own inline `left` places it. A browser without CSS anchor
+positioning drops both declarations and leaves the frame's own placement in charge.
+Nothing is forked and no core row is disabled — this is dress, the same shape as the
+header-ring override below.
 
-**Measured in the desktop window** (WebView2, `run-desktop.bat`, a 1440×900 frame
-with the right bar open), driving the control's own menu and then the drag with
-**real pointer input**:
+## The screenshot control
 
-| zoom | seam vs the right column's left edge | drag |
-|---|---|---|
-| 100% | 0.00px | panel resizes (648px → 488px) |
-| 80% | 0.00px (was −288px) | panel resizes (488px → 328px) |
-| 125% | 0.00px | panel resizes |
+One button on the same header row, **left of the Themes control**, which captures
+**the whole window** and saves the PNG to the **Desktop of the machine running the
+app**. The Web GUI is a fixed-viewport shell — the document itself does not scroll,
+the columns do — so the page's full width and full height are exactly what fills
+the tab: one frame of the tab's own surface is the whole page, nothing is stitched
+together, and there is no scrolled-out remainder to guess at.
 
-Back at 100% the marker is cleared and the computed `left` falls back to the
-frame's inline value, so the override leaves nothing behind.
-
-## The screenshot control (alpha.10)
-
-One more button on the same header row, **left of the Themes control** (order
-`-30` against its `-20`), which captures **the whole window** and saves the PNG to
-the **Desktop of the machine running the app**.
-
-**"100% width and 100% height" is the tab's box.** The Web GUI is a
-fixed-viewport shell — the document itself does not scroll, the columns do (each
-keeping its own position) — so the page's full width and full height are exactly
-what fills the tab. One frame of the tab's own surface is therefore the whole page:
-nothing is stitched together, and there is no scrolled-out remainder to guess at.
-
-**Why the browser takes the picture.** Only the page can photograph itself in real
-pixels:
+**Only the page can photograph itself in real pixels:**
 
 ```js
 const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -636,28 +518,23 @@ const stream = await navigator.mediaDevices.getDisplayMedia({
 
 That first frame is drawn into a canvas and encoded as `image/png`, so anything the
 app draws with **canvas** (the terminal dock's xterm surface), with compositor
-effects, or inside an open dialog is in the picture. Two alternatives were rejected
-for exactly that reason: a DOM-to-canvas library would have to stand in for the
-engine (portalled dialogs and menus, layered hashed stylesheets, the xterm canvas),
-and a headless browser pointed at the same URL would photograph a **fresh load** —
-the open tab, the editor buffer and the dock are *this client's* state, not the
-server's.
+effects, or inside an open dialog is in the picture; the stream is stopped the
+instant the frame is grabbed. A DOM-to-canvas library would have to stand in for
+the engine (portalled dialogs and menus, layered hashed stylesheets, the xterm
+canvas), and a headless browser pointed at the same URL would photograph a **fresh
+load** — the open tab, the editor buffer and the dock are *this client's* state, not
+the server's.
 
-The stream is stopped the instant the frame is grabbed. The picture is **the
-interface as it stands — this package's header controls included**: they are
-part of the header being photographed, and alpha.10's rule that took them out of
-the frame (so the shot would be "the app rather than the buttons that took it")
-left a hole in the record, which alpha.11 closes.
-
-The one thing kept out of the frame is the **open tooltip bubble**, through
+The picture is **the interface as it stands — this package's header controls
+included**, because they are part of the header being photographed. The one thing
+kept out of the frame is the **open tooltip bubble**, through
 `html[data-dsh-screenshot] [role=tooltip]`: a hover card is not part of the
-interface, and the pointer is usually still on the button that started the
-capture. That button also passes `disabled` to its own `Tooltip` while the capture
-runs — the shipped primitive's own close-and-stay-closed switch — so its bubble is
-gone rather than merely invisible, and the rule is the safety net that covers every
-other `Tooltip` in the app. The rule is keyed on the tooltip's **semantic**
-`role="tooltip"` marker, never on a hashed class, so it cannot drift with a harness
-line.
+interface, and the pointer is usually still on the button that started the capture.
+That button also passes `disabled` to its own `Tooltip` while the capture runs — the
+shipped primitive's own close-and-stay-closed switch — so its bubble is gone rather
+than merely invisible, and the rule is the safety net covering every other `Tooltip`
+in the app. It is keyed on the tooltip's **semantic** `role="tooltip"` marker, never
+on a hashed class, so it cannot drift with a harness line.
 
 **Where the file goes: the host's Desktop, not the download folder.** The PNG is
 POSTed to this package's own authenticated route, which is the one thing here that
@@ -676,29 +553,24 @@ start with the PNG signature, and stay under 64 MiB. It is written
 is already taken), so a second shot inside the same second never clobbers the first.
 Failures come back typed (`415` / `400` / `413` / `500` + a code) instead of as a
 stack trace, and the client never names a path: there is no traversal surface and no
-way to ask this host to write anywhere but the Desktop it reports.
-
-If a profile runs this bundle **without** its host row, the browser's own download
-is the fallback and the toast says which of the two happened — the control always
-produces a picture.
-
+way to ask this host to write anywhere but the Desktop it reports. If a profile runs
+this bundle **without** its host row, the browser's own download is the fallback and
+the toast says which of the two happened — the control always produces a picture.
 **Feedback** is the shipped `Toast`, anchored to the button: the saved path on
 success, and otherwise the reason — a dismissed picker, a browser without
 `getDisplayMedia` (the page is not on HTTPS or localhost), or a write failure.
 
-## The header ring (alpha.9)
+## The header ring
 
-The conversation header's icon buttons are meant to read as one group, and the
-group's dress is a **round hairline outline**: `28px` square, `border-radius:28px`
-and `.5px solid var(--dsw-alias-border-l3)`, held *inside* the box by
-`box-sizing:border-box`. The terminal control has always worn it; the Session-log
-download seat now does too; this package's own button did not, so it sat bare
-among them. It does now.
-
-The one button on that bar that cannot draw the ring where it lives is the **right
-bar's own collapse/expand toggle** in the header corner — it is the pack's forked
-right bar's button, in a GENERATED bundle that is never hand-edited — so this
-package gives it the ring with one rule:
+The conversation header's icon buttons read as one group, and the group's dress is a
+**round hairline outline**: `28px` square, `border-radius:28px` and
+`.5px solid var(--dsw-alias-border-l3)`, held *inside* the box by
+`box-sizing:border-box`. The terminal control wears it, and this package's own
+buttons and the Session-log download seat draw it themselves. The one button on that
+bar that cannot draw the ring where it lives is the **right bar's own
+collapse/expand toggle** in the header corner — it is the pack's forked right bar's
+button, in a GENERATED bundle that is never hand-edited — so this package gives it
+the ring with one rule:
 
 ```css
 html [data-conversation-header-corner] button{
@@ -706,37 +578,36 @@ html [data-conversation-header-corner] button{
   border-radius:28px;box-sizing:border-box}
 ```
 
-- **A stable hook, not a hashed class.** The corner element carries
-  `data-conversation-header-corner`, the conversation header's own marker in
-  ui-conversation, so this rule survives the class-name churn a harness bump
-  brings (unlike the left-bar band above, which is pinned to hashed names on
-  purpose and documented as such).
-- **`box-sizing` is part of the rule.** The toggle's own dress does not set it, so
-  without it the `.5px` outline would grow the button by half a pixel per side.
-- **The corner is a `single` slot**, so the rule cannot leak onto unrelated
-  controls; it is also installed once — there is no palette in it.
+The corner element carries `data-conversation-header-corner`, the conversation
+header's own marker in ui-conversation, so this is a **stable hook, not a hashed
+class** — it survives the class-name churn a harness bump brings (unlike the
+left-bar band above, which is pinned to hashed names on purpose and documented as
+such). **`box-sizing` is part of the rule**: the toggle's own dress does not set it,
+so without it the `.5px` outline would grow the button by half a pixel per side. And
+the corner is a **`single` slot**, so the rule cannot leak onto unrelated controls;
+it is also installed once, with no palette in it.
 
 ## Where it sits
 
 The Session header is composed from slots
-(`conversation.session.header.{actions,utilities,corner}`). This control is one
-occupant of the **utilities** list:
+(`conversation.session.header.{actions,utilities,corner}`), and all four of this
+package's controls are occupants of the **utilities** list, which renders in
+ascending `order`:
 
 | Occupant | Order | Position |
 |---|---|---|
 | **Page zoom** (this package) | `-40` | first — left of the capture control |
 | **Screenshot** (this package) | `-30` | next — left of the Themes control |
 | **Themes** (this package) | `-20` | next — left of Open In |
-| Open In… (`open-in-app` / the pack's `dsh-open-in-app`) | `-10` | next |
-| **Session log download** (this package, shadowing the shipped seat) | `0` | after that — was the three-dot button |
+| Open In… (`dsh-open-in-app`) | `-10` | next |
+| **Session log download** (this package, shadowing the shipped `session-log-download` seat) | `0` | after that |
 | Terminal (`dsh-terminal`) | `30` | last |
 
-`-40`, `-30` and `-20` are the whole placement: the utilities list renders in
-ascending order, so a lower order simply renders further left. Nothing shipped is
-patched and no existing row's order is changed. The download seat is the one place
-this package takes OVER an occupant instead of adding one, and it does that by the
-registry's priority rule (same `id`, lower `priority`) rather than by hiding
-anything.
+`-40`, `-30` and `-20` are the whole placement: a lower order simply renders
+further left. Nothing shipped is patched and no existing row's order is changed.
+The download seat is the one place this package takes OVER an occupant instead of
+adding one, and it does that by the registry's priority rule (same `id`, lower
+`priority`) rather than by hiding anything.
 
 ## Layout
 
@@ -747,82 +618,55 @@ lib/index.js       Node half: one authenticated route, POST /api/dsh-themes/scre
                    browser bundle needs no host otherwise)
 lib/client.js      Browser half: the Page-zoom button + menu (one inline `zoom` on
                    <html>, Chrome's ladder cut at 50/200, remembered in the
-                   `vn-harness` section with the `localStorage` copy underneath),
-                   the Screenshot button (capture + save), the Themes
-                   button + menu, the registered themes (THEME_EXTENSIONS: Nord's,
-                   Monokai's and Hacker's token maps and menu glyphs, registered
-                   through ctx.theme), the Session-log download seat (same slot,
-                   shipped id at a lower priority) with its export dialog, the theme
-                   snapshot reader, and the appearance overrides (the Markdown paper,
-                   the Markdown chrome, the left column's top bar, the header ring)
+                   `vn-harness` section with the `localStorage` copy underneath), the
+                   Screenshot button (capture + save), the Themes button + menu, the
+                   registered themes (THEME_EXTENSIONS: Nord's, Monokai's and Hacker's
+                   token maps and menu glyphs, registered through ctx.theme), the
+                   Session-log download seat (same slot, shipped id at a lower
+                   priority) with its export dialog, the theme snapshot reader, and the
+                   appearance overrides (the Markdown paper, the Markdown chrome, the
+                   left column's top bar, the header ring, the zoom seam)
 ```
 
 ## Behaviour worth keeping
 
-- **The service is optional, lazily resolved.** `theme` is read through
-  `ctx.get('theme')` at use time and never declared as a hard dependency, so a
-  profile that never mounts ui-theme keeps its header: the button renders
-  disabled with "The theme service is unavailable" instead of blocking another
-  plugin's activation.
-- **Live, not sticky.** The control subscribes to ui-theme's `theme/change`
-  event, so a switch made in Settings — or an OS flip while the preference is
-  `system` — repaints the label. It needs no DOM observation of its own: the
-  resolved palette is not this control's business, only the preference is.
-- **The button wears one static mark** (alpha.12), not the active preference's
-  sun/moon: the menu and the tooltip carry the choice, and a registered theme has
-  no shipped glyph to wear. The tooltip still names the active theme, so the
-  control is never ambiguous about what is on.
+- **Live, not sticky.** The control subscribes to ui-theme's `theme/change` event,
+  so a switch made in Settings — or an OS flip while the preference is `system` —
+  repaints the label, and it needs no DOM observation of its own: the resolved
+  palette is not this control's business, only the preference is.
 - **A theme is added by registering it.** The menu iterates `snapshot.themes` (the
   registry's own list) and appends `system` last, so `THEME_EXTENSIONS` is the only
-  place a palette is declared. A theme another plugin registers shows up too — by
-  its id, with the generic appearance mark, since this package has no words or
-  glyph for it.
+  place a palette is declared; a theme another plugin registers shows up too — by
+  its id, with the generic appearance mark.
 - **Extension themes do not touch ui-theme's durable preference.** `setTheme` only
-  writes `light` / `dark` / `system` through the settings scope, so selecting Nord,
-  Monokai or Hacker leaves the stored preference alone; the id it wants in force
-  lives in
-  the pack's own `vn-harness` section (alpha.17), is put back on the next load,
-  and is kept applied against ui-theme's own re-adopt (alpha.18), and picking a
-  built-in clears it.
-- **Same switch, both surfaces.** Because the write goes through
-  `theme.setTheme(id)`, no second copy of the built-in preference (and no second
-  persistence path for it) exists to drift; the extension id is the one thing this
-  package remembers itself, above.
-- **The download seat is taken by priority, not by force.** Registering the
-  SHIPPED occupant's `id` one priority lower is what makes this package's
-  component the rendered one; a different `id` would simply have added a second
-  button beside the three-dot one.
-- **The shipped controller is optional and resolved at use time.** Nothing
-  shipped is disabled, and a profile without `sessionLogDownload` degrades to a
-  disabled button reading "Session export is unavailable" — the same rule this
-  package follows for `theme`.
+  writes `light` / `dark` / `system`, so selecting Nord, Monokai or Hacker leaves
+  the stored preference alone; the id it wants in force lives in the pack's own
+  `vn-harness` section and is kept applied, and picking a built-in clears it. No
+  second copy of the built-in preference, and no second path to persist it, exists
+  to drift.
+- **The download seat is taken by priority, not by force.** Registering the SHIPPED
+  occupant's `id` one priority lower is what makes this component the rendered one;
+  a different `id` would simply have added a second button beside the three-dot one.
 - **The screenshot is taken by the page and saved by the host.** The browser half
-  never writes a path and the host half never trusts the client's bytes: the
-  route names the file, resolves the Desktop itself, and validates the PNG before
-  writing it create-exclusively. A missing host row costs the Desktop shortcut,
-  not the feature — the browser download still saves the picture.
-- **The zoom is one declaration, and it goes away at 100%.** No wrapper element, no
-  transform, no per-surface CSS: a level that is not the resting one is a single
-  inline `zoom` on `<html>`, and the resting level removes it, so an unzoomed page
-  is byte-for-byte the page the harness shipped. That is also why the control needs
-  no host half of its own and no Tauri API — the same code zooms a browser tab and
-  the shell's WebView.
+  never writes a path and the host half never trusts the client's bytes: the route
+  names the file, resolves the Desktop itself, and validates the PNG before writing
+  it create-exclusively. A missing host row costs the Desktop shortcut, not the
+  feature.
+- **The zoom is one declaration, and it goes away at 100%.** A level that is not the
+  resting one is a single inline `zoom` on `<html>`, removed at the resting level,
+  so an unzoomed page keeps exactly the markup the harness shipped — no wrapper
+  element, no transform, no per-surface CSS, and no host half or Tauri API of its
+  own.
 - **The ladder's top rung is a safety property, not a preference.** The control
-  lives inside the page it zooms, and a page zoom reflows the shell, so a rung high
-  enough to push the header's utilities row past the (shrunken) layout viewport
-  would hide the only way back down. 200% is where the measurement says the row
-  still fits with room to spare; a future edit that widens the ladder has to argue
-  with `check-client-bundles.mjs`, which pins it.
-- **The zoom does not get to break a core control** (alpha.16). The frame places
-  the right bar's outer resize seam with pixel arithmetic that mixes the SCALED
-  rect it measures with the layout pixels it writes, so a level in force slid that
-  seam off the column's edge and the bar stopped being draggable — in the desktop
-  window, the one host this control exists for. The seam override puts it back from
-  the layout, and `check-client-bundles.mjs` pins the two things that keep it
-  honest: it is gated on the marker a live zoom writes (so it is inert at 100% and
-  the frame's own inline `left` still governs) and it keys on stable markers rather
-  than hashed classes (so a harness bump cannot turn it into a rule that matches
-  nothing while still looking right).
+  lives inside the page it zooms, so a rung high enough to push the header's
+  utilities row past the (shrunken) layout viewport would hide the only way back
+  down; 200% is where the row still fits with room to spare, and
+  `check-client-bundles.mjs` pins the ladder.
+- **The zoom does not get to break a core control.** The seam override places the
+  right bar's resize seam from the layout rather than from the mixed scaled/layout
+  arithmetic the frame uses, and `check-client-bundles.mjs` pins both halves of that
+  honesty: the rule is inert at 100%, and it keys on stable markers rather than
+  hashed classes.
 
 ## Install / uninstall
 
@@ -830,8 +674,7 @@ The repo launcher (`install.bat` on Windows, `./install.sh` on macOS/Linux)
 auto-discovers this package — it is a standard `dsh.bundle`. Adding a package
 changes the profile's bundle set, and a bundle the profile does not list yet is
 added by one plain launcher run (no `-Force` needed); after that a plain run is
-enough. The web profile links
-it into this repo, so code edits only need a restart of
-`npx @deepseek-ai/dsh web` plus a hard browser refresh. Starting it is
-`run-web.bat` / `./run-web.sh` — the launcher that starts `dsh web` and opens the URL it
-prints in Chrome.
+enough. The web profile links it into this repo, so code edits only need a restart
+of `npx @deepseek-ai/dsh web` plus a hard browser refresh. Starting it is
+`run-web.bat` / `./run-web.sh` — the launcher that starts `dsh web` and opens the URL
+it prints in Chrome.

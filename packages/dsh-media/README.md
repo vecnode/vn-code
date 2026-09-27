@@ -3,10 +3,10 @@
 **Media the agent can actually work with — and the one copy of ffmpeg this pack
 runs.**
 
-The `read` tool refuses a binary file, so an image is invisible to the agent
-today: a PNG's dimensions, a video's codec, an audio file's sample rate and
-whether a browser can play any of it are all questions nothing in the pack could
-answer. This package answers them, and gives the agent a real ffmpeg:
+The `read` tool refuses a binary file, so an image is invisible to the agent: a
+PNG's dimensions, a video's codec, an audio file's sample rate and whether a
+browser can play any of it are questions nothing else in the pack answers. This
+package answers them, and gives the agent a real ffmpeg:
 
 | | |
 |---|---|
@@ -25,7 +25,11 @@ the agent and by that surface so the two cannot disagree about a file.
 
 ### `media_probe` — what is this file?
 
-One ffprobe run, one report:
+One ffprobe run, one report: the container, its duration and bitrate, and every
+stream — the codec and profile, exact pixel size and display aspect, frame rate
+as **both** its rational and its decimal, pixel format and bit depth, rotation,
+sample rate, channel layout, language and title tags, and every chapter with its
+timestamps:
 
 ```
 clip.mkv — 1.4 GB
@@ -41,7 +45,7 @@ to make it play: ffmpeg -i "clip.mkv" -c copy "clip-playable.mp4"
 read in 41 ms (header only: no frame was decoded)
 ```
 
-Three things in that report are load-bearing:
+Three things are load-bearing:
 
 - **The frame rate is both numbers.** `23.98 fps` is what a reader wants and
   `24000/1001` is what the file actually says; a report that printed only the
@@ -70,36 +74,34 @@ Three things in that report are load-bearing:
 
 There is no shell anywhere in this package, so a path with a space, a filter
 graph full of commas and a literal `&` all arrive at ffmpeg as themselves. What
-the tool adds, and only when you have not said otherwise:
+the tool injects, at the **front** of the argv and only when you have not said
+otherwise:
 
-| added | why |
+| injected | why |
 |---|---|
 | `-hide_banner` | The build banner is twenty lines and the diagnosis is at the end. |
 | `-loglevel warning` | Unless you pass `-loglevel`/`-v` yourself: ffmpeg's default is chatty enough that the interesting line scrolls out of a capped answer. |
 | `-nostdin` | ffmpeg must never sit on a prompt reading a terminal. |
 | `-n` | **It will not overwrite an existing file.** `overwrite: true` is the only way to replace one, and it becomes `-y`. |
 
-ffprobe gets none of the ffmpeg-only flags (it has no `-n`, and a check
-famously found that out). The call runs in the conversation workspace unless
-`cwd` says otherwise, is killed at its deadline (120 s by default, 600 s at
-most), and its output is capped by keeping the **head and the tail** and naming
-how much was dropped. The answer reports the exit code, the elapsed time, and
-every file ffmpeg's own log named as an output — stat'ed, so one that is not
-there says "not written" rather than being assumed.
+ffprobe gets none of the ffmpeg-only flags — it has no `-n` at all. The call runs
+in the conversation workspace unless `cwd` says otherwise, is killed at its
+deadline (120 s by default, 600 s at most), and its output is capped by keeping
+the **head and the tail** and naming how much was dropped from the middle. The
+answer reports the exit code, the elapsed time, and every file ffmpeg's own log
+named as an output — stat'ed, so one that is not there says "not written".
 
 ### `media_frames` — frames out
 
 `at: ["5", "00:01:30"]` for exact moments, `count: 9` to sample the whole thing
 evenly, `sheet: true` for ONE tiled contact sheet, `format: "jpg"` for mjpeg
-(quality included, because ffmpeg's default mjpeg quality is poor enough to make
-a contact sheet look worse than the video). Names are create-exclusive — a
-second call writes `-2` rather than replacing the first — and each file's **real
-pixel dimensions** are read back out of its own PNG/JPEG header, so a frame that
-came out the wrong size says so.
+(quality set, because ffmpeg's default mjpeg quality is poor). Names are
+create-exclusive — a second call writes `-2` rather than replacing the first —
+and each file's **real pixel dimensions** are read back out of its own PNG/JPEG
+header, so a frame that came out the wrong size says so.
 
-A timestamp past the end of the file is the interesting failure: ffmpeg exits
-**0** having written nothing, and the answer says exactly that instead of
-claiming success.
+A timestamp past the end of the file is the interesting case: ffmpeg exits **0**
+having written nothing, and the answer says so.
 
 ## Where ffmpeg comes from
 
@@ -107,34 +109,37 @@ The repository ships **no binary**. A static ffmpeg is 130–170 MB per platform
 committing one per platform would be multiplied into every clone, every
 distribution and every CI cache, and a committed Windows build helps nobody on
 macOS. What this package ships instead is a **pin**: `lib/binaries.json` names,
-per platform and architecture, the exact official static build and its SHA-256.
+per platform and architecture, the exact official static build URL and its
+SHA-256.
 
-Resolution order, for every call:
+Resolution order:
 
 1. **`DSH_MEDIA_FFMPEG` / `DSH_MEDIA_FFPROBE`** — an explicit path wins, always.
-2. **`ffmpeg` / `ffprobe` on `PATH`** — the machine's own install is used rather
-   than downloading a second copy of the same program — which is why a machine
+2. **`ffmpeg` / `ffprobe` on `PATH`** — the machine's own install, used rather
+   than downloading a second copy of the same program, which is why a machine
    with ffmpeg installed downloads nothing at all.
 3. **The provisioned copy** at `$DSH_HOME/dsh-media/bin/<platform>-<arch>/`.
-   `DSH_MEDIA_PREFER_BUNDLED=1` makes this win over `PATH` too, for a
-   deployment that wants one known build everywhere.
+   `DSH_MEDIA_PREFER_BUNDLED=1` makes this win over `PATH` too, for a deployment
+   that wants one known build everywhere.
 4. **Nothing** — and the tool call answers **immediately** with a sentence that
    names all of the above, starting the pinned download in the **background**
-   rather than blocking a turn on 170 MB. The next call finds it installed.
-   `DSH_MEDIA_NO_INSTALL=1` turns the background download off entirely.
+   rather than blocking a turn on 170 MB. `DSH_MEDIA_NO_INSTALL=1` turns the
+   background download off entirely.
 
-The download itself is the part that had to be careful:
+The install itself:
 
-- the archive is hashed **as it arrives** and compared with the pin **before
-  anything is executed**; a mismatch deletes it, installs nothing, leaves no
-  stamp, and says which two hashes disagreed;
-- it is unpacked with the host's own `tar` (bsdtar on Windows 10+ and macOS, GNU
-  tar on Linux) — no npm archive dependency, which this pack has nowhere;
-- each binary is copied in under a `.partial` name and **renamed**, so a binary
-  that exists is always a complete binary;
-- an `install.json` stamp records what was installed, from where, and when; a
-  stale lock from a killed process is stolen after 30 minutes, and a live one
-  makes a second process wait rather than fight over the directory.
+- a **lock directory** keeps two processes off the same directory; a stale one is
+  stolen after 30 minutes, so a killed process cannot wedge a later install;
+- the download is streamed and hashed **as it arrives**, with a stall detector, a
+  deadline and a byte cap;
+- the hash is compared with the pin **before anything is executed**; a mismatch
+  installs nothing, deletes the file, writes no stamp, and reports both hashes;
+- the archive is unpacked with the host's own `tar` (bsdtar on Windows 10+ and
+  macOS, GNU tar on Linux) — no npm archive dependency, which this pack has
+  nowhere;
+- each binary is copied in under a `.partial` name, `chmod 0o755` on POSIX, and
+  **renamed**, so a binary that exists is always a complete binary;
+- an `install.json` stamp records what was installed, from where, and when.
 
 | platform | pinned build | license |
 |---|---|---|
@@ -148,7 +153,7 @@ verification rather than strengthen it. On those machines `brew install ffmpeg`
 (or the two environment variables) is the way, and the plugin says so in a
 sentence instead of guessing at a download.
 
-Refreshing the pin is one command:
+`tools/binaries.mjs` is the maintainer's half of the pin:
 
 ```
 node packages/dsh-media/tools/binaries.mjs --check    # offline shape check (a tracked check runs it)
@@ -156,11 +161,10 @@ node packages/dsh-media/tools/binaries.mjs --update   # re-read the release dige
 node packages/dsh-media/tools/binaries.mjs --verify   # download every pinned archive and compare (~600 MB)
 ```
 
-`--update` takes BtbN's own SHA-256 for each release asset from GitHub's API —
-and that is not trust on faith: the Windows archive's hash in the shipped
-manifest was confirmed by downloading all 173,535,440 bytes and hashing them
-locally. The macOS pair is hashed by `--update` itself, because evermeet
-publishes a GPG signature rather than a checksum.
+`--update` takes BtbN's own SHA-256 for each release asset from GitHub's API, and
+hashes the macOS pair itself, because evermeet publishes a GPG signature rather
+than a checksum. The pack's own `skipdir tools` rule keeps this tooling out of a
+distribution.
 
 ## Routes (the video tab's side)
 
@@ -170,23 +174,28 @@ publishes a GPG signature rather than a checksum.
 | `GET /api/dsh-media/health` | The same snapshot, for the tracked checks. |
 | `POST /api/dsh-media/provision` | Start (or join) the pinned download. Idempotent. |
 | `GET /api/dsh-media/report` | The same summary `media_probe` prints, as JSON. With no ffprobe it answers `200 {ok:true, unavailable:true}` — a fact about the host, not a bad request. |
-| `GET /api/dsh-media/file` | The bytes, **with HTTP Range**: 206 + `Content-Range`, suffix ranges, 416 on an unsatisfiable one, HEAD without a body. This is what lets a 2 GB film seek instead of being read into memory. `?cache=<key>` serves one of this package's own conversions; a caller never names a cache path. |
+| `GET /api/dsh-media/file` | The bytes, **with real HTTP Range support**: 206 + `Content-Range`, `Accept-Ranges`, suffix ranges, 416 on an unsatisfiable one, HEAD without a body. This is what lets a `<video>` seek in a 2 GB file. `?cache=<32-hex>` serves one of this package's own conversions; a caller never names a cache path. |
 | `POST /api/dsh-media/remux` | Start (or **join**) the background remux/transcode that makes a file browser-playable. |
 | `GET /api/dsh-media/job` | That job's progress, straight from ffmpeg's own `-progress` output. |
 
 The job id **is** the content key: `sha256(realpath + size + mtime + mode)`. So
 asking twice joins the first job, a finished conversion is answered from the
-cache without re-encoding, and an edited file can never serve a stale copy. A
-partial file left by a failed conversion is deleted and never served.
+cache without re-encoding, and an edited file can never serve a stale copy. The
+percentage is driven by ffmpeg's own `-progress pipe:1` `out_time_us`, and a
+partial file left by a failed conversion is deleted rather than served.
 
 The cache (`$DSH_HOME/dsh-media/playable/`) is LRU-pruned at 8 GiB.
+
+`/file` accepts only the video extensions the `dsh-video` tab claims — audio
+belongs to `dsh-audio` and the shipped preview — and it re-validates every path
+exactly as the tools do.
 
 ## What it claims, and what it deliberately does not
 
 | | |
 |---|---|
 | claimed by `/file` | mp4, m4v, mov, webm, mkv, avi, wmv, flv, ogv, ts, m2ts, mpg, mpeg, 3gp, mts |
-| not claimed | **every audio format** — WAV/AIFF/FLAC belong to `dsh-audio`'s waveform and MP3/M4A/Ogg to the shipped preview's own player, so claiming them here would take a surface away rather than add one |
+| not claimed | **every audio format** — WAV/AIFF/FLAC belong to `dsh-audio`'s waveform and MP3/M4A/Ogg to the shipped preview's own player, so claiming them here would take a surface away |
 | not claimed | images — `dsh-image` owns those; `media_probe` still describes them, and `media_frames` can cut one up |
 | reads | any regular file the caller names, inside the conversation workspace or by absolute path (a chat attachment, a file in Downloads) |
 | never | a shell, an implicit transcode, a `-y` without `overwrite: true`, a write outside the directory a command names, a route that accepts a path it has not re-validated |
@@ -195,12 +204,10 @@ The cache (`$DSH_HOME/dsh-media/playable/`) is LRU-pruned at 8 GiB.
 
 `skills/ffmpeg-cli/SKILL.md` and `skills/ffprobe-cli/SKILL.md` are registered at
 runtime from this package's own folder **and** copied into `$DSH_HOME/skills` by
-both installers. They are written for the tool interface this package actually
-exposes — argv arrays, the injected guardrails, `-n` by default — and they teach
-the parts that are easy to get wrong: stream copy versus re-encode, which
-containers a browser opens, `-ss` before `-i`, mapping streams, reading a failed
-command's log, and, for ffprobe, what each field family means and how to
-diagnose a file from its header alone.
+both installers. They teach the parts that are easy to get wrong: stream copy
+versus re-encode, which containers a browser opens, `-ss` before `-i`, mapping
+streams, reading a failed command's log, and, for ffprobe, what each field family
+means and how to diagnose a file from its header alone.
 
 A skill a person wrote is never overwritten: each copied folder carries a
 `.vn-harness-dsh-media` marker, so uninstall removes only what the installer put
@@ -209,17 +216,16 @@ there.
 ## Verifying a change
 
 ```
-node --check packages/dsh-media/lib/index.js
 node scripts/checks/check-media-node.mjs
 ```
 
 The tracked check drives the shipped code path — module import, `apply(context)`,
 then real tool calls and real `Request`s against the captured route table. It is
-split by what it can promise on any host: the **pin** is exercised end to end
-against a synthetic archive this check builds itself and serves over a loopback
-server (download, hash verification, `tar` unpack, the atomic install, the
-stamp, the resolution order, and the hash-mismatch refusal — with no download and
-no network), while the ffmpeg-dependent half (real probes, real frames, a real
+split by what it can promise: the **pin** is exercised end to end against a
+synthetic archive this check builds itself and serves over a loopback server
+(download, hash verification, `tar` unpack, the atomic install, the stamp, the
+resolution order, and the hash-mismatch refusal — with no download and no
+network), while the ffmpeg-dependent half (real probes, real frames, a real
 remux and a real transcode) runs when the host has ffmpeg and **skips loudly**
 when it does not. `DSH_MEDIA_NO_INSTALL=1` and a temp `DSH_HOME` are set before
 import, so no check run can start a download or touch `~/.dsh`.
@@ -236,16 +242,5 @@ install.bat -Force        # Windows
 This is a **new bundle**, so the app's profile has to learn about it: run the
 installer once, then restart `npx @deepseek-ai/dsh web` and hard-refresh the
 browser (Ctrl+F5). After that it is a live link, and editing `lib/*.js` needs only
-a restart. Nothing needs installing first — the installer `grep`s no ffmpeg, and
-the plugin fetches its pinned copy only if the machine has none.
-
-## Alpha roadmap
-
-- **alpha.1** (this release): the three tools, the two skills, the pin and its
-  provisioning, the seven routes, the Range-capable file stream and the
-  remux/transcode jobs.
-- **Next, if the media you work with asks for it**: subtitle extraction to text
-  (the one thing ffmpeg can produce that an agent can read directly), a
-  `media_frames` mode that returns a picture the conversation itself renders,
-  audio-only waveform summaries for a long recording, and Hardware-encoder
-  detection surfaced as a capability rather than left to `-encoders`.
+a restart. Nothing needs installing first — the plugin fetches its pinned copy
+only if the machine has none.

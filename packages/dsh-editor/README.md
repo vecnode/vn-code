@@ -9,154 +9,18 @@ names and creates new files through the shared **`dsh-modal`** dialog, and saves
 them back to disk. It is a **sub-plugin**: it holds no bar code, and its
 host-side half owns the pack's own HTTP routes. Alpha.
 
-## What it does (through alpha.13)
+## What it does
 
-- **The engine and the bundle can no longer disagree** (alpha.12 — a real bug
-  alpha.11 shipped). The vendored engine is ONE artifact at ONE URL, and it was
-  cached **in memory for the life of the harness process** and served with
-  `cache-control: public, max-age=3600`. Opening a `.rs` tab right after
-  alpha.11 therefore ran a **new client bundle against an old engine**, and
-  `streamLanguage()`'s missing mode made `StreamLanguage.define(undefined)`
-  dereference what it was handed: the whole tab died with *“Editor unavailable —
-  Cannot read properties of undefined (reading 'languageData')”*. Four changes,
-  each aimed at one half of that mismatch: the engine URL is now
-  **version-qualified** (`/api/dsh-editor/vendor?v=<bundle version>`), so a new
-  bundle is a new request instead of a cache hit; the route answers
-  **`cache-control: no-cache`** (it is a generated artifact at a stable URL — the
-  content-hash ETag makes revalidation a 304, never a re-download) instead of
-  trusting a one-hour freshness window; the route **re-`stat`s the file** and
-  re-reads it when it changed, so a rebuild or a `git pull` needs no harness
-  restart; and a mode the loaded engine does not carry now **degrades to no
-  language with a console warning naming the mismatch**, because a document that
-  opens unhighlighted beats a dead tab.
+- **The editor is a tab type in the right bar.** It registers through the bar's
+  own tab-type registry (`ctx.sidebarRightTabs.register`, provided by
+  `dsh-rightbar`) with the id `dsh-editor` and the kind `editor`, and its body
+  and chip title register under that same id in the keyed
+  `sidebar.right.pane.tab` / `sidebar.right.pane.tab.title` seats. There is no
+  private dock, no header capsule and no window bridge.
 
-- **Every language goes through that guard, not just the stream modes**
-  (alpha.13). alpha.12 wrapped the five **stream** languages (`shell`,
-  `powerShell`, `batch`, `rust`, `toml`) and left the seven **Lezer** ones called
-  straight off the engine (`CM.javascript()`, `CM.json()`, `CM.markdown()`,
-  `CM.python()`, `CM.html()`, `CM.css()`, `CM.yaml()`). The mismatch it was
-  fixing reaches those too — an engine older than its bundle answers
-  **`CM.yaml is not a function`**, which `openFile`'s `catch` turns into the very
-  "Editor unavailable" tab the fix exists to prevent — so the claim in this file
-  was broader than the code. Two lookups now serve the two families, because the
-  engine answers in two shapes: `engineLanguage(CM, name)` returns null (and
-  reports once) when the engine exports no factory of that name, a Lezer language
-  being a function, while `engineStreamMode(CM, name)` does the same for a
-  CM5-style mode, a StreamParser object carrying `token()`; `lezerLanguage` builds
-  through the first and `streamLanguage` wraps a stream mode through the second —
-  so `languageExtensionFor` contains **no direct `CM.<name>(...)` call at all**,
-  and the tracked check asserts exactly that (it fails on a bare `return
-  CM.<name>(` reappearing). The
-  warning's remedy was also stale: it still told the reader the route "caches the
-  artifact in memory for the life of the harness process, so RESTART `dsh web`",
-  which alpha.12 had just made false — a restart cannot help when the artifact on
-  disk is the old one. It now names the **rebuild** command and says a restart is
-  neither needed nor useful. The tracked check pins both halves, and it also
-  compares the client's `PLUGIN_VERSION` with `package.json`, because the
-  version-qualified URL is only worth anything while the two agree.
-
-- **Rust and TOML are highlighted too** (alpha.11). `.rs` and `.toml` files used
-  to open with **no language at all**, exactly like the shell scripts before
-  alpha.10, and for the same reason: CM6 has no Lezer parser for either one
-  (`@codemirror/lang-rust` is a separate package and no official TOML grammar
-  exists for CM6 at all), while the **already-vendored**
-  `@codemirror/legacy-modes` carries a ported CM5 mode for **both**. So nothing
-  new is installed: `vendor/entry.js` re-exports `rust` and `toml`, the bundle is
-  rebuilt, and the map wraps them with the same `StreamLanguage` call the shell
-  languages use — which means the same `defaultHighlightStyle` (light)
-  and oneDark (dark) colour them. The **`rust`** mode is a `simpleMode`: keywords,
-  the name a `fn` / `struct` / `enum` / `type` / `union` / `let` declares,
-  primitive types, `true` / `false` / `Some` / `None` / `Ok` / `Err`, char and
-  byte literals, all four string spellings, numeric literals with their bases and
-  suffixes, `#[attributes]`, `//` and `/* */` comments and macro names. The
-  **`toml`** mode is a hand-written stream parser: `[table]` and
-  `[[array of tables]]` headers, the key on the left of an `=`, strings in all
-  four quote spellings, `#` comments, dates, booleans, arrays and numbers.
-
-- **Shell scripts are highlighted too** (alpha.10). `.sh` / `.bash` / `.zsh` /
-  `.ksh` / `.dash`, `.ps1` / `.psm1` / `.psd1` and `.bat` / `.cmd` files used to
-  open with **no language at all** — one flat colour in the light theme. CM6 has
-  no Lezer parser for any of the three, so all three ride on **`StreamLanguage`**:
-  the vendored bundle now carries `shell` and `powerShell` from
-  `@codemirror/legacy-modes`, plus a **hand-written batch mode**
-  (`vendor/batch-mode.js` — CodeMirror never shipped one, in 5 or 6). Their token
-  names are CM5's, which is the vocabulary StreamLanguage maps onto highlight
-  tags, so the same `defaultHighlightStyle` (light) and oneDark (dark) that colour
-  a `.js` file colour these; the batch mode knows `@echo off`, `rem` / `::`
-  comments, labels, `%VAR%` / `%~dp0` expansions, `/switches`, and the variable a
-  `set` names. The append-only language map lives in `languageExtensionFor`.
-
-- **The toolbar is the tab's own top bar, on the same line as the other two
-  columns** (alpha.9). Every column opens with a band that ends in one hairline at
-  **y=76**: the conversation header is `min-height:76px`, the left column's
-  branding row is given the same 70px band by `dsh-themes`, and the right column's
-  first line is the open tab's own header — the docking strip above a pane is
-  **38px** (28px + 10px top padding), so the shipped Files tab's **38px**
-  `box-sizing:border-box` header lands exactly on that line, and so does the
-  document preview's. This toolbar was `8px + 26px + 8px = 42.5px`, so its rule
-  sat **~4.5px below** the middle column's. It is now the same **38px** box
-  (`box-sizing:border-box`, so the `.5px` rule sits inside it) with the controls a
-  size down (**24px**, 12px type): the find input, **Preview** and **Save**. The
-  panel is taller by a few pixels, and the three hairlines are one line.
-
-- **The rendered page behaves like a document, not like plain text** (alpha.8).
-  The shadow body below lives inside the preview's scrollport, which is built for
-  the **plain-text** renderer: `[data-textpreview-body]` declares
-  `white-space:pre` and a monospace font stack, and the shipped Markdown body
-  undid both in the wrapper this package replaces. The pack's own wrapper now
-  does the same — `white-space:normal`, so a source newline is a soft break
-  again and blank lines collapse into paragraph spacing instead of rendering as
-  full empty lines (the "huge spaces" a Markdown document used to show on the
-  white page), and the app's UI font on the **Edit** pill (which otherwise
-  inherited the mono face, unlike every button around it).
-- **Preview is a toggle** (alpha.7). The editor's Markdown preview now carries the way back:
-  this package registers the rendered Markdown **document body** itself
-  (`sidebar.right.tab.document`, keyed by the shipped preview's own Markdown
-  implementation id, at a **lower priority** — the slot system's shadowing rule,
-  *lowest renders*), so only the page is ours and the shipped preview keeps its
-  metadata, paging, wrap and reload chrome. That body draws a sticky **Edit**
-  button which hands the same file straight back to the editor, replacing the
-  preview tab — Editor → **Preview** → **Edit** → Editor, one tab, same file.
-  Uninstalling this package brings the shipped body back with no residue.
-- **Markdown opens editable.** `.md` / `.markdown` are text, so the editor claims
-  them (they used to be vetoed to the shipped preview). Clicking one in the Files
-  tree opens it as a highlighted document — edit it, save it, and the file on disk
-  is what changes.
-- **`Preview` hands the file to the rendered view.** The toolbar button (shown
-  while a Markdown file is open) names the shipped document-preview type
-  (`@deepseek-ai/dsh-client-ui-sidebar-documentpreview`, whose *kind* is read from
-  the tab registry, never hardcoded) and asks the right bar's controller to open
-  the same address there, **replacing the editor tab** — so Edit ⇄ Preview is one
-  tab that cannot drift from the file it names. Refused while the document has
-  unsaved edits: the preview reads the file from disk, and showing the older text
-  silently would be a lie. In the pack's own profile that rendered page is the
-  always-light **Markdown paper** (`dsh-themes`), and since `dsh-themes` alpha.3 it
-  carries **no viewer menu**: the preview header builds that menu from *every*
-  candidate renderer ("Markdown" plus the plain-text fallback), and a Markdown page
-  has exactly one — **Edit** is the way back to the text.
-- **The editor follows the app's appearance** (alpha.5) — light **or** dark. CodeMirror
-  needs a palette of its own, so the surface configures **oneDark only while the
-  app is dark** and a transparent light theme while it is light — the light layer
-  leaves the panel's `--dsw-*` tokens visible instead of painting a white canvas
-  of its own. The document text colour is the `--dsw-alias-label-primary` token
-  in both modes, which is what keeps a file with **no syntax language**
-  (`.gitignore`, `.txt`, `.log`, …) readable: in the light theme that token is
-  near-black, so on oneDark's opaque dark canvas it used to paint black text on a
-  dark background.
-- **The switch is live.** The surface re-configures the moment the appearance
-  changes, in either direction, without reopening the file: the `theme` service
-  (shipped `@deepseek-ai/dsh-client-ui-theme`) emits `theme/change`, and the
-  `body[data-ds-dark-theme]` marker ui-layout writes is watched as the fallback
-  for a profile that never mounts ui-theme. Both are resolved lazily — the editor
-  never hard-depends on the theme package.
-- **Registered into the right bar** through the bar's tab-type registry
-  (`ctx.sidebarRightTabs.register`, provided by `dsh-rightbar`): id
-  `dsh-editor`, kind `editor`, with the body and the chip title registered in
-  the keyed `sidebar.right.pane.tab` / `sidebar.right.pane.tab.title` seats.
-  There is no private dock, no header capsule and no window bridge.
 - **Text files open editable.** The type declares `dsh-resource://file/**` in
-  the `extension` priority band, which outranks every viewer the product ships,
-  and vetoes in `canOpen`:
+  the **`extension`** priority band, which outranks every viewer the product
+  ships, and vetoes in `canOpen`:
   - what a text editor has nothing to add to (`.html`, images, PDF,
     office/archive/media and binary extensions) — those keep their own preview
     tab;
@@ -165,18 +29,32 @@ host-side half owns the pack's own HTTP routes. Alpha.
   So clicking a `.ts`, `.json`, `.py`, `.txt`, `.md` … in the Files tree opens it
   in the editor; clicking a `.png` or a `.pdf` opens the shipped preview as
   before.
-- **"+" → Editor opens a BLANK document.** Picking the guide entry creates an
-  editor tab on an empty, unnamed document: nothing is read from disk and the
-  tab holds no workspace browser. The file bar reads *Untitled* and **Save** is
-  always offered.
+
+- **Markdown is claimed too.** `.md` / `.markdown` / `.mdown` are text, so the
+  editor opens them as highlighted documents — edit them, save them, and the file
+  on disk is what changes. The toolbar's **Preview** button (shown while a
+  Markdown file is open) names the shipped document-preview type
+  (`@deepseek-ai/dsh-client-ui-sidebar-documentpreview`, whose *kind* is read from
+  the tab registry, never hardcoded) and asks the right bar's controller
+  (`ctx.get('sidebarRight')`) to open the same address there, **replacing the
+  editor tab** — so Edit ⇄ Preview is one tab that cannot drift from the file it
+  names. Refused while the document has unsaved edits: the preview reads the file
+  from disk, and showing the older text silently would be a lie.
+
+- **"+" → Editor opens a BLANK document.** The package contributes a guide entry
+  (`order: 20`), so the tab strip's "+" control offers **Editor**. Picking it
+  creates an editor tab on an empty, unnamed document: nothing is read from disk
+  and the tab holds no workspace browser. The file bar reads *Untitled* and
+  **Save** is always offered.
+
 - **Saving a blank document names it.** Save (or Ctrl+S) opens the pack's shared
   dialog (`dsh-modal`'s `modals` service) asking for the **file name with its
   extension** — a relative path such as `notes.md` or `src/app.ts`, created in
   **this conversation's workspace folder** (the same place the tab was opened
   from); the folder must already exist. The dialog validates the name (an
-  extension is required, dotfiles excepted; no absolute or `..` paths), shows
+  extension is required, dotfiles excepted; no absolute or `..` paths) and shows
   the server's answer **inside the dialog** when the name is taken
-  (`409 EXISTS`) and keeps what was typed. On success:
+  (`409 EXISTS`), keeping what was typed. On success:
   - an ordinary text/code file (`.txt`, `.ts`, `.json`, `.py`, `.md`, …) becomes
     its own tab (`replaceTab`), so the chip shows the file name and every later
     save is an ordinary in-place save — exactly as if the file had been clicked in
@@ -187,32 +65,131 @@ host-side half owns the pack's own HTTP routes. Alpha.
     because the preview cannot edit the file and this tab is the only place that
     can.
   Without `dsh-modal` mounted the dialog falls back to the browser's own prompt.
-- **Edit**: CodeMirror 6 with line numbers, history/undo, bracket matching,
-  autocomplete, find-in-file, and syntax highlighting for js/ts/jsx/tsx, json,
-  markdown, python, html, css, yaml, the shell languages sh/bash/zsh/ksh/dash,
-  ps1/psm1/psd1 and bat/cmd (alpha.10), and Rust (`rs`) and TOML (`toml`)
-  (alpha.11). Line-wrapping for prose-ish
-  files. The
-  palette follows the **app's own light/dark theme** (oneDark while the app is
-  dark, a token-driven transparent theme while it is light; see alpha.5 above).
-  The engine is **lazy**: the vendored classic bundle is
-  fetched once from `/api/dsh-editor/vendor` the first time a file opens — once
-  per bundle version, since the request carries `?v=<bundle version>` (alpha.12).
-  A language the loaded engine does not carry — Lezer or stream, both go through
-  a guarded lookup (alpha.13) — opens the document **without syntax
-  highlighting** and warns once in the console with the rebuild command, instead
-  of failing the tab.
-- **Toolbar**: a find-in-file search input, a **Preview** button (Markdown files
-  only, see alpha.7) and a **Save** button. Save is offered for an unnamed
-  document at all times and for an open file while it is modified;
-  **Ctrl/Cmd+S** works inside the editor. The chip of a tab with unsaved work
-  carries a dot.
-- **Saving** is optimistic and atomic: the panel PUTs the whole document with the
+
+- **The panel.** CodeMirror 6 with line numbers, history/undo, bracket matching,
+  autocomplete and find-in-file, plus line-wrapping for prose-ish files (`.md`,
+  `.txt`, `.log`, `.csv`, dotfiles and extensionless names). The toolbar is the
+  tab's own top bar — the same **38px** `box-sizing:border-box` box the Files and
+  preview headers use, ending on the one hairline at **y=76** that all three
+  columns share — carrying a find-in-file input, **Preview** and **Save**. Save is
+  offered for an unnamed document at all times and for an open file while it is
+  modified; **Ctrl/Cmd+S** works inside the editor. The chip of a tab with
+  unsaved work carries a dot.
+
+- **Saving is optimistic and atomic.** The panel PUTs the whole document with the
   mtime/size it opened with; the server re-checks containment and writes a temp
   file renamed over the target. If the file changed on disk meanwhile the panel
   offers **Reload** / **Save anyway** instead of silently clobbering.
-- Unsaved edits are NOT persisted across tab closes or app restarts (alpha
-  caveat — save before closing a tab).
+
+- **Unsaved edits are not persisted** across tab closes or app restarts — save
+  before closing a tab.
+
+### The language map
+
+Every extension is mapped in `languageExtensionFor`, and every lookup goes
+through a guard.
+
+| Extensions | Language | Engine shape |
+|---|---|---|
+| `js` `mjs` `cjs` (and `jsx`, `ts`, `tsx`, each with its own flags) | javascript | Lezer factory |
+| `json` `jsonc` | json | Lezer factory |
+| `md` `markdown` `mdown` | markdown | Lezer factory |
+| `py` `pyw` | python | Lezer factory |
+| `html` `htm` `xhtml` | html | Lezer factory |
+| `css` | css | Lezer factory |
+| `yaml` `yml` | yaml | Lezer factory |
+| `sh` `bash` `zsh` `ksh` `dash` | `shell` | StreamParser object |
+| `ps1` `psm1` `psd1` | `powerShell` | StreamParser object |
+| `bat` `cmd` | `batch` | StreamParser object |
+| `rs` | `rust` | StreamParser object |
+| `toml` | `toml` | StreamParser object |
+
+The Lezer half comes from the vendored CodeMirror build. The stream half has no
+Lezer parser at all: `shell` and `powerShell` come from the vendored
+`@codemirror/legacy-modes`, and `batch` comes from the pack's own hand-written
+**`vendor/batch-mode.js`**, because neither CM5 nor CM6 ever shipped one. All
+five are wrapped by the vendored `StreamLanguage`, and their CM5 token names are
+the vocabulary StreamLanguage maps onto highlight tags, so
+`defaultHighlightStyle` (light) and oneDark (dark) colour them from the same tags
+they colour a `.js` with. A file with no mapping opens editable and unhighlighted.
+
+### Two engine shapes, two guarded lookups
+
+The vendored engine is ONE generated artifact on ONE route, and a client bundle
+newer than the loaded engine can ask for a language the engine does not carry.
+Both shapes of that are fatal without a guard — a Lezer factory that is not a
+function at all (`CM.yaml is not a function`), and `StreamLanguage.define(undefined)`,
+which dereferences what it was handed — so a document that opens unhighlighted
+beats a tab that cannot open at all.
+
+The engine answers in two SHAPES, so there are **two lookups**:
+
+- **`engineLanguage(CM, name)`** wants a Lezer factory — a **function**
+  (`CM.javascript(options)`) — and covers the seven Lezer languages in the map;
+- **`engineStreamMode(CM, name)`** wants the **StreamParser OBJECT** a CM5-style
+  legacy mode is, found by its `token()` method rather than a
+  `typeof === 'function'` test, and covers `shell`, `powerShell`, `batch`, `rust`
+  and `toml`.
+
+Each returns `null` plus **one console warning** naming the missing factory when
+the loaded engine lacks the name; `lezerLanguage` builds through the first and
+`streamLanguage` wraps a stream mode through the second, so
+`languageExtensionFor` contains **no direct `CM.<name>(...)` call at all**. An
+older engine therefore degrades a document to no highlighting instead of killing
+the tab.
+
+### The engine and the bundle are kept in step
+
+Because that guard is the last line of defence, the artifact itself is kept fresh
+too:
+
+- the request is **version-qualified** (`/api/dsh-editor/vendor?v=<bundle version>`),
+  so a new bundle is a new request instead of a cache hit;
+- the route answers **`cache-control: no-cache`** over a **content-hash ETag** —
+  the artifact is generated at a stable URL, so revalidation is a 304, never a
+  re-download;
+- the route **re-`stat`s** the artifact per request and re-reads it when it
+  changed, so a rebuild or a `git pull` needs no harness restart;
+- **HEAD** answers the same headers with no body.
+
+When a mode is missing anyway, the warning names the **rebuild** command
+(`packages/dsh-editor/vendor`, the esbuild line below) and says a restart of
+`dsh web` neither helps nor is needed.
+
+### The palette follows the app's theme
+
+CodeMirror needs a palette of its own: the surface configures **oneDark only
+while the app is dark** and a transparent, token-driven light layer while it is
+light — the light layer leaves the panel's `--dsw-*` tokens visible instead of
+painting a white canvas of its own. The document text colour is
+`--dsw-alias-label-primary` in both modes, which is what keeps a file with **no
+syntax language** (`.gitignore`, `.txt`, `.log`, …) readable.
+
+The switch is live, with no reopening of the file: a CodeMirror **`Compartment`**
+is reconfigured off the shipped `theme` service (`ctx.get('theme')` and its
+`theme/change` event), with **`body[data-ds-dark-theme]`** watched as the
+fallback for a profile that never mounts ui-theme. Both are resolved lazily — the
+editor never hard-depends on the theme package.
+
+### The rendered Markdown page
+
+This package registers the rendered Markdown **document body** itself — the keyed
+**`sidebar.right.tab.document`** slot, keyed by the shipped preview's own
+Markdown implementation id, at **`priority: -10`**. That is the slot system's
+shadowing rule (*lowest renders*): only the page body is ours, and the shipped
+preview keeps its metadata, paging, wrap and reload chrome. Uninstalling this
+package brings the shipped body back with no residue.
+
+- The body draws a sticky **Edit** button which hands the same file straight back
+  to the editor, replacing the preview tab — Editor → **Preview** → **Edit** →
+  Editor, one tab, same file.
+- The body lives inside the preview's scrollport, which is built for the
+  **plain-text** renderer: `[data-textpreview-body]` declares `white-space:pre`
+  and a monospace font stack, and this package's wrapper **undoes both** —
+  `white-space:normal`, so a source newline is a soft break again and blank lines
+  collapse into paragraph spacing instead of rendering as full empty lines.
+- The **Edit** pill wears the app's UI font (`--dsw-font-family`) instead of
+  inheriting the mono face.
 
 ## How the write path works (no core patches)
 
@@ -223,10 +200,10 @@ shipped `dsh-session-log-export` plugin, the Node half registers
 
 | Route | What it does |
 |---|---|
-| `GET /api/dsh-editor/file?session=<id>&path=<rel>` | read one text file (the host resolves the session's workspace root, containment-checks the path against it; strict UTF-8, no NUL; ≤ 2 MiB) |
+| `GET /api/dsh-editor/file?session=<id>&path=<rel>` | read one text file (the host resolves the session's workspace root and containment-checks the path against it; strict UTF-8, no NUL; ≤ 2 MiB; HEAD answers the headers and no body) |
 | `PUT /api/dsh-editor/file` | save one text file `{session, path, text, expected?: {mtimeMs, size}}` (atomic temp+rename; 409 when the file moved on disk) |
 | `PUT /api/dsh-editor/file` with `{create: true}` | **create** a new file at `path` (the PARENT folder must exist inside the workspace and is realpath-checked; the target must not exist — `409 EXISTS`; published create-exclusive, so a create never overwrites a file the user did not open) |
-| `GET /api/dsh-editor/vendor` | serve the vendored CodeMirror 6 classic bundle (lazy; cached, re-`stat`ed per request so a rebuilt artifact is picked up without a restart; `cache-control: no-cache` + a content-hash ETag, so a client always revalidates rather than reusing a stale engine) |
+| `GET /api/dsh-editor/vendor?v=<bundle version>` | serve the vendored CodeMirror 6 classic bundle (lazy; `cache-control: no-cache` + a content-hash ETag; re-`stat`ed per request so a rebuilt artifact needs no restart; HEAD answers no body) |
 
 The session id is what the tab's address already carries
 (`dsh-resource://file/session/<sessionId>/<path>`); the workspace root is
@@ -235,8 +212,9 @@ exactly like `@deepseek-ai/dsh-api-workspace-files` resolves its own reads. The
 client never names a root, and a session whose root cannot be resolved gets a
 typed `NO_WORKSPACE` failure instead of a guess.
 
-The web profile exposes the same `connection` surface the route registration
-uses on every boot.
+The engine is **lazy**: the vendored classic bundle (a script assigning
+`window.DSHEditorCM`) is fetched the first time a file opens, so an idle GUI
+never pays for the editor.
 
 ## Layout
 
@@ -249,7 +227,9 @@ lib/client.js         Browser half: tab type + guide entry, body (blank document
                       with the dirty dot (module-table bundle)
 lib/vendor/cm6.min.js GENERATED - the vendored CodeMirror 6 classic bundle
                       (IIFE on window.DSHEditorCM); commit it, do not edit by hand
-vendor/package.json   +  vendor/entry.js  — reproducible CM6 build inputs
+vendor/entry.js       the CM6 build entry (Lezer languages, legacy modes, batch-mode.js)
+vendor/batch-mode.js  the hand-written CM5-style batch mode for bat/cmd
+vendor/package.json   pinned CM6 build inputs
 ```
 
 The save-as dialog lives in [`packages/dsh-modal`](../dsh-modal): the editor
@@ -259,22 +239,14 @@ that package being installed. `dsh-modal` is not listed in this package's
 `dsh.client.inject` on purpose — the dependency is a service lookup, not a module
 load order.
 
-The theme service is resolved the same way (`ctx.get('theme')`, from the shipped
-`@deepseek-ai/dsh-client-ui-theme`): with it the editor reads the resolved
-`active.colorScheme`, and without it it falls back to the `body[data-ds-dark-theme]`
-marker ui-layout writes and then to `prefers-color-scheme` — so the editor keeps
-following the app on every profile. The header control that switches that
-preference is [`packages/dsh-themes`](../dsh-themes).
-
 **Preview** resolves two more services lazily, and neither is a hard dependency:
 the right bar's controller (`ctx.get('sidebarRight')`) does the actual open, and
 the tab registry (`ctx.get('sidebarRightTabs')`) is consulted for the **kind** the
 shipped document preview registered under — so a harness line that renames that
 kind keeps working, and a deployment without the preview type gets a clear
-"Preview unavailable" instead of a dead button. `openResource(address, { kind })`
-is the controller's own option; the tab record's `openResource` action drops
-`kind`, so the editor calls the controller directly (the tab is on screen, so its
-session is the mounted one).
+"Preview unavailable" instead of a dead button. The editor calls the controller
+directly rather than going through the tab record's own `openResource` action,
+which drops `kind`.
 
 ### Regenerating the vendored CodeMirror bundle
 

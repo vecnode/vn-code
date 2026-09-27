@@ -29,152 +29,6 @@ Alpha. `0.1.0-alpha.6`.
 
 ---
 
-## 0. What changed in these alphas
-
-### alpha.6
-
-**The library, and the model can cite it.** A diagram was owned by the
-conversation that drew it, and only by that one. There is now a second scope:
-one file for the whole harness (`$DSH_HOME/dsh-diagrams/library.json`), written
-by the same store class - same caps, same atomic write, same render reports -
-with a fixed file name instead of one per conversation.
-
-- `diagram_write { scope: "library" }` writes straight into it, and
-  `diagram_publish { id }` copies a conversation diagram in (one call, no
-  source round-trip; an id the library already holds is replaced).
-- Every read resolves a **bare id in the library first**, then this
-  conversation, so `diagram_read { id: "jepa-model" }` finds the shared diagram
-  from a chat that never saw it written - and says which scope it found it in.
-  `diagram_read` with no id lists both halves.
-- The address is `dsh-resource://diagram/library/<id>`: it names no
-  conversation, which is what makes a citation durable and what lets one tab be
-  opened from anywhere. The `diagram` tab type claims that address too.
-- The index page shows both halves, library first; the state route carries the
-  library with every conversation's diagrams (so the client needs no second
-  store); the artifact, export, diagram and render-report routes all take a
-  `scope`.
-- Two things had to be careful: a **panel edit writes back where the diagram
-  already is** (without that, editing a library diagram in its tab would have
-  quietly created a conversation-only second copy), and **deleting a diagram no
-  longer drops its cached artifact blindly**, because the cache is
-  content-addressed and shared - an identical diagram elsewhere is the same
-  file.
-
-### alpha.5
-
-Two fixes in how a verdict is shaped, both found by using the plugin: a key that
-is only sometimes meaningful must be **absent**, never `null` or `undefined`.
-`reported: null` against a schema declaring `integer` made every FRESH write
-fail output validation ("must be an integer"), and `error: undefined` on a drawn
-verdict failed the registry's lossless-JSON rule, which made every diagram the
-browser had RENDERED unreadable to the model. The tracked check now validates
-every tool result against the schema the tool declares, which is the gap that
-let both through.
-
-### alpha.4
-
-Six things, each found by exercising the surfaces rather than by reading them:
-
-1. **The picture was not the size you wanted to read.** The tab laid a diagram
-   out at its own natural size in a pane a few hundred pixels wide. It now lays
-   the picture out at **80% of the pane** and adds a **zoom ladder**
-   (25%-400%, `-` / `+` / `Fit`, remembered per diagram) with **drag to pan**.
-   Three things make that work, and the first two were bugs found by using it:
-   the zoom moves the layout BOX rather than applying a CSS `transform` (a
-   transform scales into a clipped box with no scrollable area, so a zoomed
-   diagram could never be scrolled back to); **every child of a zoomed box is
-   stretched to it**, because a column flex container sizes its children to their
-   CONTENT on the cross axis and the picture wrapper stayed at the svg's natural
-   width however wide the box became - so the box zoomed and the diagram did not;
-   and panning is the canvas' own `scrollLeft`/`scrollTop`, so nothing is
-   transformed or repositioned and the wheel keeps working. A zoom keeps the point
-   the reader was looking at, the grab cursor appears only when there is something
-   to pan, and a native image drag cannot steal the gesture.
-
-2. **Exports went somewhere nobody was looking.** Every format now **saves to
-   the Desktop of the machine running the harness** - the same deal the
-   screenshot control makes - through the host route, which resolves the Desktop
-   per request (OneDrive-redirected Windows, `XDG_DESKTOP_DIR` on Linux, the home
-   folder last), writes create-exclusively under the diagram's own name and
-   answers with the **absolute path** the panel then reports. The conversation
-   folder is never written to, the client never names a path, and the browser
-   download survives only as the fallback for a profile without that row.
-
-3. **`ok` and `drawn` were doing too much work.** The browser verdict is now ONE
-   function (`lib/store.js: verificationOf`) used by the tool result, the state
-   route and the tab pill, so the three cannot disagree. The four states are
-   objective and carry **both** revision numbers - `revision` (current) and
-   `reported` (what the newest report names) - so `stale` is read rather than
-   guessed: a report about revision 4 is never evidence about revision 5. A
-   missing report is `pending`, never a picture. And the verdict **omits** its
-   `error`/`at` keys instead of nulling them, because the tool registry refuses a
-   value that does not survive a JSON round trip and `JSON.stringify` drops an
-   `undefined` property: with `error: undefined` on a drawn verdict, every
-   diagram the browser had RENDERED became unreadable to the model
-   (*"value is not lossless JSON"* from `diagram_read` / `diagram_verify`).
-
-4. **A cache hit assumed success.** `checkAndRecord` read a cached TikZ compile
-   back as `ok` without looking at what the compile had said. A compile that
-   FAILED but still produced a PDF is cached on purpose - the partial picture is
-   evidence - so the second call reported a broken diagram as fine. The verdict
-   is now read from the cached meta.
-
-5. **A conversation could outgrow its own state file.** Sources were capped per
-   diagram (256 KiB) and the file at 1 MiB, so a handful of large diagrams put
-   the file past the size at which the store reads it as EMPTY - every diagram in
-   the conversation disappearing at once. There is now a **conversation source
-   budget** (4 MiB, enforced on write AND patch, replacing a diagram charged
-   once) with a typed `BUDGET` error the model can act on, and the file cap sits
-   far above it (16 MiB), where only a file that is not ours can reach it.
-
-6. **Two verdicts that meant "we could not check", and one of them was our
-   fault.** Mermaid validations now run through a **bounded child pool** (2 at a
-   time, bounded queue) instead of an unbounded fan-out of 3.5 MB engine
-   children. The DOM stub now exposes `window.CSS`: without it the engine's
-   sequence-diagram `box` parser took a `new Option()` fallback that does not
-   exist in a stub, so **every `box` diagram** came back `unavailable` - stored
-   but never checked. And a bare pgfplots body is now wrapped in a `tikzpicture`:
-   on a `standalone` document an `axis` at the top level does not compile at all
-   (`Environment axis undefined`, then every `\addplot` undefined), while the same
-   axis inside a picture compiles cleanly.
-
-A new tracked check, `scripts/checks/check-skill-examples.mjs`, keeps the skills
-honest: every fenced example in every shipped skill document is parsed or
-compiled by the same engines the plugin uses (25 examples today, one
-deliberately skipped). It found the two skill bugs in item 6's neighbourhood on
-its first run - a double-escaped matrix row separator and a fragment that
-referenced two nodes it never declared.
-
-### alpha.3
-
-Three findings from a real session, none of which a passing check would have
-caught:
-
-1. **The engine's error pictures were being left in the page.**
-   `mermaid.render(id, source)` called with no container element builds `#d<id>`
-   on `document.body`, draws into it, and removes it again - **but only on the
-   success path**. Every failed render left its div behind, and when the engine
-   had drawn its own error diagram into it first, what stayed in the interface
-   was a full 2412x512 picture reading *"Syntax error in text / mermaid version
-   11.17.2"*: one per failure, until the tab was reloaded. Reproduced against
-   the vendored engine itself (§7). Fixed by **parsing before rendering**,
-   telling the engine never to draw its own errors
-   (`suppressErrorRendering: true`), rendering into a **container the plugin
-   owns**, and sweeping the engine's fixtures in `finally`.
-
-2. **The state route never carried the source.** `GET /state` answered with
-   summaries that omitted `source`, and the browser half holds no other copy of
-   it: Mermaid is rendered *from its source in the browser*, the source drawer
-   edits it, and TikZ exports from it. Every diagram tab and every conversation
-   card was drawing from `undefined`. Summaries now carry `source` **and
-   `revision`** - the latter because a render report is only meaningful against
-   the revision it drew.
-
-3. **"It parses" and "it draws" were the same signal.** A picture the parser
-   accepted and the renderer then refused looked exactly like a healthy one.
-   The browser now reports what it did with each revision, and the model reads
-   that back through `diagram_read`.
-
 ## 1. What the user sees
 
 **In the conversation.** Every diagram tool call renders its picture inline -
@@ -190,9 +44,7 @@ is a `tool-result` block carrying `call.argsRaw` plus the `meta` view the host
 declared. That second channel is what names the diagram for a `diagram_write` -
 the write never carries an id, because the host derives one from the title - so
 the settled card can name the diagram, show its status, refresh the conversation
-store and offer a live **Open tab** link (alpha.2; alpha.1 read `kind` as
-"running", which left every write card an unnamed "still writing" row with no
-link at all).
+store and offer a live **Open tab** link.
 
 **In the right bar.**
 
@@ -201,15 +53,20 @@ link at all).
 | `dsh-resource://diagram/session/<session>/<id>` (a library diagram is `dsh-resource://diagram/library/<id>`) | **one tab per diagram**: the rendered picture laid out at 80% of the pane with a `-` / `+` / `Fit` zoom ladder (25%-400%), drag-to-pan when it overflows, a `Recompile` button for TikZ, `Copy`, and `Export ▾` |
 | `sidebar://diagrams` | the **index**: every diagram of the conversation and of the shared library, with kind, status and size; `New Mermaid` / `New TikZ`; picking a row opens its tab |
 
+80% **is** the 100% rung: a diagram is read whole first. The zoom moves the
+layout BOX rather than a CSS `transform`, so a zoomed box stays scrollable to
+its edge; every child of a zoomed box is stretched to it, because a column flex
+container sizes its children to their content on the cross axis; panning is the
+canvas' own `scrollLeft`/`scrollTop`; and a zoom keeps the point the reader was
+looking at.
+
 The index type carries the package's one **guide entry** (`order: 40`, after
 Files 10, Editor 20 and History 30), which is what the `+` control and the Start
 page list.
 
 Both pane bodies re-read the conversation from the host when they mount **and**
 whenever the tab becomes visible again, so a tab that stayed mounted while the
-model wrote diagrams shows them the moment the user returns to it (alpha.2;
-alpha.1 only read once per mount, and the write cards could not refresh at all,
-so an open index could sit on a stale list).
+model wrote diagrams shows them the moment the user returns to it.
 
 **The source drawer.** `Source` opens a monospace drawer beside the picture:
 edit, then `Apply` (validated and stored exactly like a model write, and
@@ -247,7 +104,9 @@ arguments and the returned canonical value):
 
 Five rules make this more than a text box:
 
-1. **Every write is validated before it is stored.**
+1. **Every write is validated before it is stored**, so a broken diagram
+   returns the parser's or the compiler's own line-accurate error rather than a
+   broken picture.
    - *Mermaid*: the source goes to a **child process** that loads the vendored
      engine behind a DOM stub and calls `mermaid.parse()`; the parse error comes
      back with the offending line, the caret and the parser's "Expecting" list.
@@ -267,9 +126,9 @@ Five rules make this more than a text box:
    pages or to a canvas too wide to read. They ride the same result, marked as
    advisory, and never change `status`.
 4. **Two degenerate sources are refused in plain words.** An empty (or
-   comments-only) source, and a TikZ document with no picture in it at all -
-   both of which the engines handle with a success and a blank page.
-5. **"It parses" and "it draws" are separate verdicts.** See §4.
+   comments-only) source, and a TikZ document with no drawing command - both of
+   which the engines handle with a success and a blank page.
+5. **"It parses" and "it draws" are separate verdicts.** See §3.
 
 The returned `address` is the diagram's tab, so the model can point the user at
 it in prose as well.
@@ -329,37 +188,51 @@ delete - is a **POST**.
 `$DSH_HOME/dsh-diagrams/sessions/<session>.json` - `{order, diagrams{id →
 {kind, title, source, status, diagnostics, warnings, render, artifact, revision,
 history}}}`, one atomic write per change, capped (64 diagrams, 256 KiB per
-source, 4 MiB of source per conversation, 16 MiB per file). The browser reads it
-through the routes; the model reads it through `diagram_read`, which is what
-makes a diagram survive compaction, a reload or the browser closing.
+source, 4 MiB of source per conversation, 16 MiB per file). A conversation
+source budget is enforced on write AND on patch (replacing a diagram is charged
+once) and refuses with a typed `BUDGET` error the model can act on. The browser
+reads the file through the routes; the model reads it through `diagram_read`,
+which is what makes a diagram survive compaction, a reload or the browser
+closing.
 
 `$DSH_HOME/dsh-diagrams/library.json` is the **same shape in one file** for the
-whole harness, written by the same class with a fixed name instead of a name per
-conversation. It has its own 4 MiB source budget, its own render reports and its
-own revisions, so the library copy of a diagram is an independent entry that
-happens to share its source - and therefore its artifact, because the cache is
-content-addressed. Nothing about a conversation leaks into it: the file knows no
-session.
+whole harness, written by the same store class with a fixed name instead of a
+name per conversation. It has its own 4 MiB source budget, its own render
+reports and its own revisions, so the library copy of a diagram is an
+independent entry that happens to share its source - and therefore its artifact,
+because the cache is content-addressed. Nothing about a conversation leaks into
+it: the file knows no session.
+
+Four rules are load-bearing:
+
+- **A panel edit writes back where the diagram already is** - otherwise editing
+  a library diagram in its tab would quietly fork a conversation-only copy.
+- **Deleting a diagram does not drop its cached artifact blindly**, because the
+  cache is content-addressed and shared: an identical diagram elsewhere is the
+  same file.
+- **State is never a session event.** `@deepseek-ai/dsh-session-persistence`
+  refuses to load a log containing an event type outside
+  `KNOWN_SESSION_EVENT_TYPES` unless the envelope carries `ignorable: true`, and
+  `Session.append()` has no way to set that marker - a plugin-owned event type
+  would make the conversation unreadable.
+- **State is never a projection.** A `sessionProjections` unit requires `zod`
+  schemas, and this pack ships no npm dependencies (the profile installs bundles
+  as live links, so a package dependency would not be installed). It would also
+  fold the same events the rule above refuses.
 
 `render` is the browser's own report about the revision it drew
 (`{revision, ok, phase, error, theme, at}`), stored by `recordRender` and read
 back as one of four states by `verificationOf`: `drawn` (a renderer reported
 success for THIS revision), `failed` (it reported failure, with its own error),
 `stale` (the newest report names a DIFFERENT revision, so this one has never been
-drawn) or `pending` (no report at all). The verdict carries both revision
-numbers, so `stale` is read rather than guessed. A write sets `render` back to
-`null`, because the old picture was of different text.
-
-**Why not a session event.** This was the first design and it is a dead end on
-this harness line: `@deepseek-ai/dsh-session-persistence` refuses to load a log
-containing an event type outside `KNOWN_SESSION_EVENT_TYPES` unless the envelope
-carries `ignorable: true`, and `Session.append()` has no way to set that marker.
-A plugin-owned event type would therefore make the conversation unreadable.
-
-**Why not a projection.** A `sessionProjections` unit requires `zod` schemas,
-and this pack ships no npm dependencies (the profile installs bundles as live
-links, so a package dependency would not be installed). It would also fold the
-same events the paragraph above rules out.
+drawn) or `pending` (no report at all). The verdict is ONE function
+(`lib/store.js: verificationOf`) used by the tool result, the state route and the
+tab pill, so the three cannot disagree; it carries both revision numbers, so
+`stale` is read rather than guessed - a report about revision 4 is never
+evidence about revision 5 - and it **omits** its `error`/`at` keys rather than
+nulling them, because the tool registry refuses a value that does not survive a
+JSON round trip. A write sets `render` back to `null`, because the old picture
+was of different text.
 
 ### Rendering
 
@@ -380,10 +253,10 @@ load-bearing:
    bug on a source the parser accepted), the engine throws instead of drawing
    its 2412x512 "Syntax error in text" diagram.
 3. **A container the plugin owns.** `render(id, source)` with no container
-   builds `#d<id>` on `document.body` and removes it **only on success**; every
-   failure left one behind, and one of those divs holds the error picture.
-   Passing `mermaidHost()` - attached, laid out at zero size, offscreen -
-   keeps every fixture out of the interface. A `finally` sweeps `d<id>`/`i<id>`
+   builds `#d<id>` on `document.body` and removes it **only on success**, so a
+   failure would leave one behind - and one of those divs holds the error
+   picture. Passing `mermaidHost()` - attached, laid out at zero size, offscreen
+   - keeps every fixture out of the interface. A `finally` sweeps `d<id>`/`i<id>`
    anyway, so an engine that ever ignores the container still cannot paint.
 4. **A verdict, not a throw**, at the call site: `MermaidError.phase` says
    whether the parser or the renderer refused, and the pictures draw that as
@@ -393,14 +266,22 @@ The exports (`svg`/`png`) go through the same path, so a diagram that does not
 render fails with the parser's words instead of writing an engine error picture
 to the Desktop.
 
+The validator itself runs as a **bounded child pool** (2 at a time, bounded
+queue) rather than an unbounded fan-out of ~3.4 MB engine children, and its DOM
+stub exposes `window.CSS`: without it the engine's sequence-diagram `box` parser
+takes a `new Option()` fallback that does not exist in a stub.
+
 **TikZ, on the host.** `pdflatex` (else `xelatex`, else `lualatex`) compiles a
 normalized document in a private temp folder, then `pdftocairo`/`pdftoppm`
-produce the SVG/PNG. The tab and the card show the **engine's own vector
-output** (`pdftocairo -svg` emits glyph outlines, so it is font-independent),
-fetched as a blob and shown through an `<img>`. A failing compile that still
-produced a PDF is cached too and shown **flagged as errored** - a hint, never
-proof. A document that compiles to no picture at all is refused before the
-engine sees it, with words rather than a blank panel.
+produce the SVG/PNG. A bare pgfplots body is wrapped in a `tikzpicture` first,
+because an `axis` at the top level of a `standalone` document does not compile.
+The tab and the card show the **engine's own vector output** (`pdftocairo -svg`
+emits glyph outlines, so it is font-independent), fetched as a blob and shown
+through an `<img>`. A failing compile that still produced a PDF is cached too
+and shown **flagged as errored** - a hint, never proof, and the verdict is read
+back from the cached meta rather than assumed to be a success. A document that
+compiles to no picture at all is refused before the engine sees it, with words
+rather than a blank panel.
 
 Content-addressed cache: `$DSH_HOME/dsh-diagrams/artifacts/<sha256[0:24]>/{doc.tex,doc.pdf,doc.svg,doc.png,meta.json}`,
 keyed by engine + renderer version + normalized source. Editing back to a
@@ -424,7 +305,8 @@ previous revision is an instant hit, and the cache can be deleted at any time
   the harness process, and a crashing engine can never take the host down.
 - **Writes** go to `$DSH_HOME/dsh-diagrams/**` (state + cache) and to the
   **Desktop** when the user asks for an export - where the name is
-  host-generated, the folder is resolved per request, and the write is
+  host-generated, the folder is resolved per request (OneDrive-redirected
+  Windows, `XDG_DESKTOP_DIR` on Linux, the home folder last), and the write is
   create-exclusive, so nothing the user already had can be replaced. The client
   never names a path.
 
@@ -457,7 +339,7 @@ TikZ diagrams still store and export as `.tex`. Mermaid needs no engine at all.
 ## 7. Checks
 
 ```sh
-node scripts/checks/check-client-bundles.mjs   # tab types, seats, cards, the render trap, zoom, Desktop export, verdict labels
+node scripts/checks/check-client-bundles.mjs   # tab types, seats, cards, the render path, zoom, Desktop export, verdict labels
 node scripts/checks/check-node-routes.mjs      # routes, tools, store, compile, export, vendor drift, budgets, cache verdicts
 node scripts/checks/check-skill-examples.mjs   # every fenced example in every shipped skill, parsed or compiled
 ```
@@ -481,48 +363,20 @@ honest: it extracts every fenced example from `skills/**/*.md` and runs it
 through the same parser and engine, so a copy-pasteable source that no longer
 works fails the run instead of misleading the next agent.
 
-The reproduction that found the error pictures is not part of the tracked
-checks, because it needs a real DOM and this pack ships no npm dependency. It
-was run three ways, each recorded here so a future change can be compared
-against it:
-
-1. **The vendored engine under `jsdom`** (throwaway install). Three failed
-   renders left **three** `div#d<id>` elements in `document.body`, each holding
-   the engine's error SVG; the parse-first path left **zero** of either.
-2. **The vendored engine in real headless Chrome**, through two pages that
-   differ only in call shape. Measured from the screenshots with a PNG decoder
-   (ink coverage per row, no image library):
-
-   | Page | Ink below the report line | Blocks |
-   |---|---|---|
-   | old call shape (`render(id, source)`, three failures) | 37 039 px over rows 16..409 | **3** stacked engine blocks, ~123 px each |
-   | parse-first path (same three failures) | 0 px below row 52 | **none** |
-
-   That is the user's report, reproduced and then removed: the interface grew a
-   block of engine output per failed render.
-3. **The tracked checks**, which assert the four load-bearing properties so a
-   regression cannot reach the page again.
-
-
-## 8. Limits and roadmap
+## 8. Limits
 
 - One diagram per tab: `dsh-resource://diagram/session/<session>/<id>` for a
   conversation diagram and `dsh-resource://diagram/library/<id>` for a shared
   one; the index is the only page.
-- The source drawer is a textarea by design (alpha.1); reusing `dsh-editor`'s
-  vendored CodeMirror when that bundle is installed is the next step.
+- The source drawer is a textarea by design - the package depends on no editor.
 - TikZ with multiple files (`\input`) is not supported - the document is one
   self-contained source.
 - A source may not read files or run commands: the engine is sandboxed to its
   temp folder with shell escape off.
-- **Host-side Mermaid rasterization was considered and rejected.** Verifying a
-  Mermaid *picture* on the host would need real SVG geometry (`getBBox`), which
-  the child validator's DOM stub deliberately does not provide - and adding
+- **Host-side Mermaid rasterization is not implemented.** Verifying a Mermaid
+  *picture* on the host would need real SVG geometry (`getBBox`), which the
+  child validator's DOM stub deliberately does not provide - and adding
   `jsdom`/`svgdom` would break the pack's zero-dependency rule. The browser
   render report is the substitute: it uses the real renderer, in the real theme,
   on the user's own screen, which is a stronger signal than a headless proxy.
   Its only cost is that it needs a client to have drawn the revision.
-- Follow-ups worth doing: report the render verdict per diagram in the
-  conversation card (today the card is honest but does not say "drawn"), and
-  fold the render report into the tool result the model sees when a client
-  happens to be open at call time.

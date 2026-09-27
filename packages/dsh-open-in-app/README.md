@@ -10,13 +10,13 @@ the shipped launcher hands the directory to the OS shell's *open verb*
 as the helper exits, even when nothing reached the desktop — this package takes
 the file managers over and opens the OS's own file browser **directly**. Alpha.
 
-## What changed, and what did not
+## What it takes over, and what it leaves alone
 
 | | |
 |---|---|
-| **Kept from the shipped plugin** | the whole UI (the split button, the remembered choice, the menu, the icons), and the application **catalog** — VS Code, Cursor, JetBrains IDEs, Git GUIs, Windows Terminal, Git Bash… still resolve and launch through the shipped host row, which stays mounted and untouched |
+| **Left to the shipped plugin** | the whole UI (the split button, the remembered choice, the menu, the icons), and the application **catalog** — VS Code, Cursor, JetBrains IDEs, Git GUIs, Windows Terminal, Git Bash… still resolve and launch through the shipped host row, which stays mounted and untouched |
 | **Taken over** | the three **file-manager** catalog ids (`explorer`, `finder`, `filemanager`): the forked browser bundle posts them to this package's own route |
-| **Changed** | how that one launch happens: an argv spawn of the OS's file browser instead of the shell's open verb |
+| **The difference** | how that one launch happens: an argv spawn of the OS's file browser instead of the shell's open verb |
 
 The package's bundle layer **hard-disables the shipped client row**
 (`ui-open-in-app`) and inserts its own row, which owns both halves: the forked

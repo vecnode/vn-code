@@ -16,20 +16,15 @@ Alpha.
 
 ## Why this exists
 
-Everything that survives a restart today survives because it already lives on the
+Everything that survives a restart survives because it already lives on the
 **host**: `$DSH_HOME/sessions` holds the conversations (which is why a new chat
 opens the last one), `$DSH_HOME/storages/workspace.json` holds the workspaces,
-and `$DSH_HOME/settings.yaml` holds the shipped preferences. Everything the
-interface forgets lives in the **browser**, and there it is per **origin** and per
-browser **profile**:
-
-- a Chrome tab and the desktop window's WebView2 are two different stores, so
-  they can never share it — even at the same port;
-- the desktop shell prefers port 3080 and falls back to a free one, so even one
-  host loses it by moving a port;
-- and `localStorage` is gone entirely if site data is cleared.
-
-A settings section is one document both hosts read. That is the whole idea.
+and `$DSH_HOME/settings.yaml` holds the shipped preferences. What the interface
+keeps in the **browser** is per **origin** and per browser **profile**: a Chrome
+tab and the desktop window's WebView2 are two different stores, so they never
+share it — even at the same port — and the desktop shell prefers port 3080 and
+falls back to a free one, so even one host loses it by moving a port. A settings
+section is one document both hosts read. That is the whole idea.
 
 ## What is remembered
 
@@ -43,15 +38,7 @@ A settings section is one document both hosts read. That is the whole idea.
 
 The file is `$DSH_HOME/settings.yaml`, and a fresh install writes **no**
 `vn-harness` section at all: every field carries a schema default, so only values
-that actually differ from the contract land in the document.
-
-```yaml
-vn-harness:
-  pageZoom: 125
-  theme: nord
-  dockHeight: 340
-  sidebarWidth: 300
-```
+that actually differ from the contract are written.
 
 There is deliberately **no field for the terminal dock's open state**. The panel
 is the window onto a *process*: after a reload the client holds no slots, so
@@ -59,52 +46,60 @@ reopening it would either show an empty panel or — once the server's five-minu
 PTY retention has lapsed — **start a shell nobody asked for**. A height is a
 preference; "a shell was running" is not.
 
-Two conventions matter when reading it by hand:
+Two conventions matter when reading it by hand. **A negative width means "never
+recorded"**, which is deliberately not `0`, because for the sidebar `0` is a real
+state (collapsed) and a remembered `0` is restored through ui-layout's toggle
+rather than its width setter. And **`theme` holds an extension theme only**:
+`light` / `dark` / `system` are already durable in ui-theme's own namespace, and
+duplicating a preference would give one setting two owners that could disagree.
 
-- **A negative width means "never recorded"**, which is deliberately not `0` —
-  for the sidebar `0` is a real state (collapsed). A remembered `0` is restored
-  through ui-layout's toggle, because its width setter clamps to the drag range
-  and `0` is not in it.
-- **`theme` holds an extension theme only.** `light` / `dark` / `system` are
-  already durable in ui-theme's own namespace, and duplicating a preference would
-  give one setting two owners that could disagree.
+## Why a settings namespace
 
-Light/dark/system and the content font size are therefore **not** this package's
-business — they already persist. What did not persist, and does now, is an
-extension theme such as Nord, Monokai or Hacker: ui-theme's durable schema accepts
-the built-in three only, so those used to be an in-process choice that a reload
-threw away.
+A plugin-owned session event is not an option: `dsh-session-persistence` refuses
+an unknown event type unless the envelope carries `ignorable: true`, which
+`Session.append()` cannot set, so the conversation would become unreadable.
+`ctx.storageDomain` cannot be used either — it needs a projection the browser
+cannot read. A namespace is the documented third-party seam for a preference.
 
-## The `uiState` service
+## The Node half
 
-| Call | Answers |
-|---|---|
-| `uiState.get(field)` | the remembered value, or the contract default |
-| `uiState.set(field, value)` | a Promise for the queued, durable write |
-| `uiState.unset(field)` | a Promise for the queued clear — the field reads as inherited again |
-| `uiState.subscribe(fn)` | `fn` after each accepted section; returns a disposer |
-| `uiState.snapshot()` | `{ status, value, defaults }` |
-| `uiState.status()` | `loading` / `ready` / `unavailable` / `absent` (no transport) |
+`lib/index.js` registers the `vn-harness` namespace and answers
+`webserver/index-inject` with one inline script carrying the remembered page
+zoom, placed immediately after the opening body tag so the level is in force for
+the first paint. The script writes **both** the `zoom` declaration and the
+`data-dsh-page-zoomed` marker, because that marker is the gate `dsh-themes`'
+right-bar seam fix keys on. Should no copy of schemastery be reachable, the row
+**warns and degrades** — nothing is remembered, and the client falls back to its
+own defaults — rather than failing the boot.
 
-`set` is safe before the transport is ready (the write is replayed when the first
-section arrives) and safe with **no transport at all** (it resolves without
-writing), which is what lets a consumer keep its own `localStorage` fallback for a
-profile that installed it without this package.
+## Why schema is resolved at runtime and never imported
 
-**One binder, deliberately.** Three bundles binding `vn-harness` independently
-would each hold their own revision, and a namespace write is fenced on the latest
-known revision — so one package's write could be refused because another had
-already moved it. The recovery for that is a reload of host state, which would
-silently drop the write. One scope means one queue and one revision.
+This pack ships zero npm dependencies: the profile installs each bundle as a
+**live link** into this repo, so a bare `import '@deepseek-ai/schemastery'`
+resolves from the repo folder and fails with `ERR_MODULE_NOT_FOUND` (measured).
+`settings.register` wants a schemastery schema, so the module is loaded at
+runtime instead with `createRequire`, through the anchors
+`packages/dsh-terminal/lib/pty.js` established for the harness's own `node-pty` —
+`process.argv[1]`, then `$DSH_HOME/profiles`, which `dsh-app-boot` keeps as a
+mirror of the installation's dependency closure. Duck typing is what makes that
+safe: `dsh-settings` treats a schema as a function and reads `schema.toJSON()`,
+so class identity never matters across the two module graphs.
 
-## The page zoom is applied before the first paint
+## The browser half
 
-A zoom that arrives after the client boots is a visible reflow of the whole
-shell, so — exactly like ui-theme's own theme bootstrap — this package's Node half
-inlines the remembered level as a script row **before the shell mounts**. It
-writes both the `zoom` declaration and the `data-dsh-page-zoomed` marker, because
-that marker is a contract rather than a decoration: `dsh-themes`' right-bar seam
-fix is gated on it.
+`lib/client.js` binds that namespace **once** — three bundles binding it
+independently would each fence their writes on their own revision, and the
+contract's recovery for a stale revision is a reload that silently drops the
+write — and publishes the client service **`uiState`**
+(`get`/`set`/`unset`/`subscribe`/`snapshot`/`status`), which `dsh-themes` and
+`dsh-terminal` reach **lazily** via `ctx.get`, never in their `inject`, so each
+still works — and still writes its own `localStorage` copy — in a profile without
+this package. `snapshot()` answers `{ status, value, defaults }` and `status()`
+answers `loading` / `ready` / `unavailable` / `absent` (no transport); `set` is
+safe before the transport is ready — the write is replayed when the first section
+arrives — and safe with none at all, where it resolves without writing. `unset`
+exists because clearing is not overwriting: picking a built-in theme after Nord
+must **remove** the field so it reads as inherited again.
 
 ## Why the column widths are this package's job
 
@@ -114,29 +109,23 @@ frame, and closing the sidebar forgets its drag width by design. `ctx.layout`
 exposes no width setter, so the store is reached the way ui-layout's own
 `AppFrame` reaches it: through the **`root` slot registration**, which carries the
 store handle, and `store.create()` answers the same shared instance the frame
-renders from. That is the one core store this pack writes, so it is guarded
-twice — the handle must look like a layout store before anything is touched, and
-a shape it does not recognise means "remember nothing" rather than "run blind".
+renders from. That is the one core store this pack writes, so it is guarded twice
+— the handle must look like a layout store before anything is touched, and a
+shape it does not recognise means "remember nothing" rather than "run blind".
 Both widths go to the store's own setters **unclamped**: it clamps to its drag
-range and to 70% of the frame itself.
+range and to 70% of the frame itself, and a remembered `0` goes through
+`toggleSidebar()` because `setSidebar(0)` clamps to 264. Below ui-layout's 1024px
+auto-collapse width the sidebar is not restored at all: the rail is the layout's
+decision, not a preference.
 
-## Why schema is resolved and not imported
+## Desktop window geometry
 
-This pack ships zero npm dependencies and every other Node half imports only
-`node:*` builtins: the web profile installs each bundle as a **live link** into
-this repo, so a bare `import '@deepseek-ai/schemastery'` resolves from the repo
-folder and fails with `ERR_MODULE_NOT_FOUND` (measured). `settings.register` wants
-a schemastery schema, so the module is loaded at runtime instead through the
-anchors `packages/dsh-terminal/lib/pty.js` established for the harness's own
-`node-pty` — the running entry, then `$DSH_HOME/profiles`, which `dsh-app-boot`
-keeps as a mirror of the installation's dependency closure. The CJS build is what
-makes `createRequire` work (`schemastery` is `type: module` but publishes
-`exports.require`), and duck typing is what makes it safe: `dsh-settings` treats
-the schema as a function and reads `schema.toJSON()`.
-
-Should no copy be reachable, the row **warns and degrades** — nothing is
-remembered, and the client falls back to its own defaults — rather than failing
-the boot.
+The desktop shell remembers its own window geometry separately, in
+`$DSH_HOME/vn-harness/window.json` — written and read by the Rust shell itself
+(`app/src-tauri/src/windowstate.rs`, whose pure half is covered by `cargo test`)
+— because the size must be known *before* the window is built, and a Chrome tab
+has no window geometry to share. A maximized recording keeps the previously known
+size and position and flips only the flag.
 
 ## Layout
 
@@ -146,21 +135,12 @@ lib/index.js       Node half: registers the `vn-harness` namespace, inlines the 
 lib/client.js      Browser half: binds the namespace, restores the column widths, provides `uiState`
 ```
 
-No route, no storage of its own, no fork, no core row disabled.
-
-## Desktop window geometry
-
-The desktop shell remembers its own window geometry separately, in
-`$DSH_HOME/vn-harness/window.json` — written and read by the Rust shell itself
-(`app/src-tauri/src/windowstate.rs`), because the size must be known *before* the
-window is built. It is desktop-only state by nature: a Chrome tab has no window
-geometry to share.
+No route, no fork, no core row disabled, no npm dependency.
 
 ## Install / uninstall
 
 The repo launcher (`install.bat` on Windows, `./install.sh` on macOS/Linux)
-auto-discovers this package — it is a standard `dsh.bundle`. Adding a package
-changes the profile's bundle set, and a bundle the profile does not list yet is
-added by one plain launcher run (no `-Force` needed). The web profile links it
-into this repo, so code edits only need a restart of `npx @deepseek-ai/dsh web`
-plus a hard browser refresh.
+auto-discovers this package — it is a standard `dsh.bundle`, so a bundle the
+profile does not list yet is added by one plain launcher run (no `-Force`
+needed). The web profile links it into this repo, so code edits only need a
+restart of `npx @deepseek-ai/dsh web` plus a hard browser refresh.
