@@ -1062,7 +1062,10 @@ function infoText({ target, doc, facts, sample, stats, engines, ocrLanguages, ve
   const lines = []
   lines.push('PDF: ' + path.basename(target.file))
   lines.push('Path: ' + target.file)
-  lines.push('Size: ' + humanBytes(doc.bytes ?? target.size) + ' | Pages: ' + numPages + ' | PDF ' + (info.PDFFormatVersion ?? '?') + ' | Engine: pdf.js ' + (doc.engine ?? version))
+  // By VALUE, not by nullishness: every entry cached before alpha.4 holds
+  // `bytes: 0` (pdf.js detached the buffer the child measured its length from),
+  // so a stored zero has to fall through to the size on disk rather than win.
+  lines.push('Size: ' + humanBytes(doc.bytes || doc.bytesOnDisk || target.size) + ' | Pages: ' + numPages + ' | PDF ' + (info.PDFFormatVersion ?? '?') + ' | Engine: pdf.js ' + (doc.engine ?? version))
   const attribution = [info.Title, info.Author && 'by ' + info.Author, info.Producer && 'produced by ' + info.Producer, info.Creator && 'created with ' + info.Creator]
     .filter(Boolean)
     .join(' | ')

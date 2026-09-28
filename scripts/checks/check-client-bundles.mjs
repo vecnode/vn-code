@@ -2259,6 +2259,22 @@ check(
     pdfSource.includes("API_ROOT + '/vendor/standard-fonts.json'") &&
     pdfSource.includes('BinaryDataFactory: MapBinaryDataFactory'),
 )
+// pdf.js validates all three factory parameters with its own getFactoryUrlProp()
+// even when a custom BinaryDataFactory is supplied, so a bare route killed every
+// document with `Invalid factory url: ".../cmaps.json" must include trailing
+// slash.` before a page was read. What is handed over is therefore the route
+// PLUS a slash - and the route itself stays bare, because the route registry
+// matches exact paths and `.../cmaps.json/` is not one of them.
+check(
+  'the factory urls pdf.js validates are slash-terminated',
+  pdfSource.includes("const factoryUrl = (route) => route + '/'") &&
+    pdfSource.includes('cMapUrl: factoryUrl(VENDOR_CMAPS),') &&
+    pdfSource.includes('standardFontDataUrl: factoryUrl(VENDOR_FONTS),') &&
+    pdfSource.includes('wasmUrl: factoryUrl(VENDOR_WASM),') &&
+    pdfSource.includes("VENDOR_CMAPS = API_ROOT + '/vendor/cmaps.json'") &&
+    pdfSource.includes("VENDOR_FONTS = API_ROOT + '/vendor/standard-fonts.json'") &&
+    pdfSource.includes("VENDOR_WASM = API_ROOT + '/vendor/wasm.json'"),
+)
 check('the reader uses pdf.js own TextLayer', pdfSource.includes('new engine.TextLayer({'))
 check('the reader is page-navigable by keyboard', pdfSource.includes("event.key === 'PageDown'") && pdfSource.includes('dpf-pageInput') && pdfSource.includes('goToPage'))
 check('a PDF is claimed as an extension type', pdfSource.includes("patterns: ['*.pdf']") && pdfSource.includes("priority: 'extension'"))
@@ -2282,7 +2298,7 @@ check(
   'the wasm decoders are wired',
   pdfSource.includes("API_ROOT + '/vendor/wasm.json'") &&
     pdfSource.includes("kind === 'wasmUrl' ? VENDOR_WASM") &&
-    pdfSource.includes('wasmUrl: VENDOR_WASM'),
+    pdfSource.includes('wasmUrl: factoryUrl(VENDOR_WASM)'),
 )
 check(
   'the index page reads the workspace route',
@@ -2291,7 +2307,11 @@ check(
     pdfSource.includes('Every PDF in this workspace'),
 )
 check('the index is a page type with its own guide entry', pdfSource.includes("priority: 'builtin',") && pdfSource.includes('order: 50'))
-check('the client is at alpha.3', pdfSource.includes("PLUGIN_VERSION = '0.1.0-alpha.3'"))
+// Derived, not pinned: the marker is what the reader's toolbar draws, and the
+// generic pass at the end of this file already compares every bundle's constant
+// with its package.json - a literal here would only go stale on the next bump.
+const pdfVersion = JSON.parse(readFileSync(path.join(repo, 'packages/dsh-pdf/package.json'), 'utf8')).version
+check('the client version constant is the package version', pdfSource.includes("PLUGIN_VERSION = '" + pdfVersion + "'"))
 
 const pdfTypes = []
 const pdfSeats = {}
@@ -2347,7 +2367,6 @@ check(
     pdfSource.includes('OCR misreads digits, names, accents and punctuation') &&
     pdfSource.includes('Recognized, not extracted'),
 )
-check('the client is at alpha.3', pdfSource.includes("PLUGIN_VERSION = '0.1.0-alpha.3'"))
 const PdfBody = pdfSeats['sidebar.right.pane.tab#dsh-pdf'].component
 const pdfTab = { id: 'tab7', contentId: 'dsh-resource://file/session/s1/report.pdf', title: 'report.pdf' }
 const pdfMarkup = renderToStaticMarkup(h(PdfBody, { useTabInfo: () => ({ tab: pdfTab }), sessionId: 's1' }))

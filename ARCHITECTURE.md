@@ -1811,6 +1811,23 @@ registrations; instead one route per KIND returns a base64 map, and a custom
 why `pdf.min.mjs` is checked for **zero static imports**: the file must survive
 being imported from a blob URL.
 
+**Those three URLs must end in a slash, and the routes must not** (alpha.4). A
+custom `BinaryDataFactory` takes over the *fetching*, not the *validation*:
+pdf.js runs its own `getFactoryUrlProp()` over `cMapUrl`, `standardFontDataUrl`
+and `wasmUrl` before it reads a page, whatever factory was supplied, and throws
+on any string that does not end in `/`. Handing over the bare route therefore
+killed the browser reader outright - `Invalid factory url:
+"/api/dsh-pdf/vendor/cmaps.json" must include trailing slash.` - for **every**
+document, while the host half kept working, because `lib/extract.mjs` builds the
+same three as real directory URLs (`new URL(name + '/', VENDOR).href`) and always
+had the slash. The value pdf.js wants is never fetched, so the client passes the
+route plus a slash and keeps the route itself bare, because the registry matches
+exact paths and `.../cmaps.json/` is not one of them. `check-pdf-node.mjs` drives
+the vendored engine with the URLs rebuilt out of the shipped client source - a
+bare URL must still be refused, and a two-page document must actually open - so a
+future pdf.js release that changes the rule, or a client edit that drops the
+slash, fails the tracked checks instead of the reader.
+
 **Reading a document: identity, child process, cache.**
 
 1. *Identity is content.* The SHA-256 of the bytes (streamed in the parent,
@@ -1824,10 +1841,17 @@ being imported from a blob URL.
    JavaScript is never evaluated), `useWorkerFetch: false` with no URL fetching
    anywhere, `enableXfa: false`, `useSystemFonts: false`, `disableFontFace:
    true`, and the cMap/standard-font trees as `file://` URLs.
+   The **size is measured before the hand-off** (alpha.4): pdf.js transfers the
+   `data` buffer to its worker and detaches it, so `byteLength` read after
+   `getDocument` is 0 - which is why every document was cached with `"bytes": 0`
+   and `pdf_info` printed `Size: 0 bytes`.
 3. *The cache answers first.* `$DSH_HOME/dsh-pdf/artifacts/<sha256>/` holds
    `index.json` (document facts), `stats.json` (per-page numbers, merged as pages
    are extracted) and `pages/<n>.json` (one page's text in both modes), written
    atomically and LRU-pruned at 512 MiB. `pdf_read` after `pdf_find` is free.
+   The entry is keyed by SHA **and** engine version only, so a zero cached by an
+   older build outlives the fix: the size line reads a stored zero as absent and
+   falls through to the size on disk.
 
 **The panel and the index (alpha.3).** Two toolbar buttons open a side panel
 beside the page column, and both halves of it are deliberately NOT the page
@@ -1985,6 +2009,8 @@ pdf_* card, or by an address of either shape.
 | `pdf_read` says "Truncated at N of M" | the `maxChars` ceiling; ask for a smaller range rather than raising the cap |
 | A PDF does not open in the reader but the old preview shows it | `dsh-pdf` is not mounted (a new package needs one install run, or `-Force`), or the bundle did not activate - check the console for `[dsh-pdf]`; the shipped preview is the fallback and keeps working |
 | The tab says "This PDF could not be read (HTTP 413)" | the file is larger than the tab's 256 MiB ceiling; the tools still read it page by page |
+| `pdf_info` says `Size: 0 bytes` | pdf.js transfers the `data` buffer to its worker and detaches it, so a length read after `getDocument` is 0: `dsh-pdf` before alpha.4 cached every document that way. Fixed in alpha.4 (the length is measured before the hand-off, and a stored zero falls through to the size on disk), and an existing cache needs no clearing - but the host half is a Node module, so the running server must be **restarted** for it |
+| The tab says `Invalid factory url: ".../cmaps.json" must include trailing slash.` | pdf.js's own factory-URL validation, refusing a value that does not end in `/` - it runs before a page is read and even with this bundle's custom `BinaryDataFactory`, so **every** document fails while the tools keep working. Fixed in `dsh-pdf` alpha.4 (the value handed to `getDocument` is the route plus a slash); on an older bundle, reinstall/refresh. If a future edit brings it back, `check-client-bundles.mjs` and `check-pdf-node.mjs` both fail |
 | The tab says "That path points outside the conversation workspace" | a relative path with `..` that leaves the workspace: open the file by its absolute path instead, or copy it in |
 | `vendor/build.mjs --check` fails | the vendored tree was edited or half-written; re-run `node packages/dsh-pdf/vendor/build.mjs` (never hand-edit `lib/vendor`) |
 | A CJK document extracts as boxes | the cMap map route is missing or the tree is incomplete - run the vendor build and restart |

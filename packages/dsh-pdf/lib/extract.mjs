@@ -102,6 +102,13 @@ async function main() {
     say({ ok: false, failure: { kind: 'unreadable' }, error: messageOf(err), ms: Date.now() - started })
     return
   }
+  // The size is taken HERE, while the array is still a view over real bytes:
+  // pdf.js TRANSFERS this buffer to its worker, which DETACHES it, so after
+  // `getDocument` the very same array answers `byteLength` 0 (`buffer.detached`
+  // is true - measured). Reading the length after the await is how every
+  // document came to be cached with `"bytes": 0` and `pdf_info` to print
+  // "Size: 0 bytes" beside the correct size on disk.
+  const fileBytes = bytes.byteLength
   const sha256 = createHash('sha256').update(bytes).digest('hex')
 
   // A file:// URL, never a native path: the Node fallback loads this module with
@@ -124,7 +131,7 @@ async function main() {
       ...(typeof request.password === 'string' && request.password !== '' ? { password: request.password } : {}),
     })
   } catch (err) {
-    say({ ok: false, failure: classify(err), error: messageOf(err), bytes: bytes.byteLength, sha256, ms: Date.now() - started })
+    say({ ok: false, failure: classify(err), error: messageOf(err), bytes: fileBytes, sha256, ms: Date.now() - started })
     return
   }
 
@@ -136,7 +143,7 @@ async function main() {
       ok: false,
       failure: classify(err),
       error: messageOf(err),
-      bytes: bytes.byteLength,
+      bytes: fileBytes,
       sha256,
       ...(err && err.name === 'PasswordException' ? { passwordCode: err.code ?? null } : {}),
       ms: Date.now() - started,
@@ -148,7 +155,7 @@ async function main() {
   const result = {
     ok: true,
     engine: pdfjs.version,
-    bytes: bytes.byteLength,
+    bytes: fileBytes,
     sha256,
     numPages: doc.numPages,
     fingerprints: doc.fingerprints ?? [],

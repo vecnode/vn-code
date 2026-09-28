@@ -248,6 +248,36 @@ check('info marks the scan in the view', JSON.stringify(scanInfo.view.scanned), 
 const cachedInfo = await call('pdf_info', { path: 'report.pdf' })
 check('a second pdf_info is a cache hit', cachedInfo.view.cached, true)
 
+// The SIZE the engine reported. pdf.js TRANSFERS the data buffer to its worker,
+// which DETACHES it: after `getDocument` the very same Uint8Array answers
+// `byteLength` 0 (`buffer.detached` is true - measured). A byte count read after
+// the await is therefore always zero, which is what every document was cached
+// with and what pdf_info printed as "Size: 0 bytes" beside the correct size on
+// disk. The length is taken while the array is still a view over real bytes.
+const reportBytes = textPdf().length
+check('info reports the real size', info.text.includes('Size: ' + String(reportBytes) + ' bytes'))
+const artifacts = path.join(root, 'dsh-home', 'dsh-pdf', 'artifacts')
+const artifactKeys = existsSync(artifacts) ? await fsp.readdir(artifacts) : []
+const reportIndex = artifactKeys
+  .map((key) => path.join(artifacts, key, 'index.json'))
+  .find((file) => {
+    try {
+      return String(JSON.parse(readFileSync(file, 'utf8')).source ?? '').endsWith('report.pdf')
+    } catch (err) {
+      return false
+    }
+  })
+const storedFacts = reportIndex === undefined ? null : JSON.parse(readFileSync(reportIndex, 'utf8'))
+check('the cached facts hold the real byte count', storedFacts !== null && storedFacts.bytes === reportBytes)
+// An entry written BEFORE this fix holds `bytes: 0`, and the cache is content-
+// addressed and version-tolerant, so those entries survive the upgrade: the size
+// line has to fall through to the size on disk rather than print zero.
+if (reportIndex !== undefined) {
+  await fsp.writeFile(reportIndex, JSON.stringify({ ...storedFacts, bytes: 0 }))
+  const legacy = await call('pdf_info', { path: 'report.pdf' })
+  check('a pre-alpha.4 entry still reports the real size', legacy.text.includes('Size: ' + String(reportBytes) + ' bytes'))
+}
+
 // ---------------------------------------------------------------------------
 // pdf_read
 // ---------------------------------------------------------------------------
@@ -605,6 +635,117 @@ check(
 // which is a narrower surface than a prefix route would be, and the reason the
 // two asset maps exist at all.
 check('an unknown vendor asset is not routed', routes.has('/api/dsh-pdf/vendor/nope.mjs'), false)
+
+// ---------------------------------------------------------------------------
+// The reader's factory urls
+// ---------------------------------------------------------------------------
+// pdf.js validates all three factory parameters with its own getFactoryUrlProp()
+// BEFORE it reads a single page, and it does so even when a custom
+// BinaryDataFactory is supplied - which is exactly how this bundle loads every
+// asset (one map per kind, because the route registry is exact-path only). A
+// route handed over bare is therefore refused outright with
+//
+//   Invalid factory url: "/api/dsh-pdf/vendor/cmaps.json" must include trailing slash.
+//
+// and NO document opens at all: the reader showed "This PDF could not be
+// opened" for every file, scanned or not. What pdf.js needs is a
+// slash-terminated string it never fetches; what the routes must stay is bare.
+// This drives the REAL engine with the values rebuilt out of the shipped client
+// source, so the two halves cannot drift apart again.
+const pdfClient = readFileSync(path.join(repo, 'packages/dsh-pdf/lib/client.js'), 'utf8')
+const literal = (name) => {
+  const match = new RegExp('const ' + name + " = '([^']*)'").exec(pdfClient)
+  return match === null ? null : match[1]
+}
+const routeSuffix = (name) => {
+  const match = new RegExp('const ' + name + " = API_ROOT \\+ '([^']*)'").exec(pdfClient)
+  return match === null ? null : match[1]
+}
+const apiRoot = literal('API_ROOT')
+check('the reader declares its api root', apiRoot, '/api/dsh-pdf')
+check(
+  'every factory parameter goes through the slash helper',
+  [
+    "const factoryUrl = (route) => route + '/'",
+    'cMapUrl: factoryUrl(VENDOR_CMAPS),',
+    'standardFontDataUrl: factoryUrl(VENDOR_FONTS),',
+    'wasmUrl: factoryUrl(VENDOR_WASM),',
+  ].every((line) => pdfClient.includes(line)),
+)
+const factoryKinds = ['VENDOR_CMAPS', 'VENDOR_FONTS', 'VENDOR_WASM']
+const factoryRoutes = factoryKinds.map((name) => routeSuffix(name))
+check('the three asset routes are read off the source', factoryRoutes.every((suffix) => typeof suffix === 'string' && suffix.startsWith('/vendor/')))
+
+// The engine itself runs in a CHILD process, exactly as the package runs it: a
+// PDF is untrusted input handed to a large parser, and pdf.js's Node fallbacks
+// warn about the optional canvas package on a host that has none, which is
+// noise in this check's own output rather than a fact about the reader.
+const probePath = path.join(root, 'factory-probe.mjs')
+await fsp.writeFile(
+  probePath,
+  `// Written by check-pdf-node.mjs: open one PDF with the reader's own options.
+const { readFileSync } = await import('node:fs')
+const { pathToFileURL } = await import('node:url')
+const [vendor, file, mode, apiRoot, routes] = process.argv.slice(2)
+const pdfjs = await import(pathToFileURL(vendor + '/pdf.min.mjs').href)
+pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(vendor + '/pdf.worker.min.mjs').href
+// The reader's factory shape, flattened: the question is whether pdf.js ACCEPTS
+// the urls, and a missing font is a warning, never a failure.
+class ProbeBinaryDataFactory {
+  async fetch() {
+    return new Uint8Array(0)
+  }
+}
+const urls = {}
+;['cMapUrl', 'standardFontDataUrl', 'wasmUrl'].forEach((kind, index) => {
+  urls[kind] = apiRoot + routes.split(',')[index] + (mode === 'slashed' ? '/' : '')
+})
+try {
+  const task = pdfjs.getDocument({
+    data: new Uint8Array(readFileSync(file)),
+    isEvalSupported: false,
+    useSystemFonts: false,
+    disableFontFace: true,
+    enableXfa: false,
+    cMapPacked: true,
+    BinaryDataFactory: ProbeBinaryDataFactory,
+    ...urls,
+  })
+  const doc = await task.promise
+  const page = await doc.getPage(1)
+  const content = await page.getTextContent()
+  const text = content.items.map((item) => item.str).join('')
+  const pages = doc.numPages
+  await task.destroy()
+  console.log(JSON.stringify({ ok: true, pages, text }))
+} catch (err) {
+  console.log(JSON.stringify({ ok: false, error: String((err && err.message) ?? err) }))
+}
+`,
+)
+const childProcess = await import('node:child_process')
+function openAsReader(mode) {
+  const result = childProcess.spawnSync(
+    process.execPath,
+    [probePath, path.join(repo, 'packages/dsh-pdf/lib/vendor'), textFile, mode, apiRoot, factoryRoutes.join(',')],
+    { encoding: 'utf8' },
+  )
+  const lines = (result.stdout ?? '').trim().split('\n')
+  try {
+    return JSON.parse(lines[lines.length - 1])
+  } catch (err) {
+    return { ok: false, error: 'the probe printed nothing usable: ' + String((result.stderr ?? '').trim().split('\n')[0] ?? '') }
+  }
+}
+
+const bare = openAsReader('bare')
+check('pdf.js still refuses a bare factory url', bare.ok === false && /must include trailing slash/.test(bare.error ?? ''))
+const opened = openAsReader('slashed')
+check(
+  'the reader keeps passing the urls pdf.js demands',
+  opened.ok === true && opened.pages === 2 && String(opened.text).includes('Quarterly Report'),
+)
+if (opened.ok !== true) console.log('     a document did not open: ' + opened.error)
 
 // ---------------------------------------------------------------------------
 // The vendored tree is exactly what the build recorded

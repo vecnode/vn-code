@@ -65,7 +65,7 @@ window.__ModuleLoader__.load({
     /** The address shape a page-address tab is opened with. */
     const PAGE_PREFIX = 'sidebar://'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.3'
+    const PLUGIN_VERSION = '0.1.0-alpha.4'
     /** Keep in sync with lib/index.js. */
     const API_ROOT = '/api/dsh-pdf'
     const FILE_ROUTE = API_ROOT + '/file'
@@ -77,6 +77,17 @@ window.__ModuleLoader__.load({
     const VENDOR_CMAPS = API_ROOT + '/vendor/cmaps.json'
     const VENDOR_FONTS = API_ROOT + '/vendor/standard-fonts.json'
     const VENDOR_WASM = API_ROOT + '/vendor/wasm.json'
+    /**
+     * The value handed to pdf.js as `cMapUrl` / `standardFontDataUrl` /
+     * `wasmUrl`. Those three are NOT the routes above and are never requested:
+     * pdf.js validates each one with its own `getFactoryUrlProp()` - which runs
+     * even when a custom `BinaryDataFactory` is supplied - and refuses any
+     * string that does not end in a slash, so a route handed over bare killed
+     * every document with `Invalid factory url: ".../cmaps.json" must include
+     * trailing slash.` before a single page was read. The maps are served by
+     * `MapBinaryDataFactory`, so all pdf.js needs is a slash-terminated string.
+     */
+    const factoryUrl = (route) => route + '/'
     /** Address grammar owned by @deepseek-ai/dsh-util-workspace-path. */
     const FILE_PREFIX = 'dsh-resource://file/'
     const PDF_PREFIX = 'dsh-resource://pdf/'
@@ -1418,12 +1429,12 @@ window.__ModuleLoader__.load({
               enableXfa: false,
               cMapPacked: true,
               BinaryDataFactory: MapBinaryDataFactory,
-              cMapUrl: VENDOR_CMAPS,
-              standardFontDataUrl: VENDOR_FONTS,
+              cMapUrl: factoryUrl(VENDOR_CMAPS),
+              standardFontDataUrl: factoryUrl(VENDOR_FONTS),
               // The WASM image decoders (JBIG2 / JPEG2000 / colour profiles). The
               // factory serves them from one map, exactly like the cMaps, and
               // pdf.js asks only when a page actually carries such an image.
-              wasmUrl: VENDOR_WASM,
+              wasmUrl: factoryUrl(VENDOR_WASM),
               ...(passwordRef.current !== '' ? { password: passwordRef.current } : {}),
             })
             task.onPassword = (updatePassword, reason) => {

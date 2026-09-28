@@ -1,4 +1,4 @@
-# dsh-pdf (alpha.3)
+# dsh-pdf (alpha.4)
 
 **PDF the agent can actually read and scan, and a real PDF reader in the right
 bar.**
@@ -204,6 +204,42 @@ pdf.js asks for an asset of that kind and decoded per entry by a
 standardFontDataUrl, wasmUrl })` plus `fetch({ kind, filename })`) - which is why
 `pdf.min.mjs` must have **zero static imports**, since it is imported from a blob
 URL.
+
+**alpha.4 is the factory-url repair, and it is the reason nothing opened.**
+pdf.js validates **all three** factory parameters with its own URL check *before*
+it reads a page, and it runs that check even when a custom `BinaryDataFactory` is
+supplied - which is how this bundle loads *every* asset. A bare route was
+therefore refused outright, with
+
+```
+Invalid factory url: "/api/dsh-pdf/vendor/cmaps.json" must include trailing slash.
+```
+
+and no document opened at all, scanned or not: the reader showed "This PDF could
+not be opened" for every file while every `pdf_*` tool kept working, because the
+host half (which passes the same URLs as real directory `file://` URLs, slash
+included) never had the bug. What pdf.js demands is a slash-**terminated** string
+that it never actually fetches, so the three values handed to `getDocument` are
+now the route plus a slash, while the routes themselves stay bare - the registry
+matches exact paths, so `.../cmaps.json/` is not a route, and the fetch these
+constants feed must stay bare. Both halves are pinned: the source shape in
+`check-client-bundles.mjs`, and in `check-pdf-node.mjs` the vendored engine's own
+rule - a bare URL is still refused, and a two-page document actually opens - driven
+with the URLs rebuilt out of the shipped client source, so the two cannot drift
+apart again.
+
+**The same release repairs the byte count.** pdf.js **transfers** the `data`
+buffer to its worker, which **detaches** it, so `bytes.byteLength` read after
+`getDocument` is 0 (`buffer.detached` is true - measured). The extraction child
+took the length *after* the await, so every document was cached with
+`"bytes": 0` and `pdf_info` printed `Size: 0 bytes` beside the correct size on
+disk. The length is now taken while the array is still a view over real bytes,
+and the size line falls through a stored zero to the size on disk
+(`doc.bytes || doc.bytesOnDisk || target.size`), because the cache is
+content-addressed and keyed only by SHA + engine version: entries written by an
+older build survive the upgrade, and those are exactly the ones holding a zero.
+`check-pdf-node.mjs` pins both halves - the printed size is the file's real
+byte count, and an entry rewritten with `bytes: 0` still reads correctly.
 
 ## Vendored engine
 
