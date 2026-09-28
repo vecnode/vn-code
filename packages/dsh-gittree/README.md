@@ -1,4 +1,4 @@
-# dsh-gittree (alpha.4)
+# dsh-gittree (alpha.5)
 
 **History** is a **read-only git history tab** for the pack's right bar
 (`dsh-rightbar` — the pack's right-hand column, beside the shipped **Start**
@@ -8,15 +8,51 @@ no `patterns`, so it never competes for a file address, and
 Editor (20). It is labelled History in the capsule and the chip while the
 package, the row and the address keep the `dsh-gittree` / `gittree` name. It
 shows the **commit history** of the tab's own conversation folder — short id,
-subject, author and date, newest first — with the branch and the current commit
-kept in the file bar above it. Picking a commit opens its message and the files
-it touched; a changed-file row opens through the ordinary `openResource` action
-with **no options**, so the registry decides what claims it — and this package
-needs neither the editor nor a preview and publishes no service. Alpha.
+subject, author and date, newest first — beside a **rail** that draws the commit
+**graph** on the left of the list. The branch and the current commit stay in the
+file bar above it. Picking a commit opens its message and the files it touched; a
+changed-file row opens through the ordinary `openResource` action with **no
+options**, so the registry decides what claims it — and this package needs
+neither the editor nor a preview and publishes no service. Alpha.
 
 **It is read-only.** Nothing here can stage, commit, check out, fetch or write
 config: the only git subcommands it reaches are `rev-parse`, `status`,
 `ls-files`, `log`, `show` and `diff-tree`.
+
+## The rail (the graph)
+
+Every history row sits beside a rail: a **vertical rectangle** on the left of the
+list carrying the commit graph, drawn from the same answer the list is drawn from.
+
+- **One column per branch lane.** The layout is one forward pass over `git log`
+  in its own order (a child always comes before its parent): a lane is a column
+  holding the id of the commit it is waiting for, a commit takes the lane already
+  waiting for it or a free one, and its first parent inherits that lane while
+  every further parent — a merge — starts or joins another. A parent the page does
+  not carry (the log's own limit, or a workspace-scoped log) ends the lane, which
+  is the honest picture of a history that continues past what was read.
+- **A node per commit**, on the lane's centre line, with the line running **up to
+  the newer commit above it** and down to its first parent. A merge wears a
+  **larger hollow ring** — the shape a branch joining in makes — and the commit
+  `HEAD` points at wears a halo.
+- **Curves where a branch moves**: an elbow where a merge's extra parent leaves
+  the node, and one where that branch rejoins the line at the commit both parents
+  descend from.
+- **Pull requests**, named from the repository itself (there is no network here):
+  GitHub's `Merge pull request #12 from …` subject, a squashed `… (#12)` subject,
+  or a `refs/pull/12/…` ref a repository has fetched — each wears a `#12` chip.
+- **Ref chips** for the branch `HEAD` points at, tags and remotes, capped at two
+  with a `+N` for the rest.
+- **Nothing is measured.** A row is exactly **28px** and every coordinate comes
+  from the lane index, so the rail runs straight through an expanded commit's
+  detail and there is no `ResizeObserver` and no layout read anywhere in the
+  bundle.
+- **A Node half that has not been restarted still draws a line.** `parents` and
+  `refs` arrived with the rail, so a browser bundle newer than the running host
+  answers without them; the client then reads the list's own order as the parent
+  chain - one continuous line, correct for the linear log such a host implies -
+  rather than a rail of disconnected stubs. Restart `dsh web` to get the real
+  graph (branches, merges and chips).
 
 ## How it plugs in
 
@@ -42,7 +78,7 @@ an image or a PDF. The History tab stays open beside it.
 
 - The **file bar**: the branch (or `(detached)`), the short **HEAD** commit — the
   current commit — `↑ahead`/`↓behind` when there is an upstream, how many files
-  git reports as changed, and the version marker (`dsh-gittree 0.1.0-alpha.4`)
+  git reports as changed, and the version marker (`dsh-gittree 0.1.0-alpha.5`)
   that makes a freshly loaded bundle easy to verify.
 - The **toolbar**: the tab's own **top bar**, carrying the workspace scope and
   **Reload** in a **38px** `box-sizing:border-box` row (24px control inside). It
@@ -50,8 +86,11 @@ an image or a PDF. The History tab stays open beside it.
   pane's first hairline lands on the **y=76** line the 38px docking strip, the
   conversation header (`min-height:76px`) and the left column's branding band all
   end on.
-- The **commit list**: `short sha`, subject, author and date, newest first, up to
-  80 commits per load. The toolbar's **Reload** refetches the bar and the list.
+- The **commit list**: `short sha`, the pull-request chip and the ref chips, the
+  subject, and the author and date, newest first, up to 80 commits per load — each
+  beside its rail. The chip strip is capped (and the pull request sits first), so a
+  narrow pane clips the least important ref rather than the subject. The toolbar's
+  **Reload** refetches the bar and the list.
 - **A picked commit** opens in place (no navigation, no new tab): its full id,
   author, date, message body, and the files it touched with `M`/`A`/`D`/`R`/`C`/`T`
   badges.
@@ -71,7 +110,7 @@ The browser cannot read a repository, so the row owns three authenticated
 |---|---|---|
 | `GET /api/dsh-gittree/state?session=<id>` | `rev-parse --show-toplevel`, `status --porcelain=v2 -z --untracked-files=all --branch`, `ls-files -z`, `rev-parse --short HEAD` | `{ root, repoRoot, scope, branch, head, detached, upstream, ahead, behind, entries, total, changed, truncated }` |
 | `GET /api/dsh-gittree/state?session=<id>&brief=1` | the same branch/status/HEAD calls, **without** `ls-files` or the entry merge | `{ brief: true, root, repoRoot, scope, branch, head, detached, upstream, ahead, behind, changed }` — what the tab's bar shows, and nothing else |
-| `GET /api/dsh-gittree/history?session=<id>&limit=N` | `log -n N --date=short --pretty=format:…` (scoped to the workspace when it is a subfolder) | `{ commits: [{ sha, short, author, date, subject }] }` |
+| `GET /api/dsh-gittree/history?session=<id>&limit=N` | `log -n N --date=short --decorate=short --pretty=format:…%P…%D` (scoped to the workspace when it is a subfolder) | `{ commits: [{ sha, short, author, date, subject, parents, refs, merge }] }` — `parents` is `%P` and `refs` is `%D`, which is what the rail's graph and its chips are drawn from |
 | `GET /api/dsh-gittree/commit?session=<id>&sha=<id>` | `show -s --pretty=format:…` + `diff-tree --root --no-commit-id --name-status -r -z` | `{ commit: { sha, short, author, email, date, subject, body }, files: [{ status, path, origPath? }] }` |
 
 The tab itself uses **`brief=1`** (the bar never needs a file list), so a GUI that
@@ -113,7 +152,9 @@ Design points worth keeping:
 cordis.patch.yml   bundle layer: inserts the 'gittree' row (nothing else patched)
 lib/index.js       Node half: the read-only /api/dsh-gittree routes above
 lib/client.js      Browser half: the page tab type + guide entry, the commit list
-                   and a commit's detail (module-table bundle, no build step)
+                   with its rail, and a commit's detail (module-table bundle, no
+                   build step). Its pure half - `graphLayout`, `pullRequestOf`,
+                   `refChips` - is exported as `__internals` for the tracked check.
 ```
 
 Nothing is forked and no core row is disabled: this package **adds** surface, so
@@ -123,11 +164,18 @@ Nothing is forked and no core row is disabled: this package **adds** surface, so
 
 `scripts/checks/check-node-routes.mjs` drives these routes against a **real
 scratch repository** it creates (init → commit → modify → untracked → a workspace
-that is a subfolder), asserting the scope, the status codes, the brief form, the
-root commit's file list and the option-injection guard — and skips loudly
-without `git`. `scripts/checks/check-client-bundles.mjs` loads the browser half
-through the module table and a real React runtime and checks the registration,
-the guide order, the 38px top bar, the history-only body and the chip title.
+that is a subfolder → a branch → a `--no-ff` merge → a tag), asserting the scope,
+the status codes, the brief form, the root commit's file list, the option-injection
+guard **and the graph fields** (a merge's two parents, the ref `HEAD` points at, a
+tag ref, and a root commit with no parents) — and skips loudly without `git`.
+`scripts/checks/check-client-bundles.mjs` loads the browser half through the module
+table and a real React runtime and checks the registration, the guide order, the
+38px top bar, the history-only body, the chip title — plus the rail: the lane
+layout of a linear history and of a merge, the pull-request and ref chip readings,
+that the CSS row box matches the constant the rail's geometry is derived from,
+that the bundle measures nothing, and the rendered rail of a four-commit merge
+(one rail per row, the hollow merge node, both curves, the node on the lane's
+centre line, the `#12` chip).
 
 ## Install / uninstall
 

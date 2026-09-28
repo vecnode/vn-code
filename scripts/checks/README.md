@@ -60,7 +60,18 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
     host has no copy of ui-theme, because a stub theme service is exactly what
     let that bug ship;
   - `dsh-gittree` - registration, guide order, the history-only body, the chip
-    title;
+    title; and alpha.5's **rail**: its lane layout is DRIVEN through the bundle's
+    pure `__internals.graphLayout` (a linear history is one lane with the line
+    running through every row; a merge opens a second lane, edges to both parents
+    and collapses back at the commit they share; a parent outside the page ends
+    its lane), the pull-request and ref chip readings are driven the same way, the
+    stylesheet's own `.dsg-commitRow` height is read back and compared with the
+    `ROW_HEIGHT` constant the node's geometry is derived from (the one coupling
+    that can silently rot), the bundle is pinned to measure nothing
+    (`new ResizeObserver(` / `getBoundingClientRect(` absent), and the rendered
+    rail of a four-commit merge is checked for one rail per row, the lane widths,
+    the hollow merge node, both curves, the node on the lane's centre line and the
+    `#12` chip;
   - `dsh-terminal` - the bundle id, both seats, order 30, and the geometry
     invariants the dock must keep at the source level (never the frame's height,
     inset the two columns, re-fit on resize, follow the left bar through the
@@ -151,9 +162,11 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
   - **open-in-app** - the launcher's wire validation and the status a real launch
     answers (the actual window is behind `DSH_CHECK_LAUNCH=1`);
   - **gittree** - the three read-only routes against a real scratch repository
-    (init -> commit -> modify -> untracked -> a workspace that is a subfolder),
-    asserting scope, the brief form, the root commit's file list and the
-    option-injection guard;
+    (init -> commit -> modify -> untracked -> a workspace that is a subfolder ->
+    a branch -> a `--no-ff` merge -> a tag), asserting scope, the brief form, the
+    root commit's file list, the option-injection guard and the GRAPH fields the
+    tab's rail is drawn from (a merge's two parents, the `%D` ref `HEAD` points
+    at, a tag ref, and a root commit with no parents);
   - **terminal** - the route family, the ETag, and a LIVE shell over a real
     socket (init -> ready -> a command answered -> kill, a JSON line proven to
     be shell input rather than a control frame, and an unauthenticated upgrade

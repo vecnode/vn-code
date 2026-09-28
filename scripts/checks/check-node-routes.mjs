@@ -330,6 +330,40 @@ if (!hasGit) {
   const subState = await ask(subHandler, stateRoute, 'session=' + session)
   const subPaths = (subState.payload && Array.isArray(subState.payload.entries) ? subState.payload.entries : []).map((entry) => entry.path).sort().join(',')
   check('gittree: a subfolder workspace is scoped', subPaths, 'inner.txt')
+  // A REAL BRANCH AND MERGE, because the History tab's rail draws its graph from
+  // exactly these two log fields: `%P` (the parents - a merge has more than one,
+  // and that is what puts a second lane on the rail) and `%D` (the ref
+  // decorations - the branch HEAD points at, a tag, and `refs/pull/<n>/...` when
+  // a repository fetched its pull requests).
+  const trunk = git(['rev-parse', '--abbrev-ref', 'HEAD']).trim()
+  git(['checkout', '-q', '-b', 'feature/pr-7'])
+  await fsp.writeFile(path.join(gitRoot, 'feature.txt'), 'feature\n')
+  git(['add', 'feature.txt'])
+  git(['commit', '-qm', 'Add the feature (#7)'])
+  git(['checkout', '-q', trunk])
+  git(['merge', '--no-ff', '-q', '-m', 'Merge pull request #7 from check/feature/pr-7', 'feature/pr-7'])
+  git(['tag', 'v1.0'])
+  const merged = await ask(historyHandler, historyRoute, 'session=' + session + '&limit=10')
+  const mergedCommits = merged.payload && Array.isArray(merged.payload.commits) ? merged.payload.commits : []
+  const mergeCommit = mergedCommits[0]
+  // NOT the last row: with every commit made inside the same second, git is free
+  // to order the merge's two parents either way, so the root is found by what it
+  // is rather than by where it landed.
+  const rootCommit = mergedCommits.find((commit) => commit.subject === 'first commit')
+  const mergeParents = mergeCommit && Array.isArray(mergeCommit.parents) ? mergeCommit.parents : []
+  const mergeRefs = mergeCommit && Array.isArray(mergeCommit.refs) ? mergeCommit.refs : []
+  const rootParents = rootCommit && Array.isArray(rootCommit.parents) ? rootCommit.parents : null
+  const rootRefs = rootCommit && Array.isArray(rootCommit.refs) ? rootCommit.refs : null
+  check('gittree: the log carries three commits', mergedCommits.length, 3)
+  check('gittree: a merge names both its parents', mergeParents.length, 2)
+  check('gittree: a merge is flagged as one', Boolean(mergeCommit && mergeCommit.merge), true)
+  check('gittree: the first parent is the branch it merged into', mergeParents[0], rootCommit ? rootCommit.sha : null)
+  check('gittree: a merge names the pull request in its subject', /^Merge pull request #7 /.test((mergeCommit && mergeCommit.subject) || ''), true)
+  check('gittree: a merge carries the ref HEAD points at', mergeRefs.some((ref) => ref.indexOf('HEAD -> ') === 0), true)
+  check('gittree: a tag is carried as a tag ref', mergeRefs.includes('tag: v1.0'), true)
+  check('gittree: a root commit has no parents', rootParents !== null && rootParents.length === 0, true)
+  check('gittree: a root commit is not a merge', Boolean(rootCommit && rootCommit.merge), false)
+  check('gittree: a root commit carries no refs', rootRefs !== null && rootRefs.length === 0, true)
   await fsp.rm(gitRoot, { recursive: true, force: true })
 }
 

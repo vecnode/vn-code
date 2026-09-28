@@ -31,7 +31,18 @@
  *   - the surface follows the pack's tab dress (the toolbar and file-bar geometry
  *     and `--dsw-*` tokens the editor and the Files tab use, under its own `dsg-`
  *     prefix), so it reads as one more tab of the same bar and uninstalls without
- *     residue.
+ *     residue;
+ *   - every history row is drawn beside a **rail** on the left: a vertical
+ *     rectangle carrying the commit graph - one column per branch lane, a node per
+ *     commit, the line running up to the newer commit above it, and the curves
+ *     where a branch leaves a merge or rejoins the line. The lanes come from the
+ *     history route's `%P` (parents) and the ref chips from its `%D` (the branch
+ *     HEAD points at, tags, remotes, `refs/pull/<n>/head`), and a merge that names
+ *     a pull request - "Merge pull request #12 ...", a "(#12)" squash subject, or a
+ *     `refs/pull/12/...` ref - wears a `#12` chip and a hollow node.
+ *     Nothing is measured: a row is ROW_HEIGHT tall and every coordinate is derived
+ *     from the row's index in `graphLayout`, so an expanded detail keeps the line
+ *     straight and no ResizeObserver is involved.
  *
  * Every request carries a **token** (`useRef`), not an effect cleanup: an answer
  * is applied only while it is still the newest one. That is what keeps Reload
@@ -56,7 +67,7 @@ window.__ModuleLoader__.load({
 
     const React = require('react')
     const h = React.createElement
-    const { useCallback, useEffect, useRef, useState } = React
+    const { useCallback, useEffect, useMemo, useRef, useState } = React
 
     // ---------------------------------------------------------------------
     // Constants
@@ -76,7 +87,7 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the tool bar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.4'
+    const PLUGIN_VERSION = '0.1.0-alpha.5'
     /** The keyed seats every tab type occupies. */
     const TAB_SLOT = 'sidebar.right.pane.tab'
     const TITLE_SLOT = 'sidebar.right.pane.tab.title'
@@ -84,10 +95,38 @@ window.__ModuleLoader__.load({
     const HISTORY_LIMIT = 80
 
     // ---------------------------------------------------------------------
+    // Rail metrics
+    //
+    // The rail is drawn from ARITHMETIC, not from measurement: a commit row is
+    // exactly ROW_HEIGHT tall (the same fixed box the CSS declares), so the node
+    // sits on the row's centre line and every line and curve is placed from the
+    // lane index alone. That is what keeps the graph straight through an expanded
+    // commit's detail - the rail spans the whole list item, whose height the
+    // renderer never has to know - and what keeps this free of a ResizeObserver
+    // and of the layout thrash one would cause.
+    // ---------------------------------------------------------------------
+    /** A commit row's box height; keep in sync with `.dsg-commitRow`. */
+    const ROW_HEIGHT = 28
+    /** The node's centre line, measured from the top of a row (and of its item). */
+    const NODE_Y = ROW_HEIGHT / 2
+    /** Horizontal distance between two lanes, and its tighter form for a busy graph. */
+    const LANE_STEP = 12
+    const LANE_STEP_TIGHT = 9
+    /** Past this many columns the tighter step is used, so the rail stays narrow. */
+    const LANE_TIGHT_FROM = 4
+    /** The rail's own left/right padding, and the width of one drawn line. */
+    const RAIL_PAD = 9
+    const LINE_W = 1.5
+    /** How many lane colours exist; past that they repeat (hues stop being readable). */
+    const LANE_COLOURS = 5
+    /** Most ref chips one row shows before it collapses the rest into `+N`. */
+    const CHIP_LIMIT = 2
+
+    // ---------------------------------------------------------------------
     // Styles (the pack's tab dress, under this package's own prefix)
     // ---------------------------------------------------------------------
     const css = `
-.dsg-root{height:100%;min-height:0;flex:auto;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;color:var(--dsw-alias-label-primary,#1f1f1f);font-size:13px;line-height:1.5}
+.dsg-root{--dsg-lane-0:var(--dsw-alias-label-tertiary,#9aa0a6);--dsg-lane-1:var(--dsw-alias-state-success-primary,#2f9e44);--dsg-lane-2:var(--dsw-alias-state-business-primary,#4f8cff);--dsg-lane-3:var(--dsw-alias-state-warning-primary,#d29922);--dsg-lane-4:var(--dsw-alias-state-error-primary,#d3382c);height:100%;min-height:0;flex:auto;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;color:var(--dsw-alias-label-primary,#1f1f1f);font-size:13px;line-height:1.5}
 /* The toolbar IS this tab's top bar, and every column's top band ends in the
    same hairline at y=76: the docking strip above a pane is 38px (28px + 10px
    top padding) and the conversation header is min-height:76px, which is why the
@@ -113,13 +152,30 @@ window.__ModuleLoader__.load({
 .dsg-stateErr{color:var(--dsw-alias-state-error-primary,#d3382c)}
 .dsg-stateCode{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:11px;opacity:.8}
 .dsg-list{margin:0;padding:6px 4px 12px 6px;list-style:none}
-.dsg-item{margin:0;padding:0}
-.dsg-commitRow{width:100%;min-width:0;color:inherit;font:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:8px;display:flex;align-items:baseline;gap:8px;padding:5px 8px}
+.dsg-item{margin:0;padding:0;position:relative}
+/* The rail: the vertical rectangle beside every row, carrying the graph. It is
+   as tall as the whole list item (so it runs straight through an expanded
+   commit's detail) and it never eats a click - the row under it stays the
+   target. */
+.dsg-rail{position:absolute;left:0;top:0;bottom:0;box-sizing:border-box;pointer-events:none;background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.06));border-right:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.14))}
+.dsg-lane{position:absolute;width:1.5px;border-radius:1px}
+.dsg-elbow{position:absolute;box-sizing:border-box}
+.dsg-node{position:absolute;box-sizing:border-box;border-radius:50%}
+.dsg-commitRow{width:100%;min-width:0;height:28px;box-sizing:border-box;color:inherit;font:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 8px}
 .dsg-commitRow:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.1))}
 .dsg-commitRow[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
 .dsg-commitSha{flex:none;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:11.5px;color:var(--dsw-alias-label-secondary,#666)}
 .dsg-subject{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsg-meta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#999);white-space:nowrap}
+/* Ref chips: the branch HEAD points at, a tag, a remote, and the pull request a
+   merge names. All three are OUTLINED rather than filled, because a filled chip
+   has to pick a foreground colour that survives both schemes. */
+.dsg-chip{flex:none;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:1;padding:3px 5px;border:.5px solid transparent;border-radius:4px;background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));color:var(--dsw-alias-label-secondary,#666)}
+.dsg-chips{flex:none;display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:60%;overflow:hidden}
+.dsg-chip[data-kind="head"]{background:0 0;border:.5px solid var(--dsw-alias-brand-primary,#4f8cff);color:var(--dsw-alias-brand-primary,#4f8cff)}
+.dsg-chip[data-kind="tag"]{background:0 0;border:.5px solid var(--dsw-alias-state-success-primary,#2f9e44);color:var(--dsw-alias-state-success-primary,#2f9e44)}
+.dsg-chip[data-kind="pr"]{background:0 0;border:.5px solid var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff);font-variant-numeric:tabular-nums}
+.dsg-chip[data-kind="more"]{font-variant-numeric:tabular-nums}
 .dsg-detail{margin:2px 8px 10px 8px;padding:8px 10px;border-left:2px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.06));border-radius:0 8px 8px 0}
 .dsg-detailHead{font-size:11.5px;color:var(--dsw-alias-label-secondary,#666);margin-bottom:6px;word-break:break-word}
 .dsg-detailBody{white-space:pre-wrap;font-size:12px;color:var(--dsw-alias-label-primary,#1f1f1f);margin:0 0 6px 0}
@@ -192,6 +248,187 @@ window.__ModuleLoader__.load({
       if (worktree) parts.push('worktree: ' + worktree)
       if (entry.origPath) parts.push('from ' + entry.origPath)
       return parts.join(', ') || 'changed'
+    }
+
+    // ---------------------------------------------------------------------
+    // The commit graph - rail metrics and the lane layout
+    // ---------------------------------------------------------------------
+    /** The horizontal distance between two lanes at this width. */
+    function laneStep(laneCount) {
+      return laneCount > LANE_TIGHT_FROM ? LANE_STEP_TIGHT : LANE_STEP
+    }
+
+    /** The left edge of one lane's line inside the rail. */
+    function laneX(lane, laneCount) {
+      return RAIL_PAD + lane * laneStep(laneCount)
+    }
+
+    /** The rail's width: the last lane plus one padding on each side. */
+    function railWidth(laneCount) {
+      return laneX(Math.max(laneCount, 1) - 1, laneCount) + RAIL_PAD
+    }
+
+    /** A lane's colour (the palette repeats past LANE_COLOURS lanes). */
+    function laneColour(lane) {
+      return 'var(--dsg-lane-' + (lane % LANE_COLOURS) + ')'
+    }
+
+    /**
+     * Lay a page of commits out on the rail.
+     *
+     * A `git log` is newest first and always lists a parent after its child, so
+     * one forward pass is enough: a lane is a column carrying the id of the commit
+     * it is waiting for, a commit takes the lane already waiting for it (or a free
+     * one), and its first parent inherits that lane while every further parent -
+     * a merge - starts or joins another. Doing this in the log's own order is what
+     * makes the picture right without reading the whole repository.
+     *
+     * Pure on purpose (no React, no DOM), so the checks can drive it directly.
+     *
+     * @param commits - the history rows, each `{ sha, parents?, ... }`.
+     * @returns `{ rows, laneCount }`: one row per commit, carrying the lane it
+     *   sits in, which lanes are live at its top (`entering`) and its bottom
+     *   (`leaving`) edge, which lanes join it from above (`collapsed`), and the
+     *   edges to its parents (`edges`), plus how many columns the widest row needs.
+     */
+    function graphLayout(commits) {
+      const list = Array.isArray(commits) ? commits : []
+      const known = new Set()
+      for (const commit of list) if (commit && typeof commit.sha === 'string') known.add(commit.sha)
+      /** A column carrying the id of the commit it is waiting for, or null. */
+      const lanes = []
+      const rows = []
+      let laneCount = 1
+      // A column freed in THIS row is not reused in it: a line that curves into
+      // the node and a branch that leaves it would otherwise share one column and
+      // draw over each other.
+      const freeLane = (sha, skip) => {
+        for (let i = 0; i < lanes.length; i++) {
+          if (lanes[i] === null && !(skip && skip.has(i))) {
+            lanes[i] = sha
+            return i
+          }
+        }
+        lanes.push(sha)
+        return lanes.length - 1
+      }
+      for (const commit of list) {
+        const sha = commit && typeof commit.sha === 'string' ? commit.sha : ''
+        // A parent outside this page (the log's own limit, or a workspace-scoped
+        // log) is not drawn: the lane simply ends, which is the honest picture of
+        // a history that continues past what was read.
+        const parents = (commit && Array.isArray(commit.parents) ? commit.parents : []).filter(
+          (parent) => typeof parent === 'string' && known.has(parent),
+        )
+        let lane = lanes.indexOf(sha)
+        if (lane === -1) lane = freeLane(sha, null)
+        const entering = lanes.slice()
+        const collapsed = []
+        for (let i = 0; i < lanes.length; i++) {
+          if (i !== lane && lanes[i] === sha) {
+            collapsed.push(i)
+            lanes[i] = null
+          }
+        }
+        const freed = new Set(collapsed)
+        const edges = []
+        if (parents.length === 0) {
+          lanes[lane] = null
+        } else {
+          lanes[lane] = parents[0]
+          edges.push({ lane, kind: 'first' })
+          for (let i = 1; i < parents.length; i++) {
+            const parent = parents[i]
+            const existing = lanes.indexOf(parent)
+            const target = existing === -1 ? freeLane(parent, freed) : existing
+            edges.push({ lane: target, kind: 'merge' })
+          }
+        }
+        const leaving = lanes.slice()
+        let columns = lane + 1
+        for (let i = 0; i < entering.length; i++) if (entering[i] !== null && i + 1 > columns) columns = i + 1
+        for (let i = 0; i < leaving.length; i++) if (leaving[i] !== null && i + 1 > columns) columns = i + 1
+        if (columns > laneCount) laneCount = columns
+        rows.push({ sha, lane, entering, leaving, collapsed, edges })
+      }
+      return { rows, laneCount }
+    }
+
+    /**
+     * The parents of a history answer, for a Node half OLDER than this bundle.
+     *
+     * `parents` arrived with the rail, so a host that has not been restarted since
+     * answers without it - and drawing every commit as a root would show a rail of
+     * disconnected stubs where the reader expects a line. The list's own order then
+     * stands in (each commit's parent is the next one down): exactly right for the
+     * linear log such a host implies, and all it can tell us. A host that carries
+     * the field anywhere is never second-guessed, an empty `parents` array included.
+     *
+     * Pure, so the checks can drive it.
+     */
+    function withParents(commits) {
+      const list = Array.isArray(commits) ? commits : []
+      if (list.some((commit) => commit && Array.isArray(commit.parents))) return list
+      return list.map((commit, index) => ({
+        ...commit,
+        parents: index + 1 < list.length ? [list[index + 1].sha] : [],
+      }))
+    }
+
+    // ---------------------------------------------------------------------
+    // Pull requests
+    //
+    // A repository does not tell this tab about its pull requests, and the plugin
+    // has no network - so it names the ones the repository itself already carries:
+    // a merge commit whose subject is GitHub's "Merge pull request #12 from ...",
+    // a squashed commit whose subject ends in "(#12)", and a `refs/pull/12/*` ref,
+    // which is what a repository that fetched its pull requests has on disk.
+    // ---------------------------------------------------------------------
+    const PR_IN_REF = /(?:^|\/)pull\/(\d+)(?:\/|$)/
+    const PR_IN_SUBJECT = [/^Merge pull request #(\d+)/i, /\(#(\d+)\)\s*$/]
+
+    /**
+     * The pull request one commit names, if any.
+     * @returns `{ number, source }` or null; `source` is the ref name or 'subject'.
+     */
+    function pullRequestOf(commit) {
+      const refs = commit && Array.isArray(commit.refs) ? commit.refs : []
+      for (const ref of refs) {
+        const match = PR_IN_REF.exec(String(ref))
+        if (match) return { number: match[1], source: String(ref) }
+      }
+      const subject = commit && typeof commit.subject === 'string' ? commit.subject : ''
+      for (const pattern of PR_IN_SUBJECT) {
+        const match = pattern.exec(subject)
+        if (match) return { number: match[1], source: 'subject' }
+      }
+      return null
+    }
+
+    /**
+     * The ref chips one row shows: the branch HEAD points at first, then tags and
+     * every other ref. A pull-request ref is left to the PR chip, and anything
+     * past CHIP_LIMIT is collapsed into a `+N` chip.
+     */
+    function refChips(commit) {
+      const refs = commit && Array.isArray(commit.refs) ? commit.refs : []
+      const chips = []
+      for (const raw of refs) {
+        const ref = String(raw)
+        if (PR_IN_REF.test(ref)) continue
+        if (ref.indexOf('HEAD -> ') === 0) {
+          const branch = ref.slice('HEAD -> '.length)
+          chips.unshift({ kind: 'head', text: branch, title: 'HEAD is on ' + branch })
+        } else if (ref.indexOf('tag: ') === 0) {
+          chips.push({ kind: 'tag', text: ref.slice('tag: '.length), title: 'tag ' + ref.slice('tag: '.length) })
+        } else {
+          chips.push({ kind: 'branch', text: ref, title: 'ref ' + ref })
+        }
+      }
+      if (chips.length <= CHIP_LIMIT) return chips
+      const shown = chips.slice(0, CHIP_LIMIT)
+      shown.push({ kind: 'more', text: '+' + String(chips.length - CHIP_LIMIT), title: chips.slice(CHIP_LIMIT).map((chip) => chip.text).join(', ') })
+      return shown
     }
 
     // ---------------------------------------------------------------------
@@ -279,6 +516,168 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
+    // The rail (the graph itself)
+    // ---------------------------------------------------------------------
+    /** One absolutely positioned piece of the rail. */
+    function railLine(key, style) {
+      return h('span', { key, className: 'dsg-lane', style })
+    }
+
+    /**
+     * Where a branch leaves the node or rejoins it: a rounded corner between the
+     * lane's vertical and the node's own line, drawn as a bordered box (the border
+     * IS the line) plus the straight part the corner does not cover.
+     *
+     * @param fromX - the branch lane's x.
+     * @param toX - the node's x.
+     * @param direction - 'up' for a lane joining the node from above (a collapse),
+     *   'down' for a lane starting at the node (a merge's extra parent).
+     */
+    function elbow(key, fromX, toX, colour, direction) {
+      const delta = fromX - toX
+      const radius = Math.min(6, Math.abs(delta))
+      const right = delta > 0
+      // `box-sizing:border-box`: the box's right edge must land ON the lane's
+      // right edge when the lane is to the right, so the border covers the line.
+      const box = {
+        left: Math.min(fromX, toX),
+        width: Math.abs(delta) + (right ? LINE_W : 0),
+        height: radius,
+      }
+      if (direction === 'up') {
+        box.top = NODE_Y - radius
+        box.borderBottom = LINE_W + 'px solid ' + colour
+        if (right) {
+          box.borderRight = LINE_W + 'px solid ' + colour
+          box.borderBottomRightRadius = radius
+        } else {
+          box.borderLeft = LINE_W + 'px solid ' + colour
+          box.borderBottomLeftRadius = radius
+        }
+        return [
+          railLine(key + 'v', { left: fromX, top: 0, height: Math.max(0, NODE_Y - radius), background: colour }),
+          h('span', { key: key + 'e', className: 'dsg-elbow', style: box }),
+        ]
+      }
+      box.top = NODE_Y
+      box.borderTop = LINE_W + 'px solid ' + colour
+      if (right) {
+        box.borderRight = LINE_W + 'px solid ' + colour
+        box.borderTopRightRadius = radius
+      } else {
+        box.borderLeft = LINE_W + 'px solid ' + colour
+        box.borderTopLeftRadius = radius
+      }
+      return [
+        h('span', { key: key + 'e', className: 'dsg-elbow', style: box }),
+        railLine(key + 'v', { left: fromX, top: NODE_Y + radius, bottom: 0, background: colour }),
+      ]
+    }
+
+    /**
+     * The rail beside one row: the rectangle, every lane crossing it, the node,
+     * and the curves at the node. The node IS the commit, so a merge wears a
+     * larger hollow ring - the shape a branch joining in makes - and the commit
+     * HEAD points at wears a halo.
+     */
+    function GraphRail(props) {
+      const row = props.row
+      const count = props.laneCount
+      const pieces = []
+      const columns = Math.max(row.entering.length, row.leaving.length, row.lane + 1)
+      const live = (list, index) => index < list.length && list[index] !== null && list[index] !== undefined
+      for (let column = 0; column < columns; column++) {
+        const colour = laneColour(column)
+        const x = laneX(column, count)
+        const top = live(row.entering, column)
+        const bottom = live(row.leaving, column)
+        if (column === row.lane) {
+          // The commit's own column: the line runs up to the newer commit above
+          // and down to its first parent (or stops here, at a root).
+          if (top && bottom) pieces.push(railLine('n' + column, { left: x, top: 0, bottom: 0, background: colour }))
+          else if (top) pieces.push(railLine('n' + column, { left: x, top: 0, height: NODE_Y, background: colour }))
+          else if (bottom) pieces.push(railLine('n' + column, { left: x, top: NODE_Y, bottom: 0, background: colour }))
+          continue
+        }
+        if (row.collapsed.indexOf(column) >= 0) {
+          pieces.push(...elbow('c' + column, x, laneX(row.lane, count), colour, 'up'))
+          continue
+        }
+        if (bottom && !top) {
+          pieces.push(...elbow('b' + column, x, laneX(row.lane, count), colour, 'down'))
+          continue
+        }
+        // Anything with NEITHER end live is not drawn at all: a lane that ended in
+        // an older row must not leave a line hanging under the commits below it.
+        if (top && bottom) pieces.push(railLine('p' + column, { left: x, top: 0, bottom: 0, background: colour }))
+        else if (top) pieces.push(railLine('p' + column, { left: x, top: 0, height: NODE_Y, background: colour }))
+        else if (bottom) pieces.push(railLine('p' + column, { left: x, top: NODE_Y, bottom: 0, background: colour }))
+      }
+      const cx = laneX(row.lane, count) + LINE_W / 2
+      const merge = row.edges.length > 1
+      const size = merge ? 9 : 7
+      const colour = laneColour(row.lane)
+      const dot = {
+        left: cx - size / 2,
+        top: NODE_Y - size / 2,
+        width: size,
+        height: size,
+        border: LINE_W + 'px solid ' + colour,
+        // A merge is hollow (a ring), and the ring's fill is the panel's own
+        // background so the lane behind it is hidden, not seen through.
+        background: merge ? 'var(--dsw-alias-bg-base,#fff)' : colour,
+      }
+      if (props.head) dot.boxShadow = '0 0 0 1.5px ' + colour
+      pieces.push(
+        h('span', {
+          key: 'dot',
+          className: 'dsg-node',
+          'data-gittree-node': row.sha,
+          'data-gittree-node-merge': merge ? '1' : '0',
+          'data-gittree-node-head': props.head ? '1' : '0',
+          title: props.title,
+          style: dot,
+        }),
+      )
+      return h('span', { className: 'dsg-rail', 'data-gittree-rail': row.sha, style: { width: props.width } }, pieces)
+    }
+
+    /**
+     * The pull-request chip and the ref chips, in ONE capped strip: the pull
+     * request comes first, because a narrow pane clips the strip's tail and the
+     * pull request is the fact worth keeping.
+     */
+    function CommitChips(props) {
+      const chips = props.chips
+      const pull = props.pull
+      if (chips.length === 0 && pull === null) return null
+      return h(
+        'span',
+        { className: 'dsg-chips' },
+        pull === null
+          ? null
+          : h(
+              'span',
+              {
+                key: 'pr',
+                className: 'dsg-chip',
+                'data-kind': 'pr',
+                'data-gittree-pr': pull.number,
+                title: pull.source === 'subject' ? 'Pull request #' + pull.number + ' (named by the commit subject)' : 'Pull request #' + pull.number + ' (' + pull.source + ')',
+              },
+              '#' + pull.number,
+            ),
+        chips.map((chip) =>
+          h(
+            'span',
+            { key: chip.kind + ':' + chip.text, className: 'dsg-chip', 'data-kind': chip.kind, 'data-gittree-ref': chip.text, title: chip.title },
+            chip.text,
+          ),
+        ),
+      )
+    }
+
+    // ---------------------------------------------------------------------
     // The history
     // ---------------------------------------------------------------------
     /** One changed file of a commit: the directory chip, the name and the badge. */
@@ -347,6 +746,9 @@ window.__ModuleLoader__.load({
     /** The commit log; picking a row opens that commit's changed files in place. */
     function HistoryView(props) {
       const history = props.history
+      // The lane layout is a pure function of the page of commits, so it is
+      // computed once per answer and reused by every row.
+      const graph = useMemo(() => graphLayout(withParents(history.commits)), [history.commits])
       if (history.phase === 'error') {
         return h(StateBox, { state: 'history-error', error: history.error, title: stateTitle(history.error), hint: history.error && history.error.message })
       }
@@ -358,31 +760,49 @@ window.__ModuleLoader__.load({
           hint: loading ? '' : history.empty ? 'Nothing has been committed in this workspace.' : 'No commit touches this workspace folder.',
         })
       }
-      const rows = []
-      for (const commit of history.commits) {
+      const width = railWidth(graph.laneCount)
+      const rows = history.commits.map((commit, index) => {
         const open = props.selected === commit.sha
-        rows.push(
+        const rail = graph.rows[index]
+        const pull = pullRequestOf(commit)
+        const merge = Array.isArray(commit.parents) && commit.parents.length > 1
+        return h(
+          'li',
+          {
+            key: commit.sha,
+            className: 'dsg-item',
+            'data-gittree-lane': rail ? String(rail.lane) : '0',
+            'data-gittree-branches': rail ? String(rail.edges.length) : '1',
+            style: { paddingLeft: width },
+          },
+          rail
+            ? h(GraphRail, {
+                row: rail,
+                laneCount: graph.laneCount,
+                width,
+                head: (Array.isArray(commit.refs) ? commit.refs : []).some((ref) => String(ref).indexOf('HEAD -> ') === 0),
+                title: merge ? 'merge commit ' + commit.short : 'commit ' + commit.short,
+              })
+            : null,
           h(
-            'li',
-            { key: commit.sha, className: 'dsg-item' },
-            h(
-              'button',
-              {
-                type: 'button',
-                className: 'dsg-commitRow',
-                'aria-expanded': open ? 'true' : 'false',
-                'data-gittree-commit': commit.sha,
-                title: commit.sha + ' \u2014 ' + commit.subject,
-                onClick: () => props.onPick(commit),
-              },
-              h('span', { className: 'dsg-commitSha' }, commit.short),
-              h('span', { className: 'dsg-subject' }, commit.subject),
-              h('span', { className: 'dsg-meta' }, commit.author + ' \u00b7 ' + commit.date),
-            ),
-            open ? h(CommitDetail, { detail: props.detail, onOpen: props.onOpen }) : null,
+            'button',
+            {
+              type: 'button',
+              className: 'dsg-commitRow',
+              'aria-expanded': open ? 'true' : 'false',
+              'data-gittree-commit': commit.sha,
+              'data-gittree-merge': merge ? '1' : '0',
+              title: commit.sha + ' \u2014 ' + commit.subject,
+              onClick: () => props.onPick(commit),
+            },
+            h('span', { className: 'dsg-commitSha' }, commit.short),
+            h(CommitChips, { chips: refChips(commit), pull }),
+            h('span', { className: 'dsg-subject' }, commit.subject),
+            h('span', { className: 'dsg-meta' }, commit.author + ' \u00b7 ' + commit.date),
           ),
+          open ? h(CommitDetail, { detail: props.detail, onOpen: props.onOpen }) : null,
         )
-      }
+      })
       return h('div', { className: 'dsg-body', 'data-gittree-state': 'history' }, h('ul', { className: 'dsg-list' }, rows))
     }
 
@@ -630,6 +1050,25 @@ window.__ModuleLoader__.load({
     exports.name = 'dsh-gittree'
     exports.inject = inject
     exports.apply = apply
+    // The pure half, for the tracked check: the lane layout and the pull-request
+    // reading are arithmetic over the history route's answer, and a browser-only
+    // bundle has no other way to have them verified than to hand them over.
+    exports.__internals = {
+      graphLayout,
+      withParents,
+      pullRequestOf,
+      refChips,
+      laneX,
+      railWidth,
+      laneColour,
+      HistoryView,
+      ROW_HEIGHT,
+      NODE_Y,
+      LANE_STEP,
+      LINE_W,
+      RAIL_PAD,
+      CHIP_LIMIT,
+    }
     return module.exports
   },
 })

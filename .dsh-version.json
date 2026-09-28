@@ -63,12 +63,12 @@
       ]
     },
     "dsh-gittree": {
-      "version": "0.1.0-alpha.4",
+      "version": "0.1.0-alpha.5",
       "rows": [
         "gittree"
       ],
       "rowOverrides": [],
-      "role": "the workspace's COMMIT HISTORY as a page tab type, labelled History in the capsule and the chip while the package, row and address keep the gittree name (guide order 30, after Files and Editor), with the branch and current commit in its file bar; its Node half owns read-only /api/dsh-gittree routes, and the tab reads state with brief=1 so no file list is ever built - no fork, no core row disabled, nothing for sync-vendored.ps1 to track. Its toolbar is the tab's own TOP BAR (alpha.4): 38px with box-sizing:border-box, the same box the shipped Files tab and the document preview use, so the pane's first hairline lands on the y=76 line the 38px docking strip, the conversation header (min-height:76px) and the left column's branding band all end on - it was 42.5px (8px padding around a 26px control) and sat ~4.5px low",
+      "role": "the workspace's COMMIT HISTORY as a page tab type, labelled History in the capsule and the chip while the package, row and address keep the gittree name (guide order 30, after Files and Editor), with the branch and current commit in its file bar; its Node half owns read-only /api/dsh-gittree routes, and the tab reads state with brief=1 so no file list is ever built - no fork, no core row disabled, nothing for sync-vendored.ps1 to track. Its toolbar is the tab's own TOP BAR (alpha.4): 38px with box-sizing:border-box, the same box the shipped Files tab and the document preview use, so the pane's first hairline lands on the y=76 line the 38px docking strip, the conversation header (min-height:76px) and the left column's branding band all end on - it was 42.5px (8px padding around a 26px control) and sat ~4.5px low. ALPHA.5 draws the GRAPH: every history row sits beside a rail - a vertical rectangle on the left of the list carrying one column per branch lane, a node per commit, the line running up to the newer commit above it, and the curves where a branch leaves a merge or rejoins the line - laid out by one forward pass over `git log` in its own order (children before parents), from the parents the history route now carries as `%P` plus the ref decorations as `%D`. A merge wears a hollow node and a `#N` pull-request chip when the commit names one (GitHub's \"Merge pull request #12 from ...\", a \"(#12)\" squash subject, or a `refs/pull/12/...` ref a repository fetched), and the branch HEAD points at / a tag / a remote wears a ref chip. Nothing is measured: a row is exactly 28px and every coordinate comes from the lane index, so the rail runs straight through an expanded commit's detail with no ResizeObserver",
       "uses": [
         "dsh-rightbar",
         "git on PATH"
@@ -162,7 +162,7 @@
       ]
     },
     "dsh-terminal": {
-      "version": "0.1.0-alpha.10",
+      "version": "0.1.0-alpha.11",
       "rows": [
         "terminal"
       ],

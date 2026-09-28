@@ -8,7 +8,11 @@
  * file routes:
  *
  *   GET /api/dsh-gittree/state?session=<id>            working tree + status
- *   GET /api/dsh-gittree/history?session=<id>&limit=N  the commit log
+ *   GET /api/dsh-gittree/history?session=<id>&limit=N  the commit log - with the
+ *                                                      parents (`%P`) and the ref
+ *                                                      decorations (`%D`) the
+ *                                                      tab's rail draws its graph
+ *                                                      from
  *   GET /api/dsh-gittree/commit?session=<id>&sha=<id>  one commit + its files
  *
  * **Read-only, on purpose.** The only git subcommands this file can reach are
@@ -441,9 +445,47 @@ async function handleState(ctx, request) {
   }
 }
 
-/** The `%x1f`-joined field lists: one per log row, one for a commit header. */
-const LOG_FIELDS = '%H' + FIELD + '%h' + FIELD + '%an' + FIELD + '%ad' + FIELD + '%s'
+/**
+ * The `%x1f`-joined field lists: one per log row, one for a commit header.
+ *
+ * The log carries `%P` (the parents, which is what the tab's rail draws the
+ * graph from) and `%D` (the ref decorations: the branch HEAD points at, tags,
+ * remote branches, and `refs/pull/<n>/head` when a repository has fetched a pull
+ * request). Both are EMPTY for a root commit and for a commit no ref names, so
+ * the two trailing separators are always there and the field count never varies.
+ */
+const LOG_FIELDS = '%H' + FIELD + '%h' + FIELD + '%an' + FIELD + '%ad' + FIELD + '%s' + FIELD + '%P' + FIELD + '%D'
 const COMMIT_FIELDS = '%H' + FIELD + '%h' + FIELD + '%an' + FIELD + '%ae' + FIELD + '%ad' + FIELD + '%s' + FIELD + '%b'
+
+/**
+ * Parse one `git log` row's `%P` field: the parent ids, space separated (empty
+ * for a root commit).
+ * @returns {string[]} the parent ids, in git's own order (first parent first).
+ */
+function parseParents(value) {
+  const text = String(value || '').trim()
+  return text === '' ? [] : text.split(/\s+/)
+}
+
+/**
+ * Parse one `git log` row's `%D` field: the ref decorations, comma separated.
+ *
+ * `%d` prints `HEAD -> main, origin/main, tag: v1.0`, and a pull-request ref is
+ * not shortened (`refs/pull/12/head`), which is exactly what lets the tab show a
+ * pull request as its own chip. The separator is git's own, so a ref whose NAME
+ * contains a comma - legal, and vanishingly rare - comes back as two refs: one
+ * cosmetic chip rather than a wrong commit.
+ *
+ * @returns {string[]} the ref names, in git's own order.
+ */
+function parseRefs(value) {
+  const text = String(value || '').trim()
+  if (text === '') return []
+  return text
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part !== '')
+}
 
 /** GET /api/dsh-gittree/history — the commit log, newest first. */
 async function handleHistory(ctx, request) {
@@ -453,7 +495,7 @@ async function handleHistory(ctx, request) {
     const requested = Number.parseInt(url.searchParams.get('limit') || '', 10)
     const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), MAX_HISTORY) : DEFAULT_HISTORY
     const repo = await repoInfo(ctx, sessionId)
-    const args = ['log', '-n', String(limit), '--date=short', '--pretty=format:' + LOG_FIELDS + RECORD]
+    const args = ['log', '-n', String(limit), '--date=short', '--decorate=short', '--pretty=format:' + LOG_FIELDS + RECORD]
     if (repo.scope !== '') args.push('--', repo.scope)
     let text = ''
     try {
@@ -472,7 +514,17 @@ async function handleHistory(ctx, request) {
       if (trimmed === '') continue
       const fields = trimmed.split(FIELD)
       if (fields.length < 5) continue
-      commits.push({ sha: fields[0], short: fields[1], author: fields[2], date: fields[3], subject: fields[4] })
+      const parents = parseParents(fields[5])
+      commits.push({
+        sha: fields[0],
+        short: fields[1],
+        author: fields[2],
+        date: fields[3],
+        subject: fields[4],
+        parents,
+        refs: parseRefs(fields[6]),
+        merge: parents.length > 1,
+      })
     }
     return json(200, { ok: true, commits })
   } catch (err) {

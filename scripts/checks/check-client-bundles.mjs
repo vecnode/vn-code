@@ -1347,11 +1347,15 @@ const GitTreeBody = gitSeats['sidebar.right.pane.tab#dsh-gittree'].component
 const gitTab = { id: 'tab9', contentId: 'sidebar://gittree', title: 'History', navigation: { revision: 0 } }
 const gitMarkup = renderToStaticMarkup(h(GitTreeBody, { useTabInfo: () => ({ tab: gitTab }), sessionId: 's1' }))
 check('gittree body renders', gitMarkup.includes('data-gittree-tab="tab9"') && gitMarkup.includes('data-gittree-state="loading"'))
+// Derived, never a literal: the pack-wide check at the end of this file compares
+// every bundle's constant with its own package.json, and a literal here would only
+// go stale on the next version bump.
+const gitTreeVersion = JSON.parse(readFileSync(path.join(repo, 'packages/dsh-gittree/package.json'), 'utf8')).version
 check(
   'gittree body is history-only',
   gitMarkup.includes('data-gittree-reload') &&
     gitMarkup.includes('data-gittree-address="sidebar://gittree"') &&
-    gitMarkup.includes('dsh-gittree 0.1.0-alpha.4'),
+    gitMarkup.includes('dsh-gittree ' + gitTreeVersion),
 )
 check(
   'gittree has no file-tree view',
@@ -1364,6 +1368,118 @@ check(
   renderToStaticMarkup(h(gitSeats['sidebar.right.pane.tab.title#dsh-gittree'].component, {})),
   '<span class="dsg-title">History</span>',
 )
+
+// ------------------------------------------------ dsh-gittree: the commit rail
+// alpha.5 draws the graph. Its arithmetic is the half a markup check cannot see,
+// so the bundle hands its pure half over as `__internals` and the layout is
+// driven directly - and the ONE coupling that can silently rot (the CSS row box
+// the rail's node height is derived from) is read back out of the stylesheet.
+const gitSource = readFileSync(path.join(repo, 'packages/dsh-gittree/lib/client.js'), 'utf8')
+const gitInternals = gitTree.exports.__internals
+check(
+  'gittree rail styles are injected',
+  gitCss.includes('.dsg-rail{position:absolute;left:0;top:0;bottom:0;') &&
+    gitCss.includes('.dsg-lane{position:absolute;width:1.5px;') &&
+    gitCss.includes('.dsg-elbow{position:absolute;box-sizing:border-box}') &&
+    gitCss.includes('.dsg-node{position:absolute;'),
+)
+const gitRowHeight = /\.dsg-commitRow\{[^}]*?height:(\d+)px/.exec(gitCss)
+check('gittree row box is the rail height', gitRowHeight === null ? null : Number(gitRowHeight[1]), gitInternals.ROW_HEIGHT)
+check('gittree node sits on the row centre', gitInternals.NODE_Y * 2, gitInternals.ROW_HEIGHT)
+check(
+  'gittree lane geometry',
+  [gitInternals.laneX(0, 2), gitInternals.laneX(1, 2), gitInternals.railWidth(2), gitInternals.railWidth(6), gitInternals.laneColour(5)].join(','),
+  [9, 21, 30, 63, 'var(--dsg-lane-0)'].join(','),
+)
+check(
+  'gittree rail measures nothing',
+  gitSource.includes('new ResizeObserver(') === false && gitSource.includes('getBoundingClientRect(') === false,
+)
+// A straight line: one lane, every commit on it, and nothing else to draw.
+const gitChain = [
+  { sha: 'a'.repeat(40), subject: 'third', parents: ['b'.repeat(40)] },
+  { sha: 'b'.repeat(40), subject: 'second', parents: ['c'.repeat(40)] },
+  { sha: 'c'.repeat(40), subject: 'first', parents: [] },
+]
+const gitChainGraph = gitInternals.graphLayout(gitChain)
+check('gittree: a linear history is one lane', [gitChainGraph.laneCount, gitChainGraph.rows.map((row) => row.lane).join('')].join('/'), '1/000')
+check(
+  'gittree: the line runs through every row',
+  gitChainGraph.rows.map((row) => (row.entering[0] === null ? '.' : 'i') + (row.leaving[0] === null ? '.' : 'o')).join(' '),
+  'io io i.',
+)
+// A MERGE: the merge commit opens a second lane, the branch's own commit keeps it,
+// and the lane collapses back into the node of the commit both parents descend
+// from. That collapse is the curve the rail draws beside that row.
+const gitMerged = [
+  { sha: 'm'.repeat(40), subject: 'Merge pull request #12 from ana/branch', parents: ['a'.repeat(40), 'f'.repeat(40)], refs: ['HEAD -> main'] },
+  { sha: 'a'.repeat(40), subject: 'third', parents: ['b'.repeat(40)], refs: [] },
+  { sha: 'f'.repeat(40), subject: 'Add the thing (#12)', parents: ['b'.repeat(40)], refs: ['feature'] },
+  { sha: 'b'.repeat(40), subject: 'first', parents: [], refs: [] },
+]
+const gitMergeGraph = gitInternals.graphLayout(gitMerged)
+check('gittree: a merge opens a second lane', [gitMergeGraph.laneCount, gitMergeGraph.rows.map((row) => row.lane).join('')].join('/'), '2/0010')
+check(
+  'gittree: the merge edges to both parents',
+  gitMergeGraph.rows[0].edges.map((edge) => edge.lane + ':' + edge.kind).join(','),
+  '0:first,1:merge',
+)
+check('gittree: the branch lane collapses at the shared parent', gitMergeGraph.rows[3].collapsed.join(','), '1')
+// A parent the page does not carry (the log's own limit, or a workspace-scoped
+// log) ends the lane instead of inventing a commit for it.
+const gitScoped = gitInternals.graphLayout([
+  { sha: 'x'.repeat(40), subject: 'tip', parents: ['y'.repeat(40)] },
+  { sha: 'y'.repeat(40), subject: 'cut', parents: ['z'.repeat(40)] },
+])
+check('gittree: a parent outside the page ends the lane', gitScoped.rows[1].leaving[0], null)
+// A hard refresh against a Node half that has NOT been restarted answers without
+// `parents` at all (the field arrived with the rail). Drawing that as all-roots
+// would be a rail of disconnected stubs, so the list's own order stands in - and a
+// host that does carry the field is never second-guessed.
+check(
+  'gittree: an un-restarted host still draws a connected line',
+  JSON.stringify(gitInternals.withParents([{ sha: 'b' }, { sha: 'a' }]).map((commit) => commit.parents)),
+  '[["a"],[]]',
+)
+check(
+  'gittree: a host that carries the parents keeps them',
+  JSON.stringify(gitInternals.withParents([{ sha: 'b', parents: ['z'] }, { sha: 'a', parents: [] }]).map((commit) => commit.parents)),
+  '[["z"],[]]',
+)
+check('gittree: a pull request is read from a merge subject', JSON.stringify(gitInternals.pullRequestOf(gitMerged[0])), '{"number":"12","source":"subject"}')
+check('gittree: a pull request is read from a squash subject', JSON.stringify(gitInternals.pullRequestOf(gitMerged[2])), '{"number":"12","source":"subject"}')
+check('gittree: a pull request is read from a fetched ref', gitInternals.pullRequestOf({ subject: 'x', refs: ['refs/pull/31/head'] }).number, '31')
+check('gittree: an ordinary commit names no pull request', gitInternals.pullRequestOf(gitMerged[1]), null)
+check(
+  'gittree: ref chips put HEAD first and collapse the rest',
+  JSON.stringify(gitInternals.refChips({ refs: ['HEAD -> main', 'origin/main', 'feature'] })),
+  JSON.stringify([
+    { kind: 'head', text: 'main', title: 'HEAD is on main' },
+    { kind: 'branch', text: 'origin/main', title: 'ref origin/main' },
+    { kind: 'more', text: '+1', title: 'feature' },
+  ]),
+)
+// ...and what a person actually sees: the rendered rows.
+const gitRailMarkup = renderToStaticMarkup(
+  h(gitInternals.HistoryView, {
+    history: { phase: 'ready', commits: gitMerged, error: null, empty: false },
+    selected: null,
+    detail: { phase: 'idle', data: null, error: null },
+    onPick() {},
+    onOpen() {},
+  }),
+)
+check('gittree: every row is drawn beside a rail', gitRailMarkup.split('data-gittree-rail=').length - 1, 4)
+check('gittree: the rail is as wide as its lanes', gitRailMarkup.includes('width:30px') && gitRailMarkup.includes('padding-left:30px'))
+check('gittree: the merge sits on the first lane and branches', gitRailMarkup.includes('data-gittree-lane="0" data-gittree-branches="2"'))
+check('gittree: the branch commit is drawn on the second lane', gitRailMarkup.includes('data-gittree-lane="1"'))
+check('gittree: a merge wears a hollow node', gitRailMarkup.includes('data-gittree-node-merge="1"') && gitRailMarkup.includes('background:var(--dsw-alias-bg-base,#fff)'))
+check('gittree: the node HEAD points at wears a halo', gitRailMarkup.includes('data-gittree-node-head="1"'))
+check('gittree: both curves are drawn', gitRailMarkup.split('dsg-elbow').length - 1, 2)
+check('gittree: the node sits on the lane at the row centre', gitRailMarkup.includes('left:21px') && gitRailMarkup.includes('top:10.5px'))
+check('gittree: the pull request wears its chip', gitRailMarkup.includes('data-gittree-pr="12"') && gitRailMarkup.includes('>#12<'))
+check('gittree: the branch HEAD points at wears a chip', gitRailMarkup.includes('data-kind="head"') && gitRailMarkup.includes('data-gittree-ref="main"'))
+check('gittree: a plain branch wears a chip', gitRailMarkup.includes('data-gittree-ref="feature"'))
 
 // -------------------------------------------------------------- dsh-terminal
 const terminal = loadBundle('packages/dsh-terminal/lib/client.js', {})

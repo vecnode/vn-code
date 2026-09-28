@@ -84,7 +84,12 @@ the details.
   (short id, subject, author, date), with the branch and the current commit kept in
   its file bar, read through the package’s own **read-only**
   `/api/dsh-gittree/*` routes (the tab uses their `brief=1` form, so it never builds
-  a file list). Picking a commit shows its message and the files it touched, and a
+  a file list). Every row sits beside a **rail** drawing the commit **graph** - one
+  column per branch lane, a node per commit, the line running up to the newer commit
+  above it, and the curves where a branch leaves a merge or rejoins it - laid out from
+  the `%P` parents and `%D` ref decorations the `history` route carries, with a `#N`
+  pull-request chip when a merge names one. Picking a commit shows its message and the
+  files it touched, and a
   file row opens the file through the ordinary `dsh-resource://file/...` address,
   which the editor or a shipped preview then claims. It replaces nothing and
   publishes no service, so it cannot disturb the bar’s tab-type chain.
@@ -497,6 +502,29 @@ the details.
   The draw string is what the tracked check pins, so a bundle still saying
   `VN Harness` fails the check loudly. Restart and hard-refresh; the version
   changed, so a plain install run (or `-Force`) re-adds the bundle.
+
+- **gittree alpha.5**: the History tab draws the **graph**. Every row now sits
+  beside a **rail** - a vertical rectangle on the left of the list carrying one
+  column per branch lane, a node per commit, the line running up to the newer
+  commit above it, and the curves where a branch leaves a merge or rejoins the
+  line. The layout comes from two fields the `history` route now carries per
+  commit - `%P` (the parents) and `%D` (the ref decorations) - laid out in ONE
+  forward pass over the log's own order, which is enough because git always lists
+  a child before its parent; a parent outside the page (the `limit`, or a
+  workspace-scoped log) ends its lane instead of inventing a commit for it. A
+  merge wears a larger hollow node, and a **pull request is named from the
+  repository itself** - GitHub's `Merge pull request #12 from …` subject, a
+  squashed `… (#12)` subject, or a `refs/pull/12/…` ref a repository has fetched -
+  as a `#12` chip; the branch `HEAD` points at, tags and remotes wear ref chips
+  (two at most, then `+N`). Nothing is measured: a row is exactly 28px, so the
+  node sits on the row's centre line and the rail runs straight through an
+  expanded commit's detail. The route answers more per commit, so **restart the
+  harness and hard-refresh** to pick up both halves; the version changed, so a
+  plain install run (or `-Force`) re-adds the bundle. A hard refresh against a
+  host that has NOT been restarted is tolerated on purpose: without the new
+  fields the client reads the list's own order as the parent chain, drawing one
+  continuous line (right for the linear log such a host implies) instead of a
+  rail of disconnected stubs, and gains the real graph on the next restart.
 
 - **layout parity (rightbar alpha.2, editor alpha.9, gittree alpha.4)**: three
   changes that are about the same 38px box. The pack's bar lifts the shipped

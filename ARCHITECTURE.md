@@ -486,6 +486,28 @@ the version marker. There is no working-tree listing: the Files tab already brow
 folder, and the tab reads the state route with `brief=1`, so no file list is ever built
 into an answer it would not show.
 
+**The rail** (alpha.5) draws the commit **graph** on the left of every row: a vertical
+rectangle carrying one column per branch lane, a node per commit, the line running up to
+the newer commit above it, and the curves where a branch leaves a merge or rejoins the
+line. Its input is the log's own `%P` (parents) and `%D` (ref decorations), which the
+`history` route carries per commit. One forward pass lays it out - and the log's own
+order is what makes that enough, since a child is always listed before its parent: a
+lane is a column holding the id of the commit it waits for, a commit takes the lane
+already waiting for it (or a free one), its first parent inherits that lane and every
+further parent opens or joins another. A parent the page does not carry - the log's
+`limit`, or a workspace-scoped log - ends the lane instead of inventing a commit for it.
+A merge wears a larger **hollow** ring and a `#N` chip when the commit names a pull
+request (GitHub's `Merge pull request #12 from …`, a squashed `… (#12)` subject, or a
+`refs/pull/12/…` ref), and the branch HEAD points at, a tag or a remote wears a ref
+chip. **Nothing is measured**: a row is exactly 28px (`ROW_HEIGHT`, the value the
+stylesheet's own `.dsg-commitRow` is checked against) so the node sits on the row's
+centre line and every coordinate is derived from the lane index - which is what keeps
+the rail straight through an expanded commit's detail, whose height the renderer never
+learns, and what keeps the bundle free of a `ResizeObserver` and of `getBoundingClientRect`
+altogether (both pinned by the tracked check). The pure half - `graphLayout`,
+`pullRequestOf`, `refChips` - is exported as `__internals` so it can be verified at all:
+a browser bundle otherwise has no seam a check can reach into.
+
 **How a row opens a file.** Every file row - a commit’s changed file - opens the same way a click in the Files tab does: the tab
 record's own `openResource` action with a `dsh-resource://file/session/<id>/<path>`
 address and **no options**, so the registry's ranking decides - the editor for
