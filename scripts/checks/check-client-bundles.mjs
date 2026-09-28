@@ -2275,6 +2275,82 @@ check(
     pdfSource.includes("VENDOR_FONTS = API_ROOT + '/vendor/standard-fonts.json'") &&
     pdfSource.includes("VENDOR_WASM = API_ROOT + '/vendor/wasm.json'"),
 )
+// alpha.5: the bytes of an open belong to pdf.js, and the WORKER is the
+// reader's to release. `getDocument` hands `data` to the worker as a transfer,
+// which detaches the array, so a cached Uint8Array poisons its address for every
+// LATER open of the same document:
+//
+//   Failed to execute 'postMessage' on 'Worker': An ArrayBuffer is detached and
+//   could not be cloned.
+//
+// - the reader's "This PDF could not be opened" on the SECOND visit (a Retry, a
+// password reopen, a reopened tab, two panes on one file) while the first visit
+// worked. So there is no byte cache in this bundle, every open reads the route
+// again (`loadDocumentBytes`), and the loading task - which owns the worker and
+// the parsed document - is destroyed when the tab unmounts or the open is
+// replaced. `check-pdf-node.mjs` proves the engine's side of the rule with the
+// real pdf.js.
+check(
+  'the reader caches no PDF bytes (pdf.js detaches what it is given)',
+  pdfSource.includes('documentCache') === false &&
+    pdfSource.includes('async function loadDocumentBytes(parsed)') &&
+    pdfSource.includes('const bytes = await loadDocumentBytes(parsed)') &&
+    pdfSource.includes('data: bytes,'),
+)
+check(
+  'the reader tears its loading task down',
+  pdfSource.includes('let task = null') &&
+    pdfSource.includes('task = engine.getDocument({') &&
+    pdfSource.includes('task.destroy()') &&
+    pdfSource.includes('// A tab that went away while the bytes were in flight must not'),
+)
+// alpha.6: the page column must fit the PANE, at any width, and a fit the reader
+// can re-apply. Two faults met here, and both were measured in Chrome against
+// this file's own dress:
+//
+//   1. an undrawn page reserved `minWidth: 45vw` / `minHeight: 60vh` - a
+//      VIEWPORT unit inside a reader that lives in one pane of a dock. The
+//      column is `min-width:min-content`, so a placeholder wider than the pane
+//      stretched the column past it, and every page was then centred in a box
+//      wider than the pane: at a 700px pane in a 1600px window the column came
+//      out 738px wide and the page sat 44px from the left edge with its right
+//      edge clipped (and 246px / -197px in a 2500px window) while the SCALE was
+//      exactly right - which is why neither fit button could repair it. The box
+//      now comes from the document's OWN page 1 at the current scale (`unit`),
+//      the same measurement the fit divides by, and the two small fallbacks are
+//      only for the frame before page 1's box is known.
+//   2. `applyFit` awaited `doc.getPage(1)` INSIDE the ResizeObserver callback,
+//      and a drag fires dozens of them: the scale that stayed was whichever
+//      promise resolved LAST, not the one measured last. It is synchronous now,
+//      and a fit mode that is clicked while it is ALREADY active re-applies
+//      instead of being a `setState` with the same value (React bails out, so
+//      the button did nothing exactly when it was the way out).
+check(
+  'an undrawn page reserves the pane-sized page box, never a viewport unit',
+  pdfSource.includes('const width = size ? Math.floor(size.width) : unit ? Math.floor(unit.width * scale) : null') &&
+    pdfSource.includes('const height = size ? Math.floor(size.height) : unit ? Math.floor(unit.height * scale) : null') &&
+    pdfSource.includes("minWidth: width ? undefined : '140px'") &&
+    // the literals, not the bare tokens: the fix's own comment names the unit it
+    // replaced, and that explanation is worth keeping.
+    pdfSource.includes("'45vw'") === false &&
+    pdfSource.includes("'60vh'") === false,
+)
+check(
+  'the reader measures its unit once and hands it to every page',
+  pdfSource.includes('const [unit, setUnit] = useState(null)') &&
+    pdfSource.includes('const base = first.getViewport({ scale: 1, rotation })') &&
+    pdfSource.includes('setUnit({ width: base.width, height: base.height })') &&
+    pdfSource.includes('const { doc, pageNumber, scale, rotation, registerBox, unit } = props'),
+)
+check(
+  'a fit is measured synchronously against the pane, and re-appliable',
+  pdfSource.includes('async (mode) => {') === false &&
+    pdfSource.includes('availableWidth / unit.width') &&
+    pdfSource.includes('const observer = new ResizeObserver(() => applyFit(fit))') &&
+    pdfSource.includes('if (fit === mode) applyFit(mode)') &&
+    pdfSource.includes("onClick: () => chooseFit('width')") &&
+    pdfSource.includes("onClick: () => chooseFit('page')"),
+)
 check('the reader uses pdf.js own TextLayer', pdfSource.includes('new engine.TextLayer({'))
 check('the reader is page-navigable by keyboard', pdfSource.includes("event.key === 'PageDown'") && pdfSource.includes('dpf-pageInput') && pdfSource.includes('goToPage'))
 check('a PDF is claimed as an extension type', pdfSource.includes("patterns: ['*.pdf']") && pdfSource.includes("priority: 'extension'"))

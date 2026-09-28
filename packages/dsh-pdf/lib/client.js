@@ -65,7 +65,7 @@ window.__ModuleLoader__.load({
     /** The address shape a page-address tab is opened with. */
     const PAGE_PREFIX = 'sidebar://'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.4'
+    const PLUGIN_VERSION = '0.1.0-alpha.6'
     /** Keep in sync with lib/index.js. */
     const API_ROOT = '/api/dsh-pdf'
     const FILE_ROUTE = API_ROOT + '/file'
@@ -283,8 +283,6 @@ window.__ModuleLoader__.load({
     let enginePromise = null
     /** Decoded asset maps, per kind, fetched only when pdf.js asks for one. */
     const assetMaps = new Map()
-    /** Documents already loaded, keyed by the address they were loaded from. */
-    const documentCache = new Map()
 
     /**
      * The vendored pdf.js, as a module imported from a blob URL.
@@ -368,35 +366,58 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /** The bytes of one PDF, fetched once per address and kept for the session. */
-    function loadDocumentData(parsed) {
-      const key = parsed.absolute ? 'abs:' + parsed.absolute : 'ws:' + parsed.sessionId + '/' + parsed.path
-      const cached = documentCache.get(key)
-      if (cached) return cached
-      const promise = (async () => {
-        const params = new URLSearchParams()
-        if (parsed.absolute) params.set('path', parsed.absolute)
-        else {
-          params.set('session', parsed.sessionId)
-          params.set('path', parsed.path)
+    /**
+     * The bytes of ONE open of one PDF, read from this plugin's own route.
+     *
+     * There is deliberately NO cache of these bytes anywhere in this bundle.
+     * pdf.js **transfers** the `data` buffer to its worker, which **detaches**
+     * it: the moment `getDocument` has the array, `byteLength` is 0 and its
+     * buffer reports `detached` (the extraction child measured exactly this -
+     * see the note in lib/extract.mjs). Handing a remembered array over a
+     * second time therefore dies inside the worker hand-off with
+     *
+     *   Failed to execute 'postMessage' on 'Worker': An ArrayBuffer is detached
+     *   and could not be cloned.
+     *
+     * which the reader showed as "This PDF could not be opened" - on the SECOND
+     * visit to a document, while the first visit worked. A Retry, a password
+     * reopen, a tab closed and reopened, a remount, or two panes on the same
+     * file all reach this path twice, so caching bytes here poisoned the
+     * address for the rest of the page's life. Every open now reads the route
+     * again and owns exactly ONE buffer: the one pdf.js is allowed to take.
+     */
+    async function loadDocumentBytes(parsed) {
+      const params = new URLSearchParams()
+      if (parsed.absolute) params.set('path', parsed.absolute)
+      else {
+        params.set('session', parsed.sessionId)
+        params.set('path', parsed.path)
+      }
+      const response = await fetch(FILE_ROUTE + '?' + params.toString(), { credentials: 'same-origin' })
+      if (!response.ok) {
+        let message = 'The PDF could not be read (HTTP ' + response.status + ').'
+        try {
+          const body = await response.json()
+          if (body && body.error && body.error.message) message = String(body.error.message)
+        } catch (err) {
+          /* the status is the message then */
         }
-        const response = await fetch(FILE_ROUTE + '?' + params.toString(), { credentials: 'same-origin' })
-        if (!response.ok) {
-          let message = 'The PDF could not be read (HTTP ' + response.status + ').'
-          try {
-            const body = await response.json()
-            if (body && body.error && body.error.message) message = String(body.error.message)
-          } catch (err) {
-            /* the status is the message then */
-          }
-          throw new Error(message)
-        }
-        const buffer = await response.arrayBuffer()
-        return { bytes: new Uint8Array(buffer), sha: response.headers.get('x-dsh-pdf-sha256') ?? '' }
-      })()
-      promise.catch(() => documentCache.delete(key))
-      documentCache.set(key, promise)
-      return promise
+        throw new Error(message)
+      }
+      const buffer = await response.arrayBuffer()
+      // A short read is worth its own sentence: it is what a file edited while
+      // it was being read looks like, and pdf.js would otherwise answer with
+      // "not a readable PDF" and blame the document. A CONTENT-ENCODED response
+      // is skipped on purpose - `content-length` then counts the bytes on the
+      // wire, not the ones the browser just decoded, and comparing them would
+      // refuse a document that is perfectly fine.
+      const declared = Number(response.headers.get('content-length') ?? '')
+      const encoded = response.headers.get('content-encoding')
+      if (!encoded && Number.isFinite(declared) && declared > 0 && buffer.byteLength !== declared) {
+        throw new Error('The PDF came back short (' + buffer.byteLength + ' of ' + declared + ' bytes). The file may have changed while it was being read.')
+      }
+      if (buffer.byteLength === 0) throw new Error('The PDF came back empty; there are no bytes to open.')
+      return new Uint8Array(buffer)
     }
 
     // ---------------------------------------------------------------------
@@ -550,7 +571,7 @@ window.__ModuleLoader__.load({
      * size when it scrolls away, so the scroll position never jumps.
      */
     function PageView(props) {
-      const { doc, pageNumber, scale, rotation, registerBox } = props
+      const { doc, pageNumber, scale, rotation, registerBox, unit } = props
       const boxRef = useRef(null)
       const canvasRef = useRef(null)
       const layerRef = useRef(null)
@@ -717,8 +738,18 @@ window.__ModuleLoader__.load({
         }
       }, [scan.text])
 
-      const width = size ? Math.floor(size.width) : null
-      const height = size ? Math.floor(size.height) : null
+      // A page that has not been drawn yet still reserves its own box. The size
+      // comes from the document's own page 1 at the current scale (`unit`), NOT
+      // from a viewport unit: `45vw` of the WINDOW is meaningless in a pane, and
+      // a placeholder wider than the pane stretched the page column itself
+      // (`.dpf-pages` is `min-width:min-content`), which centred every page in a
+      // box wider than the pane - the page slid right, its left margin became a
+      // gap and its right edge left the pane, while the SCALE was perfectly
+      // right, so neither fit button could repair it. The two fallbacks are only
+      // for the frame or two before page 1's box is known and are deliberately
+      // small enough that they can never widen the column past the pane.
+      const width = size ? Math.floor(size.width) : unit ? Math.floor(unit.width * scale) : null
+      const height = size ? Math.floor(size.height) : unit ? Math.floor(unit.height * scale) : null
       return h(
         'div',
         { className: 'dpf-pageWrap', ref: boxRef, 'data-pdf-page-wrap': String(pageNumber) },
@@ -732,8 +763,8 @@ window.__ModuleLoader__.load({
             style: {
               width: width ? width + 'px' : undefined,
               height: height ? height + 'px' : undefined,
-              minHeight: width ? undefined : '60vh',
-              minWidth: width ? undefined : '45vw',
+              minHeight: width ? undefined : '180px',
+              minWidth: width ? undefined : '140px',
               // pdf.js reads the scale from here, not from the document.
               '--total-scale-factor': String(scale),
             },
@@ -1027,31 +1058,78 @@ window.__ModuleLoader__.load({
         }
       }, [])
 
-      /** Recompute the scale for the current fit mode against the pane width. */
-      const applyFit = useCallback(
-        async (mode) => {
-          const pane = scrollRef.current
-          if (!pane || !doc) return
+      /**
+       * The document's own page box at scale 1 for the current rotation: page 1
+       * is this reader's unit. It is BOTH the fit's denominator and the size an
+       * undrawn page reserves, so one measurement serves both and the two can
+       * never disagree about how wide a page is.
+       */
+      const [unit, setUnit] = useState(null)
+      useEffect(() => {
+        if (!doc) {
+          setUnit(null)
+          return undefined
+        }
+        let cancelled = false
+        ;(async () => {
           try {
             const first = await doc.getPage(1)
+            if (cancelled) return
             const base = first.getViewport({ scale: 1, rotation })
-            const availableWidth = Math.max(120, pane.clientWidth - 34)
-            const availableHeight = Math.max(120, pane.clientHeight - 34)
-            const next = mode === 'page' ? Math.min(availableWidth / base.width, availableHeight / base.height) : availableWidth / base.width
-            setScale(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next.toFixed(3)))))
+            setUnit({ width: base.width, height: base.height })
           } catch (err) {
-            /* keep the current scale */
+            /* page 1 is unreadable: the scale keeps its last value */
           }
+        })()
+        return () => {
+          cancelled = true
+        }
+      }, [doc, rotation])
+
+      /**
+       * Recompute the scale for the current fit mode against the pane.
+       *
+       * Synchronous on purpose. The pane's width is a live measurement and the
+       * unit is already in hand, so a resize lands in the same frame as the
+       * observer's callback. The previous shape awaited `doc.getPage(1)` INSIDE
+       * the callback, and dragging a bar fires dozens of those: the scale that
+       * stayed was whichever promise resolved last rather than the one measured
+       * last, so a resized pane could keep a fit computed for a wider one - the
+       * "only sometimes" half of the same complaint.
+       */
+      const applyFit = useCallback(
+        (mode) => {
+          const pane = scrollRef.current
+          if (!pane || !unit) return
+          const availableWidth = Math.max(120, pane.clientWidth - 34)
+          const availableHeight = Math.max(120, pane.clientHeight - 34)
+          const next = mode === 'page' ? Math.min(availableWidth / unit.width, availableHeight / unit.height) : availableWidth / unit.width
+          setScale(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next.toFixed(3)))))
         },
-        [doc, rotation],
+        [unit],
       )
 
-      // The first layout fits the width; a rotation re-fits, because the page
-      // and the pane swapped proportions.
+      // Fit the page to the pane: on the first layout, after a rotation (the
+      // page and the pane swapped proportions, so `unit` is a new measurement),
+      // and whenever the mode changes.
       useEffect(() => {
         if (fit !== null) applyFit(fit)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [doc, rotation])
+      }, [applyFit, fit])
+
+      /**
+       * Pick a fit mode - and RE-APPLY it when it is already the active one.
+       * `setFit('width')` on a reader already fitting the width is the same
+       * value, so React never re-renders and the effect never runs: the button
+       * that looks like the way out of a wrong fit was a no-op exactly when it
+       * was needed.
+       */
+      const chooseFit = useCallback(
+        (mode) => {
+          if (fit === mode) applyFit(mode)
+          else setFit(mode)
+        },
+        [applyFit, fit],
+      )
 
       // Follow the pane when it is resized while a fit mode is active.
       useEffect(() => {
@@ -1134,10 +1212,10 @@ window.__ModuleLoader__.load({
             zoomStep(-1)
           } else if (event.key === '0') {
             event.preventDefault()
-            setFit('width')
+            chooseFit('width')
           }
         },
-        [goToPage, page, pageCount, zoomStep],
+        [chooseFit, goToPage, page, pageCount, zoomStep],
       )
 
       // Drag to pan, only while something can actually be panned.
@@ -1283,6 +1361,8 @@ window.__ModuleLoader__.load({
             pageNumber: number,
             scale,
             rotation,
+            // The unit every undrawn page reserves its box from.
+            unit,
             registerBox,
             searchRevision,
             onScan,
@@ -1319,8 +1399,8 @@ window.__ModuleLoader__.load({
           h(ToolButton, { icon: 'zoomOut', title: 'Zoom out (-)', onClick: () => zoomStep(-1), action: 'zoom-out' }),
           h('span', { className: 'dpf-zoom', 'data-pdf-zoom': String(Math.round(scale * 100)) }, Math.round(scale * 100) + '%'),
           h(ToolButton, { icon: 'zoomIn', title: 'Zoom in (+)', onClick: () => zoomStep(1), action: 'zoom-in' }),
-          h(ToolButton, { icon: 'fitWidth', title: 'Fit width', active: fit === 'width', onClick: () => setFit('width'), action: 'fit-width' }),
-          h(ToolButton, { icon: 'fitPage', title: 'Fit page', active: fit === 'page', onClick: () => setFit('page'), action: 'fit-page' }),
+          h(ToolButton, { icon: 'fitWidth', title: 'Fit width', active: fit === 'width', onClick: () => chooseFit('width'), action: 'fit-width' }),
+          h(ToolButton, { icon: 'fitPage', title: 'Fit page', active: fit === 'page', onClick: () => chooseFit('page'), action: 'fit-page' }),
           h(ToolButton, { icon: 'rotate', title: 'Rotate 90 degrees', onClick: () => setRotation((current) => (current + 90) % 360), action: 'rotate' }),
           h(
             'span',
@@ -1406,6 +1486,8 @@ window.__ModuleLoader__.load({
 
       useEffect(() => {
         let cancelled = false
+        /** The loading task this effect started; it owns the worker. */
+        let task = null
         const parsed = parsePdfAddress(address)
         if (!parsed) {
           setState({ phase: 'error', doc: null, pdfjs: null, error: 'This tab does not name a PDF.', password: false })
@@ -1420,9 +1502,15 @@ window.__ModuleLoader__.load({
         ;(async () => {
           try {
             const engine = await loadEngine()
-            const data = await loadDocumentData(parsed)
-            const task = engine.getDocument({
-              data: data.bytes,
+            // The bytes are read fresh for THIS open: pdf.js takes the buffer
+            // (and detaches it), so there is nothing here to hand over twice.
+            const bytes = await loadDocumentBytes(parsed)
+            // A tab that went away while the bytes were in flight must not
+            // start a task at all: nothing would be left to destroy it and the
+            // worker would outlive the document.
+            if (cancelled) return
+            task = engine.getDocument({
+              data: bytes,
               isEvalSupported: false,
               useSystemFonts: false,
               disableFontFace: true,
@@ -1465,6 +1553,17 @@ window.__ModuleLoader__.load({
         })()
         return () => {
           cancelled = true
+          // Release the worker and the parsed document this effect started.
+          // Nothing else owns them: a loading task left alone keeps its worker
+          // thread and transport for the life of the page, so without this every
+          // open - and every Retry - leaked one.
+          if (task && typeof task.destroy === 'function') {
+            try {
+              task.destroy()
+            } catch (err) {
+              /* already destroyed */
+            }
+          }
         }
       }, [address, sessionId, attempt])
 

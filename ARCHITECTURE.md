@@ -1800,6 +1800,27 @@ at boot and pdf.js is 1.8 MB, so `lib/client.js` stays small and fetches
 turning each into a blob URL - a module `import()` for the engine, a worker URL
 for the render worker, exactly the lazy shape `dsh-editor` uses for CodeMirror.
 
+**And it caches no bytes, because pdf.js consumes the buffer it is given
+(alpha.5).** The transfer that bit the host half in alpha.4 bites the reader the
+same way: `getDocument` sends `data` to the worker in the transfer list, so the
+array is **detached** the moment the call is made, and a second hand-off of the
+same array throws inside the worker message
+(`Failed to execute 'postMessage' on 'Worker': An ArrayBuffer is detached and
+could not be cloned.` - a `DataCloneError` in Node). The reader used to keep the
+fetched bytes per address for the life of the page, which meant the FIRST open
+worked and every later one showed "This PDF could not be opened": a Retry, a
+password reopen, a reopened tab, a remount, a second pane on the same document,
+or the **Open tab** link on a document already on screen. So the reader now reads
+`/file` again for every open (`loadDocumentBytes`), owns exactly one buffer per
+open, and **destroys the loading task** - which owns the worker and the parsed
+document - when the tab unmounts, when the address changes, or when Retry
+replaces it; a task left alone leaked a worker thread per open. A short or empty
+body is refused in its own words, because a file edited mid-read is otherwise
+reported by pdf.js as "not a readable PDF". Two checks hold it: `check-pdf-node.mjs`
+drives the vendored engine with one array twice (the second hand-off must FAIL)
+and with two fresh arrays, and `check-client-bundles.mjs` fails if a byte cache
+or a missing teardown reappears.
+
 **Why the asset routes are two JSON maps.** The connection's fetch registry
 matches **exact paths only** - `fetchRoutes.get(url.pathname)`, and `register`
 throws on a duplicate - so there is no prefix route to hang pdf.js's asset trees
@@ -2011,6 +2032,7 @@ pdf_* card, or by an address of either shape.
 | The tab says "This PDF could not be read (HTTP 413)" | the file is larger than the tab's 256 MiB ceiling; the tools still read it page by page |
 | `pdf_info` says `Size: 0 bytes` | pdf.js transfers the `data` buffer to its worker and detaches it, so a length read after `getDocument` is 0: `dsh-pdf` before alpha.4 cached every document that way. Fixed in alpha.4 (the length is measured before the hand-off, and a stored zero falls through to the size on disk), and an existing cache needs no clearing - but the host half is a Node module, so the running server must be **restarted** for it |
 | The tab says `Invalid factory url: ".../cmaps.json" must include trailing slash.` | pdf.js's own factory-URL validation, refusing a value that does not end in `/` - it runs before a page is read and even with this bundle's custom `BinaryDataFactory`, so **every** document fails while the tools keep working. Fixed in `dsh-pdf` alpha.4 (the value handed to `getDocument` is the route plus a slash); on an older bundle, reinstall/refresh. If a future edit brings it back, `check-client-bundles.mjs` and `check-pdf-node.mjs` both fail |
+| The tab says `Failed to execute 'postMessage' on 'Worker': An ArrayBuffer is detached and could not be cloned.` | the SAME transferred buffer, on the reader's side. `getDocument` hands `data` to the worker as a transfer, which detaches the array, so before alpha.5 the reader's per-address byte cache made every open AFTER the first hand a detached buffer over - a Retry, a password reopen, a reopened tab, a remount, a second pane, or **Open tab** on a document already open, while the first visit worked. Fixed in alpha.5 (no byte cache: each open reads `/file` again and the loading task is destroyed with the tab). The bundle is a browser artifact, so **hard-refresh** for it; nothing on the host changed |
 | The tab says "That path points outside the conversation workspace" | a relative path with `..` that leaves the workspace: open the file by its absolute path instead, or copy it in |
 | `vendor/build.mjs --check` fails | the vendored tree was edited or half-written; re-run `node packages/dsh-pdf/vendor/build.mjs` (never hand-edit `lib/vendor`) |
 | A CJK document extracts as boxes | the cMap map route is missing or the tree is incomplete - run the vendor build and restart |

@@ -748,6 +748,95 @@ check(
 if (opened.ok !== true) console.log('     a document did not open: ' + opened.error)
 
 // ---------------------------------------------------------------------------
+// The buffer belongs to pdf.js, and it can only be handed over ONCE
+// ---------------------------------------------------------------------------
+// alpha.5. The reader's byte cache was the bug: `getDocument` hands `data` to the
+// worker as a TRANSFER, which DETACHES the array, so the second open of a
+// remembered Uint8Array died inside the worker hand-off with
+//
+//   Failed to execute 'postMessage' on 'Worker': An ArrayBuffer is detached and
+//   could not be cloned.
+//
+// - the reader's own "This PDF could not be opened" on the SECOND visit to a
+// document (a Retry, a password reopen, a reopened tab, two panes on one file),
+// while the first visit worked. What the shipped client does now is read the
+// route again for every open, which is a rule only this probe can pin down: it
+// drives the vendored engine with one array twice and with two fresh arrays, so
+// a future pdf.js that copies instead of transferring, or a client edit that
+// reintroduces a cache, fails here rather than in front of a reader.
+const detachPath = path.join(root, 'detach-probe.mjs')
+await fsp.writeFile(
+  detachPath,
+  `// Written by check-pdf-node.mjs: what pdf.js does with the buffer it is given.
+const { readFileSync } = await import('node:fs')
+const { pathToFileURL } = await import('node:url')
+const [vendor, file] = process.argv.slice(2)
+const pdfjs = await import(pathToFileURL(vendor + '/pdf.min.mjs').href)
+pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(vendor + '/pdf.worker.min.mjs').href
+const open = async (bytes) => {
+  const task = pdfjs.getDocument({ data: bytes, isEvalSupported: false, useSystemFonts: false, disableFontFace: true, enableXfa: false })
+  const doc = await task.promise
+  const pages = doc.numPages
+  await task.destroy()
+  return pages
+}
+const message = (err) => String((err && err.message) ?? err)
+const out = {}
+const reused = new Uint8Array(readFileSync(file))
+try {
+  out.firstPages = await open(reused)
+} catch (err) {
+  out.firstError = message(err)
+}
+out.byteLengthAfterFirst = reused.byteLength
+out.detachedAfterFirst = reused.buffer.detached === true
+try {
+  out.secondPages = await open(reused)
+} catch (err) {
+  out.secondError = message(err)
+  out.secondName = String((err && err.name) ?? '')
+}
+try {
+  out.freshPages = [await open(new Uint8Array(readFileSync(file))), await open(new Uint8Array(readFileSync(file)))]
+} catch (err) {
+  out.freshError = message(err)
+}
+console.log(JSON.stringify(out))
+`,
+)
+function probeDetach() {
+  const result = childProcess.spawnSync(process.execPath, [detachPath, path.join(repo, 'packages/dsh-pdf/lib/vendor'), textFile], {
+    encoding: 'utf8',
+  })
+  const lines = (result.stdout ?? '').trim().split('\n')
+  try {
+    return JSON.parse(lines[lines.length - 1])
+  } catch (err) {
+    return { error: 'the probe printed nothing usable: ' + String((result.stderr ?? '').trim().split('\n')[0] ?? '') }
+  }
+}
+
+const detach = probeDetach()
+check('one array opens the document once', detach.firstPages === 2)
+check(
+  'pdf.js detaches the array it is handed',
+  detach.byteLengthAfterFirst === 0 && detach.detachedAfterFirst === true,
+  true,
+)
+// Node words the transfer refusal "Cannot transfer object of unsupported type."
+// (a DataCloneError) where a browser says `Failed to execute 'postMessage' on
+// 'Worker': An ArrayBuffer is detached and could not be cloned.` - the cause is
+// the same detached buffer, so what is pinned is the TYPE and the fact that the
+// open FAILS, never one engine's sentence.
+check(
+  'a REUSED array cannot be opened a second time',
+  detach.secondPages === undefined && detach.secondName === 'DataCloneError',
+  true,
+)
+if (detach.secondPages !== undefined) console.log('     pdf.js opened a detached buffer: the reader could cache bytes again')
+check('two FRESH arrays both open (what the reader does now)', JSON.stringify(detach.freshPages), '[2,2]')
+
+// ---------------------------------------------------------------------------
 // The vendored tree is exactly what the build recorded
 // ---------------------------------------------------------------------------
 const { spawnSync } = await import('node:child_process')

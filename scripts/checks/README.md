@@ -101,7 +101,9 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
     scanner's own route call, and the parts of the reader that are contracts
     (the text layer's scale variables, the lazily drawn thumbnail rail, the
     outline resolved through pdf.js, the engine fetched from the package's own
-    routes rather than inlined);
+    routes rather than inlined, and - alpha.5 - that the reader caches **no**
+    PDF bytes and destroys its loading task, because pdf.js transfers and
+    detaches the array it is handed);
   - `dsh-image` - the image type and its seat, the extension band and the
     `canOpen` refusals, the chip title and the deliberate absence of a guide
     entry, the tab body and the title seat rendered as markup, and the viewer's
@@ -188,7 +190,12 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
   refusal) and the pipeline directly through a stub OCR engine, which is what
   proves on any host that the raster handed to the engine is the one drawn for
   that page, that a second call is a cache hit, that another dpi/psm/language is
-  a new recognition, and that the per-call cap names the pages it left.
+  a new recognition, and that the per-call cap names the pages it left. It also
+  drives the vendored engine with the READER's own factory URLs (rebuilt out of
+  the shipped client source) and, since alpha.5, with **one `Uint8Array` handed
+  to `getDocument` twice** - the second hand-off must FAIL, because pdf.js
+  transfers and detaches the first - and with two fresh arrays, which is the rule
+  the reader's per-open byte read rests on.
 - `check-media-node.mjs` drives `dsh-media`'s host half the way the agent and the
   video tab do - module import, `apply(context)`, then real tool calls and real
   `Request`s against the captured route table. It is deliberately split by what it

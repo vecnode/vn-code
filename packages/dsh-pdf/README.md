@@ -1,4 +1,4 @@
-# dsh-pdf (alpha.4)
+# dsh-pdf (alpha.6)
 
 **PDF the agent can actually read and scan, and a real PDF reader in the right
 bar.**
@@ -98,8 +98,15 @@ resolution it came from.
 
 - **Continuous, lazy pages** - a canvas per page, drawn when the page nears the
   viewport (with a margin), sized by pdf.js so the scrollbar never lies.
+- **An undrawn page reserves the document's OWN page box** (alpha.6) - page 1 at
+  the current scale, never a viewport unit, because this reader is one pane of a
+  dock. The box the fit divides by and the box a placeholder reserves are the
+  same measurement, so the page column can never grow wider than the pane.
 - **Zoom ladder** 50%-400% plus **fit width** / **fit page**. Zoom moves the
   LAYOUT, never a CSS transform, so a zoomed page stays scrollable to its edge.
+  A fit is measured **synchronously** against the pane, so a resize lands in the
+  frame the observer reports, and clicking the fit mode that is **already
+  active** re-applies it instead of doing nothing (alpha.6).
 - **Page navigation**: previous/next, a jump field, and the keyboard
   (`PageUp`/`PageDown`, `ArrowLeft`/`ArrowRight`, `Home`/`End`, `+`/`-`, `0`).
 - **Rotate** 90 degrees; a rotation re-fits, because page and pane swap
@@ -121,6 +128,14 @@ The engine is **not** in the bundle - the harness reads every client bundle at
 boot and pdf.js is 1.8 MB - so it and its worker are fetched from this plugin's
 own authenticated routes on the first PDF and turned into blob URLs: a module
 import for the engine, a worker URL for the render worker.
+
+**Each open owns its own bytes** (alpha.5). pdf.js **transfers** the `data` buffer
+to its worker, which **detaches** it, so the bytes of an open belong to pdf.js the
+moment `getDocument` is called. The reader therefore caches no bytes at all: every
+open reads `/file` again (`loadDocumentBytes`) and hands over exactly one buffer,
+and the loading task - which owns the worker and the parsed document - is
+**destroyed** when the tab unmounts, when the address changes, or when Retry
+replaces it.
 
 ### The side panel
 
@@ -240,6 +255,75 @@ content-addressed and keyed only by SHA + engine version: entries written by an
 older build survive the upgrade, and those are exactly the ones holding a zero.
 `check-pdf-node.mjs` pins both halves - the printed size is the file's real
 byte count, and an entry rewritten with `bytes: 0` still reads correctly.
+
+**alpha.5 is the buffer-ownership repair, and it is why a document sometimes did
+not open the SECOND time.** The `data` buffer pdf.js transfers is detached by the
+transfer, and the reader used to remember the fetched bytes per address for the
+life of the page - so the first open took the buffer and every later open of that
+same document handed the worker a detached one:
+
+```
+Failed to execute 'postMessage' on 'Worker': An ArrayBuffer is detached and could not be cloned.
+```
+
+which is exactly what "This PDF could not be opened" was. It read as intermittent
+because the *first* visit always worked and the second one never did: a **Retry**,
+a password reopen, a tab closed and reopened, a remount, a second pane on the same
+document, or the **Open tab** link on a document already open elsewhere. The
+reader caches no bytes now, every open reads `/file` again and owns the one buffer
+pdf.js is allowed to take, and the loading task is **destroyed** with the tab (it
+owns the worker) - an open used to leak a worker thread and a parsed document for
+the life of the page. A body that comes back **short** (the file changed while it
+was being read) or **empty** gets its own sentence instead of pdf.js's "not a
+readable PDF", which blamed the document for a race. Both halves are pinned:
+`check-pdf-node.mjs` drives the vendored engine with ONE array twice (the second
+hand-off fails - a `DataCloneError` in Node, the `postMessage` line above in a
+browser) and with two fresh arrays, and `check-client-bundles.mjs` fails if a byte
+cache or a missing teardown ever comes back.
+
+**alpha.6 is the pane-sized page box, and it is why a page drifted right when the
+panel was resized.** A page that has not been drawn yet - everything outside a
+1200px band around the viewport, on any document long enough to have one - used to
+reserve `minWidth: 45vw` / `minHeight: 60vh`. Those are units of the **window**,
+and this reader is one pane of a dock: the right bar's width is a preference
+(capped at 70% of the frame, 45% by default), so *half the window* says nothing
+about the space a page has in it. `.dpf-pages` is `min-width: min-content` - the
+rule that keeps a zoomed page scrollable to its edge - so a single placeholder
+wider than the pane stretched the whole column past the pane, and
+`align-items: center` then centred every page in a box wider than the pane: the
+page slid right, its left margin became a visible gap, and its right edge left
+the pane. Measured in Chrome against this file's own dress (a 700px pane, six
+pages, one drawn), the old box and the new one:
+
+| window | column (old) | gaps (old) | column (new) | gaps (new) |
+|---|---|---|---|---|
+| 1600px | 738px in a 685px pane | 44px left, right edge clipped | 685px | 17px / 17px, no overflow |
+| 2500px | 1143px in a 685px pane | 246px left, 197px clipped | 685px | 17px / 17px, no overflow |
+
+And since it was the window's width that moved the page, the symptom followed the
+window and the panel width rather than the document - "only sometimes", and worse
+the wider the window was. **The scale was never wrong**, which is why neither fit
+button helped: they recomputed a page width that was already right, while the
+column the page sat in was too wide. The box now comes from the document's OWN
+page 1 at the current scale - one `unit` measurement that is BOTH the fit's
+denominator and what an undrawn page reserves - so the column is the page plus
+its padding and can never exceed the pane. The two small fallbacks (`140px` /
+`180px`) apply only to the frame or two before page 1's box is known, and are
+deliberately too small to widen the column.
+
+**The same release makes a fit re-appliable.** `applyFit` awaited
+`doc.getPage(1)` *inside* the `ResizeObserver` callback, and dragging a bar fires
+dozens of those: the scale that stayed on screen was whichever promise resolved
+**last**, not the one measured last, so a resized pane could keep a fit computed
+for a wider one. It is synchronous now - the pane's width is a live measurement
+and the unit is already in hand - and a fit mode clicked while it is ALREADY
+active (`Fit width` on a reader already fitting the width) re-applies through
+`chooseFit` instead of being a `setState` with the same value, which React bails
+out of: the button that looked like the way out of a wrong fit was a no-op
+exactly when it was needed. Both halves are pinned in `check-client-bundles.mjs`:
+the placeholder is sized from the unit (and no `'45vw'` / `'60vh'` literal may
+come back), the unit is measured once and handed to every page, and no `await`
+may return to the fit callback.
 
 ## Vendored engine
 
