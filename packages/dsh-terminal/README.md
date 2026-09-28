@@ -160,11 +160,19 @@ looking. You keep your shell, and you can see — without reading a single messa
 switches the panel to the log and switches it back to the terminal you were on
 (not to slot 1) — one control, one meaning: the button is *on* exactly while the
 log is what the panel shows, and picking any terminal chip turns it off. The
-button wears the log's own state: a pulse while a command runs, the count of what
-failed as a badge, the counts in its tooltip, a dot on the header control while
-something is running, and — the one warning nothing else on the dock can show —
-the warning tone and a `⚠` when this conversation's log *cannot be read here*,
-with the host's own reason in the tooltip. The toggle is remembered per origin in
+button wears the log's own state: a pulse while a command runs, the number of
+commands that **failed** as a red badge, the counts in its tooltip, a dot on the
+header control while something is running, and — the one warning nothing else on
+the dock can show — the warning tone and a `⚠` when this conversation's log
+*cannot be read here*, with the host's own reason in the tooltip. **Every one of
+those numbers is the COMMANDS'** (alpha.11). A tool call that is not an executing
+tool — a `read`, a `grep`, an `edit` — is a row under the *All tools* filter and
+never a number on the control: before alpha.11 any failed tool incremented the
+failure count, so a conversation whose only tool call was a failed `read` wore a
+red `1` badge and a red header dot while its own tooltip said *0 commands, 1
+failed, nothing run yet* in one breath. The other family's running and failed rows
+are counted separately, so *All tools* can still be described honestly. The toggle
+is remembered per origin in
 `localStorage` — a *view* preference, which is exactly why it may be remembered
 while the dock's **open** state deliberately is not: the panel is a window onto a
 process, and a boolean that resets merely re-hides the log. It is `localStorage`
@@ -244,6 +252,18 @@ poll stops when nothing is subscribed (the header control of the conversation on
 screen is the usual subscriber), pauses in a hidden tab and resumes on the next
 visit, and publishes **nothing** when the fold's signature is unchanged — a
 steady conversation costs an idle request and no re-render.
+
+**Following the conversation you are looking at** is the whole contract of that
+poll, so alpha.11 closes the two windows where it could lag. A log that has **not
+answered yet** is retried briskly — 1.5 s, four attempts, then back to the steady
+cadence, with the budget reset by an answer *and* by the conversation coming back
+on screen — because the conversation on screen is attached by the host as the app
+opens it, so the very first read can race that attach and answer `NOT_LIVE`: at
+6 s, a restored conversation said so for up to six seconds after every reload. And
+the panel belongs to the conversation on screen and to no other: switching
+conversations closes the dock **and forgets the one it left**, because the dock is
+root-scoped and always mounted, so keeping the old identity meant a hidden panel
+went on reading (and holding numbers from) a conversation nobody was looking at.
 
 The exit status is recovered from the `\n[exit code: N]` / `\n[killed by
 signal: X]` markers that `@deepseek-ai/dsh-shell/render` appends — the same
@@ -399,7 +419,13 @@ adds the rest, empty groups drop) and `buildActivityFromEvents` (grouping by
 prompt, injected context NOT opening a group, a failure read off its marker, a
 call with no result still running, a persistent shell claiming no exit status, a
 result outside the tail kept but unnamed) — plus `activitySignature`, which is
-what keeps a poll that returns the same log from re-folding it.
+what keeps a poll that returns the same log from re-folding it. alpha.11 pins the
+counts as well, on both sides of the same claim: a log whose only tool call was a
+failed `read` folds to *zero failed* (the row is still a failure, and its own
+`otherFailed` counter still sees it), the tooltip `activityFactsTitle` is asserted
+as the exact sentence a reader gets, and the source pins the bounded retry
+(1.5 s, four attempts, reset by an answer) and the dock forgetting the
+conversation it no longer belongs to.
 
 ## Known limits
 
@@ -419,7 +445,7 @@ what keeps a poll that returns the same log from re-folding it.
 - The agent view reads the conversation only while it is **live on this host** (a
   stored conversation that no process has open answers `NOT_LIVE`), it is
   refreshed by polling rather than pushed — 6 s, or 2 s while a command is
-  running — and it names commands by tool: a call whose `tool/call` event is
+  running, or 1.5 s for the first four reads while it has no answer yet — and it names commands by tool: a call whose `tool/call` event is
   outside the tail is shown as an unnamed result with its raw output, and
   sub-agent commands belong to the sub-agent's own session (the root `subagent`
   call is what appears here).

@@ -1539,7 +1539,7 @@ check('terminal adopt: a height already in force moves nothing', adopt({ shared:
 check('terminal adopt: an unready section waits', adopt({ ready: false }), null)
 check('terminal adopt: an absent value is not a height of zero', adopt({ shared: null }), null)
 check('terminal adopt: another window still moves the dock', adopt({ shared: 350, known: 400, current: 280 }), 350)
-check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.10'))
+check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.11'))
 
 // ------------------------------------------------- the agent's own terminal use
 // alpha.7. The dock's second view is a TRANSCRIPT of what the conversation
@@ -1569,6 +1569,15 @@ check(
     termSource.includes('rememberActivity(sessionId, view === ACTIVITY_VIEW)') &&
     termSource.includes('activityUnreadable') &&
     termSource.includes('activityFactsTitle(activity)'),
+)
+// alpha.11: the counts the toggle's badge and the header dot are made of are the
+// COMMANDS' (the fold decides that, below), and the view's own facts line adds the
+// other family's running/failed rows back only while "All tools" can DRAW them.
+check(
+  'terminal view counts the commands, plus the rest only under All tools',
+  termSource.includes('if (allTools && model.counts.other > 0) facts.push(String(model.counts.other) + \' other\')') &&
+    termSource.includes('const running = model.counts.running + (allTools ? model.counts.otherRunning || 0 : 0)') &&
+    termSource.includes('const failed = model.counts.failed + (allTools ? model.counts.otherFailed || 0 : 0)'),
 )
 check(
   'terminal activity styles are injected',
@@ -1624,6 +1633,34 @@ check(
     termSource.includes("document.addEventListener('visibilitychange', onVisible)") &&
     termSource.includes('if (listeners.size === 0 && timer !== null)'),
 )
+// alpha.11, the startup half of "the notification follows the conversation".
+// The conversation on screen is attached by the host as the app opens it, so the
+// FIRST read can race that attach and answer NOT_LIVE; at the steady 6 s cadence a
+// restored conversation then says "not readable here" for up to six seconds after
+// every reload. A few brisk attempts close that window, and a log that is still
+// unreadable falls back to the steady cadence rather than polling at 1.5 s for
+// ever - so the retry is BOUNDED and the answer RESETS it.
+check(
+  'terminal retries a log that has not answered yet, then settles',
+  termSource.includes('const ACTIVITY_RETRY_MS = 1500') &&
+    termSource.includes('const ACTIVITY_RETRY_ATTEMPTS = 4') &&
+    termSource.includes('if (model.available !== true && retries < ACTIVITY_RETRY_ATTEMPTS) return ACTIVITY_RETRY_MS') &&
+    /if \(body !== null && body\.ok === true\) \{[\s\S]{0,240}?retries = 0[\s\S]{0,80}?absorb\(body\)/.test(termSource) &&
+    // ... and BOTH a fresh answer and a fresh subscription (the conversation
+    // coming back on screen) reset the budget, so the retry is never spent once.
+    (termSource.match(/retries = 0/g) || []).length >= 2 &&
+    /const unavailable = \(reason\) => \{\n\s*retries \+= 1/.test(termSource),
+)
+// The dock is root-scoped and always mounted, so the conversation it BELONGS to
+// is the only thing that keeps its feed (and its numbers) on the conversation on
+// screen: a closed dock used to hold `dock.sessionId` from the conversation it
+// was last opened in and keep polling that one.
+check(
+  'terminal dock forgets a conversation it no longer belongs to',
+  /function adoptSession\(sessionId\)[\s\S]*?if \(dock\.sessionId === null \|\| dock\.sessionId === sessionId\) return[\s\S]*?dock\.open = false\n\s*dock\.sessionId = null\n\s*bump\(\)/.test(
+    termSource,
+  ),
+)
 check(
   'terminal keeps the activity view when a chip is killed',
   termSource.includes('if (dock.active.get(sessionId) !== ACTIVITY_VIEW)'),
@@ -1638,7 +1675,7 @@ check(
     termSource.includes('const text = String(command)'),
 )
 
-const { parseExecCall, parseExitMarker, stripAnsi, buildActivityFromEvents, activitySignature, filterActivity, formatDuration } =
+const { parseExecCall, parseExitMarker, stripAnsi, buildActivityFromEvents, activitySignature, filterActivity, formatDuration, activityFactsTitle } =
   terminal.exports.__internals
 
 const shellCall = parseExecCall('bash', '{"command":"ls -la","description":"list files"}')
@@ -1689,7 +1726,43 @@ check('activity: a settled failure says so', activityModel.groups[0].commands[0]
 check('activity: the exit code is read off the marker', activityModel.groups[0].commands[0].exitCode, 1)
 check('activity: the marker leaves the body', activityModel.groups[0].commands[0].output, 'FAIL')
 check('activity: a call with no result is still running', activityModel.groups[0].commands[1].status, 'running')
-check('activity: counts separate commands from failures', JSON.stringify(activityModel.counts), '{"shell":2,"other":0,"running":1,"failed":1}')
+check('activity: counts separate commands from failures', JSON.stringify(activityModel.counts), '{"shell":2,"other":0,"running":1,"failed":1,"otherRunning":0,"otherFailed":0}')
+// alpha.11: the numbers the Agent control WEARS are the COMMANDS'. A conversation
+// whose only tool call was a `read` - and had it fail - used to paint the red
+// failure badge and the red header dot ("1 failed") while its own tooltip said
+// "0 commands, 1 failed, nothing run yet" in one breath. The other family's own
+// running/failed rows are counted separately, so "All tools" stays describable.
+const nonCommandLog = [
+  promptEvent(1, 'read that file'),
+  ev(2, 'tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"missing.txt"}' }),
+  resultEvent(3, 'c1', 'ENOENT: no such file', true),
+]
+const nonCommandModel = buildActivityFromEvents(nonCommandLog)
+check(
+  'activity: a failed non-command lights no badge',
+  JSON.stringify(nonCommandModel.counts),
+  '{"shell":0,"other":1,"running":0,"failed":0,"otherRunning":0,"otherFailed":1}',
+)
+check('activity: the failure badge counts commands only', nonCommandModel.counts.failed, 0)
+check('activity: a failed non-command is still a failure', nonCommandModel.groups[0].commands[0].status, 'error')
+check(
+  'activity: a running non-command is not the terminal working',
+  buildActivityFromEvents([ev(4, 'tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"a/b.ts"}' })]).counts.running,
+  0,
+)
+check('activity: a failed command still counts', activityModel.counts.failed, 1)
+// The tooltip is where the counts reach a reader as WORDS, and the alpha.11 bug
+// read there first: "0 commands, 1 failed, nothing run yet" in one breath.
+check(
+  'activity: the tooltip counts commands, not every tool',
+  activityFactsTitle(nonCommandModel),
+  'The agent\u2019s own terminal use in this conversation: 0 commands, nothing run yet',
+)
+check(
+  'activity: the tooltip reports what the commands did',
+  activityFactsTitle(activityModel),
+  'The agent\u2019s own terminal use in this conversation: 2 commands, 1 running, 1 failed',
+)
 const pagedOut = buildActivityFromEvents([resultEvent(9, 'gone', 'out\n[exit code: 0]')])
 check('activity: a result whose call was paged out is kept', pagedOut.groups[0].commands.length, 1)
 // The exit marker is read ONLY for a tool we know is a foreground shell: the
@@ -1780,7 +1853,7 @@ check('activity view: a running command says so', activityRunningMarkup.includes
 const activityUnavailableMarkup = renderToStaticMarkup(
   h(ActivityView, {
     sessionId: 's1',
-    model: { groups: [], counts: { shell: 0, other: 0, running: 0, failed: 0 }, hasMore: false, available: false, reason: 'no reader here', revision: 1 },
+    model: { groups: [], counts: { shell: 0, other: 0, running: 0, failed: 0, otherRunning: 0, otherFailed: 0 }, hasMore: false, available: false, reason: 'no reader here', revision: 1 },
     onRunInTerminal: () => {},
     canRunInTerminal: false,
   }),
@@ -1794,7 +1867,7 @@ check(
   renderToStaticMarkup(
     h(ActivityView, {
       sessionId: 's1',
-      model: { groups: [], counts: { shell: 0, other: 0, running: 0, failed: 0 }, hasMore: false, available: false, reason: null, revision: 0 },
+      model: { groups: [], counts: { shell: 0, other: 0, running: 0, failed: 0, otherRunning: 0, otherFailed: 0 }, hasMore: false, available: false, reason: null, revision: 0 },
       onRunInTerminal: () => {},
       canRunInTerminal: false,
     }),

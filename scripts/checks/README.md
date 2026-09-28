@@ -89,7 +89,11 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
     unnamed), the view itself RENDERED from a hand-built log (since the switch is
     off by default no static render of the dock can reach a row), plus
     `activitySignature`, which is what keeps an unchanged poll from re-folding the
-    log;
+    log. alpha.11 pins the COUNTS the control wears as the commands' own - a
+    failed `read` folds to zero failures (and to `otherFailed: 1`), its tooltip
+    sentence is asserted as text, and the bounded retry (1.5 s over the first four
+    reads with no answer, cleared by an answer) and the dock forgetting the
+    conversation it no longer belongs to are pinned at the source level;
   - `dsh-rightbar` - the forked bar's own source invariants (module-table id,
     the module-table surface other bundles inject);
   - `dsh-diagrams` - both tab types and their seats, all six tool cards, and the

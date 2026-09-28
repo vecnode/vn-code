@@ -59,7 +59,7 @@ window.__ModuleLoader__.load({
     // Constants
     // ---------------------------------------------------------------------
     /** Shown on the dock's bar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.10'
+    const PLUGIN_VERSION = '0.1.0-alpha.11'
     /** The header list this control joins (Open In... is -10). */
     const HEADER_SLOT = 'conversation.session.header.utilities'
     /** The root-scoped overlay list the layout package renders inside the frame. */
@@ -87,6 +87,19 @@ window.__ModuleLoader__.load({
      */
     const ACTIVITY_POLL_MS = 6000
     const ACTIVITY_POLL_BUSY_MS = 2000
+    /**
+     * How often a log that has NOT ANSWERED YET is asked again (alpha.11).
+     *
+     * The conversation on screen is the only subscriber, and the host attaches
+     * it as the app opens it - so the first read can race that attach and answer
+     * `NOT_LIVE`. Waiting the steady 6 s would leave a restored conversation
+     * saying "not readable here" for up to six seconds after every startup,
+     * which is exactly the window a reader sees when they reload. A few brisk
+     * attempts close it; a log that is STILL unreadable settles back onto the
+     * steady cadence rather than polling at this one for ever.
+     */
+    const ACTIVITY_RETRY_MS = 1500
+    const ACTIVITY_RETRY_ATTEMPTS = 4
     /** The marker that separates control frames from the shell's own output. */
     const CONTROL = '\u0000'
     /** Terminal slots per conversation, and the geometry bounds of the dock. */
@@ -647,10 +660,23 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       bump()
     }
 
-    /** A header button reports its conversation: the dock only belongs to one. */
+    /**
+     * A header button reports its conversation: the dock only belongs to one.
+     *
+     * alpha.11: the dock also FORGETS a conversation it no longer belongs to.
+     * The panel used to keep `dock.sessionId` while it was closed, so the
+     * always-mounted dock kept a subscription - and a poll - on a conversation
+     * that was no longer on screen, and a count it had collected there stayed in
+     * the store. The header control of the conversation on screen is the only
+     * subscriber that is really "here": dropping the identity is what keeps
+     * every number the panel wears about the conversation in front of you.
+     */
     function adoptSession(sessionId) {
-      if (!dock.open || typeof sessionId !== 'string' || sessionId === '') return
-      if (dock.sessionId !== sessionId) closeDock()
+      if (typeof sessionId !== 'string' || sessionId === '') return
+      if (dock.sessionId === null || dock.sessionId === sessionId) return
+      dock.open = false
+      dock.sessionId = null
+      bump()
     }
 
     /** Send the settled height to the shared section, once. */
@@ -764,7 +790,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
     // exported for the tracked check to drive with hand-built events.
     // ---------------------------------------------------------------------
     /** The model every view renders, shared by the feed and its empty states. */
-    const EMPTY_COUNTS = { shell: 0, other: 0, running: 0, failed: 0 }
+    const EMPTY_COUNTS = { shell: 0, other: 0, running: 0, failed: 0, otherRunning: 0, otherFailed: 0 }
     const EMPTY_ACTIVITY = { groups: [], counts: EMPTY_COUNTS, hasMore: false, available: false, reason: null, revision: 0 }
 
     /** One-line text: whitespace collapsed and cut at `max` characters. */
@@ -986,7 +1012,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
     function buildActivityFromEvents(entries) {
       const groups = []
       const byCall = new Map()
-      const counts = { shell: 0, other: 0, running: 0, failed: 0 }
+      const counts = { shell: 0, other: 0, running: 0, failed: 0, otherRunning: 0, otherFailed: 0 }
       let group = null
 
       const openGroup = (prompt, turn) => {
@@ -1059,11 +1085,26 @@ body.dst-dragging{cursor:row-resize;user-select:none}
         settleEntry(entry, event, data)
       }
 
+      // THE COUNTS ARE THE COMMANDS' (alpha.11). `running` and `failed` are what
+      // the Agent control's pulse, its red count and the header control's dot are
+      // MADE of, so a non-command row must never reach them: a conversation whose
+      // only tool call was a failed `read` used to wear a red "1 failed" badge and
+      // a red header dot while its own tooltip said "0 commands, 1 failed, nothing
+      // run yet" in one breath. The other family's own running and failed rows are
+      // counted separately, so the "All tools" filter can still be described
+      // honestly without ever reaching the notification.
       for (const entry of allCommands(groups)) {
-        if (entry.family === 'shell' || entry.family === 'terminal') counts.shell += 1
+        const command = entry.family === 'shell' || entry.family === 'terminal'
+        if (command) counts.shell += 1
         else counts.other += 1
-        if (entry.status === 'running') counts.running += 1
-        else if (entry.status === 'failed' || entry.status === 'signal' || entry.status === 'error') counts.failed += 1
+        if (entry.status === 'running') {
+          if (command) counts.running += 1
+          else counts.otherRunning += 1
+          continue
+        }
+        if (entry.status !== 'failed' && entry.status !== 'signal' && entry.status !== 'error') continue
+        if (command) counts.failed += 1
+        else counts.otherFailed += 1
       }
       return { groups: groups.filter((item) => item.commands.length > 0), counts }
     }
@@ -1149,6 +1190,8 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       let timer = null
       let inflight = false
       let disposed = false
+      /** Consecutive reads with no answer yet (alpha.11): see `cadence`. */
+      let retries = 0
 
       const notify = () => {
         for (const listener of [...listeners]) {
@@ -1173,6 +1216,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
        * publishes even when it carries exactly what a previous one did.
        */
       const unavailable = (reason) => {
+        retries += 1
         if (model.available === false && model.reason === reason) return
         signature = null
         publish({ groups: [], counts: EMPTY_COUNTS, hasMore: false, available: false, reason, revision: model.revision + 1 })
@@ -1181,6 +1225,21 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       /** A hidden tab has nobody to draw for: the visibility handler resumes us. */
       const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden'
 
+      /**
+       * How long the next read waits (alpha.11).
+       *
+       * A log with NO answer yet is retried briskly for a few attempts - the
+       * conversation on screen is attached by the host as the app opens it, so
+       * the first read can race that attach and answer `NOT_LIVE`. Past those
+       * attempts it falls back to the steady cadence, so a conversation that
+       * really cannot be read here costs one idle request every 6 s instead of
+       * a metronome.
+       */
+      const cadence = () => {
+        if (model.available !== true && retries < ACTIVITY_RETRY_ATTEMPTS) return ACTIVITY_RETRY_MS
+        return model.counts.running > 0 ? ACTIVITY_POLL_BUSY_MS : ACTIVITY_POLL_MS
+      }
+
       /** One read, whenever the last one has settled. */
       const schedule = () => {
         if (disposed || listeners.size === 0 || hidden()) return
@@ -1188,7 +1247,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
         timer = setTimeout(() => {
           timer = null
           void load()
-        }, model.counts.running > 0 ? ACTIVITY_POLL_BUSY_MS : ACTIVITY_POLL_MS)
+        }, cadence())
       }
 
       /**
@@ -1224,8 +1283,12 @@ body.dst-dragging{cursor:row-resize;user-select:none}
           const response = await fetch(ACTIVITY_ROUTE + '?session=' + encodeURIComponent(sessionId), { credentials: 'same-origin' })
           const body = response.ok ? await response.json() : null
           if (disposed) return
-          if (body !== null && body.ok === true) absorb(body)
-          else if (body !== null && typeof body.message === 'string' && body.message !== '') unavailable(body.message)
+          if (body !== null && body.ok === true) {
+            // A conversation that ANSWERS is no longer retrying: the next read
+            // is on the steady cadence again.
+            retries = 0
+            absorb(body)
+          } else if (body !== null && typeof body.message === 'string' && body.message !== '') unavailable(body.message)
           else unavailable(REACH)
         } catch (err) {
           if (!disposed) unavailable(REACH)
@@ -1245,7 +1308,13 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       return {
         subscribe(listener) {
           listeners.add(listener)
-          if (listeners.size === 1) void load()
+          // A fresh look is a fresh start (alpha.11): the conversation has just
+          // come on screen, so its first reads get the brisk cadence again
+          // rather than the budget an earlier visit spent.
+          if (listeners.size === 1) {
+            retries = 0
+            void load()
+          }
           return () => {
             listeners.delete(listener)
             // Nothing is watching: stop the clock rather than poll for a panel
@@ -2055,9 +2124,15 @@ body.dst-dragging{cursor:row-resize;user-select:none}
 
       const facts = []
       facts.push(String(model.counts.shell) + (model.counts.shell === 1 ? ' command' : ' commands'))
-      if (model.counts.other > 0 && allTools) facts.push(String(model.counts.other) + ' other')
-      if (model.counts.running > 0) facts.push(String(model.counts.running) + ' running')
-      if (model.counts.failed > 0) facts.push(String(model.counts.failed) + ' failed')
+      if (allTools && model.counts.other > 0) facts.push(String(model.counts.other) + ' other')
+      // alpha.11: the counts are the COMMANDS' (see the fold), so the other
+      // family's own running and failed rows are added back only while "All
+      // tools" can actually DRAW them - the line then describes what is on
+      // screen instead of counting rows this filter is hiding.
+      const running = model.counts.running + (allTools ? model.counts.otherRunning || 0 : 0)
+      const failed = model.counts.failed + (allTools ? model.counts.otherFailed || 0 : 0)
+      if (running > 0) facts.push(String(running) + ' running')
+      if (failed > 0) facts.push(String(failed) + ' failed')
       if (model.hasMore) facts.push('older ones are outside this view')
 
       const hint = (title, text, code) =>
@@ -2223,9 +2298,11 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       const active = dock.open && dock.sessionId === sessionId
       // The header control is the one part of this package that is on screen
       // while the dock is CLOSED, so it is where the agent's own terminal use
-      // has to be visible: a pulsing dot while a command runs, and a quiet red
-      // one once the last thing that settled failed. Without it, "the agent is
-      // doing something" is only discoverable by opening the panel to look.
+      // has to be visible: a pulsing dot while a COMMAND runs, and a quiet red
+      // one while any COMMAND in this conversation's log failed. Both read the
+      // COMMAND counts the fold produces (alpha.11), so a failed `read` can
+      // never light a terminal up. Without this, "the agent is doing something"
+      // is only discoverable by opening the panel to look.
       const activity = useActivity(sessionId)
       const busy = activity.counts.running > 0
       const failed = !busy && activity.counts.failed > 0
@@ -3015,6 +3092,11 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       activitySignature,
       filterActivity,
       formatDuration,
+      // alpha.11: the sentence the Agent control wears in its tooltip. It is the
+      // one place the counts reach a reader as WORDS, and the bug this release
+      // fixes was visible there first ("0 commands, 1 failed, nothing run yet" in
+      // one breath), so it is pinned as text rather than as a source shape.
+      activityFactsTitle,
       // The view itself, so the tracked check can RENDER a hand-built log: the
       // switch is off by default, so a static render of the dock can never reach
       // a row, and "the panel draws a command" would otherwise be unchecked.
