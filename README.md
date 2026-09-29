@@ -13,13 +13,9 @@ are plain JavaScript with **zero npm dependencies**; the launchers run on
 **Windows, macOS and Linux** (PowerShell on one side, plain POSIX shell on the
 other, and the Unix half never needs PowerShell).
 
-![print](assets/vn-harness-20260920-164101.png)
 
 <p align="center">
-  <img src="assets/vn-harness-20260926-095353.png" alt="The vn-harness window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
-  <img src="assets/vn-harness-20260925-084844.png" alt="The same window once the harness is up, showing the pack's app in the light theme" width="49%">
-  <br>
-  <em><code>run-desktop.bat</code>: the splash while <code>npx</code> works, and the same window once the harness is listening.</em>
+  <img src="assets/vn-harness-29092026-120650.png" alt="The vn-harness window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
 </p>
 
 ## Install
