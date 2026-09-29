@@ -131,7 +131,12 @@ a `transcode` verdict instead.
 `reference/fields.md` beside this file has the whole catalogue: every `-show_*`
 section with what it reads and what it costs, the container/codec/audio/subtitle/
 attachment/side-data families in full, the working invocations with their measured
-output, and the long-form diagnosis.
+output, and the long-form diagnosis. It also carries the three measurements a
+container does not give you - a bitrate from the packets, a frame count, and the
+proof that a file is really variable-rate - the transport-stream **program/PID**
+layer (`-show_programs`, which an MP4 simply does not have), and `-show_data`,
+which hexdumps the bytes behind a section so a stream's real configuration record
+can be read instead of assumed.
 
 ## Diagnosing from the output alone
 
@@ -185,3 +190,8 @@ a damaged tail. Then:
 - A file `media_probe` cannot identify is a file ffprobe found no container in. Do
   not retry it with a longer timeout: re-check the path, and consider that a
   truncated download or a text file with a `.mp4` name looks exactly like this.
+- **When the question changes from reading to changing, this is the wrong skill.**
+  ffprobe never writes a byte: the moment the answer is a different container, a
+  smaller file or a frame on disk, the work belongs to the `ffmpeg-cli` skill -
+  whose own `reference/failures.md` (in that skill's folder, not this one) is also
+  where to look when an action taken on a probe's answer fails.

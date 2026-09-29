@@ -1,4 +1,4 @@
-# dsh-modal (alpha.1)
+# dsh-modal (alpha.2)
 
 **Modal** is the pack's shared dialog surface for the DeepSeek Harness web GUI.
 It is a **client-service plugin**: its browser half mounts one body-level
@@ -34,6 +34,32 @@ dialog in the app looks and behaves the same. Alpha.
 | `submit(values, …)` | async work that runs **while the dialog stays open** |
 | `confirmLabel`, `cancelLabel`, `busyLabel` | button copy (`cancelLabel: null` renders no cancel button — an alert) |
 | `danger` | paints the confirm button as the error color |
+| `content` | **a rich dialog**: a render function handed `{ close }` that owns the whole body (alpha.2) |
+| `size` | `'lg'` gives a rich dialog the roomy frame (min(1120px, 94vw) × min(800px, 90vh)) |
+
+## Rich dialogs
+
+A dialog that is a **browser** rather than a question — a list beside a document,
+a picker, a form of its own — passes `content` instead of `fields`:
+
+```js
+modals.open({
+  title: '',
+  size: 'lg',
+  content: (helpers) => h(Browser, { close: helpers.close }),
+})
+```
+
+Fields, `validate` and `submit` do not apply to one: the content owns its own
+work and closes the dialog itself through the `close` it is handed, which settles
+the `open()` Promise with whatever it passed. The overlay, the Escape handling,
+the focus restore and the one-dialog-at-a-time queue are still this package's —
+that is the whole point of the second shape, so a rich surface never ships its own
+overlay.
+
+One difference is deliberate: **a mask click does not close a rich dialog.** It
+can hold unfinished work, and a stray click outside it must not throw that away.
+Escape and the content's own Close control are the ways out.
 
 `submit` is the point of the whole surface: a save, a rename or a request that
 can fail runs with the dialog still on screen, so the failure is reported
@@ -45,7 +71,8 @@ shows the message and leaves the dialog open; resolving closes it and settles th
 Cancel paths are the Cancel button, **Escape** (captured on the document, so the
 pane underneath never sees the key) and a click on the mask. None of them fires
 while `submit` is still running. Focus moves to the first field and returns to
-whatever had it when the dialog closes.
+whatever had it when the dialog closes. (A **rich** dialog keeps Escape but drops
+the mask-click path — see below.)
 
 Two calls that overlap **queue**: the second dialog opens when the first settles,
 so two racing saves can never replace each other's UI.
@@ -72,6 +99,8 @@ lib/client.js      Browser half: the overlay host, the queue, and the `modals` s
 
 - [`packages/dsh-editor`](../dsh-editor) uses `modals.open` for the save-as
   dialog (name + extension) that creates a new file.
+- [`packages/dsh-skills`](../dsh-skills) opens the pack's first **rich** dialog:
+  the Skills browser, a list beside a Markdown document with inline editing.
 
 ## Install / uninstall
 

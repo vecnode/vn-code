@@ -325,6 +325,117 @@ check('alert has one button', alertMarkup.includes('>OK<') && !alertMarkup.inclu
 modals.close()
 await alertPromise
 
+// The RICH dialog (alpha.2): `content` is a render function handed `{ close }`
+// that owns the whole body, for a dialog that is a browser rather than a
+// question. What makes it a different shape, and what is pinned here: the roomy
+// frame, no form and no action row (the content drives its own work), and a mask
+// that does NOT close it - a rich dialog can hold unfinished work.
+let richClosedWith = 'not closed'
+const richPromise = modals.open({
+  title: '',
+  size: 'lg',
+  content: (helpers) => {
+    richHelpers = helpers
+    return h('div', { className: 'rich-body' }, 'rich content', h('button', { type: 'button', onClick: () => helpers.close('done') }, 'Finish'))
+  },
+})
+let richHelpers = null
+const richMarkup = renderToStaticMarkup(captured.element)
+check('rich dialog uses the large frame', richMarkup.includes('class="dsm-panel dsm-lg"'))
+check('rich dialog renders the content', richMarkup.includes('class="rich-body"') && richMarkup.includes('rich content'))
+check('rich dialog has no form or action row', !richMarkup.includes('dsm-form') && !richMarkup.includes('dsm-actions'))
+check('rich dialog content can close it', typeof richHelpers.close === 'function')
+richHelpers.close('done')
+richClosedWith = await richPromise
+check('rich dialog resolves what the content passed', richClosedWith, 'done')
+check('rich dialog closed cleanly', renderToStaticMarkup(captured.element), '')
+
+// -------------------------------------------------------------- dsh-skills
+const skills = loadBundle('packages/dsh-skills/lib/client.js', {})
+const skillsCssTag = skills.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-skills/skills.css').pop()
+const skillsCss = skillsCssTag ? skillsCssTag.textContent : ''
+const skillsSource = readFileSync(path.join(repo, 'packages/dsh-skills/lib/client.js'), 'utf8')
+check('skills bundle id', skills.id, 'dsh-skills')
+check('skills inject', JSON.stringify(skills.exports.inject), '["slots"]')
+check(
+  'skills stylesheet injected',
+  skillsCss.includes('.dsk-button{') && skillsCss.includes('.dsk-list{') && skillsCss.includes('.dsk-editor{'),
+)
+const skillsSeats = {}
+const skillsClicks = []
+skills.exports.apply({
+  slots: {
+    inject: (name, fn) => fn(),
+    register(spec, component) {
+      skillsSeats[spec.name] = { spec, component }
+      return () => {}
+    },
+  },
+  get: () => undefined,
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+check('skills takes one seat', Object.keys(skillsSeats).join(','), 'conversation.session.header.utilities')
+const skillsSeat = skillsSeats['conversation.session.header.utilities']
+check('skills button id', skillsSeat.spec.id, 'dsh-skills')
+// THE SEAT: -50 is one step LEFT of the page-zoom control (-40), which is where
+// it was asked to be; the list renders ascending, so nothing else may take it.
+check('skills button order is left of the zoom control', skillsSeat.spec.order, -50)
+const skillsMarkup = renderToStaticMarkup(h(skillsSeat.component, { sessionId: 'sess-1' }))
+check('skills button renders its glyph', skillsMarkup.includes('data-dsh-skills="button"') && skillsMarkup.includes('aria-label="Skills"'))
+// The modal is opened on the pack's shared surface in its RICH form, and its
+// absence is a sentence rather than a crash.
+check(
+  'the button opens the shared dialog in its rich form',
+  skillsSource.includes("const MODAL_SERVICE = 'modals'") &&
+    skillsSource.includes("size: 'lg'") &&
+    skillsSource.includes('content: (helpers) => h(SkillsBrowser'),
+)
+check('a missing modal service is handled', skillsSource.includes('is not mounted in this profile'))
+
+// The browser mounts and draws its first frame (a static render runs no effect,
+// so this is the loading state - the whole tree still has to survive building).
+const skillsBrowser = renderToStaticMarkup(
+  h(skills.exports.__internals.SkillsBrowser, { sessionId: 'sess-1', close: () => {} }),
+)
+check(
+  'the browser draws its frame before the catalog arrives',
+  skillsBrowser.includes('Skills') && skillsBrowser.includes('Reading the skill catalog') && skillsBrowser.includes('>Close<'),
+)
+
+// The pure half, driven directly: the grouping a reader sees and the label an
+// unknown bucket gets.
+const internals = skills.exports.__internals
+check('source labels are the reader-facing ones', internals.sourceLabel('project-dsh'), 'Project \u00b7 .dsh/skills')
+check('an unknown source is shown as itself', internals.sourceLabel('something-new'), 'something-new')
+check('the known buckets keep the documented order', internals.SOURCE_ORDER.join(','), 'project-dsh,project-agents,custom,user-dsh,user-agents,bundled,runtime')
+check('an unknown bucket groups apart', internals.groupKeyOf({ source: 'something-new' }), 'other')
+check('a known bucket groups by itself', internals.groupKeyOf({ source: 'user-dsh' }), 'user-dsh')
+check(
+  'a row names its provider and its shape',
+  internals.metaOf({ provider: 'dsh-pdf', kind: 'bundle', bytes: 2048 }) === 'dsh-pdf \u00b7 SKILL.md folder \u00b7 2.0 KB',
+)
+check('a runtime row says it has no file', internals.metaOf({ provider: 'some-plugin', kind: 'runtime', bytes: null }).includes('no file'))
+check('sizes read as sizes', internals.formatBytes(512) === '512 B' && internals.formatBytes(4096) === '4.0 KB' && internals.formatBytes(3 * 1024 * 1024) === '3.0 MB')
+
+// THE LOAD-BEARING RULE OF THE SAVE: the client names a SKILL, never a path -
+// the host writes the file the registry resolved. Pinned from the source, since
+// a static render runs no handler.
+const skillsPayload = /const payload = \{([\s\S]*?)\n          \}/.exec(skillsSource)
+check('the save payload exists', skillsPayload !== null)
+check(
+  'the save payload carries no path',
+  skillsPayload !== null && skillsPayload[1].includes('session: sessionId') && skillsPayload[1].includes('name: doc.data.name') && skillsPayload[1].includes('expected:') && !skillsPayload[1].includes('path'),
+)
+check(
+  'an edit is only offered for a file-backed skill',
+  skillsSource.includes('doc.data !== null && doc.data.editable') && skillsSource.includes("draft === null ? 'Edit' : 'Stop editing'"),
+)
+check(
+  'the routes match the host half',
+  ['/list', '/body', '/save'].every((suffix) => skillsSource.includes("API_ROOT + '" + suffix + "'")),
+)
+
 // --------------------------------------------------------------- dsh-editor
 const editor = loadBundle('packages/dsh-editor/lib/client.js', {})
 // The editor's stylesheet, injected at module scope: the alpha.8 resets of what
@@ -2121,7 +2232,7 @@ const indexMarkup = renderToStaticMarkup(h(IndexBody, { sessionId: 'sess-1' }))
 check('index body renders its empty state', indexMarkup.includes('Nothing yet: this conversation has no diagrams and the library is empty.'))
 check(
   'index body offers both engines',
-  indexMarkup.includes('>New Mermaid<') && indexMarkup.includes('>New TikZ<') && indexMarkup.includes('dsh-diagrams 0.1.0-alpha.6'),
+  indexMarkup.includes('>New Mermaid<') && indexMarkup.includes('>New TikZ<') && indexMarkup.includes('dsh-diagrams 0.1.0-alpha.7'),
 )
 // The index is where the LIBRARY becomes visible: the file bar always counts
 // both halves, and the two labelled lists are asserted from the source below

@@ -23,6 +23,16 @@ share one vendored pdf.js engine and one content-addressed page cache.
 `pdf_info` first is almost always right: it is one parse, it is cached, and it
 tells you whether text can be read at all.
 
+## Worked sequences
+
+`reference/workflows.md` beside this file has the order that actually works for
+each common request - a document you have never seen, the scanned contract, an
+invoice or statement (`layout` and where to look for the total), a chat
+attachment, a figure, a locked file, a long or damaged one, and which PDFs are in
+the workspace at all. Read it when the request is not simply "read these pages":
+it also records what to report back, and the printed-page-versus-PDF-page rule
+that makes a citation checkable.
+
 ## Reading order is not layout
 
 `pdf_read` has two modes, and the difference decides whether a document is

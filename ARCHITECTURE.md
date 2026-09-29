@@ -73,6 +73,12 @@ packages/dsh-modal/               # sub-plugin: the shared dialog surface
   cordis.patch.yml    # inserts the 'modal' row (nothing else patched)
   lib/index.js        # Node half: no-op row (the overlay is browser-only)
   lib/client.js       # browser half: body-level overlay + the `modals` client service
+                      # (form dialogs, and the RICH dialog dsh-skills opens: spec.content + size 'lg')
+packages/dsh-skills/              # sub-plugin: the Skills browser (see section 18)
+  package.json        # dsh.bundle + dsh.client
+  cordis.patch.yml    # inserts the 'skills' row (nothing else patched)
+  lib/index.js        # Node half: /api/dsh-skills/list|body|save over ctx.skills (the HOST's registry)
+  lib/client.js       # browser half: one header button at order -50, and the modal that lists, reads and edits
 packages/dsh-themes/              # sub-plugin: the header's page-zoom, capture, theme and download controls
   package.json        # dsh.bundle + dsh.client
   cordis.patch.yml    # inserts the 'themes' row (nothing else patched)
@@ -598,6 +604,15 @@ Design points worth keeping:
   the capture phase and stops propagation, so the pane underneath never also
   reacts to the same key. Mask click and Cancel cancel; none of them fires while
   `submit` is in flight.
+- **A second SHAPE, for a dialog that is not a question (alpha.2).** `spec.content`
+  is a render function handed `{ close }` that owns the whole body, and
+  `size: 'lg'` gives it a roomy frame; fields, `validate` and `submit` do not
+  apply to one. The point is that Escape handling, the focus restore and the
+  one-at-a-time queue stay in ONE place instead of every rich surface shipping
+  its own overlay - `dsh-skills`' browser (§20) was the first caller. A rich
+  dialog's **mask click deliberately does NOT close it**: it can hold unfinished
+  work, and a stray click outside must not throw that away. Escape and the
+  content's own Close control are the ways out.
 
 ## 9. The conversation header (dsh-themes)
 
@@ -610,10 +625,11 @@ The conversation header's right-hand group is a slot list
 (`conversation.session.header.utilities`): the shipped **Open In…** split button
 registers there at `order: -10`, the Session-log download seat at the default `0`
 (that seat used to draw a three-dot button — see the download seat below), the
-**Screenshot** control at **`-30`**, the Themes control at **`-20`** and the
-**Page-zoom** control at **`-40`**, the leftmost of the pack's four. The list
-renders in ascending order, so the row reads zoom | capture | themes | download
-next to Open In. Nothing shipped is patched or reordered.
+**Screenshot** control at **`-30`**, the Themes control at **`-20`**, the
+**Page-zoom** control at **`-40`** — the leftmost of this package's four — and,
+one seat further left again at **`-50`**, `dsh-skills`' **Skills** button (§20).
+The list renders in ascending order, so the row reads skills | zoom | capture |
+themes | download next to Open In. Nothing shipped is patched or reordered.
 
 **The Themes control.** One icon button with a `Menu`:
 
@@ -942,7 +958,8 @@ absent — an older profile, or `-Plugin dsh-themes` against a partial install �
 produces a picture; the toast says which of the two paths happened.
 
 **The Page-zoom control (alpha.15).** The fourth occupant of the same list, at
-**`order: -40`** — one more step left, so it is the first control in the group —
+**`order: -40`** — one more step left, so it is the first control in THIS package's
+group (the pack's Skills button sits one seat further left, at `-50`, §20) —
 which drops a `Menu` holding the level in force plus the two steps, **Zoom in** and
 **Zoom out**.
 
@@ -956,7 +973,7 @@ the equivalent itself.
 |---|---|
 | slot | `conversation.session.header.utilities` (list, session scope) |
 | `id` | `dsh-themes-zoom` |
-| `order` | `-40` — the group's leftmost occupant, left of the Screenshot control (`-30`) |
+| `order` | `-40` — leftmost of this package's controls, left of the Screenshot control (`-30`); `dsh-skills`' button is one step further left at `-50` |
 | what it writes | ONE inline declaration on `document.documentElement`: `zoom: <percent/100>`, and `removeProperty('zoom')` at the resting level |
 | ladder | Chrome's own zoom steps, cut at **50%** and **200%** |
 | memory | `localStorage['dsh-themes.page-zoom']`, per origin, re-applied before the control's first render |
@@ -1472,7 +1489,7 @@ passes that through as the batch's own exit code).
   blank master, so a profile that lists it still gets no client half — plus
   `dsh-rightbar`, `dsh-rightbar-files`, `dsh-editor`, `dsh-gittree`,
   `dsh-image`, `dsh-audio`, `dsh-media`, `dsh-video`, `dsh-diagrams`, `dsh-pdf`,
-  `dsh-terminal`, `dsh-modal`,
+  `dsh-skills`, `dsh-terminal`, `dsh-modal`,
   `dsh-ui-state`, `dsh-themes`, `dsh-open-in-app`) as `pnpm link:` symlinks straight into this repo (detected by
   `Test-LiveLink` / `is_live_link()`, comparing realpaths case-insensitively on
   Windows). Code edits then already apply - a restart of
@@ -1739,7 +1756,15 @@ overwritten and uninstall removes exactly what it wrote. The copy is recursive,
 which is what lets each skill carry a `reference/complex-diagrams.md` beside its
 `SKILL.md`, and `check-skill-examples.mjs` parses or compiles every fenced
 example in those files with the same engines the plugin uses - documentation that
-does not run is documentation that misleads.
+does not run is documentation that misleads. The two families whose examples are
+TOOL CALLS rather than source get the same treatment from
+`check-media-examples.mjs`: it walks `dsh-media`'s two skills and their reference
+files plus `pdf-analysis`, reconstructs each example's JSON across the lines it
+spans (a `media_run` argv array, an ffprobe invocation object, a
+`pdf_scan { ... }` pseudo-call) and then runs every media example whose inputs a
+fixture set - built with real ffmpeg under the names the documents use - can
+provide, reading this build's own `-encoders` and `-filters` first and printing
+every skip with its reason.
 
 **TeX is optional.** `GET /api/dsh-diagrams/health` reports `tex.available`; with
 no engine the index, the tab and the tool result all say the diagram was stored
@@ -2223,11 +2248,13 @@ dimensions, a film's codec or a recording's sample rate, and it could not answer
 ffmpeg - needs an ffmpeg the machine may not have.
 
 So the package is three things in one row: **three tools** (`lib/tools.js`),
-**two bundled skills** (`skills/ffmpeg-cli`, `skills/ffprobe-cli`), and **the
-pinned copy** of ffmpeg that makes both honest (`lib/ffmpeg.js`,
-`lib/binaries.json`). It is HOST-ONLY - no `dsh.client`, no browser bundle - and
-its routes exist for `dsh-video`'s tab, so that the interface and the model read
-the same probe through the same code.
+**two bundled skills** (`skills/ffmpeg-cli`, `skills/ffprobe-cli`, each an entry
+`SKILL.md` plus the `reference/` files it routes to - the recipe book, the filter
+graphs, the per-host parts and the failure catalogue for ffmpeg, the field
+catalogue for ffprobe), and **the pinned copy** of ffmpeg that makes both honest
+(`lib/ffmpeg.js`, `lib/binaries.json`). It is HOST-ONLY - no `dsh.client`, no
+browser bundle - and its routes exist for `dsh-video`'s tab, so that the interface
+and the model read the same probe through the same code.
 
 **Why the tools are not one command runner.** `media_probe` is the shape a model
 actually needs from a media file: one ffprobe run, one report, and a verdict
@@ -2360,3 +2387,78 @@ on every tick, a polling loop feeding itself.
 **Chapters are jump targets, in both the panel and the toolbar picker**, and a
 chapter click moves the playhead AND starts playback, because a chapter is a
 place you wanted to watch.
+
+## 20. The Skills browser (dsh-skills)
+
+**One button, one modal, and the host's own registry behind it.** Skills are
+advertised to the model in the system prompt, loaded on demand by the `skill`
+tool and listed by name in the composer's `/` menu - and none of those surfaces
+shows a person WHERE a skill lives, WHICH copy won when two are installed under
+one name, or what its document says. That gap is what this package fills, and it
+is a separate bundle for the same reason §7 is: a row, a version and a check of
+its own, installable independently.
+
+**The catalog is not a second opinion.** `/api/dsh-skills/list` calls
+`ctx.skills.snapshot({ cwd, scope })` - the SAME registry, with the same project
+folder and the same agent scope, that the system prompt and the `skill` tool
+read - so the modal cannot disagree with what the model was given. Two details
+make that true rather than approximately true:
+
+- **`cwd` comes from the session**, in the order of freshness: the live Session
+  header (§6's own lookup for its workspace root), else the projected
+  `sessionQuery.observeSession`, else the stored header from
+  `sessionPersistence`. A conversation that is not running in this process still
+  gets its project's skills.
+- **The scope selects an agent preset's layer**, and that is not optional on this
+  harness line: the web roster DISABLES the host `skill-filesystem` row (§2) so
+  the filesystem provider lives in the preset layer. `ctx.skills` merges the
+  global layer first and the viewing scope's chain after it, so a preset-layer
+  entry wins a duplicate name; the registry that serves a live session is
+  `agentPresets.serviceFor(live, 'skills')`, and a cold one resolves its recorded
+  preset through `standingKeyFor(preset)`.
+
+**Paths come from `get()`, never from `list()`.** The registry's summary type
+deliberately carries no path (`toSummary` drops it: the summary feeds a prompt,
+where a file path is prompt budget for nothing), so each entry is loaded once
+through `ctx.skills.get(name, …)` to obtain the definition - which is where
+`path` and `content` live. A handful of small Markdown files per listing, memoized
+for 1.5 s so opening the modal is one round of reads.
+
+**Every write is addressed by skill name, never by path.** The client sends
+`{ session, name, text, expected }`; the host resolves the name through the
+registry and writes the file IT returned. There is therefore no request shape
+that can name a file this plugin would not have offered, and no path policy to
+get wrong. On top of that: the target must be a regular `.md`; the text must
+still carry the frontmatter the registry reads a skill out of (`name:` and
+`description:`) - a TEXT-LEVEL guard, because this pack ships no YAML parser and
+the registry's parser stays the authority - the publish is atomic (a private temp
+beside the target, then a rename), and the save carries `expected.mtimeMs/size`
+so a file that moved since it was opened is refused (`409 CHANGED_ON_DISK`)
+rather than clobbered.
+
+**The reload verdict is honest, and it is keyed on the PROVIDER.** A definition
+served by the shipped `filesystem` provider is watched, so a save is picked up on
+the next listing and the next turn; any OTHER provider read the file (or holds
+the text outright) when the harness started, so the answer says "restart" instead
+of promising a reload that will not happen. Where the winning definition names NO
+file at all, the modal shows the loaded text, marks it read-only and says why -
+a button that cannot work is worse than a sentence.
+
+**The modal is the pack's shared dialog surface, in its RICH form** (§8): the
+overlay, the Escape handling, the focus restore and the one-dialog-at-a-time
+queue are `dsh-modal`'s, and this package contributes only the body. That is why
+the button degrades in a sentence when `dsh-modal` is absent instead of throwing.
+
+**A companion fix, and why it is in §20.** Building this surface found a real
+bug in the three packages that register a skill at runtime (§15, §16, §18):
+`ctx.skills.register()` did not set `source`, and `ctx.skills.get()` - what the
+`skill` tool calls to LOAD a skill, as opposed to listing it - validates the
+definition it gets back and requires a STRING `source`. Wherever such a
+registration is the WINNING entry (a host-scoped read, or a composition whose
+preset mounts no filesystem provider) the skill answered `loaded skill "x" source
+must be a string` and could not be loaded at all. Those registrations now name
+their source bucket (`bundled`) and the file they read, which also makes the
+definition file-backed for this browser. `check-node-routes.mjs` pins both fields
+from the source of all three packages and `check-media-node.mjs` pins them
+behaviourally, because a registration that silently loses either one is invisible
+until someone tries to load the skill.

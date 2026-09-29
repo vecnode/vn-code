@@ -292,22 +292,14 @@ for (const file of skillFiles) {
   check(label + ': names the tools it drives', /media_probe/.test(text) && /media_run/.test(text))
   check(label + ': teaches the argv ARRAY, not a command string', /\*\*array\*\*|array of arguments|argv/i.test(text))
 }
-// Every fenced JSON block in these skills must actually parse: they are the
-// closest thing to a copy-pasteable tool call, and a stray comma would be sent
-// straight to media_run by an agent that trusts the document.
-for (const file of skillFiles) {
-  const text = readFileSync(file, 'utf8')
-  const blocks = [...text.matchAll(/```json\n([\s\S]*?)```/g)].map((match) => match[1].trim())
-  const bad = blocks.filter((block) => {
-    try {
-      JSON.parse(block)
-      return false
-    } catch (err) {
-      return true
-    }
-  })
-  check(path.basename(path.dirname(file)) + ': every ```json example parses', bad.join(' | '), '')
-}
+// The examples in these two skills used to be "checked" right here, by parsing
+// every ```json fenced block - and it passed over an EMPTY list for as long as
+// it existed, because not one example in either skill is fenced `json`. That
+// loop is gone rather than repaired: examples are now driven by
+// `check-media-examples.mjs`, which walks both skills AND their reference files,
+// reconstructs each array across the lines it spans, and really RUNS every
+// example this host can provide a fixture for. Keep example checking there, so
+// there is one owner and one verdict.
 const skillBodies = skillFiles.map((file) => readFileSync(file, 'utf8'))
 check(
   'the ffmpeg skill names every injected guardrail',
@@ -326,6 +318,21 @@ check('both skills registered at apply time', skills.map((skill) => skill.name).
 check('...under this package as their provider', [...new Set(skills.map((skill) => skill.provider))].join(','), 'dsh-media')
 check('...with their frontmatter description carried over', skills.every((skill) => typeof skill.description === 'string' && skill.description.length > 20))
 check('...and a loaded body', skills.every((skill) => typeof skill.content === 'string' && skill.content.length > 1000))
+// A REGISTRATION MUST NAME ITS FILE AND ITS SOURCE BUCKET (alpha.2). Not
+// cosmetics: `ctx.skills.get()` - what the `skill` tool calls to LOAD a skill -
+// validates the definition it gets back and requires a STRING `source`, so a
+// runtime registration without one is unloadable wherever it is the winner; and
+// `path` is what makes the definition file-backed instead of an address-less
+// text. Both are pinned here so neither can be dropped in a later edit.
+check(
+  '...naming the file each was read from',
+  skills.every((skill) => typeof skill.path === 'string' && skill.path.endsWith('SKILL.md') && existsSync(skill.path)),
+)
+check('...and its source bucket', [...new Set(skills.map((skill) => skill.source))].join(','), 'bundled')
+check(
+  '...with the skill folder as the resource base',
+  skills.every((skill) => skill.resourceBase && skill.resourceBase.kind === 'directory' && path.dirname(skill.path) === skill.resourceBase.path),
+)
 const noRegistry = plugin.registerSkills({ effect: (fn) => fn(), get: () => undefined }, { warn() {} })
 check('a profile with no skill registry degrades to a warning', noRegistry, 0)
 

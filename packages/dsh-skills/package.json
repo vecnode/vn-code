@@ -1,0 +1,30 @@
+{
+  "name": "dsh-skills",
+  "version": "0.1.0-alpha.1",
+  "description": "The SKILLS BROWSER: one button immediately left of the page-zoom control in the conversation header opens a centered modal listing every skill the harness actually loads for this conversation - name, description, where it came from (project / user / custom / bundled / runtime), the provider that owns it, whether the model and the user may invoke it, and the absolute file behind it - and shows that skill's markdown, frontmatter included, with inline editing and a Save that goes back through this plugin's own authenticated route. The catalog is the HOST's: ctx.skills.snapshot() is the same registry the system prompt and the / menu read, so the modal cannot disagree with what the model was given. A file-backed skill is editable here (the client never names a path: it names a skill, and the host writes the file the registry itself resolved, atomically, with an mtime/size guard so a save cannot clobber a concurrent edit); a skill registered at runtime without a file is shown from its loaded content and is honestly read-only. No core patches, no fork, no npm dependencies.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session",
+        "dsh-modal"
+      ]
+    }
+  },
+  "license": "MIT"
+}

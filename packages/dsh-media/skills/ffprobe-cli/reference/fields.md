@@ -17,6 +17,7 @@ and every quoted value here was produced against real fixtures.
 | `-show_packets` | one entry per packet | a full demux pass |
 | `-show_frames` | one entry per frame, with picture type and colour | a decode pass |
 | `-count_frames` | decodes to count | a decode pass, and slow |
+| `-show_data` | a hexdump of the bytes behind a section - `stream=extradata` is the useful one | depends what it is attached to |
 | `-show_stream_groups`, `-show_program_version` | container-specific extras | free |
 
 `-of` writers worth knowing: `json` (`-print_format json` is the same option),
@@ -150,6 +151,111 @@ three-second window, `1:00%+10` starts at 1:00, `%+#1` is the first item. It
 bounds *packets*. `-skip_frame nokey` is the option that makes a `-show_frames`
 walk decode keyframes only - it does not filter a packet listing, which still
 prints everything in the window.
+
+## Programs and PIDs: a transport stream is a different shape
+
+`-show_streams` answers "what streams are in this file". A **transport stream**
+also carries a *program* layer that says which streams belong together and which
+PID carries them, and that layer is what `-show_programs` reads:
+
+```
+["-v","error","-show_programs","-of","json","clip.ts"]
+```
+
+Measured on a TS the tracked check builds from an MP4:
+
+```text
+"programs": [ { "program_id": 1, "program_num": 1, "nb_streams": 1,
+                "pmt_pid": 4096, "pcr_pid": 256,
+                "tags": { "service_name": "Service01", "service_provider": "FFmpeg" },
+                "streams": [ ... ] } ]
+```
+
+Read it when a TS misbehaves: a `pcr_pid` naming a stream that is not there, a
+program with fewer streams than `-show_streams` reported, or several programs in
+one file (a multi-service capture) are all facts `-show_streams` alone cannot give
+you. On an MP4 or MKV the section is empty, which is correct rather than an error
+- those containers have no program layer.
+
+## Measuring what the header does not say
+
+Three measurements cover most of what a container omits.
+
+**A bitrate the container did not record.** Matroska often omits `bit_rate`, and
+`N/A` is not a failure. Sum the packets instead - `packet=size` is cheap and needs
+no decode:
+
+```
+["-v","error","-select_streams","v:0","-show_entries","packet=size","-read_intervals","%+2","-of","csv=p=0","clip.mp4"]
+```
+
+One size per line (`2200`, `668`, `250`, ...). Bits per second is
+`sum(sizes) * 8 / seconds`, and a bounded `-read_intervals` window is a *sample*
+of the rate rather than the whole file - say which of the two you measured.
+
+**A frame count, and the identity behind `avg_frame_rate`.** `nb_frames` is often
+`N/A`; `-count_frames` decodes and counts for real:
+
+```
+["-v","error","-select_streams","v:0","-count_frames","-show_entries","stream=nb_read_frames","-of","default=nw=1","vfr.mp4"]
+["-v","error","-show_entries","format=duration","-of","default=nw=1","vfr.mp4"]
+```
+
+Measured on the check's own variable-rate fixture: `nb_read_frames=7` and
+`duration=1.900000`, and `7 / 1.9 = 3.684` - which is exactly that file's
+`avg_frame_rate=70/19`. **`avg_frame_rate` is frames ÷ duration**, not a rate
+anyone measured, which is what makes it the honest number for a file whose rate
+wanders.
+
+**Whether a file is really variable-rate.** The cheap header check first:
+
+```
+["-v","error","-select_streams","v:0","-show_entries","stream=r_frame_rate,avg_frame_rate","-of","default=nw=1","vfr.mp4"]
+```
+
+`r_frame_rate=10/3` and `avg_frame_rate=70/19` on the same file: they differ, so it
+is variable-rate. `r_frame_rate` is the rate the container *calls* "the" rate and
+it can be nonsense - it is the number to distrust, not the one to quote. Confirm
+with the count above when the answer matters, and remember that a **raw elementary
+stream** has no container timing at all, so remux it into MP4 before believing any
+frame rate it reports.
+
+If you look at packet timestamps directly, mind the **order**:
+
+```
+["-v","error","-select_streams","v:0","-show_entries","packet=pts_time","-read_intervals","%+2","-of","csv=p=0","clip.mp4"]
+```
+
+Measured: `0.000000`, `0.900000`, `0.300000`, `0.600000`. Those are **decode**
+order, so they are not sorted and consecutive differences are not frame intervals
+- with B-frames present, `pts_time` runs backwards on purpose. Sort before
+differencing, or read `-show_frames` with `best_effort_timestamp_time`, and never
+call a file variable-rate because a raw diff of this output looked irregular.
+
+## Reading raw bytes: `-show_data`
+
+`-show_data` makes ffprobe hexdump the bytes behind a section, with the printable
+characters beside them. `stream=extradata` is the one worth knowing:
+
+```
+["-v","error","-select_streams","v:0","-show_data","-show_entries","stream=extradata","-of","default=nw=1","clip.mp4"]
+```
+
+Measured, on H.264:
+
+```text
+extradata=
+00000000: 0164 000a ffe1 0019 6764 000a acd9 4284  .d......gd....B.
+00000010: 7e5c 0440 0000 0300 4000 0005 03c4 8965  ~\.@......@....e
+00000020: 8001 0006 68eb e094 b22c fdf8 f800       ....h....,.....
+```
+
+That is the H.264 configuration record - the SPS/PPS a decoder needs before the
+first frame, `67`/`68` being the NAL unit types inside it. Reach for it when a
+stream "is" a codec it does not decode as, when `codec_name` looks right but
+playback fails, or when you need the real profile of a raw stream. It can be a
+great deal of output, so pair it with `-select_streams` and a `-show_entries` that
+names only what you want.
 
 ## Diagnosis, in detail
 

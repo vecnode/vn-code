@@ -14,7 +14,7 @@ package answers them, and gives the agent a real ffmpeg:
 | `media_run` | A **real ffmpeg or ffprobe command**, as an argv array. No shell, a deadline, an output cap, and no overwrite unless you say so. |
 | `media_frames` | Frames **out** of a video: at named timestamps, sampled evenly, or tiled into one contact sheet. |
 | the pinned copy | The exact static build per platform, by URL **and SHA-256**, downloaded once into `$DSH_HOME/dsh-media/bin` when the machine has no ffmpeg of its own. |
-| two skills | `ffmpeg-cli` and `ffprobe-cli`, registered at runtime and copied into `$DSH_HOME/skills` by both installers. |
+| two skills | `ffmpeg-cli` and `ffprobe-cli`, registered at runtime and copied into `$DSH_HOME/skills` by both installers — each with its `reference/` files beside it, and every example in them checked by `scripts/checks/check-media-examples.mjs`. |
 | seven routes | The bytes (with **HTTP Range**), the probe summary as JSON, and the background remux/transcode that `dsh-video`'s tab lives on. |
 
 It is a **host-only** bundle: no `dsh.client`, no browser bundle, nothing in the
@@ -209,14 +209,37 @@ versus re-encode, which containers a browser opens, `-ss` before `-i`, mapping
 streams, reading a failed command's log, and, for ffprobe, what each field family
 means and how to diagnose a file from its header alone.
 
+Each skill is an ENTRY POINT plus the references its summary routes to, because
+the entry is loaded every time and a reference is read only when its question
+comes up:
+
+| File | Answers |
+|---|---|
+| `ffmpeg-cli/reference/cookbook.md` | joining clips, the delivery flag sets, target-size encodes, GIF/WebP/APNG, and what each operation class costs |
+| `ffmpeg-cli/reference/filters.md` | `-vf`/`-filter_complex`: geometry, overlay/watermark/PiP, subtitle burn-in, retiming, frame selection, colour and denoise, `-progress` |
+| `ffmpeg-cli/reference/platforms.md` | the parts that genuinely differ per host — a path inside a **filter** value (where a Windows drive colon needs two backslashes, measured), concat lists, where the binary is resolved from, hardware encoders, capture devices, globs and variables |
+| `ffmpeg-cli/reference/failures.md` | the message catalogue with the exact wording, and what each exit code can and cannot tell you |
+| `ffprobe-cli/reference/fields.md` | every field family, the deeper sections, the three measurements a container does not give you (bitrate from packets, frame count, a real variable-rate proof), the transport-stream program/PID layer, and `-show_data` |
+
 A skill a person wrote is never overwritten: each copied folder carries a
 `.vn-harness-dsh-media` marker, so uninstall removes only what the installer put
 there.
+
+Every example in them is checked rather than trusted:
+`scripts/checks/check-media-examples.mjs` parses each one as the tool call it is
+meant to be - a `media_run` argv array or an ffprobe invocation - and then
+**runs** the ones this host can provide for, building its fixtures with real
+ffmpeg under the very names the documents read. An example that needs an encoder
+or a filter this build lacks is skipped WITH its reason and never counted as a
+pass; the two that are templates naming a path or a font no host could have are
+marked `no-check` and reported as skipped. It is what found nine examples whose
+inline prose made the array unusable.
 
 ## Verifying a change
 
 ```
 node scripts/checks/check-media-node.mjs
+node scripts/checks/check-media-examples.mjs
 ```
 
 The tracked check drives the shipped code path — module import, `apply(context)`,
@@ -229,6 +252,11 @@ network), while the ffmpeg-dependent half (real probes, real frames, a real
 remux and a real transcode) runs when the host has ffmpeg and **skips loudly**
 when it does not. `DSH_MEDIA_NO_INSTALL=1` and a temp `DSH_HOME` are set before
 import, so no check run can start a download or touch `~/.dsh`.
+
+The second check guards the DOCUMENTATION rather than the code: it shapes every
+example in both skills (and in `reference/`, which the first check never read)
+and executes the ones this host can run. See "The two skills" above for what it
+does and does not claim.
 
 ## Install
 

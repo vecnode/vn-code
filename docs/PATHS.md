@@ -48,7 +48,7 @@ root** — with the three exceptions in §3.
 | `.credentials.yaml` | the model API key | `dsh-credentials-local` |
 | `.anonymous-user-id` | one random id, created on first run | `dsh-anonymous-user-id` |
 | `attachments/v1/files/…` | files pasted/attached into a conversation | `dsh-attachment-local` |
-| `skills/` | the pack's copied skills (`mermaid-diagrams`, `tikz-diagrams`, `pdf-analysis`, `ffmpeg-cli`, `ffprobe-cli`), each under a `.vn-harness-<package>` marker | both installers |
+| `skills/` | the pack's copied skills (`mermaid-diagrams`, `tikz-diagrams`, `pdf-analysis`, `ffmpeg-cli`, `ffprobe-cli`), each under a `.vn-harness-<package>` marker — the copy is recursive, so a skill's own `reference/` files come with it | both installers |
 | `profiles/<name>/` | the profile: `package.json`, `cordis.yml`, `cordis.patch.yml`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `node_modules/`, `.dsh-module-fallback/` | `dsh-app-boot`, pnpm, the installers |
 | `profiles/node_modules/` | **junctions/symlinks into the installation** — see §2 | `healProfilesModuleFallback`, at every boot |
 | `dsh-pdf/artifacts/<sha256>/…` | PDF parse cache: `index.json`, `stats.json`, `pages/`, `ocr/`, `images/` | `dsh-pdf` |

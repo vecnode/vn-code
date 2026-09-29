@@ -25,6 +25,14 @@
  * handlers, so the dialog closes and the pane under it does not), and a click
  * on the mask; none of them fires while `spec.submit` is still running.
  *
+ * A RICH DIALOG is the same surface with `content` (alpha.2): a render function
+ * that receives `{ close }` and owns the whole body, for a dialog that is not a
+ * question - a list beside a document, a browser, a form of its own. Fields,
+ * `validate` and `submit` do not apply to one (the content drives its own work),
+ * the panel grows to `size: 'lg'`, and a MASK CLICK NO LONGER CLOSES IT: a rich
+ * dialog can hold half-finished work, and a stray click outside it must not
+ * throw that away - Escape and the content's own Close button remain.
+ *
  * The host owns no slot: it creates its own detached container on
  * `document.body` and renders it with `react-dom/client`'s `createRoot`, both
  * of which the shell seeds in the module table (`react`, `react-dom`,
@@ -46,7 +54,7 @@ window.__ModuleLoader__.load({
     const h = React.createElement
 
     /** Version marker, mirrored by the package manifest. */
-    const PLUGIN_VERSION = '0.1.0-alpha.1'
+    const PLUGIN_VERSION = '0.1.0-alpha.2'
     /** The client service name other plugins resolve. */
     const SERVICE = 'modals'
 
@@ -59,6 +67,10 @@ window.__ModuleLoader__.load({
 .dsm-mask{position:absolute;inset:0;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.42));backdrop-filter:var(--dsw-mask-blur,blur(2px))}
 .dsm-panel{position:relative;z-index:1;box-sizing:border-box;width:420px;max-width:100%;max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:20px;border-radius:16px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.22));background:var(--dsw-alias-bg-layer-2,#242424);color:var(--dsw-alias-label-primary,#ececec);box-shadow:var(--dsw-elevation-prominent,0 18px 48px rgba(0,0,0,.4));font-family:var(--dsw-font-family,inherit);font-size:13.5px;line-height:1.55}
 .dsm-title{margin:0;font-size:15px;font-weight:600;line-height:1.4;color:var(--dsw-alias-label-primary,#ececec)}
+/* A rich dialog (spec.content) owns its whole body: the panel is a frame that
+   the content lays out, so it stops padding and scrolling itself. */
+.dsm-panel.dsm-lg{width:min(1120px,94vw);height:min(800px,90vh);padding:0;gap:0;overflow:hidden}
+.dsm-content{flex:1;min-height:0;display:flex;flex-direction:column}
 .dsm-message{margin:0;color:var(--dsw-alias-label-secondary,#b8b8b8);font-size:12.5px;line-height:1.55;overflow-wrap:anywhere}
 .dsm-form{display:flex;flex-direction:column;gap:12px;margin:0}
 .dsm-field{display:flex;flex-direction:column;gap:5px;min-width:0}
@@ -168,6 +180,10 @@ window.__ModuleLoader__.load({
         fields: Array.isArray(source.fields) ? source.fields.map(normalizeField) : [],
         validate: typeof source.validate === 'function' ? source.validate : undefined,
         submit: typeof source.submit === 'function' ? source.submit : undefined,
+        /** A rich dialog's own body; when present it replaces fields and actions. */
+        content: typeof source.content === 'function' ? source.content : undefined,
+        /** `size: 'lg'` is the roomy frame a two-column rich dialog is laid out in. */
+        size: source.size === 'lg' ? 'lg' : 'md',
         confirmLabel: typeof source.confirmLabel === 'string' && source.confirmLabel !== '' ? source.confirmLabel : 'OK',
         /** `cancelLabel: null` renders no cancel button (a plain acknowledgement). */
         cancelLabel: source.cancelLabel === null ? null : typeof source.cancelLabel === 'string' && source.cancelLabel !== '' ? source.cancelLabel : 'Cancel',
@@ -373,6 +389,31 @@ window.__ModuleLoader__.load({
           field.hint === '' ? null : h('span', { className: 'dsm-hint' }, field.hint),
         ),
       )
+
+      // A RICH DIALOG: the caller's own render function owns the body, so there
+      // is no form, no field row and no action row to submit through - the
+      // content closes the dialog itself through the `close` it is handed.
+      if (request.content !== undefined) {
+        return h(
+          'div',
+          { className: 'dsm-overlay', role: 'presentation' },
+          // No mask click: a rich dialog can hold unsaved work, and Escape (and
+          // the content's own Close control) is what closes it.
+          h('div', { className: 'dsm-mask', 'aria-hidden': true }),
+          h(
+            'div',
+            {
+              ref: panelRef,
+              className: 'dsm-panel dsm-lg',
+              role: 'dialog',
+              'aria-modal': 'true',
+              ...(request.title === '' ? { 'aria-label': 'Dialog' } : { 'aria-labelledby': titleId }),
+            },
+            request.title === '' ? null : h('h2', { className: 'dsm-title', id: titleId }, request.title),
+            h('div', { className: 'dsm-content' }, request.content({ close: (result) => finish(request, result === undefined ? null : result) })),
+          ),
+        )
+      }
 
       return h(
         'div',

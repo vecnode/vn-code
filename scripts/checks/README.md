@@ -1,17 +1,19 @@
 # scripts/checks
 
-Standalone verification for the pack's JavaScript halves. None of the five
-scripts needs a running harness and none is part of the installers; run them
-after touching a client bundle, a Node route or a shipped skill (they caught a
-real "the tab body never got the hook it needs" bug during the alpha.4 editor
-work). Node only - identical on Windows, macOS and Linux.
+Standalone verification for the pack's JavaScript halves. None of these scripts
+needs a running harness and none is part of the installers; run them after
+touching a client bundle, a Node route or a shipped skill (they caught a real
+"the tab body never got the hook it needs" bug during the alpha.4 editor work).
+Node only - identical on Windows, macOS and Linux.
 
 ```sh
-node scripts/checks/check-client-bundles.mjs   # module table + real React render
-node scripts/checks/check-node-routes.mjs      # every Node route + the diagram tools
-node scripts/checks/check-pdf-node.mjs         # the five pdf tools + the routes, against PDFs it builds
-node scripts/checks/check-skill-examples.mjs   # every fenced example in every shipped skill
-node scripts/checks/check-dist-layout.mjs      # the distribution: ship list, bundles, half-to-half parity
+node scripts/checks/check-client-bundles.mjs    # module table + real React render
+node scripts/checks/check-node-routes.mjs       # every Node route + the diagram tools
+node scripts/checks/check-pdf-node.mjs          # the five pdf tools + the routes, against PDFs it builds
+node scripts/checks/check-media-node.mjs        # the media tools + the routes, the pin, and both skills
+node scripts/checks/check-skill-examples.mjs    # every fenced example in the diagram skills, parsed or compiled
+node scripts/checks/check-media-examples.mjs    # every media/PDF example, shaped and then really RUN
+node scripts/checks/check-dist-layout.mjs       # the distribution: ship list, bundles, half-to-half parity
 DSH_CHECK_LAUNCH=1 node scripts/checks/check-node-routes.mjs   # also opens a real file browser
 ```
 
@@ -255,6 +257,36 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
   and parses or compiles it with the plugin's own engines, so a copy-pasteable
   source that no longer works fails the run instead of misleading the next
   agent.
+- `check-media-examples.mjs` is the same idea for the two families whose examples
+  are TOOL CALLS rather than source: it walks both media skills **and their
+  reference files** plus `pdf-analysis`, and holds them to two tiers. **Shape**
+  (always, hermetic) reconstructs each example's JSON across the lines it spans
+  and parses it - a `media_run` argv array, an ffprobe invocation object, or a
+  `pdf_scan { ... }` pseudo-call - which is what catches a stray comma, a
+  dropped quote or a line of prose welded onto the end of an array. A block with
+  a language in its info string is a sample of output rather than an example, and
+  `no-check` still marks one deliberately un-runnable template. **Execution**
+  (only when this host has ffmpeg) builds a fixture set with real ffmpeg under
+  the very names the documents read (`clip.mp4`, `two.mkv`, `withsubs.mkv`,
+  `attached.mkv`, `a.mp4`, `pal.png`, `list.txt`, `subs.srt`, `rotated.mp4`, a
+  genuinely interlaced `interlaced.mp4`, an HDR `hdr.mp4`, a transport-stream
+  `clip.ts` and a variable-rate `vfr.mp4`), and then runs every example whose
+  inputs are all fixtures, in a directory of its own, copying each fixture the
+  argv reads *or merely mentions* - a path inside a filter value never follows an
+  `-i` - through the argv shape `media_run` builds (`-hide_banner -loglevel
+  warning -nostdin`, and `-y` where the tool puts `-n`, because here nothing is
+  precious). It reads **this build's** own `-encoders` and `-filters` before each
+  one, so an example that needs an encoder or a filter the build lacks is skipped
+  with its name rather than failed; the same for an example whose input is not in
+  the fixture set. Every skip is printed with its reason, never counted as a
+  pass: that list is the readable measure of how much of the documentation has
+  actually been executed here. It has teeth - a deliberately introduced
+  `["-i","clip.mkv","-c","copy","clip.mp4",]` failed it and named the line, and
+  it caught two of its own author's examples while this skill set was written (a
+  Windows filter path that only works with the doubled backslash, and a graph
+  whose second labelled output was never mapped). The PDF family is shape-only on
+  purpose, because driving those tools needs real PDFs and `check-pdf-node.mjs`
+  already builds its own.
 - `check-dist-layout.mjs` covers the distribution feature, which is a COPY of
   this repository produced by two independent halves (`scripts/dist.ps1` on
   Windows, `scripts/dist.sh` everywhere else). It reads

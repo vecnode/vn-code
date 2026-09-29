@@ -3,7 +3,13 @@
 Working command shapes that do not fit in the skill summary: joining clips,
 choosing a quality setting, and the slower operations whose cost has to be
 planned for. Every command here is written as an `args` ARRAY for `media_run`,
-and every one of them was run against real fixtures before it was written down.
+and every one of them was run against real fixtures before it was written down -
+and is run again by `scripts/checks/check-media-examples.mjs`.
+
+This is the recipe book. The other three references answer their own questions:
+`filters.md` for `-vf`/`-filter_complex` work, `platforms.md` for the parts that
+genuinely differ per operating system, and `failures.md` for the message
+catalogue.
 
 ## Joining clips
 
@@ -82,18 +88,8 @@ the video-only output was **411 kB at `-crf 20`** and **108 kB at `-crf 35`**
 (`-preset veryfast`, same source) - a 4x range from one flag.
 
 For VP9 and AV1, `-crf` outside a constrained mode is ignored unless you also set
-`-b:v 0`, which is what puts the encoder in constant-quality mode. All three
-targets below were measured on the same source:
-
-```
-["-i","clip.mp4","-c:v","libx264","-pix_fmt","yuv420p","-crf","20","-preset","veryfast","-movflags","+faststart","-c:a","aac","-b:a","160k","-ac","2","out.mp4"]
-["-i","clip.mp4","-c:v","libvpx-vp9","-crf","32","-b:v","0","-c:a","libopus","-b:a","96k","out.webm"]
-["-i","clip.mp4","-c:v","libsvtav1","-crf","35","-preset","8","-c:a","aac","-b:a","160k","out.mp4"]
-```
-
-AV1 in MP4 is legal but less widely supported in older players; AV1 in WebM is
-the safer pairing. `libsvtav1` and `libaom-av1` are build-dependent - confirm
-with `-encoders` before relying on either.
+`-b:v 0`, which is what puts the encoder in constant-quality mode - which is why
+the VP9 command above carries it.
 
 ## Two-pass and target-size encodes
 
@@ -223,29 +219,14 @@ plays twice as fast), and speeding the audio to match is `atempo=2.0`.
 
 ## Reading a failure
 
-`media_run` names the argv it ran, the exit code, the elapsed time, the files the
-ffmpeg log named (each one stat'ed, so "not written" is stated rather than
-assumed) and the combined output. On a non-zero exit the **last lines are the
-diagnosis** - the tool says so in as many words. Every message below was
-produced on this harness's own host, so the wording is what a reader will
-actually see:
+Every message, its cause and what to do about it is in `failures.md` beside this
+file, with what each exit code means. Two things about the shape of the answer are
+worth knowing here: it names the argv, the exit code and the elapsed time and
+**stats every file the ffmpeg log named** - so a command that wrote nothing says
+so - and on a non-zero exit **the first error line above the summary is the
+cause**, because ffmpeg ends a failed graph with a generic `Conversion failed!`.
 
-| Last lines say | Means | Do |
-|---|---|---|
-| `File 'out.mp4' already exists. Exiting.` | the injected `-n` did its job | pass `overwrite: true`, or write a new name |
-| `Only VP8 or VP9 or AV1 video … supported for WebM` then `Could not write header (incorrect codec parameters ?): Invalid argument` | the container/codec pair does not fit | change the container or re-encode the codec |
-| `Error parsing filterchain 'nosuchfilter=1' around:` followed by `Invalid argument` | a filter name the build does not have, or a graph it cannot parse | the `[Parsed_<name>_0]` prefix names the filter that took the blame; check the build with `-filters` |
-| `[Parsed_scale_0] Invalid size 'abc'` then `Error initializing filters` | the filter parsed but rejected the value | read that filter's own option list |
-| `Option vf (set video filters) cannot be applied to input url clip.mp4` | an output option written before `-i` | move it after the input |
-| `Error opening input: No such file or directory` | the input path | check it with `media_probe`; never guess a path |
-| `Error creating a MFX session: -9` / `DLL amfrt64.dll failed to open` | a hardware encoder with no device behind it | fall back to `libx264` |
-| `[concat @ …] Unsafe file name 'C:\…'` then `Error opening input: Operation not permitted` | a `concat` list with absolute paths and no `-safe 0` | add `-safe 0` |
-
-"File exists" is the one that most often looks like a media problem and is not:
-`-n` is this pack being safe, and the fix is a different output name or an
-explicit `overwrite: true`. **Killed after N ms** is a timeout rather than a
-failure of the command: raise `timeoutMs` (up to 600000) or do less work with
-`-preset veryfast` or `-t`.
+## Verifying a copy that reported success
 
 A `Stream mapping:` block is worth reading on every copy that matters - it is
 printed at `-loglevel info`, which means passing that level yourself, and it

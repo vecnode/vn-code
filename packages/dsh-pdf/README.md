@@ -411,9 +411,23 @@ installers. It teaches which tool answers which question, when to switch to
 transcription, with the engine and resolution named), where an attachment lives,
 and that a locked document's password is never stored.
 
+Beside it, `skills/pdf-analysis/reference/workflows.md` is the worked sequence for
+each common request rather than a rule: a document you have never seen, the
+scanned contract (find first, scan the pages with no text layer, then find again
+over the cached recognition), an invoice or statement and where its total hides,
+a chat attachment, a figure or a signature, a locked file, a long or damaged
+document, and which PDFs the workspace holds at all - plus what to report back,
+including the printed-page-versus-PDF-page rule that makes a citation checkable.
+
 Every call also renders a conversation card: the document's name, what the host
 reported (pages, hits, pages without text, files written, what was recognized and
 with which engine, cache hit) and an **Open tab** link.
+
+Its examples are checked for SHAPE by `scripts/checks/check-media-examples.mjs`,
+beside the media package's: every `pdf_* { ... }` pseudo-call a document writes
+must parse as the tool call it looks like, so a stray comma cannot reach the tool
+from a document an agent trusted. Driving the tools themselves is
+`check-pdf-node.mjs`'s job below - that one builds real PDFs.
 
 ## Verifying a change
 

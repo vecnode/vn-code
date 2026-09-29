@@ -719,6 +719,19 @@ export function registerSkills(ctx, log) {
             whenToUse: typeof meta.whenToUse === 'string' ? meta.whenToUse : undefined,
             content,
             provider: 'dsh-diagrams',
+            // THE REGISTRATION NAMES ITS SOURCE BUCKET AND THE FILE IT READ
+            // (alpha.7), for the two reasons dsh-media records in full:
+            // `ctx.skills.get()` - what the `skill` tool calls to LOAD a skill -
+            // requires a STRING `source` in the definition it validates, so a
+            // runtime registration without one is unloadable wherever it wins;
+            // and `path` is what makes the definition file-backed, so a skills
+            // browser can show (and edit) the document the model is given. A
+            // runtime entry's precedence is its own rank (250), so a preset's
+            // `$DSH_HOME/skills` copy still wins wherever the filesystem provider
+            // is mounted.
+            source: 'bundled',
+            path: file,
+            resourceBase: { kind: 'directory', path: path.dirname(file) },
           }),
         'dsh-diagrams: skill ' + name,
       )

@@ -45,7 +45,7 @@ export const name = 'dsh-media'
 export const inject = ['connection', 'tools']
 
 /** This build's marker (the tracked checks pin it against package.json). */
-export const PLUGIN_VERSION = '0.1.0-alpha.1'
+export const PLUGIN_VERSION = '0.1.0-alpha.3'
 
 /** Every route this plugin owns, kept in sync with dsh-video's client by hand. */
 const API_ROOT = '/api/dsh-media'
@@ -155,7 +155,7 @@ export function registerSkills(ctx, log) {
   let count = 0
   for (const entry of SKILL_FILES) {
     try {
-      const { meta, content } = readSkill(entry)
+      const { file, meta, content } = readSkill(entry)
       if (content.length === 0) {
         log.warn('skill file is empty: ' + entry.file)
         continue
@@ -169,6 +169,25 @@ export function registerSkills(ctx, log) {
             whenToUse: typeof meta.whenToUse === 'string' ? meta.whenToUse : undefined,
             content,
             provider: 'dsh-media',
+            // THE REGISTRATION NAMES ITS SOURCE BUCKET AND THE FILE IT READ
+            // (alpha.2). Two reasons, both measured against the real registry:
+            //   - `ctx.skills.get()` - which is what the `skill` tool calls to
+            //     LOAD a skill - runs the registry's own definition validator, and
+            //     that validator requires a STRING `source`. A runtime
+            //     registration without one throws `loaded skill "x" source must
+            //     be a string`, so wherever this entry wins (a host-scoped read,
+            //     or a composition whose preset mounts no filesystem provider)
+            //     both bundled skills were unloadable.
+            //   - `path` is what makes the definition file-backed: it is the
+            //     document the model is actually given, and the one a skills
+            //     browser can show and edit instead of a text with no address.
+            // `source` is prompt-visible metadata only - a runtime entry's
+            // precedence is its own rank (250) - so a preset's `$DSH_HOME/skills`
+            // copy still wins wherever the filesystem provider is mounted, and
+            // that copy is the watched one.
+            source: 'bundled',
+            path: file,
+            resourceBase: { kind: 'directory', path: path.dirname(file) },
           }),
         'dsh-media: skill ' + skillName,
       )

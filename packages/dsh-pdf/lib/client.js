@@ -65,7 +65,7 @@ window.__ModuleLoader__.load({
     /** The address shape a page-address tab is opened with. */
     const PAGE_PREFIX = 'sidebar://'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.6'
+    const PLUGIN_VERSION = '0.1.0-alpha.8'
     /** Keep in sync with lib/index.js. */
     const API_ROOT = '/api/dsh-pdf'
     const FILE_ROUTE = API_ROOT + '/file'

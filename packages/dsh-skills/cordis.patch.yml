@@ -1,0 +1,26 @@
+# dsh-skills bundle layer (alpha).
+#
+# One extra row ('skills') owns the whole plugin. Its Node half registers three
+# authenticated /api/dsh-skills/* routes - the catalog, one skill's markdown, and
+# the save - and therefore ships its browser half (dsh.client) with the Loader
+# entry. Its browser half registers ONE occupant of the conversation header's
+# utilities list: a button at order -50, i.e. immediately LEFT of the page-zoom
+# control (which sits at -40, then capture -30, themes -20, Open In -10, lower
+# rendering first), which opens a centered modal over the pack's shared dialog
+# surface (`modals`, from dsh-modal, resolved lazily through ctx.get so a profile
+# without that bundle still loads and says so).
+#
+# Nothing shipped is patched and no core row is disabled. This package READS the
+# host's own skill registry (`ctx.skills`, from @deepseek-ai/dsh-skill, fed by
+# @deepseek-ai/dsh-skill-filesystem) - the same registry the system prompt's
+# catalog and the composer's `/` menu read - so the modal lists exactly what this
+# conversation loads, and nothing else. The row is a no-op for every other row in
+# the boot graph: no fork, no `disabled: true`, no service published to the
+# client beyond the plugin's own routes.
+#
+# The row id is deliberately plural (`skills`) because the SINGULAR `skill` and
+# `skill-filesystem` rows already exist in @deepseek-ai/dsh-base and belong to the
+# registry and its filesystem provider.
+- insert:
+    - id: skills
+      name: 'dsh-skills'

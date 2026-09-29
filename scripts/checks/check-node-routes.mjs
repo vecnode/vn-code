@@ -1333,6 +1333,222 @@ check('ui-state: the boot row is silent with no settings service', (() => {
   return table.length
 })(), 0)
 
+// ------------------------------------------------------------- dsh-skills
+// The skills browser's host half: three routes over the HOST's skill registry.
+// The registry itself is stubbed here, with the exact shapes the shipped
+// `@deepseek-ai/dsh-skill` contract declares (`snapshot()` answers
+// `{ skills, complete }` of summaries, and `get(name, options)` answers a
+// definition carrying `content`, `path` and `invocation`), because what this
+// block has to prove is this plugin's OWN behaviour: which file a save writes,
+// what it refuses, and what the answer says about a skill that has no file.
+// The files, though, are REAL - a temp project workspace and a temp $DSH_HOME -
+// so the atomic publish, the frontmatter guard and the conflict refusal are
+// driven against a disk, not a mock.
+const skillsHome = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-skills-home-'))
+const skillsWorkspace = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-skills-ws-'))
+try {
+  const skillsModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-skills/lib/index.js')).href)
+  const skillRoutes = new Map()
+  const bundleDir = path.join(skillsWorkspace, '.dsh', 'skills', 'demo-skill')
+  await fsp.mkdir(bundleDir, { recursive: true })
+  const bundleFile = path.join(bundleDir, 'SKILL.md')
+  const bundleText = ['---', 'name: demo-skill', 'description: A project skill.', '---', '', '# Demo', '', 'Body text.', ''].join('\n')
+  await fsp.writeFile(bundleFile, bundleText, 'utf8')
+  const flatFile = path.join(skillsHome, 'skills', 'flat-skill.md')
+  await fsp.mkdir(path.dirname(flatFile), { recursive: true })
+  const flatText = ['---', 'name: flat-skill', 'description: A flat user skill.', '---', '', '# Flat', ''].join('\n')
+  await fsp.writeFile(flatFile, flatText, 'utf8')
+
+  // The two winning definitions: one a directory bundle on disk, one a RUNTIME
+  // registration that named no file at all (the case that must stay read-only).
+  const definitions = {
+    'demo-skill': {
+      name: 'demo-skill',
+      description: 'A project skill.',
+      invocation: { modelInvocable: true, userInvocable: true },
+      source: 'project-dsh',
+      provider: 'filesystem',
+      resourceBase: { kind: 'directory', path: bundleDir },
+      path: bundleFile,
+      content: '# Demo\n\nBody text.',
+    },
+    'flat-skill': {
+      name: 'flat-skill',
+      description: 'A flat user skill.',
+      invocation: { modelInvocable: false, userInvocable: true },
+      source: 'user-dsh',
+      provider: 'filesystem',
+      resourceBase: { kind: 'directory', path: path.dirname(flatFile) },
+      path: flatFile,
+      content: '# Flat',
+    },
+    'runtime-skill': {
+      name: 'runtime-skill',
+      description: 'Registered at runtime, no file.',
+      invocation: { modelInvocable: true, userInvocable: true },
+      source: 'runtime',
+      provider: 'some-plugin',
+      content: '# Runtime\n\nHeld in memory.',
+    },
+  }
+  const summaries = [
+    { name: 'demo-skill', description: 'A project skill.', invocation: definitions['demo-skill'].invocation, source: 'project-dsh', provider: 'filesystem' },
+    { name: 'flat-skill', description: 'A flat user skill.', invocation: definitions['flat-skill'].invocation, source: 'user-dsh', provider: 'filesystem' },
+    { name: 'runtime-skill', description: 'Registered at runtime, no file.', invocation: definitions['runtime-skill'].invocation, source: 'runtime', provider: 'some-plugin' },
+    { name: 'ghost-skill', description: 'Advertised but unreadable.', invocation: { modelInvocable: true, userInvocable: true }, source: 'bundled', provider: 'filesystem' },
+  ]
+  const viewCalls = []
+  const skillsRegistry = {
+    async snapshot(options) {
+      viewCalls.push(options)
+      return { skills: summaries, complete: true }
+    },
+    async get(name) {
+      if (name === 'ghost-skill') throw new Error('the file vanished')
+      return definitions[name]
+    },
+  }
+  const skillsSessions = { get: (id) => (id === 'session-skills' ? { header: { cwd: skillsWorkspace } } : undefined) }
+  skillsModule.apply({
+    get(name) {
+      if (name === 'connection') {
+        return {
+          fetch: {
+            register(route) {
+              skillRoutes.set(route.path, route)
+              return () => {}
+            },
+          },
+        }
+      }
+      if (name === 'skills') return skillsRegistry
+      if (name === 'sessions') return skillsSessions
+      return undefined
+    },
+    effect: (fn) => fn(),
+    logger: { debug() {}, warn() {} },
+  })
+
+  check(
+    'skills: route set',
+    [...skillRoutes.keys()].sort().join(','),
+    ['/api/dsh-skills/body', '/api/dsh-skills/list', '/api/dsh-skills/save'].join(','),
+  )
+  check(
+    'skills: methods stay inside the registry vocabulary',
+    [...skillRoutes.values()].every((route) => route.methods.every((method) => ['GET', 'HEAD', 'POST'].includes(method))),
+  )
+  check('skills: the write is a POST', skillRoutes.get('/api/dsh-skills/save').methods.join(','), 'POST')
+
+  const skillsCall = (routePath, request) => skillRoutes.get(routePath).fetch(request)
+  const skillsGet = (routePath, query) => skillsCall(routePath, new Request('http://x' + routePath + '?' + query, { method: 'GET' }))
+  const skillsPost = (body) =>
+    skillsCall(
+      '/api/dsh-skills/save',
+      new Request('http://x/api/dsh-skills/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+    )
+
+  const listResponse = await skillsGet('/api/dsh-skills/list', 'session=session-skills')
+  const listBody = await listResponse.json()
+  check('skills: the catalog lists every effective skill', listBody.skills.map((entry) => entry.name).join(','), 'demo-skill,flat-skill,runtime-skill,ghost-skill')
+  check('skills: the session project folder selects the view', listBody.cwd, skillsWorkspace)
+  check('skills: the registry is asked with that folder', viewCalls[0] && viewCalls[0].cwd, skillsWorkspace)
+  const demo = listBody.skills.find((entry) => entry.name === 'demo-skill')
+  const runtime = listBody.skills.find((entry) => entry.name === 'runtime-skill')
+  const ghost = listBody.skills.find((entry) => entry.name === 'ghost-skill')
+  check('skills: a directory bundle is named as one, with its file', demo.kind === 'bundle' && demo.path === bundleFile && demo.editable === true)
+  check('skills: a runtime entry is listed but not editable', runtime.kind === 'runtime' && runtime.path === null && runtime.editable === false)
+  check('skills: an unreadable skill is still a row', ghost.editable === false && ghost.path === null)
+  check('skills: the unreadable skill is reported', listBody.unreadable.length, 1)
+  check('skills: a user-only skill says so', listBody.skills.find((entry) => entry.name === 'flat-skill').modelInvocable, false)
+
+  // The document, frontmatter INCLUDED: that is what a person edits.
+  const bodyResponse = await skillsGet('/api/dsh-skills/body', 'session=session-skills&name=demo-skill')
+  const bodyBody = await bodyResponse.json()
+  check('skills: the document is the file on disk, frontmatter included', bodyBody.text, bundleText)
+  check('skills: an editable document carries its version', typeof bodyBody.mtimeMs === 'number' && typeof bodyBody.size === 'number')
+  const runtimeBody = await (await skillsGet('/api/dsh-skills/body', 'session=session-skills&name=runtime-skill')).json()
+  check(
+    'skills: a runtime skill is shown from its loaded text, read-only',
+    runtimeBody.editable === false && runtimeBody.path === null && runtimeBody.text.startsWith('---\nname: runtime-skill\n'),
+  )
+  check('skills: a runtime skill explains itself', runtimeBody.notice.includes('some-plugin') && runtimeBody.notice.includes('nothing here to edit'))
+  const missingBody = await skillsGet('/api/dsh-skills/body', 'session=session-skills&name=nope')
+  check('skills: an unknown skill is a 404', missingBody.status, 404)
+
+  // The save: addressed by NAME, written to the registry's own path. The text
+  // carries an ellipsis and an arrow ON PURPOSE - a route that decodes or encodes
+  // a document with anything narrower than UTF-8 silently rewrites it (`…` became
+  // `.` and `→` became `?` through a Latin-1 client in the live probe), and a
+  // skill full of prose and arrows is exactly the document that would suffer.
+  const editedText = bundleText.replace('Body text.', 'Edited body \u2014 see \u2026 \u2192 here.')
+  const saved = await skillsPost({ session: 'session-skills', name: 'demo-skill', text: editedText, expected: { mtimeMs: bodyBody.mtimeMs, size: bodyBody.size } })
+  const savedBody = await saved.json()
+  check('skills: the save answers the path the registry resolved', saved.status === 200 && savedBody.path === bundleFile)
+  check('skills: the save reports the reload verdict', savedBody.reload, 'live')
+  check('skills: the file really changed', (await fsp.readFile(bundleFile, 'utf8')).includes('Edited body \u2014 see \u2026 \u2192 here.'))
+  check('skills: no temp file is left behind', (await fsp.readdir(bundleDir)).filter((name) => name.includes('.dsh-skills-')).length, 0)
+
+  // A save that would break the document is refused BEFORE the disk is touched.
+  const brokenSave = await skillsPost({ session: 'session-skills', name: 'demo-skill', text: '# no frontmatter', expected: { mtimeMs: savedBody.mtimeMs, size: savedBody.size } })
+  const brokenBody = await brokenSave.json()
+  check('skills: a document without frontmatter is refused', brokenSave.status, 400)
+  check('skills: the refusal names what is missing', brokenBody.error.code, 'NO_FRONTMATTER')
+  check('skills: the refusal left the file alone', (await fsp.readFile(bundleFile, 'utf8')).includes('Edited body \u2014 see \u2026 \u2192 here.'))
+
+  // Optimistic concurrency: the client's stat is the one it opened with.
+  const stale = await skillsPost({ session: 'session-skills', name: 'demo-skill', text: bundleText, expected: { mtimeMs: savedBody.mtimeMs - 5000, size: savedBody.size } })
+  check('skills: a save over a changed file is refused', stale.status, 409)
+  check('skills: the refusal is the typed conflict', (await stale.json()).error.code, 'CHANGED_ON_DISK')
+
+  const runtimeSave = await skillsPost({ session: 'session-skills', name: 'runtime-skill', text: runtimeBody.text })
+  check('skills: a skill with no file cannot be written', runtimeSave.status, 409)
+  check('skills: and says so', (await runtimeSave.json()).error.code, 'NOT_FILE_BACKED')
+
+  const noRegistry = new Map()
+  skillsModule.apply({
+    get(name) {
+      if (name === 'connection') return { fetch: { register: (route) => (noRegistry.set(route.path, route), () => {}) } }
+      return undefined
+    },
+    effect: (fn) => fn(),
+    logger: { debug() {}, warn() {} },
+  })
+  const noRegistryList = await noRegistry.get('/api/dsh-skills/list').fetch(new Request('http://x/api/dsh-skills/list', { method: 'GET' }))
+  check('skills: no registry is a typed refusal, not a crash', noRegistryList.status, 503)
+} finally {
+  await fsp.rm(skillsHome, { recursive: true, force: true })
+  await fsp.rm(skillsWorkspace, { recursive: true, force: true })
+}
+
+// ------------------------------------------- every runtime skill registration
+// Three rows register a skill into the harness's own registry at activation
+// (dsh-media's two, dsh-diagrams' two, dsh-pdf's one), and every one of them
+// must name the FILE it read and its SOURCE BUCKET. The source is not cosmetic:
+// `ctx.skills.get()` - what the `skill` tool calls to LOAD a skill, as opposed to
+// listing it - validates the definition it gets back and requires a STRING
+// `source`, so a runtime registration without one is unloadable wherever it is
+// the winning entry (`loaded skill "x" source must be a string`, measured against
+// the real registry). `path` is what makes the definition file-backed, which is
+// what lets a skills browser show and edit the document the model is given.
+// dsh-media's own registration is driven behaviourally in check-media-node; the
+// other two are pinned from their source here, because nothing else drives them.
+{
+  const registrations = []
+  for (const packageName of ['dsh-media', 'dsh-diagrams', 'dsh-pdf']) {
+    registrations.push({
+      packageName,
+      source: await fsp.readFile(path.join(repo, 'packages', packageName, 'lib', 'index.js'), 'utf8'),
+    })
+  }
+  const named = registrations.filter((entry) => entry.source.includes("source: 'bundled'") && entry.source.includes('path: file') && entry.source.includes("resourceBase: { kind: 'directory', path: path.dirname(file) }"))
+  check(
+    'every bundled-skill registration names its file and source bucket',
+    named.map((entry) => entry.packageName).join(','),
+    'dsh-media,dsh-diagrams,dsh-pdf',
+  )
+}
+
 // --------------------------------------------------------- the repo manifest
 // `.dsh-version.json` is documentation, but it is documentation a PERSON reads
 // to know what is installed and at which version, and nothing else keeps it

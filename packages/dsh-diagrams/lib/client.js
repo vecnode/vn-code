@@ -73,7 +73,7 @@ window.__ModuleLoader__.load({
     const REPORT_ROUTE = '/api/dsh-diagrams/render-report'
     const VENDOR_ROUTE = '/api/dsh-diagrams/vendor/mermaid.js'
     /** Version marker shown in the panel footer, so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.6'
+    const PLUGIN_VERSION = '0.1.0-alpha.7'
     /**
      * The zoom ladder the diagram tab steps through, the share of the pane a
      * picture occupies at 100%, and the last zoom each tab was left at.

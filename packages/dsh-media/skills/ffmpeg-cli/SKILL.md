@@ -26,6 +26,17 @@ The binaries come from the pack: PATH first, then a pinned verified copy under
 never assume a version.** Where a feature is version-dependent this file says so
 and gives the widely available spelling.
 
+## One argv, every OS
+
+There is no shell between `media_run` and ffmpeg, so **one command shape is the
+command on Windows, macOS and Linux.** Do not look for a per-OS spelling of a
+command, and never hand anyone a shell string. The short list of what genuinely
+differs per host is in `reference/platforms.md` - a path inside a *filter* value
+(where a Windows drive colon needs two backslashes, and the one-backslash form
+everyone quotes fails), concat list files, where the binary is resolved from,
+hardware encoders, capture devices, and what "no shell" means for globs and
+variables.
+
 ## Copy or re-encode?
 
 | | `-c copy` | re-encode |
@@ -115,9 +126,9 @@ ffmpeg. Before `-i` it seeks in the container and then decodes - fast, and with
 after N seconds of output; `-to N` stops at time N on the input timeline.
 
 ```
-["-ss","30","-i","long.mp4","-c","copy","part.mp4"]            fast, keyframe-snapped
-["-i","long.mp4","-ss","30","-t","10","-c:v","libx264","-crf","20","-c:a","aac","part.mp4"]   exact
-["-ss","30","-i","long.mp4","-ss","2","-t","10","-c","copy","part.mp4"]                       fast seek, then accurate trim
+["-ss","30","-i","long.mp4","-c","copy","part.mp4"]            // fast, keyframe-snapped
+["-i","long.mp4","-ss","30","-t","10","-c:v","libx264","-crf","20","-c:a","aac","part.mp4"]   // exact
+["-ss","30","-i","long.mp4","-ss","2","-t","10","-c","copy","part.mp4"]                       // fast seek, then accurate trim
 ```
 
 **`-c copy` trimming snaps to keyframes.** `-ss 1.0` on a 1-second-GOP source
@@ -151,7 +162,9 @@ shape `media_frames` does not offer.
 - **Rotation metadata is not rotation.** A phone video is often stored landscape
   with a "rotate 90°" flag that `-c copy` preserves, so the pixels stay sideways;
   `media_probe` prints `rotated 90°` for exactly that case. Real rotation is
-  `-vf transpose=1` (90° clockwise), and `reference/cookbook.md` has the rest.
+  `-vf transpose=1` (90° clockwise, and `2` counter-clockwise);
+  `reference/filters.md` has the rest of the geometry - scale, crop, pad, the
+  letterbox recipe and the even-dimension rule.
 - `-frames:v 1` limits a run to one frame. Writing ONE picture also needs a name
   with no `%` pattern; ffmpeg's image2 muxer refuses a bare name in some paths
   with *"The specified filename does not contain an image sequence pattern"* -
@@ -160,9 +173,9 @@ shape `media_frames` does not offer.
 ## Audio
 
 ```
-["-i","clip.mp4","-vn","-c:a","copy","audio.m4a"]                    extract, lossless, instant
-["-i","clip.mp4","-vn","-c:a","pcm_s16le","-ar","48000","-ac","2","audio.wav"]   uncompressed
-["-i","clip.mp4","-vn","-c:a","aac","-b:a","160k","audio.m4a"]      re-encode for compatibility
+["-i","clip.mp4","-vn","-c:a","copy","audio.m4a"]                    // extract, lossless, instant
+["-i","clip.mp4","-vn","-c:a","pcm_s16le","-ar","48000","-ac","2","audio.wav"]   // uncompressed
+["-i","clip.mp4","-vn","-c:a","aac","-b:a","160k","audio.m4a"]      // re-encode for compatibility
 ["-i","clip.mp4","-vn","-ac","1","-ar","16000","-c:a","aac","-b:a","64k","mono.m4a"]
 ```
 
@@ -218,7 +231,13 @@ option), where `[0:v]`/`[1:v]` name inputs and `[x]` names a chain's output for
 ["-i","clip.mp4","-vf","fps=1,scale=320:-1,tile=3x1","-frames:v","1","sheet.png"]
 ```
 
-## Quality, and the recipes that do not fit here
+`reference/filters.md` carries the whole subject: two-input graphs (overlay,
+watermark, picture-in-picture, and the `enable=` timing expression), text and
+subtitle burn-in, `setpts`/`atempo` retiming, `select`/`thumbnail`, the colour and
+denoise filters, and the rule that **every label a graph produces must be mapped
+exactly once** or the run fails with "unconnected output".
+
+## Quality, and where the rest lives
 
 `-crf` targets a quality and is constant quality with **variable** bitrate - size
 follows the content. x264 landmarks: 18 visually lossless, 20 delivery, 23
@@ -228,29 +247,39 @@ slower for a few percent. Any filter can be tried against `-f null -`, which
 decodes everything and writes nothing - the cheapest way to check a graph, a
 loudness reading, or whether a decode works at all.
 
-`reference/cookbook.md` beside this file carries the rest: joining clips with the
-`concat` demuxer versus the `concat` filter (and the `-safe 0` and layout rules
-that decide whether a join breaks), constrained-bitrate and target-size encodes,
-one-command GIFs, animated WebP and APNG, the measured cost of each operation
-class and how to plan a timeout around it, hardware-encoder specifics, and the
-full failure table with the exact wording of every error.
+Four reference files sit beside this one, and each answers a different question:
+
+| Read it | When |
+|---|---|
+| `reference/cookbook.md` | joining clips (the `concat` demuxer versus the `concat` filter, and the `-safe 0` and layout rules that decide whether a join breaks), the full delivery flag sets, target-size encodes, GIF/WebP/APNG, and the measured cost of each operation class for planning a timeout |
+| `reference/filters.md` | any `-vf`/`-filter_complex` work: geometry, overlay/watermark/PiP, subtitle burn-in, retiming, picking frames, colour and denoise, `-progress`, and the rule that every label a graph produces must be mapped |
+| `reference/platforms.md` | anything OS-shaped: filter-value paths, concat lists, where the binary comes from, hardware encoders, capture devices, globs and variables |
+| `reference/failures.md` | a command failed: the message catalogue with the exact wording, and what each exit code means |
 
 ## Reading a failure
 
 The answer names the argv it ran, the exit code, the elapsed time, the files the
 log named (stat'ed, so "not written" is stated rather than assumed) and the
-combined output. On a non-zero exit, **the last lines are the diagnosis**.
+combined output. **The last lines are the summary; the cause is the first error
+line above them**, because a run that dies in a filter graph still ends with a
+generic `Conversion failed!`.
+
+Three failures are this pack rather than ffmpeg, and they are the ones most often
+misread:
 
 - **`File 'out.mp4' already exists. Exiting.`** is the injected `-n` working.
   Pass `overwrite: true`, or write a new name. It looks like a media problem and
   is not.
-- **`Only VP8 or VP9 or AV1 video … supported for WebM`** plus `Could not write
-  header` is the container/codec pair: change one of them.
-- An `Error parsing filterchain` or `[Parsed_<name>_0]` prefix names the filter
-  that failed; `Error opening input` is the path; `Error creating a MFX session`
-  or a missing DLL is a hardware encoder with no device behind it.
-- **Killed after N ms** is a timeout, not a broken command - raise `timeoutMs`
+- **`Killed after N ms`** is a timeout, not a broken command - raise `timeoutMs`
   (up to 600000) or do less work with `-preset veryfast` or `-t`.
+- **Exit 0 is not proof of a file.** Read the files line: a `-ss` past the end of
+  a file exits 0 having written nothing.
+
+`reference/failures.md` carries the rest: the container/codec pair, the filter
+parse and unconnected-output errors, the Windows filter-path trap and the
+`drawtext` crash that produces no ffmpeg error at all, the hardware-encoder
+initialisation failures, the truncated-container messages, and what each exit
+code can and cannot tell you.
 
 ## Safety rules
 
