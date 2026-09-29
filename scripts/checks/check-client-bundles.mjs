@@ -232,7 +232,19 @@ function loadBundle(relative, extraRequire) {
       }
       const Child = (props) => (props && props.children !== undefined ? props.children : null)
       // MarkdownText renders its text: the editor's rendered-view body draws it.
-      const Text = (props) => props.text
+      // IT IS `React.memo`-WRAPPED ON PURPOSE, because the shipped primitive is
+      // (`const MarkdownText = React.memo(...)`) and a memo component is an
+      // OBJECT, not a function. A plain-function stub let a `typeof x ===
+      // 'function'` guard pass HERE while rejecting the REAL export in the
+      // browser, so dsh-skills alpha.2 shipped showing source where the document
+      // belonged. The stub must have the shape the guard sees at runtime.
+      // A bundle that GUARDS its use of the primitive (dsh-skills does) is loaded
+      // against an engine without it too, so this knob drops the export: the
+      // fallback must be a working pane, not a crash at module scope.
+      const Text =
+        extraRequire && extraRequire.withoutMarkdownText === true
+          ? undefined
+          : React.memo((props) => props.text)
       // Modal renders nothing while closed and its title / description / body /
       // footer when open, like the real one (which portals to document.body).
       const Dialog = (props) => {
@@ -434,6 +446,56 @@ check(
 check(
   'the routes match the host half',
   ['/list', '/body', '/save'].every((suffix) => skillsSource.includes("API_ROOT + '" + suffix + "'")),
+)
+
+// THE RESTING VIEW IS THE RENDERED DOCUMENT, not the source: the SAME primitive
+// the right bar's Markdown view draws, inside the SAME `data-document-markdown`
+// container dsh-themes keys its white Markdown paper on (`body
+// [data-document-markdown]`). The SOURCE belongs to Edit alone.
+const skillsDocument = renderToStaticMarkup(
+  h(internals.SkillDocument, { text: '---\nname: demo\n---\n\n# Heading\n\nBody **bold**.\n' }),
+)
+check(
+  'the read view is the rendered Markdown document',
+  skillsDocument.includes('data-document-markdown="true"') && skillsDocument.includes('# Heading'),
+)
+check('the read view is on the paper scrollport', skillsDocument.includes('class="dsk-doc dsk-paper"'))
+check('the read view draws no source', !skillsDocument.includes('dsk-md"') && !skillsDocument.includes('<pre'))
+// THE GUARD'S SHAPE, pinned from the source, because the check's stub is what
+// makes the two checks above meaningful: `React.memo` returns an OBJECT, so a
+// `typeof ... === 'function'` presence test rejects the real primitive. That is
+// the alpha.2 bug - the modal kept drawing the source - and it is silent, so it
+// gets its own assertion rather than relying on the stub alone.
+check(
+  'the primitive guard tests presence, not function shape',
+  !/typeof primitives\.MarkdownText === 'function'/.test(skillsSource) &&
+    skillsSource.includes('exported !== undefined && exported !== null'),
+)
+check(
+  'the rendered view resets the plain-text whitespace',
+  skillsCss.includes('.dsk-mdview{min-width:0;white-space:normal;') && skillsCss.includes('.dsk-doc.dsk-paper{padding:0}'),
+)
+// The primitive is drawn WITH its chrome labels: the engine reads
+// `labels.footnotes` whenever a document has footnotes, so an absent object
+// would crash on exactly those documents.
+check(
+  'the primitive is handed its labels',
+  internals.MARKDOWN_LABELS.code.copyLabel === 'Copy' &&
+    internals.MARKDOWN_LABELS.code.copiedLabel === 'Copied' &&
+    internals.MARKDOWN_LABELS.footnotes === 'Footnotes',
+)
+// An engine whose primitives export no MarkdownText still gets a working pane.
+const skillsNoPrimitive = loadBundle('packages/dsh-skills/lib/client.js', { withoutMarkdownText: true })
+const skillsFallback = renderToStaticMarkup(
+  h(skillsNoPrimitive.exports.__internals.SkillDocument, { text: '# Heading\n' }),
+)
+check(
+  'a build without the primitive falls back to text',
+  skillsFallback.includes('<pre class="dsk-md">') && skillsFallback.includes('# Heading'),
+)
+check(
+  'the fallback is not on the paper',
+  !skillsFallback.includes('data-document-markdown') && !skillsFallback.includes('dsk-paper'),
 )
 
 // --------------------------------------------------------------- dsh-editor

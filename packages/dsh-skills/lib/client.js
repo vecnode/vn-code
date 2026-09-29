@@ -26,8 +26,16 @@
  * provider that owns it, whether the model and the user may invoke it, and the
  * absolute file behind it.
  *
- * EDITING is inline: clicking a skill shows its markdown, frontmatter included,
- * and Edit swaps in a textarea whose Save goes back through the host route. The
+ * READING is RENDERED: clicking a skill draws its document with the same
+ * `MarkdownText` primitive - inside the same `data-document-markdown` paper -
+ * that the right bar's rendered Markdown view uses, so the modal shows a
+ * document (headings, lists, code blocks, links) on dsh-themes' white page rather
+ * than a wall of source. The frontmatter is part of that document, because it is
+ * part of the file. Hitting **Edit** is what swaps the rendered page for the
+ * SOURCE, in a textarea, which is the only place this modal shows code.
+ *
+ * EDITING is inline from there: the textarea's Save goes back through the host
+ * route. The
  * client NEVER names a path - it names a skill, and the host writes the file the
  * registry itself resolved, with an mtime/size guard so a save cannot clobber a
  * concurrent edit by the agent. A skill registered at runtime WITHOUT a file is
@@ -48,11 +56,36 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
+    /**
+     * The rendered-Markdown primitive, resolved DEFENSIVELY. Every shipped web
+     * build exports it - the editor's own rendered view draws the same component
+     * - but this bundle must not die on an engine that does not: a missing
+     * factory is answered by drawing the document as TEXT, which is exactly what
+     * this pane did before the rendered view existed, so the fallback is a
+     * working modal rather than a broken one.
+     *
+     * The presence test is DELIBERATELY a null check, NOT a `typeof` one. The
+     * shipped export is `React.memo(...)`, and a memo component is an OBJECT
+     * (`{ $$typeof: Symbol(react.memo), type, compare }`), not a function - so a
+     * function-only guard REJECTS the real primitive, falls back on every render
+     * and shows the source where the document belongs. That is exactly the bug
+     * alpha.2 shipped with, and the reason the tracked check's stub is built
+     * with `React.memo` too: the shape the guard sees there must be the real one.
+     */
+    let MarkdownText = null
+    try {
+      const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
+      const exported = primitives === null || primitives === undefined ? undefined : primitives.MarkdownText
+      if (exported !== undefined && exported !== null) MarkdownText = exported
+    } catch (err) {
+      MarkdownText = null
+    }
+
     // ---------------------------------------------------------------------
     // Constants
     // ---------------------------------------------------------------------
     /** Version marker, logged at activation; must equal package.json's version. */
-    const PLUGIN_VERSION = '0.1.0-alpha.1'
+    const PLUGIN_VERSION = '0.1.0-alpha.3'
     /** Keep in sync with lib/index.js. */
     const API_ROOT = '/api/dsh-skills'
     const LIST_ROUTE = API_ROOT + '/list'
@@ -85,6 +118,19 @@ window.__ModuleLoader__.load({
       restart: 'This skill is registered at runtime, so the harness reads the file again when it starts \u2014 restart to load the new text.',
       live: 'A file-backed skill: the catalog picks this up on its own, and the next listing is already the new text.',
     }
+    /**
+     * The chrome labels `MarkdownText` draws for itself: the code block's copy
+     * control and the footnotes heading. Every other string in this modal is an
+     * English literal too, so these are literals rather than a locale namespace
+     * that only this one view would ever read. They are ALWAYS passed, never
+     * omitted: the primitive reads `labels.footnotes` when a document has
+     * footnotes, so an absent object would be a crash on exactly the documents
+     * that need it.
+     */
+    const MARKDOWN_LABELS = {
+      code: { copyLabel: 'Copy', copiedLabel: 'Copied' },
+      footnotes: 'Footnotes',
+    }
 
     // ---------------------------------------------------------------------
     // Styles (this package's own prefix, every colour a design token)
@@ -101,6 +147,7 @@ window.__ModuleLoader__.load({
 .dsk-count{font-size:11.5px;color:var(--dsw-alias-label-tertiary,#8f8f8f);white-space:nowrap}
 .dsk-search{flex:1;min-width:80px;max-width:320px;height:26px;box-sizing:border-box;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l3,rgba(127,127,127,.28));background:transparent;color:var(--dsw-alias-label-primary,#ececec);font:inherit;font-size:12.5px;outline:none}
 .dsk-search:focus{border-color:var(--dsw-alias-state-accent,#4f8cff)}
+.dsk-ver{flex:none;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#8f8f8f);opacity:.75;white-space:nowrap}
 .dsk-spacer{flex:1}
 .dsk-btn{box-sizing:border-box;height:26px;padding:0 10px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));background:transparent;color:var(--dsw-alias-label-primary,#ececec);font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
 .dsk-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
@@ -130,6 +177,16 @@ window.__ModuleLoader__.load({
 .dsk-msg[data-tone="error"]{color:var(--dsw-alias-state-error-primary,#e5534b)}
 .dsk-msg[data-tone="ok"]{color:var(--dsw-alias-state-success-primary,#3fa46a)}
 .dsk-doc{flex:1;min-height:0;overflow:auto;padding:12px 16px 18px}
+/* The RENDERED document (the read view). The scrollport drops its own padding
+   because the paper brings its own: dsh-themes paints the [data-document-markdown]
+   container with ui-theme's light declarations, a white background and 12px/14px
+   of padding, so this page is the SAME white document the right bar shows. The
+   view resets the whitespace the source fallback needs, so a Markdown document
+   reads as a document instead of hard-wrapped source - one line per source line,
+   every blank line a full empty one. */
+.dsk-doc.dsk-paper{padding:0}
+.dsk-mdview{min-width:0;white-space:normal;overflow-wrap:anywhere}
+/* The SOURCE view, shown only while editing (and as the fallback). */
 .dsk-md{margin:0;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12.5px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--dsw-alias-label-primary,#ececec)}
 .dsk-editor{width:100%;height:100%;min-height:0;box-sizing:border-box;resize:none;padding:12px 16px;border:0;outline:none;background:transparent;color:var(--dsw-alias-label-primary,#ececec);font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12.5px;line-height:1.65;tab-size:2}
 .dsk-empty{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;color:var(--dsw-alias-label-tertiary,#8f8f8f);font-size:12.5px;text-align:center}
@@ -242,6 +299,48 @@ window.__ModuleLoader__.load({
         h('path', { d: 'M8 3.6C6.9 2.7 5.4 2.3 3.2 2.3v9.4c2.2 0 3.7.4 4.8 1.3' }),
         h('path', { d: 'M8 3.6c1.1-.9 2.6-1.3 4.8-1.3v9.4c-2.2 0-3.7.4-4.8 1.3' }),
         h('path', { d: 'M8 3.6V13' }),
+      )
+    }
+
+    // ---------------------------------------------------------------------
+    // The READ view: one skill document, rendered
+    // ---------------------------------------------------------------------
+    /**
+     * One skill's document, as a READER sees it - the modal's resting view.
+     *
+     * It is the right bar's rendered Markdown view, not a copy of its look: the
+     * SAME `MarkdownText` primitive, inside the same `data-document-markdown`
+     * container, which is the marker dsh-themes keys its Markdown paper on
+     * (`body [data-document-markdown]` re-declares ui-theme's light palette and
+     * paints the page `#fff`). So the document reads as a white page with dark
+     * letters, light code blocks, light inline code, light links and light list
+     * markers - in EITHER app appearance, because the paper overrides the dark
+     * palette for that subtree alone.
+     *
+     * The FRONTMATTER is part of what is drawn, because it is part of the file;
+     * a skill's `name:`/`description:` header is what the reader is often here to
+     * check. The SOURCE only appears when **Edit** swaps this view for the
+     * textarea, which is the one place this modal shows code.
+     *
+     * A build whose primitives do not export `MarkdownText` falls back to the
+     * plain-text `<pre>` this pane was before the rendered view existed: worse to
+     * read, but a working modal.
+     *
+     * @param props - `{ text }`, the document exactly as the host returned it.
+     */
+    function SkillDocument(props) {
+      const text = typeof props.text === 'string' ? props.text : ''
+      if (MarkdownText === null) {
+        return h('div', { className: 'dsk-doc' }, h('pre', { className: 'dsk-md' }, text))
+      }
+      return h(
+        'div',
+        { className: 'dsk-doc dsk-paper' },
+        h(
+          'div',
+          { className: 'dsk-mdview', 'data-document-markdown': true },
+          h(MarkdownText, { text, streaming: false, labels: MARKDOWN_LABELS }),
+        ),
       )
     }
 
@@ -439,6 +538,11 @@ window.__ModuleLoader__.load({
             onChange: (event) => setQuery(event.target.value),
           }),
           h('span', { className: 'dsk-spacer' }),
+          // The bundle's version, in plain sight for the same reason the editor
+          // prints its own: after a restart it is the one way to tell "the fix is
+          // live" from "the harness is still serving the bundle it read at boot",
+          // without opening devtools.
+          h('span', { className: 'dsk-ver', title: 'dsh-skills client bundle version' }, 'v' + PLUGIN_VERSION),
           h(
             'button',
             {
@@ -647,7 +751,7 @@ window.__ModuleLoader__.load({
                   }),
                 )
               : doc.data !== null
-                ? h('div', { className: 'dsk-doc' }, h('pre', { className: 'dsk-md' }, doc.data.text))
+                ? h(SkillDocument, { text: doc.data.text })
                 : h('div', { className: 'dsk-empty' }, ''),
           ),
         ),
@@ -738,7 +842,7 @@ window.__ModuleLoader__.load({
     exports.inject = inject
     exports.apply = apply
     /** The pure half, so the tracked check can drive it without a browser. */
-    exports.__internals = { sourceLabel, groupKeyOf, metaOf, formatBytes, SkillsBrowser, SOURCE_ORDER }
+    exports.__internals = { sourceLabel, groupKeyOf, metaOf, formatBytes, SkillsBrowser, SkillDocument, MARKDOWN_LABELS, SOURCE_ORDER }
     return module.exports
   },
 })
