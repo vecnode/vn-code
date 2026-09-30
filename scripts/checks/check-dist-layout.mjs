@@ -176,7 +176,7 @@ if (ps && sh) {
     'packages/dsh-editor/lib/vendor/cm6.min.js',
     'packages/dsh-terminal/lib/vendor/xterm.js',
     'app/README.md',
-    'assets/vn-harness.svg',
+    'assets/vncode.svg',
   ]
   for (const sentinel of wanted) {
     if (!psSentinels.has(sentinel)) fail(`scripts/dist.ps1 does not check the sentinel '${sentinel}'.`)
@@ -356,8 +356,8 @@ for (const entry of windowsEntries) {
   }
 
   // ...using the documentation's exact three lines, in order.
-  if (!/if not defined VN_HARNESS_CONSOLE set "VN_HARNESS_ARGV=%\*"/.test(text)) {
-    fail(`${entry} is missing the 'if not defined VN_HARNESS_CONSOLE set "VN_HARNESS_ARGV=%*"' guard.`)
+  if (!/if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%\*"/.test(text)) {
+    fail(`${entry} is missing the 'if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"' guard.`)
   }
 
   // The guard exists for ONE reason: after the Windows Terminal relaunch `%*` is
@@ -366,17 +366,17 @@ for (const entry of windowsEntries) {
   // of `%*` is therefore allowed, and it is the guard's.
   const stars = text.split('%*').length - 1
   if (stars !== 1) {
-    fail(`${entry} mentions %* ${stars} times; only the VN_HARNESS_ARGV guard may, or the relaunched run loses its flags.`)
+    fail(`${entry} mentions %* ${stars} times; only the VNCODE_ARGV guard may, or the relaunched run loses its flags.`)
   }
 
-  // Flags are forwarded from VN_HARNESS_ARGS, which is what the guard protects.
-  if (!text.includes('%VN_HARNESS_ARGS%')) {
-    fail(`${entry} never forwards %VN_HARNESS_ARGS% - it cannot be passing the real flags.`)
+  // Flags are forwarded from VNCODE_ARGS, which is what the guard protects.
+  if (!text.includes('%VNCODE_ARGS%')) {
+    fail(`${entry} never forwards %VNCODE_ARGS% - it cannot be passing the real flags.`)
   }
 
   // The pause is a WINDOW decision owned by the shared layer.
-  if (!/%VN_HARNESS_PAUSE%/.test(text)) {
-    fail(`${entry} ignores VN_HARNESS_PAUSE - it would hold a scripted run open.`)
+  if (!/%VNCODE_PAUSE%/.test(text)) {
+    fail(`${entry} ignores VNCODE_PAUSE - it would hold a scripted run open.`)
   }
 
   // The preflight failure the shared layer reports must be handled, not ignored.
@@ -396,12 +396,12 @@ for (const entry of windowsEntries) {
 // 5b. A NO-ARGUMENT run must not be able to abort a launcher
 // ---------------------------------------------------------------------------
 // THE BUG THIS EXISTS FOR, because nothing else here could see it. A double-click
-// passes NO arguments, so the entry point's `set "VN_HARNESS_ARGV=%*"` left the
+// passes NO arguments, so the entry point's `set "VNCODE_ARGV=%*"` left the
 // variable UNDEFINED - cmd removes a variable that is set to nothing - and cmd
 // CANNOT expand a `:-flag=` substitution on an undefined variable. It emits the
 // modifier as literal text instead, so the console layer's pause rule
-//   if not "%VN_HARNESS_ARGS:-NoPause=%"=="%VN_HARNESS_ARGS%" set "VN_HARNESS_PAUSE=0"
-// became `if not "-NoPause=VN_HARNESS_ARGS"=="VN_HARNESS_ARGS" set ...` - an `if`
+//   if not "%VNCODE_ARGS:-NoPause=%"=="%VNCODE_ARGS%" set "VNCODE_PAUSE=0"
+// became `if not "-NoPause=VNCODE_ARGS"=="VNCODE_ARGS" set ...` - an `if`
 // with ONE token - which cmd answers with "set was unexpected at this time." and
 // which aborts the whole file on the spot. Every Windows launcher therefore
 // flashed a console and died having printed NOTHING when it was double-clicked,
@@ -422,37 +422,37 @@ for (const entry of windowsEntries) {
 // arguments must really come back with both names defined and no parse error. The
 // second is the only test in this file that executes any of this.
 if (consoleText.adapt) {
-  if (!/if not defined VN_HARNESS_ARGV set "VN_HARNESS_ARGV= "/.test(consoleText.adapt)) {
+  if (!/if not defined VNCODE_ARGV set "VNCODE_ARGV= "/.test(consoleText.adapt)) {
     fail('scripts/console/adapt.cmd no longer stores "no arguments" as one space; on a double-click both argument variables are then UNDEFINED and cmd aborts the launcher with "set was unexpected at this time."')
   }
-  if (!/set "VN_HARNESS_ARGS=%VN_HARNESS_ARGV%"/.test(code(consoleText.adapt))) {
-    fail('scripts/console/adapt.cmd does not derive VN_HARNESS_ARGS from VN_HARNESS_ARGV.')
+  if (!/set "VNCODE_ARGS=%VNCODE_ARGV%"/.test(code(consoleText.adapt))) {
+    fail('scripts/console/adapt.cmd does not derive VNCODE_ARGS from VNCODE_ARGV.')
   }
   if (process.platform !== 'win32') {
     note('skipped the no-argument launcher run (cmd.exe only exists on Windows)')
   } else {
     // A DOUBLE-CLICK, reproduced: the documented three-line contract with nothing
-    // in `%*`, then adapt.cmd, then whatever it left behind. VN_HARNESS_NO_WT keeps
+    // in `%*`, then adapt.cmd, then whatever it left behind. VNCODE_NO_WT keeps
     // it from opening a Windows Terminal window, and the file lives in a temp
     // directory, so a check never touches the tree or the desktop.
-    const probeDir = mkdtempSync(path.join(tmpdir(), 'vn-harness-args-'))
+    const probeDir = mkdtempSync(path.join(tmpdir(), 'vncode-args-'))
     const probe = path.join(probeDir, 'probe.bat')
     try {
       writeFileSync(probe, [
         '@echo off',
-        'if not defined VN_HARNESS_CONSOLE set "VN_HARNESS_ARGV=%*"',
-        `call "${path.join(repo, 'scripts', 'console', 'adapt.cmd')}" "%~f0" "vn-harness"`,
+        'if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"',
+        `call "${path.join(repo, 'scripts', 'console', 'adapt.cmd')}" "%~f0" "vncode"`,
         'if errorlevel 10 exit /b 0',
         'if errorlevel 2 exit /b 2',
-        'echo ARGV=[%VN_HARNESS_ARGV%]',
-        'echo ARGS=[%VN_HARNESS_ARGS%]',
-        'echo PAUSE=[%VN_HARNESS_PAUSE%]',
+        'echo ARGV=[%VNCODE_ARGV%]',
+        'echo ARGS=[%VNCODE_ARGS%]',
+        'echo PAUSE=[%VNCODE_PAUSE%]',
         'exit /b 0',
         '',
       ].join('\r\n'), 'ascii')
       const result = spawnSync('cmd.exe', ['/d', '/c', probe], {
         encoding: 'utf8',
-        env: { ...process.env, VN_HARNESS_NO_WT: '1' },
+        env: { ...process.env, VNCODE_NO_WT: '1' },
         windowsHide: true,
         timeout: 30000,
       })
@@ -504,32 +504,32 @@ for (const worker of ['scripts/install-all.sh', 'scripts/uninstall-all.sh', 'scr
 // the caller's flags to install-all.sh, which accepts the flag (above) instead of
 // being shielded from it.
 if (ps && !ps.includes('%VN_SHELL_ARGS:-NoTerminal=%')) {
-  fail('scripts/dist.ps1 generates a START-HERE.bat that forwards -NoTerminal to install-all.ps1 / vn-harness.exe, neither of which declares it.')
+  fail('scripts/dist.ps1 generates a START-HERE.bat that forwards -NoTerminal to install-all.ps1 / vncode.exe, neither of which declares it.')
 }
 
 // ...and the APP gets a third, narrower set again. -NoPause is the installer's
 // own switch but NOT the shell's, and the shell names an unknown flag instead of
-// ignoring it - so a generated START-HERE that handed -NoPause to vn-harness.exe
-// would install the pack correctly and then report "vn-harness FAILED". That is
+// ignoring it - so a generated START-HERE that handed -NoPause to vncode.exe
+// would install the pack correctly and then report "vncode FAILED". That is
 // measured, not hypothetical: it is what the first version of this assertion
 // caught. run-desktop.bat drops the same flag for the same reason.
 if (ps && !ps.includes('%VN_APP_ARGS:-NoPause=%')) {
-  fail('scripts/dist.ps1 generates a START-HERE.bat that forwards -NoPause to vn-harness.exe, which does not declare it - the app would refuse to start.')
+  fail('scripts/dist.ps1 generates a START-HERE.bat that forwards -NoPause to vncode.exe, which does not declare it - the app would refuse to start.')
 }
 if (sh && !sh.includes('-NoPause|--no-pause|-NoTerminal|--no-terminal) ;;')) {
-  fail('scripts/dist.sh does not filter the launcher-owned flags out of what its generated START-HERE.sh hands to ./vn-harness.')
+  fail('scripts/dist.sh does not filter the launcher-owned flags out of what its generated START-HERE.sh hands to ./vncode.')
 }
 
-// adapt.cmd MUST NOT use setlocal: its whole job is to leave VN_HARNESS_PS,
-// VN_HARNESS_ARGS and VN_HARNESS_PAUSE set for the caller, and setlocal would
+// adapt.cmd MUST NOT use setlocal: its whole job is to leave VNCODE_PS,
+// VNCODE_ARGS and VNCODE_PAUSE set for the caller, and setlocal would
 // discard all three on return.
 if (consoleText.adapt) {
   if (/^\s*setlocal\b/im.test(consoleText.adapt)) {
     fail('scripts/console/adapt.cmd uses setlocal - its decisions would vanish on return.')
   }
   // The relaunch marker is what stops an infinite window-opening loop.
-  if (!consoleText.adapt.includes('VN_HARNESS_CONSOLE')) {
-    fail('scripts/console/adapt.cmd has no VN_HARNESS_CONSOLE marker - the relaunch could loop.')
+  if (!consoleText.adapt.includes('VNCODE_CONSOLE')) {
+    fail('scripts/console/adapt.cmd has no VNCODE_CONSOLE marker - the relaunch could loop.')
   }
   // A failed wt.exe must fall back to this console rather than losing the run.
   if (!/fellthrough|continuing in this window/i.test(consoleText.adapt)) {

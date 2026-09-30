@@ -1,13 +1,13 @@
 #!/bin/sh
 # ============================================================
-#  vn-harness DISTRIBUTER - macOS / Linux.
+#  vncode DISTRIBUTER - macOS / Linux.
 #
 #  The twin of distribute.bat: builds the distribution folder you
 #  can hand to somebody (or run yourself) three ways -
 #
-#      dist/vn-harness-<version>-<rid>/     <- click this one
-#      dist/vn-harness-<version>-<rid>.zip  <- or hand this over
-#      dist/vn-harness-<version>-<rid>.run  <- or hand over ONE file,
+#      dist/vncode-<version>-<rid>/     <- click this one
+#      dist/vncode-<version>-<rid>.zip  <- or hand this over
+#      dist/vncode-<version>-<rid>.run  <- or hand over ONE file,
 #                                              which unpacks itself and starts
 #
 #  - and dist/ is gitignored on purpose: it is a COPY of this
@@ -44,7 +44,7 @@ script_dir=$(CDPATH= cd -- "$script_dir" && pwd)
 
 # -NoPause means never hold the window open; it is also accepted (and ignored)
 # by scripts/dist.sh, so a stray copy of it is never "an unknown flag".
-case " $* " in *" -NoPause "*) VN_HARNESS_PAUSE=0 ;; esac
+case " $* " in *" -NoPause "*) VNCODE_PAUSE=0 ;; esac
 
 # The distributer is a long foreground job with its own progress output, so it is
 # NOT wrapped in a banner the way install.sh is: the worker owns the words. The

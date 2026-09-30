@@ -184,7 +184,7 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
     create-exclusive write onto a redirected Desktop;
   - **ui-state** - the pack's settings namespace with no route to capture: the
     row is driven against a stub so the check can assert what `apply` registered
-    (the `vn-harness` namespace, asked for through the OPTIONAL settings service)
+    (the `vncode` namespace, asked for through the OPTIONAL settings service)
     and that the schema really resolves the defaults the browser half mirrors -
     drift between those two is what would make a fresh install read a field
     nobody set - plus the ladder and height refusals and the pre-paint zoom row
@@ -319,10 +319,10 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
 
   And it pins the CONSOLE CONTRACT, which is what keeps five Windows launchers
   and four POSIX ones behaving the same way: each Windows entry point must call
-  `scripts/console/adapt.cmd`, keep the `if not defined VN_HARNESS_CONSOLE set
-  "VN_HARNESS_ARGV=%*"` guard, mention `%*` exactly once (a second occurrence
+  `scripts/console/adapt.cmd`, keep the `if not defined VNCODE_CONSOLE set
+  "VNCODE_ARGV=%*"` guard, mention `%*` exactly once (a second occurrence
   would replace the caller's flags with `--from-terminal` after the Windows
-  Terminal relaunch), forward `%VN_HARNESS_ARGS%`, honour `VN_HARNESS_PAUSE` and
+  Terminal relaunch), forward `%VNCODE_ARGS%`, honour `VNCODE_PAUSE` and
   handle both of `adapt.cmd`'s exit codes; each POSIX entry point must source
   `scripts/console/theme.sh` and never invoke PowerShell (comments explaining
   that rule are stripped before the test, so the rule can still be documented);

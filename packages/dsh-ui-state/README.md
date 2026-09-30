@@ -37,7 +37,7 @@ section is one document both hosts read. That is the whole idea.
 | `rightbarWidth` | `-1` | this package — the right bar |
 
 The file is `$DSH_HOME/settings.yaml`, and a fresh install writes **no**
-`vn-harness` section at all: every field carries a schema default, so only values
+`vncode` section at all: every field carries a schema default, so only values
 that actually differ from the contract are written.
 
 There is deliberately **no field for the terminal dock's open state**. The panel
@@ -63,7 +63,7 @@ cannot read. A namespace is the documented third-party seam for a preference.
 
 ## The Node half
 
-`lib/index.js` registers the `vn-harness` namespace and answers
+`lib/index.js` registers the `vncode` namespace and answers
 `webserver/index-inject` with one inline script carrying the remembered page
 zoom, placed immediately after the opening body tag so the level is in force for
 the first paint. The script writes **both** the `zoom` declaration and the
@@ -121,7 +121,7 @@ decision, not a preference.
 ## Desktop window geometry
 
 The desktop shell remembers its own window geometry separately, in
-`$DSH_HOME/vn-harness/window.json` — written and read by the Rust shell itself
+`$DSH_HOME/vncode/window.json` — written and read by the Rust shell itself
 (`app/src-tauri/src/windowstate.rs`, whose pure half is covered by `cargo test`)
 — because the size must be known *before* the window is built, and a Chrome tab
 has no window geometry to share. A maximized recording keeps the previously known
@@ -131,7 +131,7 @@ size and position and flips only the flag.
 
 ```
 cordis.patch.yml   bundle layer: inserts the 'ui-state' row (nothing else patched)
-lib/index.js       Node half: registers the `vn-harness` namespace, inlines the remembered zoom
+lib/index.js       Node half: registers the `vncode` namespace, inlines the remembered zoom
 lib/client.js      Browser half: binds the namespace, restores the column widths, provides `uiState`
 ```
 

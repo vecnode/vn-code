@@ -1349,7 +1349,7 @@ check(
   'branding hides whatever occupies the brand slots',
   topBar.includes('.hHd-Xa_brandMark>*,html .hHd-Xa_root .hHd-Xa_brandName>*,html .hHd-Xa_root .hHd-Xa_railMark>*{display:none!important}'),
 )
-// alpha.8: the mark is the app ICON - `assets/vn-harness.svg` at the pack root -
+// alpha.8: the mark is the app ICON - `assets/vncode.svg` at the pack root -
 // inlined as a data URI. The artwork carries a 1px transparent margin inside its
 // 24px box, because the mark sits in boxes painted with `overflow:hidden` (the
 // sidebar's brand button is exactly 24px tall) where an edge-to-edge circle loses
@@ -1363,11 +1363,11 @@ const iconGeometry = (svg) => {
   if (box === null || circle === null) return null
   return { box: box[1], cx: Number(circle[1]), cy: Number(circle[2]), r: Number(circle[3]), fill: circle[4] }
 }
-const assetIcon = iconGeometry(readFileSync(path.join(repo, 'assets/vn-harness.svg'), 'utf8'))
+const assetIcon = iconGeometry(readFileSync(path.join(repo, 'assets/vncode.svg'), 'utf8'))
 const shippedIcon = iconGeometry(inlinedIcon)
 console.log('     icon inlined from the asset: ' + JSON.stringify(shippedIcon))
 check('branding inlines the app icon', shippedIcon !== null)
-check('the inlined icon matches assets/vn-harness.svg', JSON.stringify(shippedIcon) === JSON.stringify(assetIcon))
+check('the inlined icon matches assets/vncode.svg', JSON.stringify(shippedIcon) === JSON.stringify(assetIcon))
 check('the icon is a circle centred in its box', shippedIcon !== null && shippedIcon.cx * 2 === 24 && shippedIcon.cy * 2 === 24)
 check('the icon keeps a margin inside its box', shippedIcon !== null && shippedIcon.r < 12)
 check('the icon is black', shippedIcon !== null && shippedIcon.fill === '#000000')
@@ -1379,7 +1379,7 @@ check(
   'the hero whale is replaced by the icon',
   topBar.includes('.pXSMma_fishHitbox>*{display:none!important}') && topBar.includes('.pXSMma_fishHitbox::before{content:"";width:26px;height:26px'),
 )
-check('branding draws the product name', topBar.includes('.hHd-Xa_brandName::before{content:"vn-harness"}'))
+check('branding draws the product name', topBar.includes('.hHd-Xa_brandName::before{content:"vncode"}'))
 // The product text wears the conversation TITLE's type: ui-conversation's current
 // crumb is 14px/20px at weight 500, while the shipped brand name is 18px/600 in
 // the same 30px strip - they read as different sizes a few pixels apart.
@@ -3410,7 +3410,7 @@ function buildAiff(options) {
 
 /** One FLAC stream: a STREAMINFO block and a Vorbis comment, built by hand. */
 function buildFlac(options) {
-  const vendor = 'vn-harness-check'
+  const vendor = 'vncode-check'
   const entry = 'TITLE=' + (options.title === undefined ? 'Test' : options.title)
   const comments = new Uint8Array(12 + vendor.length + entry.length)
   const commentView = new DataView(comments.buffer)
@@ -3980,7 +3980,7 @@ check(
 )
 
 // ----------------------------------------------------------- dsh-ui-state
-// The pack's durable UI state (alpha.1). Its Node half owns the `vn-harness`
+// The pack's durable UI state (alpha.1). Its Node half owns the `vncode`
 // settings namespace and the pre-paint zoom row (driven in check-node-routes.mjs);
 // THIS half binds that namespace once, publishes the `uiState` service, and puts
 // the two COLUMN WIDTHS back - the one piece of interface state no other bundle

@@ -11,7 +11,7 @@
  *
  * WHY A SERVICE AND NOT THREE BINDINGS. `settingsScope` writes are framed by the
  * LATEST KNOWN namespace revision, and each bound scope is its own queue: three
- * bundles binding `vn-harness` independently could refuse each other's writes
+ * bundles binding `vncode` independently could refuse each other's writes
  * when one commits while another still holds the old revision (the contract's
  * recovery is a reload, which would silently drop the write). ONE scope, one
  * queue, one revision per namespace - so this half is the only binder, and
@@ -49,7 +49,7 @@ window.__ModuleLoader__.load({
     /** The client service name other halves of the pack resolve. */
     const SERVICE = 'uiState'
     /** The settings namespace, owned host-side by this package. Keep in sync. */
-    const NAMESPACE = 'vn-harness'
+    const NAMESPACE = 'vncode'
 
     /**
      * The "nothing remembered yet" state, which must stay in step with the host

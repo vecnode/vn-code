@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================
-#  vn-harness launcher - macOS / Linux.
+#  vncode launcher - macOS / Linux.
 #
 #  Starts the DeepSeek Harness web GUI and opens it in a browser:
 #
@@ -49,8 +49,8 @@ repo_root=$script_dir
 . "$repo_root/scripts/console/theme.sh"
 
 # -NoPause means never hold the window open. The Windows half reads the same
-# convention (VN_HARNESS_PAUSE=0), so the flag behaves identically on both hosts.
-case " $* " in *" -NoPause "*) VN_HARNESS_PAUSE=0 ;; esac
+# convention (VNCODE_PAUSE=0), so the flag behaves identically on both hosts.
+case " $* " in *" -NoPause "*) VNCODE_PAUSE=0 ;; esac
 
 port_arg=''
 dsh_home_arg=''
@@ -85,11 +85,11 @@ while [ $# -gt 0 ]; do
     -DshVersion=*|--dsh-version=*) dsh_version_arg=${1#*=} ;;
     -NoBrowser|--no-browser) no_browser=1 ;;
     -DefaultBrowser|--default-browser) default_browser=1 ;;
-    -NoPause|--no-pause) VN_HARNESS_PAUSE=0 ;;
+    -NoPause|--no-pause) VNCODE_PAUSE=0 ;;
     -NoTerminal|--no-terminal) ;;   # the console is a Windows decision; accepted so it is never "unknown"
     -Help|--help|-h) usage; exit 0 ;;
     *)
-      printf 'vn-harness: unknown option "%s"\n' "$1" >&2
+      printf 'vncode: unknown option "%s"\n' "$1" >&2
       printf 'Run "sh run-web.sh --help" for the accepted options.\n' >&2
       exit 2
       ;;
@@ -97,9 +97,9 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-step() { printf '[vn-harness] %s\n' "$1"; }
+step() { printf '[vncode] %s\n' "$1"; }
 fail() {
-  printf 'vn-harness: %s\n' "$1" >&2
+  printf 'vncode: %s\n' "$1" >&2
   exit 1
 }
 
@@ -263,7 +263,7 @@ fi
 # The app's output is piped through a FIFO, not a file and not a shell pipeline:
 # a FIFO keeps the token off the disk, and reading it from this shell (instead
 # of a pipeline's subshell) lets `wait` report the harness' own exit status.
-tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/vn-harness-run.XXXXXX") || fail 'could not create a temporary directory'
+tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/vncode-run.XXXXXX") || fail 'could not create a temporary directory'
 fifo="$tmp_dir/out"
 if ! mkfifo "$fifo"; then
   rm -rf "$tmp_dir"
@@ -303,14 +303,14 @@ while IFS= read -r line; do
       if is_loopback_url "$url"; then
         if browser=$(open_url "$url"); then
           opened=$browser
-          printf '\n[vn-harness] Opened the harness in %s.\n\n' "$browser"
+          printf '\n[vncode] Opened the harness in %s.\n\n' "$browser"
         else
           opened='none'
-          printf '[vn-harness] could not find a browser; open the URL above yourself.\n'
+          printf '[vncode] could not find a browser; open the URL above yourself.\n'
         fi
       else
         opened='refused'
-        printf '[vn-harness] the URL line did not name a loopback address; it was NOT opened.\n'
+        printf '[vncode] the URL line did not name a loopback address; it was NOT opened.\n'
       fi
     fi
   fi

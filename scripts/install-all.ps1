@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs the vn-harness bundle set into the DeepSeek Harness web profile
+    Installs the vncode bundle set into the DeepSeek Harness web profile
     on this machine.
 
 .DESCRIPTION
@@ -454,7 +454,7 @@ function Copy-PackSkills {
             $manifest = Join-Path $skill.FullName 'SKILL.md'
             if (-not (Test-Path $manifest)) { continue }
             $dest = Join-Path $skillsRoot $skill.Name
-            $marker = Join-Path $dest ('.vn-harness-' + $pkg.Name)
+            $marker = Join-Path $dest ('.vncode-' + $pkg.Name)
             if ((Test-Path $dest) -and -not (Test-Path $marker)) {
                 Write-Host "  - skills: left '$($skill.Name)' alone (it is not one of ours; delete it to take the bundled copy)"
                 continue
@@ -568,7 +568,7 @@ Write-Host '    "Open In...": it switches Light / Dark / System, the same prefer
 Write-Host '    Settings > General > Appearance owns (see packages/dsh-themes).'
 Write-Host '  - The camera button, left of the Themes button, screenshots the whole'
 Write-Host '    window: the browser captures the tab and the pack writes the PNG to'
-Write-Host '    this machine''s Desktop as vn-harness-<timestamp>.png.'
+Write-Host '    this machine''s Desktop as vncode-<timestamp>.png.'
 Write-Host '  - The magnifier button, left of the camera, is the page zoom: its menu'
 Write-Host '    holds Zoom in / Zoom out, the same as the browser''s Ctrl+ and Ctrl-,'
 Write-Host '    which a native window has no keyboard gesture for. The level is'

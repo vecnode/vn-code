@@ -36,7 +36,7 @@ id_ed25519*
 dist/
 
 # The SECOND output folder. `distribute.bat -OutDir dist2` (or any other path)
-# exists because a distribution that is RUNNING holds its own vn-harness.exe
+# exists because a distribution that is RUNNING holds its own vncode.exe
 # open, and Windows refuses to overwrite or delete a file in use - so a new cut
 # has to be assembled somewhere else and swapped in once the window is closed.
 # Build output for exactly the same reasons as dist/ above.

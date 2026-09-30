@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  vn-harness installer (double-click friendly)
+rem  vncode installer (double-click friendly)
 rem
 rem  Installs the plugin pack into the DeepSeek Harness WEB
 rem  profile only - the raw install used by "npx dsh web"
@@ -38,8 +38,8 @@ setlocal
 
 rem The three lines adapt.cmd documents. The guard on the first one is what keeps
 rem the real flags when Windows Terminal relaunches this file.
-if not defined VN_HARNESS_CONSOLE set "VN_HARNESS_ARGV=%*"
-call "%~dp0scripts\console\adapt.cmd" "%~f0" "vn-harness installer"
+if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
+call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode installer"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
@@ -49,7 +49,7 @@ rem argument is inspected, so a -DshHome path that happens to contain "-h" canno
 rem turn an install into a help screen. -Help and --help need no translation.
 set "VN_HELPREQ="
 set "VN_FIRST="
-for /f "tokens=1 delims= " %%A in ("%VN_HARNESS_ARGV%") do set "VN_FIRST=%%A"
+for /f "tokens=1 delims= " %%A in ("%VNCODE_ARGV%") do set "VN_FIRST=%%A"
 if /I "%VN_FIRST%"=="-h" set "VN_HELPREQ=-Help"
 if /I "%VN_FIRST%"=="/?" set "VN_HELPREQ=-Help"
 if /I "%VN_FIRST%"=="--help" set "VN_HELPREQ=-Help"
@@ -60,15 +60,15 @@ rem would make it bind positionally and fail; and a help request has no use for
 rem the other flags. Rewriting the whole argument string (rather than deleting the
 rem spelling from it) is also what keeps this safe for a -DshHome path that
 rem legitimately contains "-h".
-if defined VN_HELPREQ set "VN_HARNESS_ARGS=-Help"
+if defined VN_HELPREQ set "VNCODE_ARGS=-Help"
 
 rem The implied -Force, skipped for a help request. Safe with no arguments at all
-rem (where VN_HARNESS_ARGV used to be undefined and this line aborted the whole
+rem (where VNCODE_ARGV used to be undefined and this line aborted the whole
 rem file) because scripts\console\adapt.cmd stores "no arguments" as ONE SPACE: a
 rem defined value holding no flag, so this test reads it exactly as it reads an
 rem argument string that merely lacks -Force - which is the answer wanted here.
 set "VN_EXTRA="
-if not defined VN_HELPREQ if "%VN_HARNESS_ARGV:-Force=%"=="%VN_HARNESS_ARGV%" set "VN_EXTRA=-Force"
+if not defined VN_HELPREQ if "%VNCODE_ARGV:-Force=%"=="%VNCODE_ARGV%" set "VN_EXTRA=-Force"
 
 rem -NoTerminal belongs to the LAUNCHER, not to the install: scripts\console\adapt.cmd
 rem is the file that acts on it, deciding whether to relaunch into Windows Terminal.
@@ -76,28 +76,28 @@ rem scripts\install-all.ps1 declares no such parameter, and PowerShell stops on 
 rem argument it cannot bind - so forwarding it would turn a documented flag into a
 rem failed install. Only that one flag is dropped; -NoPause IS the worker's own.
 rem (Safe with no arguments at all: adapt.cmd guarantees the variable is defined.)
-set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
+set "VN_SHELL_ARGS=%VNCODE_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 
-"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-all.ps1" %VN_SHELL_ARGS% %VN_EXTRA%
+"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-all.ps1" %VN_SHELL_ARGS% %VN_EXTRA%
 set "VN_EXIT=%ERRORLEVEL%"
 
 echo.
 echo ============================================================
 if "%VN_EXIT%"=="0" (
-  echo [vn-harness] installed successfully.
+  echo [vncode] installed successfully.
 ) else (
-  echo [vn-harness] install FAILED - see the messages above.
+  echo [vncode] install FAILED - see the messages above.
 )
 echo ============================================================
 echo.
-if "%VN_HARNESS_PAUSE%"=="1" pause
+if "%VNCODE_PAUSE%"=="1" pause
 exit /b %VN_EXIT%
 
 :nopowershell
 echo.
 echo ============================================================
-echo  vn-harness could not start.
+echo  vncode could not start.
 echo ============================================================
 echo.
 echo  PowerShell was not found on PATH, and this installer needs it.
@@ -107,5 +107,5 @@ echo  https://aka.ms/powershell and run this file again.
 echo.
 echo  (macOS and Linux do not use PowerShell at all: run ./install.sh.)
 echo.
-if "%VN_HARNESS_PAUSE%"=="1" pause
+if "%VNCODE_PAUSE%"=="1" pause
 exit /b 2

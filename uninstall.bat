@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  vn-harness uninstaller (double-click friendly)
+rem  vncode uninstaller (double-click friendly)
 rem
 rem  Removes what this pack installed into the DeepSeek Harness
 rem  web profile: the bundles it added and the patch layer that
@@ -28,8 +28,8 @@ rem  macOS and Linux: ./uninstall.sh is the same remover in POSIX sh.
 rem ============================================================
 setlocal
 
-if not defined VN_HARNESS_CONSOLE set "VN_HARNESS_ARGV=%*"
-call "%~dp0scripts\console\adapt.cmd" "%~f0" "vn-harness uninstaller"
+if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
+call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode uninstaller"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
@@ -37,7 +37,7 @@ rem -h and /? are the two spellings PowerShell cannot bind; see install.bat for
 rem why only the first argument is inspected.
 set "VN_HELPREQ="
 set "VN_FIRST="
-for /f "tokens=1 delims= " %%A in ("%VN_HARNESS_ARGV%") do set "VN_FIRST=%%A"
+for /f "tokens=1 delims= " %%A in ("%VNCODE_ARGV%") do set "VN_FIRST=%%A"
 if /I "%VN_FIRST%"=="-h" set "VN_HELPREQ=-Help"
 if /I "%VN_FIRST%"=="/?" set "VN_HELPREQ=-Help"
 if /I "%VN_FIRST%"=="--help" set "VN_HELPREQ=-Help"
@@ -46,35 +46,35 @@ rem If one of those was found, forward -Help and NOTHING else: the spelling that
 rem was there cannot be bound by PowerShell, and a help request has no use for the
 rem other flags. Rewriting the whole string is what keeps this safe for a -DshHome
 rem path that legitimately contains "-h". See install.bat.
-if defined VN_HELPREQ set "VN_HARNESS_ARGS=-Help"
+if defined VN_HELPREQ set "VNCODE_ARGS=-Help"
 
 rem -NoTerminal is the LAUNCHER's flag and scripts\uninstall-all.ps1 declares no
 rem such parameter; forwarding it would make PowerShell stop on an argument it
 rem cannot bind. See install.bat for the whole reason. Safe with no arguments at
 rem all: scripts\console\adapt.cmd stores "no arguments" as one space, so
 rem VN_SHELL_ARGS is always defined.
-set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
+set "VN_SHELL_ARGS=%VNCODE_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 
-"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\uninstall-all.ps1" %VN_SHELL_ARGS%
+"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\uninstall-all.ps1" %VN_SHELL_ARGS%
 set "VN_EXIT=%ERRORLEVEL%"
 
 echo.
 echo ============================================================
 if "%VN_EXIT%"=="0" (
-  echo [vn-harness] removed successfully.
+  echo [vncode] removed successfully.
 ) else (
-  echo [vn-harness] removal FAILED - see the messages above.
+  echo [vncode] removal FAILED - see the messages above.
 )
 echo ============================================================
 echo.
-if "%VN_HARNESS_PAUSE%"=="1" pause
+if "%VNCODE_PAUSE%"=="1" pause
 exit /b %VN_EXIT%
 
 :nopowershell
 echo.
 echo ============================================================
-echo  vn-harness could not start.
+echo  vncode could not start.
 echo ============================================================
 echo.
 echo  PowerShell was not found on PATH, and this remover needs it.
@@ -84,5 +84,5 @@ echo  https://aka.ms/powershell and run this file again.
 echo.
 echo  (macOS and Linux do not use PowerShell at all: run ./uninstall.sh.)
 echo.
-if "%VN_HARNESS_PAUSE%"=="1" pause
+if "%VNCODE_PAUSE%"=="1" pause
 exit /b 2

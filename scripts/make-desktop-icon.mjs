@@ -11,7 +11,7 @@
         app/src-tauri/icons/icon.png   512px, for the bundle formats that want
                                        a PNG later (macOS/Linux)
 
-    Why a generator instead of a checked-in drawing: assets/vn-harness.svg is
+    Why a generator instead of a checked-in drawing: assets/vncode.svg is
     the mark's source of truth (a disc centred in a 24px box with a hairline
     transparent margin), so the geometry is READ out of that file - cx, cy, r
     and the viewBox - rather than restated here. Change the asset, re-run this,
@@ -31,7 +31,7 @@ import { deflateSync } from 'node:zlib';
 
 const here = dirname(fileURLToPath(import.meta.url));   // scripts/
 const repoRoot = join(here, '..');
-const svgPath = join(repoRoot, 'assets', 'vn-harness.svg');
+const svgPath = join(repoRoot, 'assets', 'vncode.svg');
 const outDir = join(repoRoot, 'app', 'src-tauri', 'icons');
 
 // ---------------------------------------------------------------------------

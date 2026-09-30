@@ -58,14 +58,14 @@ const rust = read(rustPath, 'the key-state module')
 // grepped for the same literals rather than parsed: the payload is built with
 // `serde_json::json!`, and a text assertion on the exact key strings is what
 // catches a rename in either direction.
-const GLOBAL = '__VN_HARNESS_SPLASH__'
+const GLOBAL = '__VNCODE_SPLASH__'
 const FIELDS = ['"key"', '"loaded"', '"source"', '"home"']
 
 if (html) {
   if (!html.includes(GLOBAL)) {
     fail(`app/ui/index.html never reads ${GLOBAL} - the shell's injected state would be ignored.`)
   }
-  if (!html.includes('__VN_HARNESS_SPLASH__')) {
+  if (!html.includes('__VNCODE_SPLASH__')) {
     fail('app/ui/index.html does not name the injected global.')
   }
 }
@@ -145,7 +145,7 @@ function render(injected) {
     document: { getElementById: (id) => elements.get(id) ?? null },
     setTimeout: () => 0,
   }
-  sandbox.window.__VN_HARNESS_SPLASH__ = injected
+  sandbox.window.__VNCODE_SPLASH__ = injected
   const context = vm.createContext(sandbox)
   for (const script of inlineScripts(html)) {
     vm.runInContext(script, context, { timeout: 2000 })

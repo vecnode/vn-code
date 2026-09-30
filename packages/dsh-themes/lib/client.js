@@ -65,7 +65,7 @@
  *
  *    The FILE does not go through the browser's downloads: the PNG is POSTed to
  *    this package's own host route (`/api/dsh-themes/screenshot`), which writes
- *    it to the host's Desktop under `vn-harness-<timestamp>.png` and answers the
+ *    it to the host's Desktop under `vncode-<timestamp>.png` and answers the
  *    path, so one click produces a real file on the host with no save dialog and
  *    no clutter in the download folder. A profile that runs this bundle without
  *    its Node half still gets the picture: the browser's own download is the
@@ -199,7 +199,7 @@ window.__ModuleLoader__.load({
     /** The host route that writes the PNG to this machine's Desktop. */
     const SCREENSHOT_ROUTE = '/api/dsh-themes/screenshot'
     /** The saved file's name pattern, the same one the Node half falls back to. */
-    const SCREENSHOT_PREFIX = 'vn-harness-'
+    const SCREENSHOT_PREFIX = 'vncode-'
     /**
      * The page-zoom control (alpha.15): its occupant id in the same utilities
      * list, and its order - one step LEFT of the Screenshot control, one more
@@ -260,7 +260,7 @@ window.__ModuleLoader__.load({
      */
     const ZOOM_MARKER = 'data-dsh-page-zoomed'
     /**
-     * The app mark, from `assets/vn-harness.svg` at the pack root: a black circle
+     * The app mark, from `assets/vncode.svg` at the pack root: a black circle
      * centred on (12,12) in its own 24px box, with a 1px transparent margin.
      *
      * The margin is the point. The mark is drawn into boxes the app paints with
@@ -1374,7 +1374,7 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         // spelling - lowercase and hyphenated, the way the repo, the npm
         // package and `run-desktop.bat` name it - not the title-case form the
         // draw-strings used through alpha.13.
-        'html .hHd-Xa_root .hHd-Xa_brandName::before{content:"vn-harness"}',
+        'html .hHd-Xa_root .hHd-Xa_brandName::before{content:"vncode"}',
         // ...wearing the CHAT TITLE's type, not the shipped brand name's. The
         // conversation's own title - the current crumb in the header strip this
         // band is levelled with - is `.wSkVaW_crumb` + `.wSkVaW_crumbCurrent` in

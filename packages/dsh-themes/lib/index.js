@@ -52,7 +52,7 @@ const MAX_PNG_BYTES = 64 * 1024 * 1024
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 /** The saved file's name: the pack's name plus a local timestamp. */
-const FILE_PREFIX = 'vn-harness-'
+const FILE_PREFIX = 'vncode-'
 
 /** How many `-2`, `-3` ... suffixes to try before giving up on a free name. */
 const MAX_NAME_ATTEMPTS = 50

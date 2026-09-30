@@ -17,7 +17,7 @@ The pack targets the harness line DeepSeek ships to the raw web install
 | Session log download | **the seat is the pack's** - `dsh-themes` alpha.9 shadows the shipped header seat (same occupant id, `priority: -10`), so a plain download icon replaces the three-dot button; the shipped `session-log-download` row stays **mounted** for `/api/session.export`, the `/export` command and the `sessionLogDownload` controller the button drives (no row disabled, nothing forked, no new package) |
 | Header icon rings | the header's icon buttons all wear the same `.5px` round outline: the pack's own controls draw it themselves and `dsh-themes` adds one rule for the right bar's toggle in the header corner (keyed on the stable `data-conversation-header-corner` marker) |
 | Media on each host | `dsh-media` resolves ffmpeg from `PATH` first, so a machine that already has it needs nothing - and nothing is downloaded there. Where it does not, one pinned static build per platform-arch is provisioned into `$DSH_HOME/dsh-media/bin`: **win32 x64/arm64** and **linux x64/arm64** from BtbN/FFmpeg-Builds (LGPL static), **darwin x64** from evermeet.cx (GPL). Unpacking uses the host's own `tar` (bsdtar on Windows 10+ and macOS, GNU tar on Linux), which is the one external tool that must exist. **darwin-arm64 is deliberately unpinned** - no Apple-Silicon build publishes both a versioned URL and a checksum - so there it is `brew install ffmpeg` or `DSH_MEDIA_FFMPEG`/`DSH_MEDIA_FFPROBE`, and the plugin says so in a sentence instead of guessing at a download |
-| Window screenshot | **the pack's** - `dsh-themes` alpha.10 adds a Screenshot control (order `-30`, left of Themes): the browser captures the current tab (`getDisplayMedia`, real pixels, so the terminal's xterm canvas and open dialogs are included) and the pack's own host route `POST /api/dsh-themes/screenshot` writes the PNG to the host's Desktop as `vn-harness-<timestamp>.png` (browser download as the fallback); no shipped row is touched |
+| Window screenshot | **the pack's** - `dsh-themes` alpha.10 adds a Screenshot control (order `-30`, left of Themes): the browser captures the current tab (`getDisplayMedia`, real pixels, so the terminal's xterm canvas and open dialogs are included) and the pack's own host route `POST /api/dsh-themes/screenshot` writes the PNG to the host's Desktop as `vncode-<timestamp>.png` (browser download as the fallback); no shipped row is touched |
 
 ## Running the app
 
@@ -195,11 +195,11 @@ the details.
   own **left top bar** it also replaces the branding: the shipped mark and wordmark
   (they are `single`-slot occupants filled by the harness's `brand-official` row,
   with the layout's own fish as fallback) are hidden and redrawn as the **app
-  icon** (`assets/vn-harness.svg`, a 24px black disc with a 1px transparent
-  margin) and the text **vn-harness**, in the wide row and in the collapsed rail.
+  icon** (`assets/vncode.svg`, a 24px black disc with a 1px transparent
+  margin) and the text **vncode**, in the wide row and in the collapsed rail.
 - **dsh-ui-state** keeps the UI state that a reload used to forget, **on the
   host**, so the web profile and the desktop window share one picture: one
-  settings namespace (`vn-harness` in `$DSH_HOME/settings.yaml`) holding the page
+  settings namespace (`vncode` in `$DSH_HOME/settings.yaml`) holding the page
   zoom, an extension theme, the dock height and the two column widths. It
   registers the namespace through the harness's own settings service and inlines
   the remembered zoom into the page **before the shell mounts**, so a level never
@@ -393,7 +393,7 @@ the details.
   an **override** on the band alpha.4 already owns rather than a fight for a
   one-occupant seat: the slots' children are hidden (`display:none!important`,
   which beats the `display:contents` wrapper the app puts around each occupant)
-  and a **24px black disc** plus the text **VN Harness** are drawn in their place
+  and a **24px black disc** plus the text **vncode** are drawn in their place
   - in the wide row and in the collapsed rail. Verified in the running app: the
   shipped art computes to `display:none` and the disc to `24px × 24px`,
   `border-radius:50%`, `rgb(0,0,0)`. Pinned to the sidebar's hashed class names
@@ -403,13 +403,13 @@ the details.
 - **themes alpha.7**: the branding text wears the **chat title's type**. The
   shipped brand name is `18px/600` while the conversation's own title (the current
   crumb in the header strip the band is levelled with) is `14px/20px/500`, so the
-  two read as different sizes a few pixels apart; **VN Harness** now takes the
+  two read as different sizes a few pixels apart; **vncode** now takes the
   title's size, weight and line height. The check pins the declaration, and the
   served `ui-conversation` bundle was compared with the served `dsh-themes` bundle
   to confirm both declare `14px/20px/500`.
 
 - **themes alpha.8**: the branding mark is now the **app icon** —
-  `assets/vn-harness.svg` at the pack root, a black circle centred on (12,12) with
+  `assets/vncode.svg` at the pack root, a black circle centred on (12,12) with
   a **1px transparent margin** inside its box. That margin is the fix for alpha.7's
   "cut" disc: it was drawn edge-to-edge inside boxes the app paints with
   `overflow:hidden` (the sidebar's brand button is exactly 24px tall), where the
@@ -459,7 +459,7 @@ the details.
   `POST /api/dsh-themes/screenshot`, which resolves the host's Desktop per request
   (Windows plain or OneDrive-redirected, `~/Desktop`, XDG `XDG_DESKTOP_DIR`, home
   last), validates the body (`image/png`, the PNG signature, a 64 MiB cap) and
-  writes it create-exclusively (`vn-harness-<timestamp>.png`, `-2` on a
+  writes it create-exclusively (`vncode-<timestamp>.png`, `-2` on a
   collision), answering the path the toast then shows. A profile without that row
   falls back to an ordinary browser download. Restart `npx @deepseek-ai/dsh web`
   and hard-refresh; the version changed, so a plain install run (or `-Force`)
@@ -496,7 +496,7 @@ the details.
   `THEME_EXTENSIONS` plus its copy in both dictionaries. Restart and hard-refresh.
 
 - **themes alpha.14**: the pack's own product text on the left top bar reads
-  **vn-harness** - the repository's own spelling - instead of the title-case
+  **vncode** - the repository's own spelling - instead of the title-case
   **VN Harness** it used through alpha.13. Nothing else about the branding moved:
   same slot override, same 24px disc, same chat-title type, same inlined icon.
   The draw string is what the tracked check pins, so a bundle still saying
@@ -554,7 +554,7 @@ the details.
   height sat in `localStorage`, which is per **origin** and per browser
   **profile** — so a Chrome tab and the desktop window's WebView never shared it,
   and the desktop shell lost it whenever port 3080 was taken. This package makes
-  that state host state: ONE settings namespace, `vn-harness`, in
+  that state host state: ONE settings namespace, `vncode`, in
   `$DSH_HOME/settings.yaml`, holding `pageZoom`, `theme`, `dockHeight`,
   `sidebarWidth` and `rightbarWidth`. Its Node half owns the namespace and
   inlines the remembered zoom into the page before the shell mounts; its browser
@@ -563,7 +563,7 @@ the details.
   restores the two COLUMN WIDTHS through ui-layout's own root-slot store handle
   (its `ctx.layout` exposes no width setter), and publishes the **`uiState`**
   client service the other two halves write through. Every field carries a schema
-  default, so a fresh install grows **no** `vn-harness` section at all. New
+  default, so a fresh install grows **no** `vncode` section at all. New
   package, so the first install after this change needs a plain
   `install.bat` / `./install.sh` run or `-Force`.
 
@@ -604,7 +604,7 @@ the details.
   `light` / `dark` / `system` always persisted (ui-theme owns them); **Nord** and
   **Monokai** did not — ui-theme's durable schema accepts the built-in three
   only, so they were an in-process choice a reload threw away. They now ride the
-  `vn-harness` section, with the per-origin `localStorage` copy kept UNDERNEATH as
+  `vncode` section, with the per-origin `localStorage` copy kept UNDERNEATH as
   the fallback, so the control still remembers its level in a profile that
   installed this bundle without `dsh-ui-state`. Picking a built-in theme **clears**
   the field rather than overwriting it, so the document keeps no stale theme id.
@@ -620,13 +620,13 @@ the details.
   Version changed: a plain install run (or `-Force`) re-adds the bundle.
 
 - **desktop window geometry (app/)**: the Tauri shell now remembers its own
-  window size and position in `$DSH_HOME/vn-harness/window.json`, read before the
+  window size and position in `$DSH_HOME/vncode/window.json`, read before the
   window is built (a browser round trip could not answer in time) and written on
   a coalesced resize/move plus once at exit, with a monitor check that centres the
   window when the remembered point is on no screen. It is desktop-only state by
   nature — a Chrome tab has no window geometry to share. `app/` is not a plugin
   and no installer touches it: `run-desktop.bat` rebuilds it on the next launch
-  (close any running vn-harness window first, or the release binary is locked).
+  (close any running vncode window first, or the release binary is locked).
 
 ## Alpha policy
 

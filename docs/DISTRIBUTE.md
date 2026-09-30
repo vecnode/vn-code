@@ -1,4 +1,4 @@
-# Building a vn-harness distribution
+# Building a vncode distribution
 
 A distribution is **one folder you can click** and, optionally, a zip of it. This
 page is the local story and the CI story, side by side, because they are the
@@ -38,17 +38,17 @@ That is why:
 The **single-file build** is the same folder, addressed to somebody who wants one
 thing to download. It is the zip appended to a copy of the shell binary, with a
 small trailer saying where the payload is; on its first run it unpacks that
-payload into `<local app data>/vn-harness/<version>-<rid>/` and then runs the
+payload into `<local app data>/vncode/<version>-<rid>/` and then runs the
 unpacked folder's own `START-HERE`. It cannot replace the folder - the live links
 above need a directory that stays put - and it does not try to: it delegates, so
-`vn-harness` still only *runs* and the installer still only *installs*.
+`vncode` still only *runs* and the installer still only *installs*.
 
 ## 2. What comes out
 
 ```text
 dist/
-  vn-harness-<version>-<rid>/          <- the folder you click
-    vn-harness.exe  |  vn-harness      <- the built shell
+  vncode-<version>-<rid>/          <- the folder you click
+    vncode.exe  |  vncode      <- the built shell
     START-HERE.bat  |  START-HERE.sh   <- generated: install, then open
     DIST-README.txt                    <- generated: requirements, flags, uninstall
     BUILD-INFO.json                    <- generated: version, pin, commit, toolchain
@@ -60,11 +60,11 @@ dist/
                                           console layer every entry point calls)
     app/README.md                      <- the shell's README; the shell itself
                                           ships built, so its source is not here
-    assets/vn-harness.svg  docs/  README.md  LICENSE  SECURITY.md
+    assets/vncode.svg  docs/  README.md  LICENSE  SECURITY.md
     install.bat/.sh  uninstall.bat/.sh  run-web.bat/.sh  run-desktop.bat
-  vn-harness-<version>-<rid>.zip       <- the same folder, archived
-  vn-harness-<version>-<rid>.exe       <- Windows: the zip above appended to the
-  vn-harness-<version>-<rid>.run          shell binary; unpacks itself, then runs
+  vncode-<version>-<rid>.zip       <- the same folder, archived
+  vncode-<version>-<rid>.exe       <- Windows: the zip above appended to the
+  vncode-<version>-<rid>.run          shell binary; unpacks itself, then runs
                                           the unpacked folder's START-HERE
 ```
 
@@ -89,7 +89,7 @@ POSIX twin `scripts/console/theme.sh` own the colour policy (a terminal gets
 colour, a redirected log never does, `NO_COLOR` always wins). That layer is why
 the generated `START-HERE.bat` behaves like the launchers beside it instead of
 like a hand-written one-off, and it ships inside `scripts/`. `run-desktop.bat` is
-shipped for the same reason it exists: in this folder it runs `vn-harness.exe`
+shipped for the same reason it exists: in this folder it runs `vncode.exe`
 directly and needs no Rust toolchain, which is what `-NoBuild` pins down.
 
 **The shell ships BUILT, not in source.** `app/src-tauri/` (the Rust source, its
@@ -102,7 +102,7 @@ against a checkout (`packages/`, the Rust source, a git history),
 `scripts/sync-vendored.ps1` moves the vendored forks forward and wants `pwsh` on
 every host, and `scripts/make-desktop-icon.mjs` regenerates icons that are not
 shipped either. `run-desktop.bat` does not miss them: it decides between "run
-the binary beside me" and "build from source" on the presence of `vn-harness.exe`,
+the binary beside me" and "build from source" on the presence of `vncode.exe`,
 never on a `Cargo.toml`.
 
 > The **plugins** are the exception, and it is structural rather than a choice:
@@ -145,7 +145,7 @@ distribute.bat -Version 0.2.0
 
 :: assemble somewhere else, leaving dist/ alone - the case that NEEDS it is a
 :: distribution that is still RUNNING: Windows will not let a live
-:: vn-harness.exe be overwritten, so the new cut is built beside it and swapped
+:: vncode.exe be overwritten, so the new cut is built beside it and swapped
 :: in after the window is closed
 distribute.bat -OutDir dist2
 ```
@@ -160,7 +160,7 @@ sh ./distribute.sh -Help          # if the executable bit was lost
 
 Every run prints the folder and the archive to click. `-OutDir` exists for the
 one case that cannot be worked around: a distribution that is **running** holds
-its own `vn-harness.exe` open, and Windows refuses to overwrite or delete a file
+its own `vncode.exe` open, and Windows refuses to overwrite or delete a file
 in use - so a new cut is assembled beside it and swapped in once the window is
 closed (`dist2/` is gitignored for that reason). `-Verify` is the useful one
 while you are changing something: it proves the **folder** works, not just that
@@ -309,7 +309,7 @@ systems and the artifact plumbing.
 
 - **Unsigned binaries.** Windows SmartScreen will say "unknown publisher"
   (More info → Run anyway). macOS quarantines an unsigned binary - right-click →
-  **Open**, or `xattr -d com.apple.quarantine ./vn-harness`, and the first launch
+  **Open**, or `xattr -d com.apple.quarantine ./vncode`, and the first launch
   from Finder rather than Terminal is the one that gets flagged.
 - **No installers.** `app/src-tauri/tauri.conf.json` keeps `bundle.active: false`,
   so there is no `.msi`, `.dmg`, `.deb` or `.AppImage`, no Tauri CLI in CI, no
@@ -321,7 +321,7 @@ systems and the artifact plumbing.
   with nothing to extract by hand.
 - **Its files are not hidden, and cannot be.** A payload the app can execute is a
   payload the user can read: they are ordinary files under
-  `<local app data>/vn-harness/<version>-<rid>/`. Deleting that folder is safe -
+  `<local app data>/vncode/<version>-<rid>/`. Deleting that folder is safe -
   the next run unpacks it again - but deleting it while the app is running is
   not, on Windows where a running binary is locked.
 - **A new version unpacks beside the old one**, never over it, so an upgrade
@@ -347,7 +347,7 @@ systems and the artifact plumbing.
 | Symptom | What it means |
 |---|---|
 | `cargo was not found on PATH` | install the Rust toolchain (https://rustup.rs) or pass `-SkipBuild` |
-| `cargo build failed ..., and vn-harness is RUNNING right now (PID ...)` | a vn-harness window is open and **Windows locks a running binary**, so cargo cannot relink it. Close the window and run again, or pass `-SkipBuild` to package the binary already under `app/src-tauri/target/release` (check it is current first: nothing under `app/` newer than the `.exe`) |
+| `cargo build failed ..., and vncode is RUNNING right now (PID ...)` | a vncode window is open and **Windows locks a running binary**, so cargo cannot relink it. Close the window and run again, or pass `-SkipBuild` to package the binary already under `app/src-tauri/target/release` (check it is current first: nothing under `app/` newer than the `.exe`) |
 | `The shell binary is not at ...` | you passed `-SkipBuild` with nothing built yet |
 | `dist-manifest.txt includes '<x>', which does not exist` | a rule names a path this repository does not have |
 | `The assembled distribution is missing: ...` | the copy lost a file - the sentinel guard fired. This is the check that catches a walk that flattened or nested a tree, and it has earned its place |

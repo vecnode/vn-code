@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================
-#  vn-harness uninstaller - macOS / Linux.
+#  vncode uninstaller - macOS / Linux.
 #
 #  Removes this pack's bundles from the DeepSeek Harness WEB profile (DSH_HOME,
 #  else ~/.dsh, profile "web" by default), together with any retired bundle name
@@ -62,7 +62,7 @@ while [ $# -gt 0 ]; do
     -NoTerminal|--no-terminal) ;;   # the console is a Windows decision; same reason
     -Help|--help|-h) usage; exit 0 ;;
     *)
-      printf 'vn-harness: unknown option "%s"\n' "$1" >&2
+      printf 'vncode: unknown option "%s"\n' "$1" >&2
       printf 'Run "sh scripts/uninstall-all.sh --help" for the accepted options.\n' >&2
       exit 2
       ;;
@@ -73,7 +73,7 @@ done
 case "$target_arg" in
   ''|web|cli) ;;
   *)
-    printf 'vn-harness: -Target accepts only "web" or "cli" (both mean the web profile); got "%s".\n' "$target_arg" >&2
+    printf 'vncode: -Target accepts only "web" or "cli" (both mean the web profile); got "%s".\n' "$target_arg" >&2
     printf 'DSH Desktop is not a target of this pack.\n' >&2
     exit 2
     ;;
@@ -82,9 +82,9 @@ esac
 # Progress goes to STDERR: ensure_pnpm is called as
 # `pnpm_bin_dir=$(ensure_pnpm ...)`, so anything on stdout is captured INTO the
 # path and turns PATH into garbage. See scripts/install-all.sh for the whole story.
-step() { printf '[vn-harness] %s\n' "$1" >&2; }
+step() { printf '[vncode] %s\n' "$1" >&2; }
 fail() {
-  printf 'vn-harness: %s\n' "$1" >&2
+  printf 'vncode: %s\n' "$1" >&2
   exit 1
 }
 
@@ -307,7 +307,7 @@ remove_skills() {
     [ -d "$skill" ] || continue
     skill_name=$(basename "$skill")
     dest="$skills_root/$skill_name"
-    marker="$dest/.vn-harness-$name"
+    marker="$dest/.vncode-$name"
     [ -f "$marker" ] || continue
     rm -rf "$dest"
     if [ -n "$skills_removed" ]; then

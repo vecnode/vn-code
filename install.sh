@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================
-#  vn-harness installer (macOS / Linux; the Windows twin is install.bat)
+#  vncode installer (macOS / Linux; the Windows twin is install.bat)
 #  Installs the plugin pack into the DeepSeek Harness WEB profile only - the
 #  raw install used by "npx @deepseek-ai/dsh web" (DSH_HOME, else ~/.dsh,
 #  profile web). DSH Desktop is not supported by this pack.
@@ -43,8 +43,8 @@ here=$(CDPATH= cd -- "$here" && pwd)
 . "$here/scripts/console/theme.sh"
 
 # -NoPause means never hold a window open. The Windows half reads the same
-# convention (VN_HARNESS_PAUSE), so the flag behaves identically on both hosts.
-case " $* " in *" -NoPause "*) VN_HARNESS_PAUSE=0 ;; esac
+# convention (VNCODE_PAUSE), so the flag behaves identically on both hosts.
+case " $* " in *" -NoPause "*) VNCODE_PAUSE=0 ;; esac
 
 # The four help spellings every entry point answers. The WORKER owns the words,
 # so this only routes: one help text per command, on both hosts.

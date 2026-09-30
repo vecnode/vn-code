@@ -86,7 +86,7 @@ function Initialize-VnConsole {
     $color = $true
     if ($NoColor) { $color = $false }
     if ($env:NO_COLOR) { $color = $false }
-    if ($env:VN_HARNESS_NO_COLOR) { $color = $false }
+    if ($env:VNCODE_NO_COLOR) { $color = $false }
     try {
         # A redirected stream is a log, and a log wants the words, not the paint.
         if ([Console]::IsOutputRedirected) { $color = $false }
@@ -132,7 +132,7 @@ function Write-VnStep {
         [string]$Color = ''
     )
     if (-not $Color) { $Color = $script:VnColorStep }
-    Write-VnLine -Text "[vn-harness] $Message" -Color $Color
+    Write-VnLine -Text "[vncode] $Message" -Color $Color
 }
 
 function Write-VnNote {
@@ -146,21 +146,21 @@ function Write-VnGood {
     <# .SYNOPSIS Something worked. #>
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$Message)
-    Write-VnLine -Text "[vn-harness] $Message" -Color $script:VnColorGood
+    Write-VnLine -Text "[vncode] $Message" -Color $script:VnColorGood
 }
 
 function Write-VnWarn {
     <# .SYNOPSIS Something is degraded but the run continues. #>
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$Message)
-    Write-VnLine -Text "[vn-harness] $Message" -Color $script:VnColorWarn
+    Write-VnLine -Text "[vncode] $Message" -Color $script:VnColorWarn
 }
 
 function Write-VnFail {
     <# .SYNOPSIS Something failed. The caller decides the exit code. #>
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$Message)
-    Write-VnLine -Text "[vn-harness] $Message" -Color $script:VnColorFail
+    Write-VnLine -Text "[vncode] $Message" -Color $script:VnColorFail
 }
 
 function Write-VnRule {
@@ -176,12 +176,12 @@ function Test-VnNoPause {
         Whether a worker must NOT hold the window open at the end.
     .DESCRIPTION
         The batch entry points already decide this (scripts\console\adapt.cmd
-        exports VN_HARNESS_PAUSE), and they own the window, so this exists only
+        exports VNCODE_PAUSE), and they own the window, so this exists only
         for a worker that has to make the same call on its own - and it reads the
         SAME variable rather than inventing a second rule.
     #>
     [CmdletBinding()]
     param()
-    if ($env:VN_HARNESS_PAUSE -eq '0') { return $true }
+    if ($env:VNCODE_PAUSE -eq '0') { return $true }
     return $false
 }

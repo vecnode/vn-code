@@ -1,4 +1,4 @@
-# Installing vn-harness (Windows, macOS, Linux)
+# Installing vncode (Windows, macOS, Linux)
 
 Three launchers, one per job:
 
@@ -74,12 +74,12 @@ layer, `scripts\console\`:
 - `adapt.cmd` picks the window - a double-click opens in **Windows Terminal**
   when it is installed and the default terminal application is not already
   Terminal (a no-op on a stock Windows 11), so `-NoTerminal` or
-  `VN_HARNESS_NO_WT=1` opts out - and the PowerShell: **`pwsh` 7 when the machine
+  `VNCODE_NO_WT=1` opts out - and the PowerShell: **`pwsh` 7 when the machine
   has it, Windows PowerShell 5.1 otherwise.** Both are supported on purpose, and
   5.1 is what a stock Windows 10/11 ships;
 - it also decides whether the window is held open at the end. A double-clicked
   failure pauses so it can be read; a scripted run does not. `-NoPause`, or
-  `VN_HARNESS_NOPAUSE=1`, never pauses;
+  `VNCODE_NOPAUSE=1`, never pauses;
 - `theme.ps1` / `theme.sh` own the colour policy: **colour only on a real
   terminal, never in a redirected log, and `NO_COLOR` always wins.** Output is
   UTF-8, so a path with an accent survives the trip;
@@ -156,13 +156,13 @@ nothing is opened and the launcher says so; the URL is in the app's own output.
 ```bat
 :: Windows
 set DSH_HOME=C:\Users\you\.dsh
-npx --yes @deepseek-ai/dsh@0.1.5-rc.1 plugin --profile web add C:\path\to\vn-harness\packages\dsh-editor
+npx --yes @deepseek-ai/dsh@0.1.5-rc.1 plugin --profile web add C:\path\to\vncode\packages\dsh-editor
 ```
 
 ```sh
 # macOS / Linux
 export DSH_HOME="$HOME/.dsh"
-npx --yes @deepseek-ai/dsh@0.1.5-rc.1 plugin --profile web add /path/to/vn-harness/packages/dsh-editor
+npx --yes @deepseek-ai/dsh@0.1.5-rc.1 plugin --profile web add /path/to/vncode/packages/dsh-editor
 ```
 
 (Requires `pnpm` on PATH.) Remove with the same command but `remove dsh-editor`.
@@ -201,7 +201,7 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
    dock's left edge follows the left bar when that is collapsed or expanded —
    the bar itself never moves.
 4. The left bar's top row wears the pack's branding: the **app icon** (a black
-   disc, `assets/vn-harness.svg`) and **vn-harness** where the shipped mark and
+   disc, `assets/vncode.svg`) and **vncode** where the shipped mark and
    wordmark were — and the same icon replaces the whale beside **Into the
    Unknown** on the new-session screen.
 
@@ -360,11 +360,11 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 - **The left bar still shows the fish and the "deepseek" wordmark** — the branding
   override arrives with `dsh-themes` alpha.6; reinstall (`install.bat` /
   `./install.sh`, or `-Force`) so that version is in the profile, then restart and
-  hard-refresh. The row should show the app icon and **vn-harness**, at the chat
+  hard-refresh. The row should show the app icon and **vncode**, at the chat
   title's size (alpha.7), with the same icon beside **Into the Unknown** (alpha.8).
 - **The mark looks clipped or oval** — alpha.7 drew it as a CSS disc, which lost a
   fraction of a pixel inside the sidebar's `overflow:hidden` brand button.
-  alpha.8 paints `assets/vn-harness.svg` instead, whose circle keeps a 1px
+  alpha.8 paints `assets/vncode.svg` instead, whose circle keeps a 1px
   transparent margin, so no container can shave it. Confirm the served
   `dsh-themes` bundle prints alpha.8 or later.
 - **The left bar's branding looks unstyled or empty after a harness update** —

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Removes the vn-harness bundle set from the DeepSeek Harness web profile,
+    Removes the vncode bundle set from the DeepSeek Harness web profile,
     together with any retired bundle name this pack shipped before (dsh-focus,
     dsh-files). Removing a bundle also removes its patch layer.
 
@@ -293,7 +293,7 @@ function Remove-PackSkills {
         if (-not (Test-Path $skillsDir)) { continue }
         foreach ($skill in (Get-ChildItem $skillsDir -Directory | Sort-Object Name)) {
             $dest = Join-Path $skillsRoot $skill.Name
-            $marker = Join-Path $dest ('.vn-harness-' + $pkg.Name)
+            $marker = Join-Path $dest ('.vncode-' + $pkg.Name)
             if (-not (Test-Path $marker)) { continue }
             Remove-Item -Path $dest -Recurse -Force
             $removed += $skill.Name

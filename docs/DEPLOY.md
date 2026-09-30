@@ -1,4 +1,4 @@
-# Deploying vn-harness
+# Deploying vncode
 
 What stands between today's `distribute.bat` and a distribution somebody can run
 on a machine that has never seen Node, plus the launcher contract, the state map
@@ -126,7 +126,7 @@ The whole distribution feature is **untracked** (`git status`: `.github/`,
 `distribute.bat`, `distribute.sh`, `docs/DISTRIBUTE.md`, `scripts/dist.ps1`,
 `scripts/dist.sh`, `scripts/dist-manifest.txt`,
 `scripts/checks/check-dist-layout.mjs`), on `main` at `origin`
-`https://github.com/vecnode/vn-harness.git`. Nothing CI-related has ever run.
+`https://github.com/vecnode/vncode.git`. Nothing CI-related has ever run.
 Code signing, notarization, `.msi`/`.dmg`/`.deb` and a `.app` bundle stay
 deliberately out of scope (`bundle.active: false`) — that is a decision to
 revisit, not an oversight to fix here.
@@ -144,7 +144,7 @@ what the folder *promises*:
   installed" — three prerequisites (Node, npm/npx, pnpm) to satisfy before the app
   runs at all;
 - with a vendored runtime it promises "run me" — which is what the built
-  `vn-harness.exe` already looks like to the person who double-clicks it.
+  `vncode.exe` already looks like to the person who double-clicks it.
 
 Costs, measured, all six targets:
 
@@ -270,7 +270,7 @@ The POSIX halves (`*.sh`) mirror the behaviour, never the mechanism: plain
 | `install.bat` / `install.sh` | both | add this folder's bundles to the web profile; no admin, ever |
 | `uninstall.bat` / `uninstall.sh` | both | remove only what this pack added |
 | `run-web.bat` / `run-web.sh` | both | start the pinned harness and open it in Chrome (default browser as fallback) |
-| `run-desktop.bat` | Windows | the same harness in the native window (`vn-harness.exe`) |
+| `run-desktop.bat` | Windows | the same harness in the native window (`vncode.exe`) |
 | `distribute.bat` / `distribute.sh` | both | maintainer only — build/assemble/verify a distribution; not shipped |
 | `START-HERE.bat` / `START-HERE.sh` | generated | install, then run — the one file a recipient double-clicks |
 
@@ -284,7 +284,7 @@ The POSIX halves (`*.sh`) mirror the behaviour, never the mechanism: plain
 
 1. **The console it opens in.** If the process is not already inside Windows
    Terminal (`WT_SESSION` unset) and `wt.exe` resolves, re-launch itself inside
-   it — `wt.exe -w 0 nt --title "vn-harness" cmd /c ""%~f0" %*` — with a marker
+   it — `wt.exe -w 0 nt --title "vncode" cmd /c ""%~f0" %*` — with a marker
    variable set so the child does not recurse, then `exit /b` **without** pausing
    (the new window owns the output). Otherwise continue in `conhost`. On Windows
    11 with Terminal as the default terminal application this is a no-op; on a
@@ -300,7 +300,7 @@ The POSIX halves (`*.sh`) mirror the behaviour, never the mechanism: plain
 4. **Colour only where it exists.** Emit ANSI only when the console reports virtual
    terminal support (`$Host.UI.SupportsVirtualTerminal`, `WT_SESSION`, `TERM`),
    honour `NO_COLOR`, and emit none at all when stdout is redirected. Status
-   lines keep the existing `[vn-harness]` prefix so a piped log is still readable.
+   lines keep the existing `[vncode]` prefix so a piped log is still readable.
 5. **`pause` only when the window would vanish.** Pause on failure when the file
    was double-clicked (stdin is a console and the parent is Explorer); never with
    `-NoPause` / `-Quiet`, never when stdin is not a terminal, and never after a
@@ -321,7 +321,7 @@ The POSIX halves (`*.sh`) mirror the behaviour, never the mechanism: plain
    The five entry files stay thin forwarders, and `check-dist-layout.mjs` pins the
    parity — five copies of a 15-line header is exactly how launchers drift.
 10. **`run-desktop.bat` finally ships**, and it does the *right* thing in a
-    distribution: when `vn-harness.exe` is present and `app/src-tauri/target/`
+    distribution: when `vncode.exe` is present and `app/src-tauri/target/`
     (or a Rust toolchain) is not, it runs the binary directly — no cargo, no
     build, no error. In a source checkout it builds as it does today.
 11. **macOS double-click parity (optional).** Finder does not run `.sh`. If
@@ -532,5 +532,5 @@ the distributer explicitly excluded from its own output.
    stock Windows 11 and the real fix on Windows 10. If a machine has Terminal
    installed but the user deliberately chose the legacy console as their default
    terminal application, this overrides that choice — `-NoTerminal` and
-   `VN_HARNESS_NO_WT=1` are the escape, but respecting the OS default instead is a
+   `VNCODE_NO_WT=1` are the escape, but respecting the OS default instead is a
    defensible alternative.

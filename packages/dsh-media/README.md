@@ -222,7 +222,7 @@ comes up:
 | `ffprobe-cli/reference/fields.md` | every field family, the deeper sections, the three measurements a container does not give you (bitrate from packets, frame count, a real variable-rate proof), the transport-stream program/PID layer, and `-show_data` |
 
 A skill a person wrote is never overwritten: each copied folder carries a
-`.vn-harness-dsh-media` marker, so uninstall removes only what the installer put
+`.vncode-dsh-media` marker, so uninstall removes only what the installer put
 there.
 
 Every example in them is checked rather than trusted:

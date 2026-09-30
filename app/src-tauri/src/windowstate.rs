@@ -2,7 +2,7 @@
 //!
 //! A window that forgets its size every launch is a window the reader has to
 //! place again every morning, so the shell keeps ONE small record of geometry
-//! and restores it. The record lives at `<harness home>/vn-harness/window.json`
+//! and restores it. The record lives at `<harness home>/vncode/window.json`
 //! - the `$DSH_HOME`-rooted shape the rest of this pack uses for its own state
 //! (`$DSH_HOME/dsh-pdf`, `$DSH_HOME/dsh-diagrams`). The home itself is resolved
 //! by `main.rs` through `reported_home` and handed in here; this module never
@@ -78,8 +78,8 @@ pub const MAX_SIDE: f64 = 32767.0;
 const VERSION: i64 = 1;
 
 /// The folder this record lives in under the harness home. The harness home is
-/// `~/.dsh` itself - not `~` - so the full path is `~/.dsh/vn-harness/window.json`.
-const STATE_DIR: &str = "vn-harness";
+/// `~/.dsh` itself - not `~` - so the full path is `~/.dsh/vncode/window.json`.
+const STATE_DIR: &str = "vncode";
 
 /// The file name inside [`STATE_DIR`].
 const STATE_FILE: &str = "window.json";
@@ -404,7 +404,7 @@ mod tests {
     /// A scratch folder of our own, so a test never touches a real home.
     fn scratch(name: &str) -> PathBuf {
         let mut path = std::env::temp_dir();
-        path.push(format!("vn-harness-windowstate-{}-{name}", std::process::id()));
+        path.push(format!("vncode-windowstate-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         path
     }
@@ -688,7 +688,7 @@ mod tests {
         // `~/.dsh` itself, so the record goes UNDER it and never beside it.
         let harness_home = Path::new("/home/someone/.dsh");
         let path = state_path(harness_home);
-        assert_eq!(path, harness_home.join("vn-harness").join("window.json"));
+        assert_eq!(path, harness_home.join("vncode").join("window.json"));
         assert!(path.starts_with(harness_home));
         assert_ne!(path.parent().and_then(Path::parent), Some(Path::new("/home/someone")), "the record belongs under the harness home");
     }

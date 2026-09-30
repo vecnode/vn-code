@@ -1,4 +1,4 @@
-# Where vn-harness keeps things
+# Where vncode keeps things
 
 This page is the **map**: every location the app reads, writes or links to, on
 Windows, macOS and Linux. It exists because a distribution is a *folder you
@@ -44,18 +44,18 @@ root** — with the three exceptions in §3.
 |---|---|---|
 | `sessions/` | one file per conversation (the durable transcript) | `dsh-session-persistence-jsonl` |
 | `storages/` | `workspace.json`, `session_projcache*` — host-side UI/workspace state | `dsh-storage-json`, host plugins |
-| `settings.yaml` | every settings namespace, this pack's `vn-harness` section included (page zoom, theme, dock height, column widths) | `dsh-settings-file`, `dsh-ui-state` |
+| `settings.yaml` | every settings namespace, this pack's `vncode` section included (page zoom, theme, dock height, column widths) | `dsh-settings-file`, `dsh-ui-state` |
 | `.credentials.yaml` | the model API key | `dsh-credentials-local` |
 | `.anonymous-user-id` | one random id, created on first run | `dsh-anonymous-user-id` |
 | `attachments/v1/files/…` | files pasted/attached into a conversation | `dsh-attachment-local` |
-| `skills/` | the pack's copied skills (`mermaid-diagrams`, `tikz-diagrams`, `pdf-analysis`, `ffmpeg-cli`, `ffprobe-cli`), each under a `.vn-harness-<package>` marker — the copy is recursive, so a skill's own `reference/` files come with it | both installers |
+| `skills/` | the pack's copied skills (`mermaid-diagrams`, `tikz-diagrams`, `pdf-analysis`, `ffmpeg-cli`, `ffprobe-cli`), each under a `.vncode-<package>` marker — the copy is recursive, so a skill's own `reference/` files come with it | both installers |
 | `profiles/<name>/` | the profile: `package.json`, `cordis.yml`, `cordis.patch.yml`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `node_modules/`, `.dsh-module-fallback/` | `dsh-app-boot`, pnpm, the installers |
 | `profiles/node_modules/` | **junctions/symlinks into the installation** — see §2 | `healProfilesModuleFallback`, at every boot |
 | `dsh-pdf/artifacts/<sha256>/…` | PDF parse cache: `index.json`, `stats.json`, `pages/`, `ocr/`, `images/` | `dsh-pdf` |
 | `dsh-diagrams/sessions/<session>.json`, `library.json`, `artifacts/…` | diagram state and the shared library | `dsh-diagrams` |
 | `dsh-media/bin/<platform>-<arch>/` | the **provisioned ffmpeg/ffprobe copy** plus its `install.json` stamp (URL, SHA-256, version, date) — and nothing at all on a machine that already has ffmpeg on `PATH` | `dsh-media` |
 | `dsh-media/playable/<key>.mp4` | the browser-playable remux/transcode cache, keyed by `sha256(realpath+size+mtime+mode)` | `dsh-media` |
-| `vn-harness/window.json` | the desktop window's size/position (`{version,width,height,x,y,maximized}`) | the Rust shell (`app/src-tauri/src/windowstate.rs`) |
+| `vncode/window.json` | the desktop window's size/position (`{version,width,height,x,y,maximized}`) | the Rust shell (`app/src-tauri/src/windowstate.rs`) |
 
 The pack's own trees are the last five, and they follow the harness's rule rather
 than inventing one: a plugin's state goes under the harness home and nowhere

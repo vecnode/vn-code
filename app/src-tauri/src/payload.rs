@@ -1,7 +1,7 @@
 //! The self-extracting payload: a whole distribution appended to this binary.
 //!
 //! A distribution is normally a FOLDER - `packages/` is live-linked by the web
-//! profile, so the folder is the application and `vn-harness.exe` is just the
+//! profile, so the folder is the application and `vncode.exe` is just the
 //! window onto it. Handing somebody one file to double-click cannot change that
 //! (a live link needs a real directory that stays put), so the single-file build
 //! does the only thing that can work: it carries the folder INSIDE itself,
@@ -26,7 +26,7 @@
 //! search from the end of the file, and the exe's own bytes can contain anything
 //! at all - including, on a machine that has one, another zip. A file that does
 //! NOT end with [`MAGIC`] is simply not a single-file build, which is every
-//! `vn-harness.exe` built into a distribution folder and every `cargo run`.
+//! `vncode.exe` built into a distribution folder and every `cargo run`.
 //!
 //! # The rules
 //!
@@ -71,7 +71,7 @@ const TAIL_LEN: u64 = 16;
 /// Written into the unpack directory once every entry is in place. Its content
 /// is the payload's identity, so a directory left by a DIFFERENT payload (or by
 /// an interrupted one) is never mistaken for this one's.
-const MARKER: &str = ".vn-harness-payload";
+const MARKER: &str = ".vncode-payload";
 
 /// The most a trailer may be. It is read in full before anything else happens,
 /// so a corrupt length could otherwise ask for a gigabyte of allocation.
@@ -231,7 +231,7 @@ pub fn data_root() -> Option<PathBuf> {
 /// The directory one payload unpacks into. Pure: the path is a decision, and a
 /// decision this shell makes once per launch is worth pinning.
 pub fn payload_dir(data_root: &Path, trailer: &Trailer) -> PathBuf {
-    data_root.join("vn-harness").join(trailer.identity())
+    data_root.join("vncode").join(trailer.identity())
 }
 
 // ---------------------------------------------------------------------------
@@ -297,7 +297,7 @@ pub fn ensure_extracted(exe: &Path, trailer: &Trailer, dir: &Path) -> Result<Pat
     if dir.exists() {
         fs::remove_dir_all(dir).map_err(|error| {
             format!(
-                "could not replace {} ({error}) - close any running vn-harness window and try again",
+                "could not replace {} ({error}) - close any running vncode window and try again",
                 dir.display()
             )
         })?;
@@ -416,7 +416,7 @@ struct Eocd {
 /// Write every entry under `dest`, inflating as it goes.
 ///
 /// The payload zip is the DISTRIBUTION zip, whose entries all sit under one
-/// top-level folder (`vn-harness-<version>-<rid>/`). That component is dropped,
+/// top-level folder (`vncode-<version>-<rid>/`). That component is dropped,
 /// which is what makes the unpack directory - not a folder inside it - the thing
 /// `START-HERE` is run from.
 fn write_entries(bytes: &[u8], entries: &[Entry], dest: &Path) -> Result<(), String> {
@@ -549,16 +549,16 @@ fn safe_relative(name: &str) -> Option<PathBuf> {
 /// The permission bits a file gets on unix.
 ///
 /// The zip's own record wins when it has one, because that is what the
-/// distribution's own `START-HERE.sh` and `vn-harness` were chmodded to on the
+/// distribution's own `START-HERE.sh` and `vncode` were chmodded to on the
 /// machine that built it. A zip built by Windows' zipper records nothing, and
-/// then the rule is the distribution's: every `*.sh` and the `vn-harness`
+/// then the rule is the distribution's: every `*.sh` and the `vncode`
 /// binary itself are meant to be executable, and everything else is not.
 fn mode_for(relative: &Path, recorded: u32) -> u32 {
     if recorded & 0o777 != 0 {
         return recorded & 0o7777;
     }
     let name = relative.file_name().and_then(|name| name.to_str()).unwrap_or("");
-    if name.ends_with(".sh") || relative == Path::new("vn-harness") {
+    if name.ends_with(".sh") || relative == Path::new("vncode") {
         return 0o755;
     }
     0o644
@@ -768,7 +768,7 @@ mod tests {
     #[test]
     fn the_unpack_directory_is_keyed_on_the_payloads_identity() {
         let dir = payload_dir(Path::new("/data"), &trailer());
-        assert_eq!(dir, PathBuf::from("/data").join("vn-harness").join("0.1.1-win-x64"));
+        assert_eq!(dir, PathBuf::from("/data").join("vncode").join("0.1.1-win-x64"));
 
         let other = Trailer {
             version: "0.1.2".to_string(),
@@ -785,10 +785,10 @@ mod tests {
     fn every_sh_and_the_shell_binary_are_executable_without_a_recorded_mode() {
         assert_eq!(mode_for(Path::new("START-HERE.sh"), 0), 0o755);
         assert_eq!(mode_for(Path::new("scripts/install-all.sh"), 0), 0o755);
-        assert_eq!(mode_for(Path::new("vn-harness"), 0), 0o755);
+        assert_eq!(mode_for(Path::new("vncode"), 0), 0o755);
         assert_eq!(mode_for(Path::new("packages/dsh-pdf/lib/index.js"), 0), 0o644);
         // ...and a zip that DID record modes wins over that rule.
-        assert_eq!(mode_for(Path::new("vn-harness"), 0o755), 0o755);
+        assert_eq!(mode_for(Path::new("vncode"), 0o755), 0o755);
         assert_eq!(mode_for(Path::new("START-HERE.sh"), 0o700), 0o700);
     }
 
@@ -801,7 +801,7 @@ mod tests {
 
     #[test]
     fn a_file_that_does_not_end_with_the_magic_is_not_a_payload() {
-        let dir = std::env::temp_dir().join(format!("vn-harness-payload-test-{}", process::id()));
+        let dir = std::env::temp_dir().join(format!("vncode-payload-test-{}", process::id()));
         let _ = fs::create_dir_all(&dir);
         let plain = dir.join("plain.bin");
         fs::write(&plain, b"just an ordinary executable, with no payload at all").unwrap();
@@ -825,7 +825,7 @@ mod tests {
 
     #[test]
     fn a_payload_appended_to_a_file_is_found_and_unpacked() {
-        let dir = std::env::temp_dir().join(format!("vn-harness-unpack-test-{}", process::id()));
+        let dir = std::env::temp_dir().join(format!("vncode-unpack-test-{}", process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
 
@@ -833,7 +833,7 @@ mod tests {
         // the reason the trailer exists and the reason there is no scan for a
         // signature from either end.
         let decoy = build_zip(&[("decoy/file.txt", b"not the payload")]);
-        let payload = build_zip(&[("vn-harness-0.1.1-win-x64/a.txt", b"hello"), ("vn-harness-0.1.1-win-x64/sub/b.txt", b"world")]);
+        let payload = build_zip(&[("vncode-0.1.1-win-x64/a.txt", b"hello"), ("vncode-0.1.1-win-x64/sub/b.txt", b"world")]);
 
         let mut exe = b"MZ this is the shell, allegedly".to_vec();
         exe.extend_from_slice(&decoy);
@@ -847,7 +847,7 @@ mod tests {
         exe.extend_from_slice(&(json.len() as u64).to_le_bytes());
         exe.extend_from_slice(MAGIC);
 
-        let exe_path = dir.join("vn-harness-0.1.1-win-x64.exe");
+        let exe_path = dir.join("vncode-0.1.1-win-x64.exe");
         fs::write(&exe_path, &exe).unwrap();
 
         let trailer = read_trailer(&exe_path).unwrap().expect("the trailer is found");

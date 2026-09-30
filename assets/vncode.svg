@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="VN Harness">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="vncode">
   <!-- The app mark: a black circle, perfectly centred on (12,12), with a 1px
        transparent margin inside the 24px box. The margin is what keeps it from
        ever being shaved: the mark sits in boxes painted with `overflow:hidden`

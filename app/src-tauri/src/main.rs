@@ -1,4 +1,4 @@
-//! vn-harness desktop shell: the Rust half of `run-desktop.bat`.
+//! vncode desktop shell: the Rust half of `run-desktop.bat`.
 //!
 //! What this is: the same harness the browser launcher runs, in a native
 //! window instead of a Chrome tab. It is NOT a second implementation of the
@@ -39,7 +39,7 @@
 //! in [`readyline`]: it is read in memory, never written to a file, printed
 //! only redacted, and handed to the webview as one value.
 //!
-//! The window also remembers ITSELF: `<harness home>/vn-harness/window.json` is
+//! The window also remembers ITSELF: `<harness home>/vncode/window.json` is
 //! read before the window is built and written back on every resize and move
 //! (coalesced, so a drag costs one write) and once more on the way out, so a
 //! window the reader placed once comes back where they put it. Every rule about
@@ -210,7 +210,7 @@ fn resolve_version(options: &Options) -> Result<String, String> {
         return Ok(version.clone());
     }
     let root = repo_root().ok_or_else(|| {
-        "could not find .dsh-version.json in this folder or any folder above it - run the shell from inside the vn-harness repository, or pass -DshVersion <ver>".to_string()
+        "could not find .dsh-version.json in this folder or any folder above it - run the shell from inside the vncode repository, or pass -DshVersion <ver>".to_string()
     })?;
     let manifest = root.join(".dsh-version.json");
     let text = std::fs::read_to_string(&manifest)
@@ -251,7 +251,7 @@ fn chosen_home(flag: Option<&str>, inherited: Option<&str>) -> Option<String> {
 /// is not a cosmetic mistake: the harness accepts it, finds no profile there,
 /// bootstraps a brand-new one holding only its own two base bundles, and serves
 /// that. The window then shows the plain DeepSeek Harness - no plugins, no
-/// vn-harness branding, none of the user's sessions - while the real home at
+/// vncode branding, none of the user's sessions - while the real home at
 /// `~/.dsh` sits there untouched.
 fn explicit_home(options: &Options) -> Option<PathBuf> {
     let inherited = std::env::var("DSH_HOME").ok();
@@ -432,7 +432,7 @@ fn open_external(url: &str) {
         .stderr(Stdio::null())
         .spawn()
     {
-        eprintln!("[vn-harness] could not open {url} in a browser: {error}");
+        eprintln!("[vncode] could not open {url} in a browser: {error}");
     }
 }
 
@@ -462,7 +462,7 @@ fn build_window(
         Some(Err(reason)) => {
             // One line, never a refusal: a record this build cannot vouch for
             // costs the reader the default geometry and nothing else.
-            println!("[vn-harness] ignoring the remembered window geometry: {reason}.");
+            println!("[vncode] ignoring the remembered window geometry: {reason}.");
             WindowState::first_launch()
         }
         Some(Ok(remembered)) => remembered,
@@ -479,7 +479,7 @@ fn build_window(
 
     let mut builder =
         WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::App(PathBuf::from("index.html")))
-            .title("vn-harness")
+            .title("vncode")
             .inner_size(remembered.width, remembered.height)
             .min_inner_size(windowstate::MIN_WIDTH, windowstate::MIN_HEIGHT)
             .resizable(true)
@@ -549,7 +549,7 @@ fn point_is_on_a_monitor(app: &AppHandle, x: f64, y: f64) -> bool {
     let monitors = match app.available_monitors() {
         Ok(monitors) => monitors,
         Err(error) => {
-            eprintln!("[vn-harness] could not read the monitor list ({error}); centring the window.");
+            eprintln!("[vncode] could not read the monitor list ({error}); centring the window.");
             return false;
         }
     };
@@ -655,7 +655,7 @@ fn spawn_geometry_writer(path: PathBuf) -> Sender<WindowState> {
 fn write_geometry(path: &Path, state: &WindowState) {
     if let Err(error) = windowstate::save(path, state) {
         eprintln!(
-            "[vn-harness] could not remember the window geometry in {}: {error}",
+            "[vncode] could not remember the window geometry in {}: {error}",
             path.display()
         );
     }
@@ -693,9 +693,9 @@ fn record_final_geometry(app: &AppHandle, state_path: Option<&Path>) {
 /// Report a failure in the two places a person can actually see: this console,
 /// and the title of the window still showing the splash.
 fn fail(app: &AppHandle, message: &str) {
-    eprintln!("[vn-harness] {message}");
+    eprintln!("[vncode] {message}");
     if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-        let _ = window.set_title("vn-harness - the harness server did not start (see the console window)");
+        let _ = window.set_title("vncode - the harness server did not start (see the console window)");
     }
 }
 
@@ -712,12 +712,12 @@ fn supervise(app: AppHandle, options: Options, key_state: KeyState) {
         None => return fail(&app, "could not find a free loopback port to listen on"),
     };
 
-    println!("[vn-harness] desktop shell");
-    println!("[vn-harness] Pinned dsh version: {version}");
+    println!("[vncode] desktop shell");
+    println!("[vncode] Pinned dsh version: {version}");
     match reported_home(&options) {
-        Some(home) => println!("[vn-harness] DSH_HOME: {}", home.display()),
+        Some(home) => println!("[vncode] DSH_HOME: {}", home.display()),
         None => println!(
-            "[vn-harness] DSH_HOME: not set, and no home directory to default to; the harness will decide"
+            "[vncode] DSH_HOME: not set, and no home directory to default to; the harness will decide"
         ),
     }
     // The same answer the splash window shows, in the console as well - the log
@@ -725,7 +725,7 @@ fn supervise(app: AppHandle, options: Options, key_state: KeyState) {
     // question when a model call fails. It names the LAYER and never the value.
     println!("{}", keystate::console_line(&key_state));
     warn_when_pack_missing(&options);
-    println!("[vn-harness] Starting the harness on 127.0.0.1:{port} (npx --yes @deepseek-ai/dsh@{version} web --no-open)");
+    println!("[vncode] Starting the harness on 127.0.0.1:{port} (npx --yes @deepseek-ai/dsh@{version} web --no-open)");
     println!("  Keep this window open - the harness runs in the window that opens. Ctrl+C stops it.");
     println!();
 
@@ -794,10 +794,10 @@ fn supervise(app: AppHandle, options: Options, key_state: KeyState) {
                         }
                     }
                     Ok(_) => eprintln!(
-                        "[vn-harness] the harness printed a URL that does not name a loopback address; it was NOT opened."
+                        "[vncode] the harness printed a URL that does not name a loopback address; it was NOT opened."
                     ),
                     Err(error) => eprintln!(
-                        "[vn-harness] the harness printed a URL this shell could not parse: {error}"
+                        "[vncode] the harness printed a URL this shell could not parse: {error}"
                     ),
                 }
             }
@@ -815,18 +815,18 @@ fn supervise(app: AppHandle, options: Options, key_state: KeyState) {
         Ok(url) => {
             println!();
             println!(
-                "[vn-harness] The harness is listening on 127.0.0.1:{} - showing it in the window.",
+                "[vncode] The harness is listening on 127.0.0.1:{} - showing it in the window.",
                 url.port().unwrap_or(port)
             );
-            println!("[vn-harness] (The launch token stays in memory and is never printed.)");
+            println!("[vncode] (The launch token stays in memory and is never printed.)");
             match app.get_webview_window(WINDOW_LABEL) {
                 Some(window) => {
                     if let Err(error) = window.navigate(url) {
-                        eprintln!("[vn-harness] could not load the harness URL in the window: {error}");
+                        eprintln!("[vncode] could not load the harness URL in the window: {error}");
                     }
                     let _ = window.set_focus();
                 }
-                None => eprintln!("[vn-harness] the window was closed before the harness was ready."),
+                None => eprintln!("[vncode] the window was closed before the harness was ready."),
             }
         }
         Err(RecvTimeoutError::Timeout) => {
@@ -855,7 +855,7 @@ fn supervise(app: AppHandle, options: Options, key_state: KeyState) {
             Err(_) => true,
         };
         if finished {
-            println!("[vn-harness] The harness stopped; closing the window.");
+            println!("[vncode] The harness stopped; closing the window.");
             app.exit(0);
             return;
         }
@@ -903,7 +903,7 @@ fn confine_to_job(child: &Child) {
     unsafe {
         let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
         if job.is_null() {
-            eprintln!("[vn-harness] warning: could not create a job object - if this shell is killed outright, the harness may keep running.");
+            eprintln!("[vncode] warning: could not create a job object - if this shell is killed outright, the harness may keep running.");
             return;
         }
         let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
@@ -916,11 +916,11 @@ fn confine_to_job(child: &Child) {
             size,
         ) == 0
         {
-            eprintln!("[vn-harness] warning: could not set kill-on-close on the job object - if this shell is killed outright, the harness may keep running.");
+            eprintln!("[vncode] warning: could not set kill-on-close on the job object - if this shell is killed outright, the harness may keep running.");
             return;
         }
         if AssignProcessToJobObject(job, child.as_raw_handle() as HANDLE) == 0 {
-            eprintln!("[vn-harness] warning: could not put the harness in the job object - if this shell is killed outright, the harness may keep running.");
+            eprintln!("[vncode] warning: could not put the harness in the job object - if this shell is killed outright, the harness may keep running.");
         }
     }
 }
@@ -983,8 +983,8 @@ fn kill_child_tree() {
 ///
 /// The shell still only RUNS. It unpacks, then executes the unpacked folder's
 /// own `START-HERE`, which installs the pack and then starts the unpacked
-/// `vn-harness`; that keeps the rule the launchers are built on - `install.bat`
-/// installs and never opens the app, `vn-harness.exe` opens the app and never
+/// `vncode`; that keeps the rule the launchers are built on - `install.bat`
+/// installs and never opens the app, `vncode.exe` opens the app and never
 /// installs - instead of teaching this binary to install things.
 fn run_standalone_payload() -> Option<i32> {
     // A real folder ALWAYS wins. The same binary dropped into the repository,
@@ -998,7 +998,7 @@ fn run_standalone_payload() -> Option<i32> {
         Ok(Some(trailer)) => trailer,
         Ok(None) => return None,
         Err(message) => {
-            eprintln!("[vn-harness] {message}");
+            eprintln!("[vncode] {message}");
             return Some(1);
         }
     };
@@ -1015,16 +1015,16 @@ fn run_standalone_payload() -> Option<i32> {
     let data_root = match payload::data_root() {
         Some(root) => root,
         None => {
-            eprintln!("[vn-harness] could not work out a per-user data directory to unpack into");
+            eprintln!("[vncode] could not work out a per-user data directory to unpack into");
             return Some(1);
         }
     };
     let directory = payload::payload_dir(&data_root, &trailer);
     if payload::is_extracted(&directory, &trailer) {
-        println!("[vn-harness] Using the copy already unpacked at {}", directory.display());
+        println!("[vncode] Using the copy already unpacked at {}", directory.display());
     } else {
         println!(
-            "[vn-harness] Unpacking vn-harness {} ({}) into {}",
+            "[vncode] Unpacking vncode {} ({}) into {}",
             trailer.version,
             trailer.rid,
             directory.display()
@@ -1033,7 +1033,7 @@ fn run_standalone_payload() -> Option<i32> {
     let root = match payload::ensure_extracted(&exe, &trailer, &directory) {
         Ok(root) => root,
         Err(message) => {
-            eprintln!("[vn-harness] {message}");
+            eprintln!("[vncode] {message}");
             return Some(1);
         }
     };
@@ -1045,12 +1045,12 @@ fn run_standalone_payload() -> Option<i32> {
 /// Deliberately NOT the shell's usage: the flags here are the LAUNCHER's, which
 /// the shell would refuse, plus every flag `START-HERE` forwards.
 fn print_standalone_usage(trailer: &payload::Trailer) {
-    println!("[vn-harness] vn-harness {} ({}) - one file that unpacks itself, then starts.", trailer.version, trailer.rid);
+    println!("[vncode] vncode {} ({}) - one file that unpacks itself, then starts.", trailer.version, trailer.rid);
     println!();
-    println!("Usage: vn-harness-{}-{}.exe [flags]", trailer.version, trailer.rid);
+    println!("Usage: vncode-{}-{}.exe [flags]", trailer.version, trailer.rid);
     println!();
     println!("  Double-clicking it needs no flags: it unpacks the distribution into");
-    println!("      <your user data folder>/vn-harness/{}-{}", trailer.version, trailer.rid);
+    println!("      <your user data folder>/vncode/{}-{}", trailer.version, trailer.rid);
     println!("  and then runs that folder's own START-HERE, which installs the pack into");
     println!("  the harness web profile and opens the window. Running it again reuses");
     println!("  what is already unpacked.");
@@ -1094,7 +1094,7 @@ fn hand_over(root: &Path, args: &[String]) -> Option<i32> {
     match status {
         Ok(status) => Some(status.code().unwrap_or(1)),
         Err(error) => {
-            eprintln!("[vn-harness] could not start {}: {error}", root.display());
+            eprintln!("[vncode] could not start {}: {error}", root.display());
             Some(1)
         }
     }
@@ -1118,7 +1118,7 @@ fn main() {
     let options = match parse_args(std::env::args().skip(1)) {
         Ok(options) => options,
         Err(message) => {
-            eprintln!("[vn-harness] {message}");
+            eprintln!("[vncode] {message}");
             std::process::exit(1);
         }
     };
@@ -1163,7 +1163,7 @@ fn main() {
     {
         Ok(app) => app,
         Err(error) => {
-            eprintln!("[vn-harness] could not start the desktop shell: {error}");
+            eprintln!("[vncode] could not start the desktop shell: {error}");
             std::process::exit(1);
         }
     };
@@ -1271,7 +1271,7 @@ mod tests {
         };
         let path = reported_home(&options).map(|home| windowstate::state_path(&home));
         let expected = PathBuf::from("/tmp/some-dsh-home")
-            .join("vn-harness")
+            .join("vncode")
             .join("window.json");
         assert_eq!(path, Some(expected));
     }

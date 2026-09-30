@@ -1,5 +1,5 @@
 # ============================================================================
-#  scripts/dist-manifest.txt - WHAT SHIPS INSIDE A vn-harness DISTRIBUTION.
+#  scripts/dist-manifest.txt - WHAT SHIPS INSIDE A vncode DISTRIBUTION.
 #
 #  Read by BOTH distribution halves - scripts/dist.ps1 (Windows) and
 #  scripts/dist.sh (macOS/Linux) - so the two cannot drift: there is one list of
@@ -15,7 +15,7 @@
 #  the web profile installs every bundle as a LIVE LINK into packages/, so the
 #  folder IS the application. Ship the folder, keep it in place, click it.
 #
-#  The single-file build (vn-harness-<version>-<rid>.exe on Windows, .run
+#  The single-file build (vncode-<version>-<rid>.exe on Windows, .run
 #  elsewhere) does not change any of that. It carries THIS folder inside itself,
 #  unpacks it into a stable per-user directory on its first run, and then runs
 #  the unpacked folder's own START-HERE - so what it unpacks is exactly the list
@@ -26,7 +26,7 @@
 #  packages/ (every bundle, live-linked by the profile), .dsh-version.json (the
 #  shell has NO fallback pin and refuses to start without it), the installer
 #  scripts, and the built shell binary - which the dist script copies in itself
-#  as <vn-harness.exe | vn-harness>, so it is deliberately NOT listed below.
+#  as <vncode.exe | vncode>, so it is deliberately NOT listed below.
 #
 #  SYNTAX - one rule per line, '#' starts a comment, blank lines are ignored:
 #
@@ -52,7 +52,7 @@ include run-web.bat
 include run-web.sh
 # The desktop launcher ships too. In a distribution it runs the built shell
 # beside it and needs no Rust; see its own header for why the presence of
-# vn-harness.exe, and not a Cargo.toml, is what decides which path it takes.
+# vncode.exe, and not a Cargo.toml, is what decides which path it takes.
 include run-desktop.bat
 include scripts
 
@@ -70,13 +70,13 @@ include docs
 # one of them. Shipping them would hand every recipient a readable copy of the
 # shell for no benefit - and `run-desktop.bat` does not need them to choose its
 # path either: it decides between "run the binary beside me" and "build from
-# source" on the presence of vn-harness.exe, never on a Cargo.toml.
+# source" on the presence of vncode.exe, never on a Cargo.toml.
 include app/README.md
 
-# --- the branding source (dsh-themes inlines assets/vn-harness.svg) ---------
+# --- the branding source (dsh-themes inlines assets/vncode.svg) ---------
 # One file, not the folder: assets/ also holds the screenshots the pack's own
 # Screenshot control wrote there, and those are somebody's machine, not content.
-include assets/vn-harness.svg
+include assets/vncode.svg
 
 # ============================================================================
 #  THE SKIP RULES.

@@ -15,7 +15,7 @@
  * This row makes the pack's own UI state HOST state, in one settings section:
  *
  *   $DSH_HOME/settings.yaml
- *     vn-harness:
+ *     vncode:
  *       pageZoom: 125
  *       theme: nord
  *       dockHeight: 340
@@ -62,13 +62,13 @@ export const name = 'dsh-ui-state'
  * The settings namespace this package owns, and the section name a person sees
  * in `$DSH_HOME/settings.yaml`. Keep in sync with the client's constant.
  */
-const NAMESPACE = 'vn-harness'
+const NAMESPACE = 'vncode'
 
 /**
  * The namespace's schema. Every field carries a default, so the resolved
  * section is a complete object even before anyone has written a thing, while the
  * USER layer in the document stays empty until a value actually differs - a
- * fresh install writes no `vn-harness` section at all.
+ * fresh install writes no `vncode` section at all.
  *
  * The defaults ARE the "nothing remembered yet" state, and they must stay in
  * step with the client's `DEFAULTS`:
@@ -232,7 +232,7 @@ export function apply(ctx) {
   const z = loadSchemastery()
   if (z === null) {
     ctx.logger?.warn?.(
-      '[dsh-ui-state] no reachable @deepseek-ai/schemastery under $DSH_HOME/profiles; the vn-harness settings namespace is not registered and the pack remembers nothing',
+      '[dsh-ui-state] no reachable @deepseek-ai/schemastery under $DSH_HOME/profiles; the vncode settings namespace is not registered and the pack remembers nothing',
     )
   } else {
     const schema = buildSchema(z)

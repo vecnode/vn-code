@@ -19,7 +19,7 @@
 #      log must not hold escape sequences;
 #    * TERM is set and is not "dumb";
 #    * NO_COLOR is unset (the https://no-color.org convention) and
-#      VN_HARNESS_NO_COLOR is unset.
+#      VNCODE_NO_COLOR is unset.
 #
 #  Otherwise every helper prints the plain text and nothing else, so a CI log and
 #  a terminal differ in paint only - never in words, and never in behaviour.
@@ -40,7 +40,7 @@ case "${TERM:-}" in
   '' | dumb) VN_COLOR=0 ;;
 esac
 if [ -n "${NO_COLOR:-}" ]; then VN_COLOR=0; fi
-if [ -n "${VN_HARNESS_NO_COLOR:-}" ]; then VN_COLOR=0; fi
+if [ -n "${VNCODE_NO_COLOR:-}" ]; then VN_COLOR=0; fi
 
 # --- the palette ------------------------------------------------------------
 # Named, so the helpers below read as prose and a colour can be changed in one
@@ -62,20 +62,20 @@ _vn_paint() {
   fi
 }
 
-vn_step() { _vn_paint "$VN_C_STEP" "[vn-harness] $1"; }
+vn_step() { _vn_paint "$VN_C_STEP" "[vncode] $1"; }
 vn_note() { _vn_paint "$VN_C_NOTE" "  $1"; }
-vn_good() { _vn_paint "$VN_C_GOOD" "[vn-harness] $1"; }
-vn_warn() { _vn_paint "$VN_C_WARN" "[vn-harness] $1"; }
-vn_fail() { _vn_paint "$VN_C_FAIL" "[vn-harness] $1"; }
+vn_good() { _vn_paint "$VN_C_GOOD" "[vncode] $1"; }
+vn_warn() { _vn_paint "$VN_C_WARN" "[vncode] $1"; }
+vn_fail() { _vn_paint "$VN_C_FAIL" "[vncode] $1"; }
 vn_rule() { _vn_paint "$VN_C_NOTE" "============================================================"; }
 
 # vn_pause
 # Hold a window open so its result can be read, and never hang a scripted run.
 # POSIX has no "was this double-clicked", so the rule is explicit and shared with
-# the Windows half: VN_HARNESS_PAUSE=0 means do not. A macOS .command window is
+# the Windows half: VNCODE_PAUSE=0 means do not. A macOS .command window is
 # the case this exists for - Finder closes it the moment the script exits.
 vn_pause() {
-  if [ "${VN_HARNESS_PAUSE:-1}" = "0" ]; then return 0; fi
+  if [ "${VNCODE_PAUSE:-1}" = "0" ]; then return 0; fi
   if [ ! -t 0 ] && [ ! -t 1 ]; then return 0; fi
   printf '\nPress Return to close this window. '
   read -r _vn_ignored || true

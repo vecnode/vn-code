@@ -1,4 +1,4 @@
-# 🤖 vn-harness
+# 🤖 vncode
 
 ![Language: JavaScript](https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black)
 ![Language: Rust](https://img.shields.io/badge/language-Rust-000000?logo=rust&logoColor=white)    
@@ -6,7 +6,7 @@
 ![DeepSeek Harness 0.1.5-rc.1](https://img.shields.io/badge/dsh-0.1.5--rc.1-4f8cff)
 ![Platforms: Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-Agent Application with core [DSH](https://www.deepseek.com/harness/en/).
+Agent IDE with core [DSH](https://www.deepseek.com/harness/en/).
 
 A native cross-platform app plus a pack of standard **dsh bundles**. The plugins
 are plain JavaScript with **zero npm dependencies**; the launchers run on
@@ -15,7 +15,7 @@ other, and the Unix half never needs PowerShell).
 
 
 <p align="left">
-  <img src="assets/vn-harness-29092026-120650.png" alt="The vn-harness window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
+  <img src="assets/vncode-29092026-120650.png" alt="The vncode window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
 </p>
 
 ## Run

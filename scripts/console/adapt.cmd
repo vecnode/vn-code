@@ -18,8 +18,8 @@ rem  that everything it decides is still set when it returns.
 rem
 rem  HOW A CALLER USES IT (exactly three lines, always in this order)
 rem  ----------------------------------------------------------------
-rem      if not defined VN_HARNESS_CONSOLE set "VN_HARNESS_ARGV=%*"
-rem      call "%~dp0scripts\console\adapt.cmd" "%~f0" "vn-harness installer"
+rem      if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
+rem      call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode installer"
 rem      if errorlevel 10 exit /b 0
 rem      if errorlevel 2 goto :nopowershell
 rem
@@ -27,15 +27,15 @@ rem  THE FIRST LINE IS NOT OPTIONAL AND ITS GUARD IS THE POINT. On the way back
 rem  in - the relaunched window - `%*` is only the `--from-terminal` marker, so
 rem  re-deriving the arguments there would replace the caller's real flags with
 rem  that marker. The guard keeps the inherited value instead. This is also why
-rem  an argumentless double-click works: `%*` is empty, VN_HARNESS_ARGV stays
+rem  an argumentless double-click works: `%*` is empty, VNCODE_ARGV stays
 rem  undefined, and "undefined" reads as "no arguments" on both sides.
 rem
 rem  WHAT IT LEAVES BEHIND
 rem  ---------------------
-rem    VN_HARNESS_ARGS   the caller's ORIGINAL arguments - ALWAYS use this to
+rem    VNCODE_ARGS   the caller's ORIGINAL arguments - ALWAYS use this to
 rem                      forward flags, never `%*`
-rem    VN_HARNESS_PS     absolute path of the PowerShell that runs the workers
-rem    VN_HARNESS_PAUSE  1 when a failure should hold the window open, else 0
+rem    VNCODE_PS     absolute path of the PowerShell that runs the workers
+rem    VNCODE_PAUSE  1 when a failure should hold the window open, else 0
 rem
 rem  EXIT CODES (the caller acts on these; they are not the script's own result)
 rem    0   continue in this window
@@ -51,7 +51,7 @@ rem  already set). On Windows 10, or on a machine where the default was changed
 rem  back to the legacy console host, it is the difference between a 1995 install
 rem  and a current one - so a real wt.exe is used when there is one, with `-w new`
 rem  so a new window is created rather than a tab injected into whatever the user
-rem  is working in. `-NoTerminal` in the arguments, or VN_HARNESS_NO_WT in the
+rem  is working in. `-NoTerminal` in the arguments, or VNCODE_NO_WT in the
 rem  environment, opts out; a wt.exe that fails to launch falls through to the
 rem  console we are in rather than losing the run.
 rem
@@ -72,7 +72,7 @@ set "VN_ENTRY=%~1"
 set "VN_TITLE=%~2"
 
 rem --- the arguments to act on ------------------------------------------------
-rem Derived from the caller's VN_HARNESS_ARGV, never from `%*`: on the relaunched
+rem Derived from the caller's VNCODE_ARGV, never from `%*`: on the relaunched
 rem pass `%*` is the marker only. Refreshed on every call so a caller that
 rem exported nothing still reads as "no arguments".
 rem
@@ -81,7 +81,7 @@ rem THAT. cmd has no empty variable: `set "X="` REMOVES X, and a `%X:-flag=%`
 rem substitution on an UNDEFINED X is not an empty string - cmd emits the modifier
 rem as literal text instead. So on a DOUBLE-CLICK, where both names are derived
 rem from an empty `%*`, the pause rule below became
-rem   if not "-NoPause=VN_HARNESS_ARGS"=="VN_HARNESS_ARGS" set "VN_HARNESS_PAUSE=0"
+rem   if not "-NoPause=VNCODE_ARGS"=="VNCODE_ARGS" set "VNCODE_PAUSE=0"
 rem an `if` with ONE token, which cmd answers with "set was unexpected at this
 rem time." and which aborts the WHOLE FILE on the spot: the window flashed and
 rem closed having printed nothing at all, while every run WITH flags worked
@@ -97,8 +97,8 @@ rem starts the shell normally). This file is the ONLY place that has to know,
 rem because it must NOT setlocal - its decisions stay visible to the caller by
 rem design - so repairing both names here, once, covers all five entry points.
 rem check-dist-layout.mjs asserts this normalisation is still here.
-if not defined VN_HARNESS_ARGV set "VN_HARNESS_ARGV= "
-set "VN_HARNESS_ARGS=%VN_HARNESS_ARGV%"
+if not defined VNCODE_ARGV set "VNCODE_ARGV= "
+set "VNCODE_ARGS=%VNCODE_ARGV%"
 
 rem --- the PowerShell that will run the work ---------------------------------
 rem pwsh (7) first: real UTF-8 by default and no 5.1 string quirks. Windows
@@ -106,13 +106,13 @@ rem PowerShell 5.1 second. Every worker in scripts\ is written to run on BOTH -
 rem that is a standing rule in AGENTS.md, not a courtesy - so the fallback is a
 rem first-class path, not a degraded one. `%%~$PATH:P` searches PATH for the
 rem literal name, which is how this stays free of a subshell per lookup.
-if not defined VN_HARNESS_PS for %%P in (pwsh.exe) do set "VN_HARNESS_PS=%%~$PATH:P"
-if not defined VN_HARNESS_PS for %%P in (powershell.exe) do set "VN_HARNESS_PS=%%~$PATH:P"
-if not defined VN_HARNESS_PS exit /b 2
+if not defined VNCODE_PS for %%P in (pwsh.exe) do set "VNCODE_PS=%%~$PATH:P"
+if not defined VNCODE_PS for %%P in (powershell.exe) do set "VNCODE_PS=%%~$PATH:P"
+if not defined VNCODE_PS exit /b 2
 
 rem --- the pause rule ---------------------------------------------------------
 rem A double-clicked installer must hold its window open so the result can be
-rem read; a scripted run must not, or it hangs a pipeline. VN_HARNESS_PAUSE is
+rem read; a scripted run must not, or it hangs a pipeline. VNCODE_PAUSE is
 rem therefore about the WINDOW, not about success: callers pause on failure (and
 rem on success where a summary is worth reading) only when this is 1.
 rem
@@ -121,31 +121,31 @@ rem That matters: `%VAR:...=%` is quoted end to end, so an argument holding `&`,
 rem `|`, `>` or a quote - a -DshHome with a space and an ampersand in it - is
 rem data, while the same value piped through echo would be re-parsed as syntax.
 rem The substitution is case-insensitive, so -nopause works too - and it is safe on
-rem the double-click path because VN_HARNESS_ARGS is guaranteed DEFINED above.
-set "VN_HARNESS_PAUSE=1"
-if defined VN_HARNESS_NOPAUSE set "VN_HARNESS_PAUSE=0"
-if defined VN_HARNESS_QUIET set "VN_HARNESS_PAUSE=0"
-if not "%VN_HARNESS_ARGS:-NoPause=%"=="%VN_HARNESS_ARGS%" set "VN_HARNESS_PAUSE=0"
+rem the double-click path because VNCODE_ARGS is guaranteed DEFINED above.
+set "VNCODE_PAUSE=1"
+if defined VNCODE_NOPAUSE set "VNCODE_PAUSE=0"
+if defined VNCODE_QUIET set "VNCODE_PAUSE=0"
+if not "%VNCODE_ARGS:-NoPause=%"=="%VNCODE_ARGS%" set "VNCODE_PAUSE=0"
 
 rem --- the window -------------------------------------------------------------
 rem Order matters and each line is a reason to stop:
 rem   already relaunched  - the marker is set, we are the child, do not loop
 rem   already in Terminal - WT_SESSION is set, this IS the window
-rem   asked not to        - -NoTerminal, VN_HARNESS_NO_WT
+rem   asked not to        - -NoTerminal, VNCODE_NO_WT
 rem   no Terminal at all  - wt.exe did not resolve
-if defined VN_HARNESS_CONSOLE exit /b 0
+if defined VNCODE_CONSOLE exit /b 0
 if defined WT_SESSION exit /b 0
-if defined VN_HARNESS_NO_WT exit /b 0
-if not "%VN_HARNESS_ARGS:-NoTerminal=%"=="%VN_HARNESS_ARGS%" exit /b 0
-set "VN_HARNESS_WT="
-for %%P in (wt.exe) do set "VN_HARNESS_WT=%%~$PATH:P"
-if not defined VN_HARNESS_WT exit /b 0
+if defined VNCODE_NO_WT exit /b 0
+if not "%VNCODE_ARGS:-NoTerminal=%"=="%VNCODE_ARGS%" exit /b 0
+set "VNCODE_WT="
+for %%P in (wt.exe) do set "VNCODE_WT=%%~$PATH:P"
+if not defined VNCODE_WT exit /b 0
 
 rem Relaunch THIS entry point in a new Windows Terminal window. The marker tells
 rem the child not to repeat any of this; `cmd /c` runs the batch and closes the
 rem tab when it is done, so the tab's lifetime is the run's lifetime.
-set "VN_HARNESS_CONSOLE=1"
-"%VN_HARNESS_WT%" -w new nt --title "%VN_TITLE%" cmd.exe /c ""%VN_ENTRY%" --from-terminal"
+set "VNCODE_CONSOLE=1"
+"%VNCODE_WT%" -w new nt --title "%VN_TITLE%" cmd.exe /c ""%VN_ENTRY%" --from-terminal"
 rem Only a wt.exe that actually failed brings us back here. Anything else means
 rem the run belongs to the new window, and this console must leave quietly -
 rem exit 10 tells the caller so, and keeps it from printing a second banner or
@@ -156,6 +156,6 @@ exit /b 10
 :fellthrough
 rem wt.exe exists but would not launch: undo the marker so the run continues in
 rem THIS console rather than believing it was relaunched.
-set "VN_HARNESS_CONSOLE="
-echo [vn-harness] Windows Terminal would not start; continuing in this window.
+set "VNCODE_CONSOLE="
+echo [vncode] Windows Terminal would not start; continuing in this window.
 exit /b 0

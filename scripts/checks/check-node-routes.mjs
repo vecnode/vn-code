@@ -680,7 +680,7 @@ try {
   check('screenshot bytes are on disk', written !== null && written.equals(png))
   check(
     'screenshot name carries the pack name',
-    path.basename(saved.path).startsWith('vn-harness-') && saved.path.endsWith('.png'),
+    path.basename(saved.path).startsWith('vncode-') && saved.path.endsWith('.png'),
   )
   const again = await (await postShot(png)).json()
   check('a second shot takes the next free name', again.path !== saved.path, true)
@@ -1281,7 +1281,7 @@ const uiStateIndexHandlers = []
 let uiStateSection
 uiStateModule.apply({
   logger: { debug() {}, warn() {} },
-  get: (name) => (name === 'settings' ? { get: (ns) => (ns === 'vn-harness' ? uiStateSection : undefined) } : undefined),
+  get: (name) => (name === 'settings' ? { get: (ns) => (ns === 'vncode' ? uiStateSection : undefined) } : undefined),
   inject: (deps, callback) => {
     uiStateInjected.push(deps.join(','))
     callback({ settings: { register: (ns, schema) => uiStateNamespaces.push({ ns, schema }) } })
@@ -1290,7 +1290,7 @@ uiStateModule.apply({
     if (event === 'webserver/index-inject') uiStateIndexHandlers.push(handler)
   },
 })
-check('ui-state: registers exactly one namespace', uiStateNamespaces.map((entry) => entry.ns).join(','), 'vn-harness')
+check('ui-state: registers exactly one namespace', uiStateNamespaces.map((entry) => entry.ns).join(','), 'vncode')
 check('ui-state: asks for the optional settings service', uiStateInjected.join(','), 'settings')
 const uiStateSchema = uiStateNamespaces[0].schema
 check(

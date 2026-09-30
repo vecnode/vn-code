@@ -1,8 +1,8 @@
 [package]
-name = "vn-harness-desktop"
+name = "vncode-desktop"
 version = "0.1.0"
 edition = "2021"
-description = "Cross-platform window for vn-harness: runs the pinned dsh web profile and shows it in a native webview."
+description = "Cross-platform window for vncode: runs the pinned dsh web profile and shows it in a native webview."
 license = "MIT"
 publish = false
 

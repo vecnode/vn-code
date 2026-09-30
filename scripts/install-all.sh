@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================
-#  vn-harness installer - macOS / Linux.
+#  vncode installer - macOS / Linux.
 #
 #  Installs this pack's bundles into the DeepSeek Harness WEB profile: the raw
 #  install used by "npx @deepseek-ai/dsh web" (DSH_HOME, else ~/.dsh, profile
@@ -71,7 +71,7 @@ while [ $# -gt 0 ]; do
     -NoTerminal|--no-terminal) ;;   # the console is a Windows decision; same reason
     -Help|--help|-h) usage; exit 0 ;;
     *)
-      printf 'vn-harness: unknown option "%s"\n' "$1" >&2
+      printf 'vncode: unknown option "%s"\n' "$1" >&2
       printf 'Run "sh scripts/install-all.sh --help" for the accepted options.\n' >&2
       exit 2
       ;;
@@ -82,7 +82,7 @@ done
 case "$target_arg" in
   ''|web|cli) ;;
   *)
-    printf 'vn-harness: -Target accepts only "web" or "cli" (both mean the web profile); got "%s".\n' "$target_arg" >&2
+    printf 'vncode: -Target accepts only "web" or "cli" (both mean the web profile); got "%s".\n' "$target_arg" >&2
     printf 'DSH Desktop is not a target of this pack.\n' >&2
     exit 2
     ;;
@@ -96,9 +96,9 @@ esac
 # "pnpm not found on PATH" on every macOS and Linux machine that had no system
 # pnpm. The Windows half never had the bug because Write-Host writes to the host
 # and a function returns its value separately.
-step() { printf '[vn-harness] %s\n' "$1" >&2; }
+step() { printf '[vncode] %s\n' "$1" >&2; }
 fail() {
-  printf 'vn-harness: %s\n' "$1" >&2
+  printf 'vncode: %s\n' "$1" >&2
   exit 1
 }
 
@@ -340,7 +340,7 @@ install_skills() {
     [ -f "$skill/SKILL.md" ] || continue
     skill_name=$(basename "$skill")
     dest="$skills_root/$skill_name"
-    marker="$dest/.vn-harness-$name"
+    marker="$dest/.vncode-$name"
     if [ -d "$dest" ] && [ ! -f "$marker" ]; then
       printf "  - skills: left '%s' alone (it is not one of ours; delete it to take the bundled copy)\n" "$skill_name"
       continue
@@ -514,7 +514,7 @@ printf '    "Open In...": it switches Light / Dark / System, the same preference
 printf '    Settings > General > Appearance owns (see packages/dsh-themes).\n'
 printf '  - The camera button, left of the Themes button, screenshots the whole\n'
 printf '    window: the browser captures the tab and the pack writes the PNG to\n'
-printf '    this machine'"'"'s Desktop as vn-harness-<timestamp>.png.\n'
+printf '    this machine'"'"'s Desktop as vncode-<timestamp>.png.\n'
 printf '  - The magnifier button, left of the camera, is the page zoom: its menu\n'
 printf '    holds Zoom in / Zoom out, the same as the browser'"'"'s Ctrl+ and Ctrl-,\n'
 printf '    which a native window has no keyboard gesture for. The level is\n'

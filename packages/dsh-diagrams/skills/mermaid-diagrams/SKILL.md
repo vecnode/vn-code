@@ -216,7 +216,7 @@ Timeline / mindmap / quadrant / pie:
 
 ```
 timeline
-    title vn-harness
+    title vncode
     2024 Q1 : first plugin
             : editor tab
     2024 Q3 : diagrams

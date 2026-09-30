@@ -147,7 +147,7 @@ Aliases a theme does not name keep their shipped dark value: the scrims
 black/white alphas and read correctly on any registered dark theme unchanged.
 
 ui-theme's durable preference schema accepts `light` / `dark` / `system` only, so
-an extension theme id is written to the pack's own `vn-harness` section instead
+an extension theme id is written to the pack's own `vncode` section instead
 (through the `uiState` service `dsh-ui-state` publishes) and put back on the next
 load; picking a built-in clears that field so it reads as inherited again, and the
 shipped preference is never faked. Keeping it in force is the other half: ui-theme
@@ -280,7 +280,7 @@ html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1
 ### The VN branding
 
 The same rule set also replaces what that row *shows*: the product's mark becomes
-the **app icon** and its name the text **vn-harness**.
+the **app icon** and its name the text **vncode**.
 
 ```css
 /* hide whatever occupies the brand slots, then draw the replacements */
@@ -289,7 +289,7 @@ html .hHd-Xa_root .hHd-Xa_railMark>*{display:none!important}
 html .hHd-Xa_root .hHd-Xa_brandMark::before,html .hHd-Xa_root .hHd-Xa_railMark::before{
   content:"";width:24px;height:24px;flex:none;display:block;
   background:url("<the icon, inlined>") center/contain no-repeat}
-html .hHd-Xa_root .hHd-Xa_brandName::before{content:"vn-harness"}
+html .hHd-Xa_root .hHd-Xa_brandName::before{content:"vncode"}
 /* and the same icon where the empty conversation's whale sits */
 html .pXSMma_fishHitbox>*{display:none!important}
 html .pXSMma_fishHitbox::before{content:"";width:26px;height:26px;
@@ -311,7 +311,7 @@ html .pXSMma_fishHitbox::before{content:"";width:26px;height:26px;
   from its own single slot, `conversation.hero.brand.mark`, wrapped in
   `div[data-slot]` exactly like the sidebar's; the icon there is 26px so it sits on
   the headline's 32px line without moving it.
-- **The icon is `assets/vn-harness.svg`** at the pack root: a black circle centred
+- **The icon is `assets/vncode.svg`** at the pack root: a black circle centred
   on (12,12) in a 24px box, with a **1px transparent margin** so a container that
   paints with `overflow:hidden` (the sidebar's brand button is exactly 24px tall)
   cannot shave a fraction of a pixel off each side. It is **inlined as a data URI
@@ -426,7 +426,7 @@ shell an agent works in, and 25% renders its text unreadable. The levels in betw
 are Chrome's own.
 
 **The level is durable, and it is re-applied before the control's first render.**
-The level goes to the pack's own host-side section (`vn-harness.pageZoom`, through
+The level goes to the pack's own host-side section (`vncode.pageZoom`, through
 the `uiState` service `dsh-ui-state` publishes), which is one document a Chrome tab
 and the shell's WebView both read, so it survives a host restart and a port change.
 The `localStorage` copy under `dsh-themes.page-zoom` is written alongside it and
@@ -549,7 +549,7 @@ The route resolves the Desktop **per request** — Windows plain or OneDrive-red
 including the freedesktop `XDG_DESKTOP_DIR`, with the home folder as the last resort
 — then validates what it is about to write: the body must carry `image/png`, really
 start with the PNG signature, and stay under 64 MiB. It is written
-**create-exclusively** as `vn-harness-<timestamp>.png` (`-2`, `-3`, … when that name
+**create-exclusively** as `vncode-<timestamp>.png` (`-2`, `-3`, … when that name
 is already taken), so a second shot inside the same second never clobbers the first.
 Failures come back typed (`415` / `400` / `413` / `500` + a code) instead of as a
 stack trace, and the client never names a path: there is no traversal surface and no
@@ -618,7 +618,7 @@ lib/index.js       Node half: one authenticated route, POST /api/dsh-themes/scre
                    browser bundle needs no host otherwise)
 lib/client.js      Browser half: the Page-zoom button + menu (one inline `zoom` on
                    <html>, Chrome's ladder cut at 50/200, remembered in the
-                   `vn-harness` section with the `localStorage` copy underneath), the
+                   `vncode` section with the `localStorage` copy underneath), the
                    Screenshot button (capture + save), the Themes button + menu, the
                    registered themes (THEME_EXTENSIONS: Nord's, Monokai's and Hacker's
                    token maps and menu glyphs, registered through ctx.theme), the
@@ -641,7 +641,7 @@ lib/client.js      Browser half: the Page-zoom button + menu (one inline `zoom` 
 - **Extension themes do not touch ui-theme's durable preference.** `setTheme` only
   writes `light` / `dark` / `system`, so selecting Nord, Monokai or Hacker leaves
   the stored preference alone; the id it wants in force lives in the pack's own
-  `vn-harness` section and is kept applied, and picking a built-in clears it. No
+  `vncode` section and is kept applied, and picking a built-in clears it. No
   second copy of the built-in preference, and no second path to persist it, exists
   to drift.
 - **The download seat is taken by priority, not by force.** Registering the SHIPPED

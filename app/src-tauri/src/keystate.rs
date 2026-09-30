@@ -160,7 +160,7 @@ pub fn splash_script(state: &KeyState, home: Option<&str>) -> String {
         "(function () {{\n  \
          var path = location.pathname;\n  \
          if (!path.endsWith('index.html')) return;\n  \
-         window.__VN_HARNESS_SPLASH__ = {payload};\n\
+         window.__VNCODE_SPLASH__ = {payload};\n\
          }})();\n"
     )
 }
@@ -171,9 +171,9 @@ pub fn splash_script(state: &KeyState, home: Option<&str>) -> String {
 /// paste into an issue, so it is the last place a key may appear.
 pub fn console_line(state: &KeyState) -> String {
     match state.source() {
-        Some(source) => format!("[vn-harness] DeepSeek key: loaded from {}", source.label()),
+        Some(source) => format!("[vncode] DeepSeek key: loaded from {}", source.label()),
         None => format!(
-            "[vn-harness] DeepSeek key: not found (checked the environment, the credentials file and .env) - add one in Settings > Models"
+            "[vncode] DeepSeek key: not found (checked the environment, the credentials file and .env) - add one in Settings > Models"
         ),
     }
 }
@@ -530,7 +530,7 @@ mod tests {
     fn the_splash_script_carries_what_the_page_reads() {
         let loaded = splash_script(&from_layers(Some("k"), None, None, None), Some("/home/u/.dsh"));
         for needle in [
-            "__VN_HARNESS_SPLASH__",
+            "__VNCODE_SPLASH__",
             "\"key\"",
             "\"loaded\"",
             "\"source\"",

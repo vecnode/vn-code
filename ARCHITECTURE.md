@@ -1,4 +1,4 @@
-# ARCHITECTURE.md - vn-harness deep dive
+# ARCHITECTURE.md - vncode deep dive
 
 This document explains how the repo, the installer, and the Editor plugin
 actually work against the DeepSeek Harness line they target
@@ -88,7 +88,7 @@ packages/dsh-themes/              # sub-plugin: the header's page-zoom, capture,
 packages/dsh-ui-state/            # sub-plugin: the state a reload would otherwise forget (see section 17)
   package.json        # dsh.bundle + dsh.client
   cordis.patch.yml    # inserts the 'ui-state' row (nothing else patched)
-  lib/index.js        # Node half: registers the `vn-harness` settings namespace, inlines the remembered page zoom
+  lib/index.js        # Node half: registers the `vncode` settings namespace, inlines the remembered page zoom
   lib/client.js       # browser half: binds that namespace once, restores the two column widths, provides `uiState`
 packages/dsh-open-in-app/         # the file-manager half of the Open In button
   package.json        # dsh.bundle + dsh.client (forks the shipped client bundle)
@@ -762,7 +762,7 @@ and name, and both are **slots**: `sidebar.brand.mark` and `sidebar.brand.name`,
 each `single`, which the shipped `@deepseek-ai/dsh-client-ui-brand-official` row
 fills (and which fall back to the layout's own `FishLogo` when no brand plugin is
 mounted). The pack replaces that art with its own: a plain **24px black disc**
-where the mark was, and the product text **vn-harness** (alpha.14; it read **VN Harness** through alpha.13).
+where the mark was, and the product text **vncode** (alpha.14; it read **VN Harness** through alpha.13).
 
 - **An override, not a slot registration.** A `single` slot has one occupant, and
   the shipped brand row already holds both of them: a second registration would
@@ -774,15 +774,15 @@ where the mark was, and the product text **vn-harness** (alpha.14; it read **VN 
   hides *children* - `display:none!important` - rather than assuming an `<svg>`
   from one particular provider. That also covers the layout's own fallback label.
 - **The replacements are drawn, not inserted**: a `::before` carrying the **app
-  icon** (`assets/vn-harness.svg` at the pack root, inlined as a data URI) at the
+  icon** (`assets/vncode.svg` at the pack root, inlined as a data URI) at the
   slot's own 24px on `.hHd-Xa_brandMark`, the same icon on the collapsed rail's
-  `.hHd-Xa_railMark`, and `content:"vn-harness"` on `.hHd-Xa_brandName`. Being in
+  `.hHd-Xa_railMark`, and `content:"vncode"` on `.hHd-Xa_brandName`. Being in
   the same pinned rule set as the band, they are installed once and need no refresh
   on `theme/change`.
 - **The icon carries its own margin, and that is the point** (alpha.8). The mark is
   painted into boxes the app declares `overflow:hidden` - the sidebar's brand button
   is exactly 24px tall - so an edge-to-edge circle loses a fraction of a pixel on
-  each side, which is what alpha.7's drawn disc looked like. `assets/vn-harness.svg`
+  each side, which is what alpha.7's drawn disc looked like. `assets/vncode.svg`
   is a black circle centred on (12,12) with a 1px transparent margin inside its
   24px box, so no container can shave it. The check compares the inlined copy's
   viewBox and circle geometry against that file, so the two cannot drift; the
@@ -890,7 +890,7 @@ longer a no-op row.
 | `id` | `dsh-themes-screenshot` |
 | `order` | `-30` — left of the Themes control (`-20`), right of the Page-zoom control (`-40`) |
 | capture | `navigator.mediaDevices.getDisplayMedia({preferCurrentTab:true, selfBrowserSurface:'include', video:{displaySurface:'browser'}, audio:false})`, one frame `drawImage`'d into a canvas and encoded as `image/png` |
-| save | `POST /api/dsh-themes/screenshot` (this package's host row) → `%USERPROFILE%\Desktop` / `~/Desktop` / XDG desktop / home, as `vn-harness-<timestamp>.png` |
+| save | `POST /api/dsh-themes/screenshot` (this package's host row) → `%USERPROFILE%\Desktop` / `~/Desktop` / XDG desktop / home, as `vncode-<timestamp>.png` |
 | fallback | the browser's own download, when the host route answers nothing |
 | feedback | the shipped `Toast`, anchored to the button: the saved path, or the reason it failed |
 
@@ -1392,13 +1392,13 @@ decides must still be set when it returns:
 
 | It decides | How |
 |---|---|
-| Which window | relaunches itself in **Windows Terminal** (`wt.exe -w new`) when wt exists, `WT_SESSION` is unset, and neither `-NoTerminal` nor `VN_HARNESS_NO_WT` opts out; a `wt.exe` that fails falls back to the current console rather than losing the run |
+| Which window | relaunches itself in **Windows Terminal** (`wt.exe -w new`) when wt exists, `WT_SESSION` is unset, and neither `-NoTerminal` nor `VNCODE_NO_WT` opts out; a `wt.exe` that fails falls back to the current console rather than losing the run |
 | Which PowerShell | `pwsh` 7 when PATH has it, else Windows PowerShell 5.1 - both first class, because 5.1 is what a stock Windows ships |
-| Whether to pause | exports `VN_HARNESS_PAUSE`; `-NoPause` / `VN_HARNESS_NOPAUSE=1` / `VN_HARNESS_QUIET` clear it, so a scripted run is never held open |
-| The real arguments | exports `VN_HARNESS_ARGS` - entry points forward THAT and never `%*`, because after the relaunch `%*` is only the `--from-terminal` marker |
+| Whether to pause | exports `VNCODE_PAUSE`; `-NoPause` / `VNCODE_NOPAUSE=1` / `VNCODE_QUIET` clear it, so a scripted run is never held open |
+| The real arguments | exports `VNCODE_ARGS` - entry points forward THAT and never `%*`, because after the relaunch `%*` is only the `--from-terminal` marker |
 
-The marker variable `VN_HARNESS_CONSOLE` is what makes that last row safe: the
-callers guard their argument capture with `if not defined VN_HARNESS_CONSOLE`, so
+The marker variable `VNCODE_CONSOLE` is what makes that last row safe: the
+callers guard their argument capture with `if not defined VNCODE_CONSOLE`, so
 the relaunched child keeps the inherited real flags. The colour policy and the
 shared wording live in `scripts/console/theme.ps1` (dot-sourced by the PowerShell
 workers, which keeps `[Console]::OutputEncoding` at UTF-8 so a Node program's
@@ -1751,7 +1751,7 @@ so a manually-added bundle still gets them. Both installers additionally copy
 each `<package>/skills/<name>/` into `$DSH_HOME/skills`, where the harness' own
 filesystem provider reads them and a person can edit them without touching this
 repository; every folder the installer creates carries a
-`.vn-harness-<package>` marker, so a person's own skill of the same name is never
+`.vncode-<package>` marker, so a person's own skill of the same name is never
 overwritten and uninstall removes exactly what it wrote. The copy is recursive,
 which is what lets each skill carry a `reference/complex-diagrams.md` beside its
 `SKILL.md`, and `check-skill-examples.mjs` parses or compiles every fenced
@@ -2111,7 +2111,7 @@ and the desktop shell prefers port 3080 and falls back to a free one, so even a
 single host can lose it by moving a port.
 
 **The answer is a settings namespace, not a new file format.** `dsh-ui-state`'s
-Node half registers ONE namespace - `vn-harness` - in the harness's own settings
+Node half registers ONE namespace - `vncode` - in the harness's own settings
 document, `$DSH_HOME/settings.yaml`, through `ctx.settings.register`. That seam
 already provides everything this needs and nothing it does not: one document both
 launchers read, atomic writes, schema validation, hot reload on a hand edit, and
@@ -2140,7 +2140,7 @@ namespace, and a setting with two owners is a setting that can disagree.
 
 **One binder, and why.** `settingsScope` writes are fenced on the LATEST KNOWN
 namespace revision, and each bound scope owns its own queue. Three bundles
-binding `vn-harness` independently could therefore refuse each other's writes,
+binding `vncode` independently could therefore refuse each other's writes,
 and the contract's recovery for a stale revision is a reload of host state -
 which would silently drop the write. So the browser half binds the namespace
 once and publishes the **`uiState`** client service (`get` / `set` / `unset` /
@@ -2217,12 +2217,12 @@ resolve `uiState` with `ctx.get` and never declare it in `inject`, and each keep
 writing its `localStorage` copy alongside the shared field. So a profile with one
 of those bundles and not this one behaves exactly as before, and the shared
 section always wins when both exist. Nothing is written at all until a value
-actually changes, which is why a fresh install grows no `vn-harness` section.
+actually changes, which is why a fresh install grows no `vncode` section.
 
 **The desktop window remembers its own geometry, separately.** The window's size
 and position must be known BEFORE the window is built, so they cannot come from a
 browser round trip: `app/src-tauri/src/windowstate.rs` (the pure half, `cargo
-test`-pinned) reads and writes `$DSH_HOME/vn-harness/window.json`, and
+test`-pinned) reads and writes `$DSH_HOME/vncode/window.json`, and
 `main.rs` does only the Tauri work - read before build, a coalescing writer on
 `Resized`/`Moved`, a synchronous write at exit, and a monitor check that falls
 back to centring when the remembered point is on no screen. It is desktop-only

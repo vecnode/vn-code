@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>vn-harness</title>
+<title>vncode</title>
 <!--
   The shell's own page: what the window shows from the moment it opens until
   the harness server prints its ready line, at which point the Rust half
@@ -24,7 +24,7 @@
     font: 14px/20px -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
   main { max-width: 34rem; padding: 2rem; text-align: center; }
-  /* The mark is the pack's own asset (assets/vn-harness.svg): a disc centred in
+  /* The mark is the pack's own asset (assets/vncode.svg): a disc centred in
      its box with a hairline margin. The GEOMETRY is the asset's; the colour
      follows this page, because the asset's black disc would be invisible on a
      dark splash. */
@@ -56,10 +56,10 @@
 </head>
 <body>
 <main>
-  <svg class="mark" viewBox="0 0 24 24" role="img" aria-label="VN Harness">
+  <svg class="mark" viewBox="0 0 24 24" role="img" aria-label="vncode">
     <circle cx="12" cy="12" r="11" fill="currentColor" />
   </svg>
-  <h1>vn-harness</h1>
+  <h1>vncode</h1>
   <p class="step" id="step">Starting the harness&hellip;</p>
   <p class="key" id="key" hidden></p>
   <p class="where" id="where" hidden></p>
@@ -74,7 +74,7 @@
   // There is still no IPC channel on this page and no command is exposed - the
   // shell cannot be called from here. What it CAN do is hand one read-only fact
   // over before this document is parsed: `initialization_script` in main.rs
-  // defines `window.__VN_HARNESS_SPLASH__` (and only on this page - the script
+  // defines `window.__VNCODE_SPLASH__` (and only on this page - the script
   // runs on every navigation, so it guards on the pathname, or the harness page
   // would inherit a global it has no use for).
   //
@@ -83,7 +83,7 @@
   // leak a secret it was never given, and this page is replaced by the harness
   // wholesale on success.
   (function () {
-    var state = window.__VN_HARNESS_SPLASH__;
+    var state = window.__VNCODE_SPLASH__;
     if (!state) return;
     var key = document.getElementById('key');
     var where = document.getElementById('where');

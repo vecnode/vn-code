@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  vn-harness DESKTOP launcher - Windows (double-click friendly).
+rem  vncode DESKTOP launcher - Windows (double-click friendly).
 rem
 rem  The same harness run-web.bat shows in a Chrome tab, in a native
 rem  window instead. The shell does the work scripts\run-web.ps1 does
@@ -53,8 +53,8 @@ rem  point: scripts\console\adapt.cmd.
 rem ============================================================
 setlocal
 
-if not defined VN_HARNESS_CONSOLE set "VN_HARNESS_ARGV=%*"
-call "%~dp0scripts\console\adapt.cmd" "%~f0" "vn-harness"
+if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
+call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
@@ -62,13 +62,13 @@ rem --- help, in every spelling ----------------------------------------------
 rem -Help is unambiguous wherever it appears; -h and /? are checked on the FIRST
 rem argument only, so a -DshHome path containing "-h" cannot print help instead
 rem of starting the app.
-rem It is safe on the double-click path - where VN_HARNESS_ARGS used to be
+rem It is safe on the double-click path - where VNCODE_ARGS used to be
 rem UNDEFINED and this very line aborted the whole file with "set was unexpected
 rem at this time." - because scripts\console\adapt.cmd stores "no arguments" as ONE
 rem SPACE, a defined value that holds no flag. The full account is there.
-if not "%VN_HARNESS_ARGS:-Help=%"=="%VN_HARNESS_ARGS%" goto :help
+if not "%VNCODE_ARGS:-Help=%"=="%VNCODE_ARGS%" goto :help
 set "VN_FIRST="
-for /f "tokens=1 delims= " %%A in ("%VN_HARNESS_ARGS%") do set "VN_FIRST=%%A"
+for /f "tokens=1 delims= " %%A in ("%VNCODE_ARGS%") do set "VN_FIRST=%%A"
 if /I "%VN_FIRST%"=="-h" goto :help
 if /I "%VN_FIRST%"=="/?" goto :help
 
@@ -76,22 +76,22 @@ rem --- the launcher's own flags must not reach the shell ---------------------
 rem The Rust shell takes -Port/-DshHome/-DshVersion and nothing else: an unknown
 rem flag exits 1 with the flag named (deliberately, so a typo is never ignored).
 rem These three are ours, so they are removed before the hand-over.
-set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
+set "VN_SHELL_ARGS=%VNCODE_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoPause=%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 set "VN_NOBUILD="
-if not "%VN_HARNESS_ARGS:-NoBuild=%"=="%VN_HARNESS_ARGS%" set "VN_NOBUILD=1"
+if not "%VNCODE_ARGS:-NoBuild=%"=="%VNCODE_ARGS%" set "VN_NOBUILD=1"
 if not defined VN_NOBUILD goto :haverbuild
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoBuild=%"
 
 :haverbuild
 rem --- which artefact runs ---------------------------------------------------
-set "VN_BUILT=%~dp0vn-harness.exe"
+set "VN_BUILT=%~dp0vncode.exe"
 if exist "%VN_BUILT%" goto :run
 
 set "VN_MANIFEST=%~dp0app\src-tauri\Cargo.toml"
 if not exist "%VN_MANIFEST%" (
-  echo [vn-harness] Neither vn-harness.exe nor app\src-tauri\Cargo.toml is here.
+  echo [vncode] Neither vncode.exe nor app\src-tauri\Cargo.toml is here.
   echo   Run run-desktop.bat from the repository root, or from a distribution
   echo   folder assembled by distribute.bat.
   goto :failed
@@ -101,28 +101,28 @@ if defined VN_NOBUILD goto :afterbuild
 
 where cargo >nul 2>nul
 if errorlevel 1 (
-  echo [vn-harness] cargo was not found on PATH, so the desktop shell cannot
+  echo [vncode] cargo was not found on PATH, so the desktop shell cannot
   echo   be built. Install the Rust toolchain from https://rustup.rs and run
   echo   this file again - or run it from a distribution folder, which carries
   echo   the shell already built and needs no Rust at all.
   goto :failed
 )
 
-echo [vn-harness] Building app\src-tauri ^(cargo does nothing when it is current^)...
+echo [vncode] Building app\src-tauri ^(cargo does nothing when it is current^)...
 cargo build --release --manifest-path "%VN_MANIFEST%"
 if errorlevel 1 goto :buildfailed
 
 :afterbuild
-set "VN_BUILT=%~dp0app\src-tauri\target\release\vn-harness-desktop.exe"
+set "VN_BUILT=%~dp0app\src-tauri\target\release\vncode-desktop.exe"
 if not exist "%VN_BUILT%" (
-  echo [vn-harness] The build reported success but the program is not at
+  echo [vncode] The build reported success but the program is not at
   echo   %VN_BUILT%
   goto :failed
 )
 
 :run
 echo.
-echo [vn-harness] Starting the desktop shell. Ctrl+C stops it.
+echo [vncode] Starting the desktop shell. Ctrl+C stops it.
 echo.
 "%VN_BUILT%" %VN_SHELL_ARGS%
 set "VN_EXIT=%ERRORLEVEL%"
@@ -144,25 +144,25 @@ echo.
 echo Runs the harness from the pinned dsh version in a native window instead of
 echo a Chrome tab - same pin, same profile and same flags as run-web.bat.
 echo.
-echo From a distribution folder it runs the vn-harness.exe beside this file and
+echo From a distribution folder it runs the vncode.exe beside this file and
 echo needs nothing installed. From a source checkout it builds app\src-tauri
 echo with cargo first, which needs the Rust toolchain and Node.js 22 or newer.
 echo.
 echo macOS and Linux: the same shell builds with "cargo build --release" in
 echo app/src-tauri and runs beside ./run-web.sh, the browser launcher.
 echo.
-if "%VN_HARNESS_PAUSE%"=="1" pause
+if "%VNCODE_PAUSE%"=="1" pause
 exit /b 0
 
 :buildfailed
 echo.
-echo [vn-harness] cargo build failed - see the errors above.
+echo [vncode] cargo build failed - see the errors above.
 goto :failed
 
 :nopowershell
 echo.
 echo ============================================================
-echo  vn-harness could not start.
+echo  vncode could not start.
 echo ============================================================
 echo.
 echo  PowerShell was not found on PATH, and this launcher needs it to
@@ -170,14 +170,14 @@ echo  set the console up. Windows PowerShell 5.1 ships with every
 echo  supported version of Windows; if it is missing, install
 echo  PowerShell 7 from https://aka.ms/powershell and run this again.
 echo.
-if "%VN_HARNESS_PAUSE%"=="1" pause
+if "%VNCODE_PAUSE%"=="1" pause
 exit /b 2
 
 :failed
 echo.
 echo ============================================================
-echo  vn-harness desktop FAILED - see the messages above.
+echo  vncode desktop FAILED - see the messages above.
 echo ============================================================
 echo.
-if "%VN_HARNESS_PAUSE%"=="1" pause
+if "%VNCODE_PAUSE%"=="1" pause
 exit /b 1

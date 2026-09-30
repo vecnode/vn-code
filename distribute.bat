@@ -1,16 +1,16 @@
 @echo off
 rem ============================================================
-rem  vn-harness DISTRIBUTER - Windows (double-click friendly).
+rem  vncode DISTRIBUTER - Windows (double-click friendly).
 rem
 rem  Builds the distribution you can hand to somebody (or run
 rem  yourself) three ways:
 rem
-rem    dist\vn-harness-<version>-win-x64\      <- click this one
-rem    dist\vn-harness-<version>-win-x64.zip    <- or hand this over
-rem    dist\vn-harness-<version>-win-x64.exe    <- or hand over ONE file,
+rem    dist\vncode-<version>-win-x64\      <- click this one
+rem    dist\vncode-<version>-win-x64.zip    <- or hand this over
+rem    dist\vncode-<version>-win-x64.exe    <- or hand over ONE file,
 rem                                              which unpacks itself and starts
 rem
-rem  The folder holds the built shell (vn-harness.exe) beside the
+rem  The folder holds the built shell (vncode.exe) beside the
 rem  whole plugin pack it live-links from, plus START-HERE.bat,
 rem  DIST-README.txt, BUILD-INFO.json and SHA256SUMS.txt. dist\
 rem  is gitignored on purpose: it is a COPY of this repository
@@ -46,8 +46,8 @@ rem  entry point: scripts\console\adapt.cmd.
 rem ============================================================
 setlocal
 
-if not defined VN_HARNESS_CONSOLE set "VN_HARNESS_ARGV=%*"
-call "%~dp0scripts\console\adapt.cmd" "%~f0" "vn-harness distributer"
+if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
+call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode distributer"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
@@ -55,7 +55,7 @@ rem -h and /? are the two spellings PowerShell cannot bind; see install.bat for
 rem why only the first argument is inspected.
 set "VN_HELPREQ="
 set "VN_FIRST="
-for /f "tokens=1 delims= " %%A in ("%VN_HARNESS_ARGV%") do set "VN_FIRST=%%A"
+for /f "tokens=1 delims= " %%A in ("%VNCODE_ARGV%") do set "VN_FIRST=%%A"
 if /I "%VN_FIRST%"=="-h" set "VN_HELPREQ=-Help"
 if /I "%VN_FIRST%"=="/?" set "VN_HELPREQ=-Help"
 if /I "%VN_FIRST%"=="--help" set "VN_HELPREQ=-Help"
@@ -64,35 +64,35 @@ rem If one of those was found, forward -Help and NOTHING else: the spelling that
 rem was there cannot be bound by PowerShell, and a help request has no use for the
 rem other flags. Rewriting the whole string is what keeps this safe for a -DshHome
 rem path that legitimately contains "-h". See install.bat.
-if defined VN_HELPREQ set "VN_HARNESS_ARGS=-Help"
+if defined VN_HELPREQ set "VNCODE_ARGS=-Help"
 
 rem -NoTerminal is the LAUNCHER's flag and scripts\dist.ps1 declares no such
 rem parameter; forwarding it would make PowerShell stop on an argument it cannot
 rem bind. See install.bat for the whole reason. Safe with no arguments at all:
 rem scripts\console\adapt.cmd stores "no arguments" as one space, so VN_SHELL_ARGS
 rem is always defined.
-set "VN_SHELL_ARGS=%VN_HARNESS_ARGS%"
+set "VN_SHELL_ARGS=%VNCODE_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 
-"%VN_HARNESS_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\dist.ps1" %VN_SHELL_ARGS%
+"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\dist.ps1" %VN_SHELL_ARGS%
 set "VN_EXIT=%ERRORLEVEL%"
 
 echo.
 echo ============================================================
 if "%VN_EXIT%"=="0" (
-  echo [vn-harness] distribution built - see the paths above.
+  echo [vncode] distribution built - see the paths above.
 ) else (
-  echo [vn-harness] distribution FAILED - see the messages above.
+  echo [vncode] distribution FAILED - see the messages above.
 )
 echo ============================================================
 echo.
-if "%VN_HARNESS_PAUSE%"=="1" pause
+if "%VNCODE_PAUSE%"=="1" pause
 exit /b %VN_EXIT%
 
 :nopowershell
 echo.
 echo ============================================================
-echo  vn-harness could not start.
+echo  vncode could not start.
 echo ============================================================
 echo.
 echo  PowerShell was not found on PATH, and the distributer needs it.
@@ -102,5 +102,5 @@ echo  https://aka.ms/powershell and run this file again.
 echo.
 echo  (macOS and Linux do not use PowerShell for this: run ./distribute.sh.)
 echo.
-if "%VN_HARNESS_PAUSE%"=="1" pause
+if "%VNCODE_PAUSE%"=="1" pause
 exit /b 2

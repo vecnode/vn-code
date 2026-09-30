@@ -1,6 +1,6 @@
 # `app/` - the desktop shell
 
-The vn-harness web profile, in a native window instead of a browser tab.
+The vncode web profile, in a native window instead of a browser tab.
 
 ```bat
 run-desktop.bat            :: Windows: builds this when needed, then runs it
@@ -63,7 +63,7 @@ Node.js 22 or newer exactly as the browser launcher does.
 
 A window that forgets its size every launch is a window the reader has to place
 again every morning, so the shell keeps ONE small record at
-`<harness home>/vn-harness/window.json` and restores it - **before** the window is
+`<harness home>/vncode/window.json` and restores it - **before** the window is
 built, which is why this cannot ride the web profile's own remembered state in
 `$DSH_HOME/settings.yaml`: that document is read by the page, long after the
 window exists. The record is `{version, width, height, x, y, maximized}`, the size
@@ -109,7 +109,7 @@ harness's own folder *under* the user's home  -  not the home itself. The first 
 did exactly that, and the harness accepted it: finding no profile at
 `%USERPROFILE%`, it bootstrapped a fresh one holding only its own two base
 bundles, so the window opened the **plain DeepSeek Harness**  -  no plugins, no
-`vn-harness` branding, none of the user's sessions  -  and left a whole second home
+`vncode` branding, none of the user's sessions  -  and left a whole second home
 beside the real `.dsh`. Unit tests in `src-tauri/src/main.rs` pin the rule
 (`chosen_home`, `default_dsh_home`, `pick_home_variable`), and the console still
 *reports* the resolved home  -  `~/.dsh` included  -  without exporting it.
@@ -199,13 +199,13 @@ browser, so a rendered document can never replace the app's only window.
 | `src-tauri/Cargo.toml` | Two dependencies: `tauri`, and `serde_json` (already in the tree behind tauri) |
 | `src-tauri/tauri.conf.json` | Identifier, the `ui/` folder as `frontendDist`, no declared window (it is built in Rust so the navigation filter can live with it), `bundle.active: false` |
 | `ui/index.html` | The splash. One file, no request of any kind. The key line and the harness home are **injected** before the document parses (`initialization_script`), not fetched - the page still has no IPC channel and no command; `scripts/checks/check-splash.mjs` renders it in both states |
-| `src-tauri/icons/` | **Generated** by `scripts/make-desktop-icon.mjs` from `assets/vn-harness.svg`, and committed so a clone builds without running the generator |
+| `src-tauri/icons/` | **Generated** by `scripts/make-desktop-icon.mjs` from `assets/vncode.svg`, and committed so a clone builds without running the generator |
 
 ## Failures
 
 There is no dialog plugin; the console is the log and the window title carries
 the verdict. If the harness never becomes ready, the window is retitled
-`vn-harness - the harness server did not start (see the console window)` and the
+`vncode - the harness server did not start (see the console window)` and the
 reason is printed - `npx` missing, the pin unreadable, no free port, or 90
 seconds without a ready line. Because the shell is a **console** application on
 purpose, `run-desktop.bat` runs it in the foreground and that output stays on
@@ -222,7 +222,7 @@ Measured on Windows 11 (Rust 1.94, Node 22.20, WebView2 153) rather than assumed
   across the runs that were measured while the Web GUI was serving 3080), and 3080
   itself is asked for first once nothing holds it;
 - the ready line is found ~8 seconds into a warm run, the window is titled
-  `vn-harness` and answering, and a `msedgewebview2.exe` process holds established
+  `vncode` and answering, and a `msedgewebview2.exe` process holds established
   connections to the harness port - so the app really loaded, rather than the
   window merely being pointed at the URL;
 - **no token leaked**: every `token=` occurrence in either stream, across every
@@ -240,7 +240,7 @@ Measured on Windows 11 (Rust 1.94, Node 22.20, WebView2 153) rather than assumed
 node scripts/make-desktop-icon.mjs
 ```
 
-Reads `cx`, `cy`, `r` and the viewBox out of `assets/vn-harness.svg` and writes
+Reads `cx`, `cy`, `r` and the viewBox out of `assets/vncode.svg` and writes
 `icon.ico` (16-256px) plus a 512px `icon.png`. It needs no image library: it
 encodes the PNGs and the ICO directory itself. Re-run it only when the mark
 changes, and commit the result.

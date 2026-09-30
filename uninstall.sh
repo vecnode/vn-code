@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================
-#  vn-harness uninstaller (macOS / Linux; the Windows twin is uninstall.bat)
+#  vncode uninstaller (macOS / Linux; the Windows twin is uninstall.bat)
 #  Removes this pack's bundles from the DeepSeek Harness web profile, together
 #  with any retired bundle name it shipped before (dsh-focus, dsh-files).
 #  Removing a bundle also removes its patch layer.
@@ -35,7 +35,7 @@ here=$(CDPATH= cd -- "$here" && pwd)
 
 . "$here/scripts/console/theme.sh"
 
-case " $* " in *" -NoPause "*) VN_HARNESS_PAUSE=0 ;; esac
+case " $* " in *" -NoPause "*) VNCODE_PAUSE=0 ;; esac
 
 if vn_wants_help "$@"; then
     exec sh "$here/scripts/uninstall-all.sh" -Help
