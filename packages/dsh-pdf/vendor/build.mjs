@@ -6,8 +6,8 @@
  * the model gets text, layout, metadata and structure instead of a binary blob.
  * The harness profile installs this bundle as a live LINK, so a package
  * dependency is not installed and a plugin cannot `import 'pdfjs-dist'` - the
- * engine is therefore vendored, exactly like dsh-diagrams' Mermaid, the
- * editor's CodeMirror and the terminal's xterm.
+ * engine is therefore vendored, exactly like dsh-diagrams' Mermaid and the
+ * editor's CodeMirror.
  *
  * The version is PINNED TO THE HARNESS'S OWN PREVIEW (pdf.js 6.3.289, the
  * build inlined in @deepseek-ai/dsh-client-ui-sidebar-documentpreview). That is

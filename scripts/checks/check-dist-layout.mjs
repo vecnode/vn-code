@@ -174,7 +174,7 @@ if (ps && sh) {
     'packages/dsh-pdf/lib/vendor/pdf.min.mjs',
     'packages/dsh-diagrams/lib/vendor/mermaid.min.js',
     'packages/dsh-editor/lib/vendor/cm6.min.js',
-    'packages/dsh-terminal/lib/vendor/xterm.js',
+    'packages/dsh-terminal/lib/client.js',
     'app/README.md',
     'assets/vncode.svg',
   ]

@@ -33,7 +33,7 @@
  * every client bundle at boot, so the vendored engine and its worker are
  * fetched from this plugin's own authenticated routes on the first PDF and
  * turned into blob URLs (a module import and a worker URL), the same lazy shape
- * the editor uses for CodeMirror and the terminal for xterm. Bytes are read
+ * the editor uses for CodeMirror. Bytes are read
  * through `/api/dsh-pdf/file`, which validates the address again on the host
  * side; the browser never decides what it may read.
  *

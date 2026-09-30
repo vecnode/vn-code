@@ -20,8 +20,9 @@ DSH_CHECK_LAUNCH=1 node scripts/checks/check-node-routes.mjs   # also opens a re
 (Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-routes.mjs`.)
 
 A check that cannot run on this host says so and skips loudly instead of
-passing: the live terminal socket needs a resolvable `node-pty` **and** `ws`,
-the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
+passing: the git routes need `git` on `PATH`, and the TikZ cases need a TeX
+engine. (The live terminal socket that used to need a resolvable `node-pty` and
+`ws` went with the terminals in terminal alpha.12.)
 
 - `check-client-bundles.mjs` loads each browser half exactly the way the shell
   does (through `window.__ModuleLoader__.load`), activates it against a stub
@@ -76,33 +77,31 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
     `#12` chip;
   - `dsh-terminal` - the bundle id, both seats, order 30, and the geometry
     invariants the dock must keep at the source level (never the frame's height,
-    inset the two columns, re-fit on resize, follow the left bar through the
-    mutation observer *and* the column `ResizeObserver`), plus the bar itself:
-    every chip pick publishes to the store (store + show + `bump()`, or the
-    highlight stays on the terminal you just left), the strip is a horizontally
-    scrolling box with `+` outside it, the arrows are gated on measured overflow
-    and the wheel listener is native and non-passive - and the strip's
-    scroll-into-view arithmetic is DRIVEN, through the bundle's pure
-    `__internals.revealDelta`. alpha.7 adds the agent view on the same terms, and
-    alpha.10 finishes the switch: it is a TOGGLE and the ONLY Agent control (off
-    by default, `aria-pressed` read back off the view itself, no `Agent` chip
-    anywhere in the strip, with the running pulse, the failure count and the
-    unreadable-log warning worn by the button). The bundle
-    reads this package's own `/activity` route rather than the browser's session
-    window and polls only while something is subscribed and the tab is visible,
-    killing a chip must not move a reader who is looking at the log, and **Run in
-    Terminal** must refuse a multi-line command - and then the whole read model is
-    DRIVEN with hand-built session events: `parseExecCall` (a missing
+    inset the two columns, follow the left bar through the mutation observer
+    *and* the column `ResizeObserver`), plus the dock's ONE view as a static
+    render can see it: no chip strip, no `+`, no view toggle, and the Agent brand
+    wearing the log's state. **alpha.12 is pinned by ABSENCE**, because the
+    terminal half must not come back: the check fails if a socket, the vendored
+    engine (`DSHTerminal`), the emulator registry (`DockRuntime`), the view
+    sentinel (`ACTIVITY_VIEW`), the chip strip (`dst-chips`), `MAX_TERMINALS` or
+    `onRunInTerminal` reappears anywhere in the browser half. The shared-height
+    arithmetic is DRIVEN through the bundle's pure `__internals.adoptDecision`
+    (news moves the dock; the pointer, our own echo, an outstanding write, the
+    height already in force, an unready section and an absent value do not).
+    The agent view is pinned on the same terms: the bundle reads this package's
+    own `/activity` route rather than the browser's session window and polls only
+    while something is subscribed and the tab is visible, a multi-line command is
+    drawn like any other with nothing offered to run it - and then the whole read
+    model is DRIVEN with hand-built session events: `parseExecCall` (a missing
     `description` marks the persistent shell, `read` is not a command),
     `parseExitMarker` (consumed, a signal is not an exit code, marker-like text
     mid-output left alone), `stripAnsi`, `formatDuration`, `filterActivity` and
     `buildActivityFromEvents` (grouping by prompt, injected context does not open
     a group, a failure read off its marker, a call with no result still running, a
     persistent shell claiming no exit status, a result outside the tail kept but
-    unnamed), the view itself RENDERED from a hand-built log (since the switch is
-    off by default no static render of the dock can reach a row), plus
+    unnamed), the view itself RENDERED from a hand-built log, plus
     `activitySignature`, which is what keeps an unchanged poll from re-folding the
-    log. alpha.11 pins the COUNTS the control wears as the commands' own - a
+    log. alpha.11 pins the COUNTS the bar wears as the commands' own - a
     failed `read` folds to zero failures (and to `otherFailed: 1`), its tooltip
     sentence is asserted as text, and the bounded retry (1.5 s over the first four
     reads with no answer, cleared by an answer) and the dock forgetting the
@@ -169,17 +168,18 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
     root commit's file list, the option-injection guard and the GRAPH fields the
     tab's rail is drawn from (a merge's two parents, the `%D` ref `HEAD` points
     at, a tag ref, and a root commit with no parents);
-  - **terminal** - the route family, the ETag, and a LIVE shell over a real
-    socket (init -> ready -> a command answered -> kill, a JSON line proven to
-    be shell input rather than a control frame, and an unauthenticated upgrade
-    refused). alpha.7 adds the agent view's read: the `/activity` route is driven
-    against a stubbed live session and must send only the three event types the
-    panel draws (injected context and assistant streams dropped), in log order,
-    answer `NOT_LIVE` for a conversation that is not open on this host (a 200 -
-    a fact about the host, not a bad request), `UNREADABLE` for a log that will
-    not read, 400 without a session id, and answer a conversation past the budget
-    with its **tail** (`hasMore` set, the newest kept, and one oversized newest
-    command still sent);
+  - **terminal** - ONE route, and the check asserts that in both directions. The
+    row is driven with a `connection` **and** a `webServer` service offered, and
+    it must register exactly `/api/dsh-terminal/activity` and **no upgrade** -
+    alpha.12 deleted the PTY, the socket, the vendored assets and the `/health`
+    probe, so their return is a regression rather than a feature. The route itself
+    is driven against a stubbed live session and must send only the three event
+    types the panel draws (injected context and assistant streams dropped), in log
+    order, answer `NOT_LIVE` for a conversation that is not open on this host (a
+    200 - a fact about the host, not a bad request), `UNREADABLE` for a log that
+    will not read, 400 without a session id, and answer a conversation past the
+    budget with its **tail** (`hasMore` set, the newest kept, and one oversized
+    newest command still sent);
   - **themes** - the screenshot route's type/signature/size refusals and the
     create-exclusive write onto a redirected Desktop;
   - **ui-state** - the pack's settings form with no route to capture: the row is

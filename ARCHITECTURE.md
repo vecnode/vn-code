@@ -915,13 +915,13 @@ remainder to guess at.
 alternatives were rejected for the same reason:
 
 - a **DOM-to-canvas** library would have to stand in for the rendering engine:
-  the terminal dock's surface is an xterm **canvas**, dialogs and menus are
-  portalled to `document.body`, and the app paints itself from layers of hashed
+  dialogs and menus are portalled to `document.body`, the right bar docks panels
+  with their own scroll boxes, and the app paints itself from layers of hashed
   stylesheets and `@font-face` rules that a foreignObject render does not
   reproduce faithfully;
 - a **headless browser** on the host pointed at the same URL would photograph a
-  **fresh load**. The open right-bar tab, the editor's buffer and the terminal
-  dock are *this client's* state, not the server's, so the shot would not be what
+  **fresh load**. The open right-bar tab, the editor's buffer and the dock's own
+  height are *this client's* state, not the server's, so the shot would not be what
   the user is looking at (and it would attach a second client to the
   conversation).
 
@@ -1116,260 +1116,187 @@ the generated banner lists the applied patches.
 
 ## 11. The terminal dock (dsh-terminal)
 
-The pack's first surface that is not in a column. A real shell in a **bottom
-dock**: one horizontal panel that starts at the right edge of the left bar, runs
-to the full width of the page, and sits **under** the middle and right columns -
-which make room for it instead of being covered. Like §7 it forks nothing,
-disables no core row and publishes no service; unlike §7 it does vendor a browser
-engine and does own an upgrade route.
+**A bottom dock, not a column.** `dsh-terminal` puts the agent's own commands at
+the foot of the window: a header control at `order: 30` in the slot LIST
+`conversation.session.header.utilities` — the last utility, immediately right of
+the shipped Open In… (`-10`) and left of the right bar's toggle, which owns the
+single-occupant `…header.corner` seat — toggles a horizontal panel that starts at
+the **right edge of the left bar**, runs to the full page width, and sits **under**
+the middle and right columns.
 
-**Where it registers.** Two seats, both through `ctx.slots.inject` so neither is
-lost to a registration order:
+**Why `shell.overlay` and not a second React root.** The dock has to escape the
+frame's `overflow:hidden` to sit at the very bottom of the window, and it has to
+live in the app's tree to inherit its React context. Both hold at once: the
+overlay layer is rendered *inside* the frame, and the dock is `position:fixed`,
+which no ancestor's overflow can clip. The layer's own `z-index:20` puts the dock
+above the columns (10/11) and below a fullscreen right bar (40) for free.
 
-| Seat | Kind | Order | Why there |
-|---|---|---|---|
-| `conversation.session.header.utilities` | list | 30 | the last utility: right of **Open In...** (-10), the pack's Themes (-20), and immediately left of the right bar's own toggle |
-| `shell.overlay` | list (root) | 50 | the layout package renders it inside the frame, in the app's React tree |
-
-The header **corner** is deliberately avoided: `conversation.session.header.corner`
-is a `single` slot and the right bar's toggle already owns it, so a registration
-there would replace it. The terminal glyph is drawn in the bundle - primitives
-ships no terminal icon - and `Tooltip` is the only primitive used.
-
-**Why the dock is `position:fixed` inside the overlay.** A bottom row cannot be a
-grid child of the frame (that would mean writing a foreign node into a
-React-managed container), and it cannot be positioned relative to the frame
-either: the frame declares `overflow:hidden`, which clips an absolutely
-positioned child. A fixed box escapes that clip while still living inside the
-overlay layer, whose `z-index:20` puts the dock above the columns (10/11) and
-below a fullscreen right bar (40) with no further work.
-
-**How the geometry is derived** (there is no layout-service API for a bottom
-region - `ctx.layout` only exposes `openRightbar`/`closeRightbar`/`toggleSidebar`/
-`selectPanel`):
+**Geometry.** The dock is not a grid child of the app frame — that would mean
+writing foreign nodes into a React-managed container — so it positions itself:
 
 - **Left edge**: the frame's columns are an inline
-  `gridTemplateColumns: <sidebar>px minmax(0,1fr) <rightbar>px`, so the resolved
-  computed style's first track IS the left bar's width - no hashed class names,
-  and it tracks the bar opening, collapsing and being dragged.
-- **Room**: it comes from the **middle and right columns only**, as their own
-  `height: calc(100% - <dock>px)`; on close each gets back the inline height it
-  had before this plugin ran. Both are found without hashed class names - the
-  layout marks the right column itself (`data-rightbar-col`), the middle column is
-  its immediately preceding sibling, and the frame's first element child (the left
-  bar) is explicitly never one of them.
-  - **Not the frame's height.** The frame has a single grid row, so shrinking the
-    frame shortens the left column with it. alpha.1 did that, and the left bar's
-    contents visibly slid up the instant the dock opened - the dock starts at the
-    left bar's right edge, so the left bar has no business losing height.
-  - **Not `padding-bottom` either.** The right column's panel is absolutely
-    positioned inside it (`top:0; bottom:0`), and an absolute child is placed
-    against its ancestor's *padding* box: padding would leave that panel exactly
-    where it was and the dock would cover its bottom. A height shortens the column
-    itself, so the panel ends at the dock's top edge like everything else.
-- **Live moves**: a `MutationObserver` on the frame's `style` attribute (a drag
-  rewrites it every frame), **plus a `ResizeObserver` on the two columns the dock
-  spans and a `transitionend` on the frame**, plus a `resize` listener. The
-  observers are not redundant: the LEFT BAR is animated, so collapsing or
-  expanding it rewrites the grid tracks ONCE and then transitions them - the
-  mutation fires while the computed track still reads the pre-transition value and
-  is never called again, which left the dock standing at the old left edge with a
-  stale width. What changes on every frame of that transition is the SIZE of the
-  columns, which is what the ResizeObserver reports; `transitionend` is the final
-  snap.
-- **Intent vs geometry**: `data-open` is user intent, `data-suspended` is derived
-  (a fullscreen right bar takes the viewport; the dock yields *and* hands the
-  columns their height back for the duration). The observer writes only the
-  derived one. This split is not cosmetic: the first spike run had the observer
-  set the open state too, so the close that restored the frame's height
-  re-triggered the observer and reopened the dock. The spike ran that scenario in
-  a real engine before any of the package existed.
-- **Resizing**: the grip drags the height (120px ... 70% of the viewport), it is
-  remembered in `localStorage`, and every change **re-fits the emulator** - rows
-  and cols recomputed from the new box, the new size sent to the PTY, and the view
-  put back on the end of the output. Without that re-fit the panel keeps the old
-  line count with the newest output out of sight, which is the pair of symptoms
-  alpha.2 fixed.
+  `gridTemplateColumns: <sidebar>px minmax(0,1fr) <rightbar>px`, so the RESOLVED
+  computed style carries the left bar's width in px. No hashed class names, and it
+  follows the left bar opening, collapsing (`0`) and being dragged.
+- **Room**: taken from the **middle and right columns only**, as their own
+  `height: calc(100% - <dock>px)`; on close each gets back the inline height it had
+  before this plugin ran. Both are found without hashed class names: the layout
+  marks the right column itself (`data-rightbar-col`), the middle column is its
+  immediately preceding sibling, and the frame's **first element child** — the left
+  bar — is explicitly never one of them.
+  - *Not the frame's height.* The frame has a single grid row, so shrinking the
+    frame shortens the left column with it, and the left bar's content visibly slid
+    up the moment the dock opened (alpha.1).
+  - *Not `padding-bottom` either.* The right column's panel is absolutely
+    positioned inside it, and an absolute child is placed against its ancestor's
+    **padding** box, so padding would leave that panel where it was and the dock
+    would cover its bottom. A height shortens the column itself.
+- **Live tracking**: a `MutationObserver` on the frame's `style` attribute, a
+  `ResizeObserver` on the two columns the dock spans, a `transitionend` on the
+  frame, and a `resize` listener. The `ResizeObserver` is what follows the **left
+  bar being collapsed or expanded**: that is animated, so the grid tracks are
+  rewritten *once* and then transitioned — the mutation reports the pre-transition
+  value and never fires again — while the columns' **size** changes on every frame
+  of the transition. `transitionend` is the final snap.
+- **Intent is separate from geometry.** `data-open` is user intent;
+  `data-suspended` is derived (a fullscreen right bar takes the viewport, and the
+  dock yields *and* hands the columns their height back for the duration). The
+  observer only ever writes the derived one.
+- **Placement and tracking are two effects.** Placing the dock is a two-write
+  effect keyed on `open`/`height`; the observers are installed once while the dock
+  is open and read `dock.height` at call time (module state, so no stale closure).
+  As one effect keyed on the height, every frame of a dock drag disconnected and
+  rebuilt a `MutationObserver` **and** a `ResizeObserver`, then let their pending
+  notifications land on the fresh observers — most of why a resized dock stuttered.
+- **The grip drags the height** (120px … 70% of the viewport). The height comes
+  from the **pointer's** own Y and the values captured at `pointerdown`, never from
+  the dock's rect: the grip moves as the dock moves, so a handler that measured it
+  would chase itself. Moves are coalesced to one per animation frame, the pointer
+  is captured, the drag closes on `pointerup` **and** `pointercancel`, and
+  `body.dst-dragging` carries the row-resize cursor and no text selection.
+- **The height is remembered in two stores**: the pack's shared section
+  (`dsh-ui-state`, which is the one document a Chrome tab and the desktop window
+  both read) and `localStorage` underneath as the fallback. The shared write is
+  coalesced to **one per settled drag** (400ms plus a flush at release): it is a
+  queued, non-optimistic wire write, and one request per pointer move both floods
+  the queue and feeds the echo loop below.
+- **An accepted shared view moves the dock only when it is NEWS.** The section
+  re-announces on every accepted view — including the answers to this client's own
+  writes — so re-adopting it unconditionally handed the dock a height the pointer
+  had already left, once per accepted write, with a write per pointer move queueing
+  answers seconds behind the drag. That was the alpha.5 "the size glitches and I
+  have to hide it" report. `adoptDecision` refuses four cases (the pointer is down,
+  a write of ours is still on the wire, our own last written value, the value
+  already in force), an adopted height is applied with `persist: false` so adopting
+  cannot itself become a write, and the function is exported in `__internals` and
+  pinned behaviourally by the tracked check — a timeline harness over the shipped
+  functions reproduces 59 backwards height moves on the alpha.5 shape against 0 on
+  this one.
+- **The dock's OPEN state is deliberately not remembered.** The panel is a window
+  onto a conversation; a boolean that resets merely re-hides it, and "reopening it"
+  after a reload would show a panel nobody asked for.
 
-**The bar's chip strip.** One chip per terminal, `+` beside it, and the strip is a
-horizontally **scrolling** box. alpha.3 clipped what ran past the right edge
-(`overflow:hidden`) and kept `+` *inside* the clipped region, so the control that
-opens a terminal could scroll out of reach with the chips. Two rules keep it
-honest: the strip measures its own overflow (`scrollWidth > clientWidth`, plus
-each end, so a click at an end dims) and grows a `‹`/`›` pair only while there
-really is some — the arrows are the affordance the strip wears **instead of** a
-native scrollbar, which on a 24px row costs more height than it explains and
-would shift the whole bar the first time a chip overflowed. A bare wheel over the
-strip moves it (the pack's other scrollable surfaces do the same, and that
-listener is NATIVE with `{passive:false}` because React's own wheel listener is
-passive and a `preventDefault()` inside it is a no-op), and the chip on screen is
-scrolled into view by the smallest amount that reveals it, measured against the
-strip's own `getBoundingClientRect`. That last piece is a **pure function**
-(`revealDelta`), exported as the bundle's `__internals` so the tracked check can
-drive the arithmetic directly — a sign error there scrolls the strip *further
-away* from the chip it was asked to show, which no static render can see, and the
-check asserts both directions, the 8px of air and the no-op case.
+### What is in the panel: the agent's own commands
 
-Picking a chip **publishes** the pick. `runtime.show()` writes `dock.active`
-straight into the store's map and re-fits the visible emulator, but it bumps no
-revision — so a pick routed through it alone left React's `data-active` on the
-chip the reader had just left: the terminal being shown changed and the highlight
-did not (reported against alpha.3, fixed in alpha.4 by routing every pick through
-one `selectSlot()` that writes the store, asks the runtime to show the slot and
-bumps).
+**The terminals are gone (alpha.12).** Through alpha.11 the dock also held its own
+xterm.js emulators — one real PTY each from the harness's own `node-pty`, attached
+over an authenticated WebSocket, a chip strip with a `+` up to 8 slots per
+conversation, a vendored `xterm.js` bundle and stylesheet served with an ETag, a
+`/health` probe, and **Run in Terminal**, which typed a recorded command into one
+of those shells. All of it was deleted. The reason is 0.2: the harness now ships
+`@deepseek-ai/dsh-client-ui-sidebar-terminal`, **terminal tabs in the right
+Sidebar**, so a second emulator at the foot of the window was a second answer to a
+question the harness answers in the column beside it — and maintaining a whole
+engine for it was the larger cost. The package now **reads and never runs**:
+`inject: ['connection']` alone, no shell spawned, no binary resolved, no socket
+gated. Deleted with the half: `lib/pty.js`, `lib/shell.js` (the pack's only per-OS
+plugin file, which is why every bundle here is now OS-neutral), `lib/vendor/` and
+`vendor/`.
 
-**Where the PTY comes from.** Not from this pack. The harness already ships
-`node-pty` (ConPTY prebuilds for `win32-x64/arm64`, plus `darwin-x64/arm64` and
-`linux-x64/arm64`) in its own dependency closure, so nothing is installed and
-nothing is built natively. What an out-of-tree plugin must solve is
-**resolution**: Node resolves bare specifiers by walking up from the importing
-FILE, and this package's file is in this repository, so `import('node-pty')` from
-here fails. `lib/pty.js` resolves through `process.argv[1]` (the running entry,
-whose parent walk lands in that installation), then `$DSH_HOME/profiles` (which
-`@deepseek-ai/dsh-app-boot` fills with the installation closure for exactly this),
-then this package's own directory. `ws` is loaded the same way. Because node-pty
-is a harness internal rather than a published API, resolution failure is a
-first-class outcome: `health` answers `available:false` with the reason, the dock
-renders it, and the boot is untouched.
+**The panel is a transcript, and the HOST owns the log.** The agent's commands run
+in the harness's own process through its shell tool — they are not this panel's —
+so this package serves the conversation's own durable events instead. That they
+come from the host is the decisive part: the log is there whether or not a
+particular browser has opened the conversation yet, while a client-side read of the
+live session window has to be **staged** first, so a panel that opens with the app
+would show nothing until something else moved the session onto the stage (the
+alpha.7 bug).
 
-**The routes.** Four authenticated HTTP routes through `connection.fetch` - the
-mechanism §6 uses - and ONE **upgrade** route, which that mechanism does not
-cover:
-
-| Route | What it is |
+| Event | What it contributes |
 |---|---|
-| `GET /api/dsh-terminal/health` | PTY availability, the shell's label, the capacity, the platform |
-| `GET /api/dsh-terminal/activity` | the agent view's read: this conversation's command-relevant session events, filtered and bounded (read-only) |
-| `GET /api/dsh-terminal/vendor/xterm.js` / `xterm.css` | the vendored engine (ETag-cached), like §6's CodeMirror bundle |
-| `WS /api/dsh-terminal/pty` | the terminal itself |
+| `tool/call` | `{ turn, step, callId, name, arguments }` — `arguments` is the RAW JSON string, so the command appears the moment the call is dispatched |
+| `tool/result` | `{ turn, step, message, error?, meta? }` — `message.content[0]` is the `ToolResultBlock`: its `content` is the output, its `isError` the failure flag |
+| `user/message` | a prompt when `source.kind === 'user'` (every other kind is injected context, and does not open a group) |
 
-`ctx.webServer.registerUpgrade` hands the raw socket over, so this package
-performs the gate itself - `connection.requestRejection(req)` (host/origin fence,
-then browser authentication) and a raw `401`/`403` written into the socket when
-it answers - the same two-step the product's own WebSocket mux performs. No
-unauthenticated socket ever reaches a PTY. The protocol is text frames with a
-`U+0000` prefix on control frames, because the shell's output is arbitrary text
-and `cat` of a JSON file must never be mistaken for a control message
-(`{"t":...}` as shell input is a tracked check). Backpressure pauses the PTY past
-4 MiB of unflushed socket bytes rather than dropping output, and a heartbeat
-drops dead sockets.
+**ONE route, and it is read-only.** `GET /api/dsh-terminal/activity?session=<id>`
+is the whole Node half. It is registered through `connection.fetch.register` (so it
+inherits the connection's authentication) with `requestBody: 'buffered'`, and it
+answers a filtered **tail** of `snapshotEvents()`: only those three types are sent,
+injected context and non-human `user/message` events are dropped on the host, the
+walk runs BACKWARDS from the newest event so a conversation past the budget answers
+with its most recent commands, and the newest event is always included even if it
+alone is oversized — a single enormous command must not leave the panel with
+nothing to draw. The caps are 400 events and roughly 512 KiB, with `hasMore`
+stating what was left out instead of truncating silently. A conversation that is
+not live on this host answers `NOT_LIVE` with a **200**, because that is a fact
+about the host and not a bad request; an unreadable log answers `UNREADABLE` the
+same way; a missing session id is a 400.
 
-**Sessions.** One PTY per (conversation, slot), at most 8 per conversation, cwd
-resolved exactly as §6/§7 resolve it. Output is retained in a 256 KiB scrollback
-ring, and a session whose last socket goes away is kept for five minutes before
-the reaper ends it - so a reload (or closing the dock) reattaches and replays
-instead of losing the shell. Every timer is `unref`ed: a terminal can never hold
-the harness process open. `pid` is reported `null` in the first `ready` frame on
-Windows, where node-pty answers `0` until ConPTY has attached.
+**The fold is in the browser, and it is pure.** The client folds those events with
+the SAME functions the tracked check drives — `parseExecCall` (which tools are
+commands, and that a missing `description` marks the *persistent* shell),
+`parseExitMarker` (the `\n[exit code: N]` / `\n[killed by signal: X]` markers
+`@deepseek-ai/dsh-shell/render` appends, mirrored rather than imported, and read
+**only** for a foreground shell), `stripAnsi` (the host's own `TerminalSanitizer`
+kind of filter), `buildActivityFromEvents`, `activitySignature`,
+`filterActivity`, `formatDuration` and `activityFactsTitle` — so what the model is
+told and what a person sees cannot drift, and the panel and the transcript can only
+disagree about *presentation*.
 
-**The vendored engine.** xterm.js 5.5.0 plus `@xterm/addon-fit` 0.10.0, built by
-`packages/dsh-terminal/vendor/` exactly the way §6 builds CodeMirror (npm install
-+ one documented esbuild line), producing `lib/vendor/xterm.js`
-(`window.DSHTerminal`) and its stylesheet. The browser half fetches them lazily
-the first time a dock opens and injects the script through a blob URL.
+**The poll is cheap on purpose.** Every 6 s, every 2 s while a command is running,
+and 1.5 s for the first four reads while the log has not answered yet (the
+conversation on screen is attached by the host as the app opens it, so the very
+first read can race that attach and answer `NOT_LIVE`; at 6 s a restored
+conversation would say so for up to six seconds after every reload). It runs only
+while something is subscribed, pauses in a hidden tab, and publishes **nothing**
+when `activitySignature` shows the fold did not change — a steady conversation
+costs an idle request and no re-render. The dock **forgets a conversation it no
+longer belongs to**: it is root-scoped and always mounted, so keeping the old
+identity meant a hidden panel went on polling (and holding counts from) a
+conversation nobody was looking at.
 
-**A terminal is an unsandboxed shell.** That is what a terminal is: it does not
-pass through the file-policy sandbox the model's tools obey. The gate is the
-connection's own authentication, and the dock exists only where `webServer` and
-`connection` do.
+**Every number on the bar is the COMMANDS'.** The bar wears the log's own state —
+a pulse while a command runs, the count of what **failed** as a red badge, a `⚠`
+and the warning tone when this conversation's log cannot be read here (with the
+host's own reason in the tooltip), and the counts as a sentence — and the header
+control carries the same running/failed dot while the panel is closed, so "the
+agent is doing something" is visible without opening it. A tool call that is not an
+executing tool (a `read`, a `grep`, an `edit`) is a row under the *All tools*
+filter and never a number: before alpha.11 any failed tool incremented the failure
+count, so a conversation whose only tool call was a failed `read` wore a red `1`
+badge and a red header dot while its own tooltip said *0 commands, 1 failed,
+nothing run yet* in one breath. The other family's running and failed rows are
+counted separately (`otherRunning` / `otherFailed`), so *All tools* can still be
+described honestly.
 
-**The agent's own terminal use (alpha.7; read from the host since alpha.8).**
-The dock's second view: a reading of the conversation, not a second shell. The
-agent's `bash`/`pwsh` run in the harness's own process through its shell tool and
-cannot be attached to the PTY in this panel, so the view is a *transcript* - it
-adds no PTY and no host state, and its one route is read-only. An `Agent` button in
-the bar **is** the toggle between the two views (alpha.10): it is on exactly while
-the log is what the panel shows - read back off the view itself, never a second flag,
-so picking any terminal chip turns it off - and switching it off hands the panel back
-to the terminal that was last on screen. Alpha.7 also put an `Agent` chip at the head
-of the strip as the way in, which read as the button having opened a second tab and
-split the log's state across two controls; alpha.10 removed the chip and moved that
-state onto the button (a pulse while a command runs, the failed count as a badge, the
-counts in its tooltip, and the warning tone with a mark when this conversation's log
-cannot be read here, with the host's own reason in the tooltip).
-The view is `ACTIVITY_VIEW = -1`, an index no slot has, which is what lets it ride
-the SAME `dock.active` cell and the SAME `DockRuntime.show()` the terminals use:
-showing `-1` hides every emulator, and the emulators stay mounted behind it
-because a shell is a process that hiding must not detach. The toggle is remembered
-per origin in `localStorage` - and deliberately NOT in the pack's shared section,
-because promoting it would mean adding a field to `dsh-ui-state`'s durable schema,
-i.e. changing another package's data contract for a boolean.
+**A row is readable at a glance, in any theme.** The status is drawn as a rail down
+**each** side — left *and* right, so a long command line cannot leave the mark
+behind, and the exit-0 green counts — and the row's head (the clickable line that
+drops the output down) wears a light `color-mix(…, transparent)` wash of the same
+colour. ONE `--dst-accent` custom property per `data-status` holds the tone, so the
+rails, the wash and the pill cannot disagree; the wash is mixed with `transparent`
+rather than a surface colour, which lightens a light theme and darkens a dark one
+and leaves the label's own themed colour alone. Output is clamped to 12 lines with
+**Show all N lines**; a row expands on click or on `Enter`/`Space`; and the only
+actions are **Copy command** and **Copy output** — nothing in this panel runs
+anything any more.
 
-**Where those events come from, and why from the HOST.** The harness's client does
-expose a session's live event window (`sessions.binding(id).eventSource`), and
-alpha.7 read exactly that. It is the wrong source for a panel that must be useful
-the moment the app opens: the window opens only once the browser has taken that
-conversation onto its **stage**, so the panel sat on "Reading the conversation..."
-until something else moved the session along. The host owns the log, so this
-package serves it - `GET /api/dsh-terminal/activity?session=<id>` answers a
-filtered **tail** from the host's own `sessions` service (`get(id)` ->
-`snapshotEvents()`, the contiguous in-memory log) and the BROWSER folds it with the
-same pure fold the tracked check drives. That division is deliberate: the host is
-the only place that always has the log, and the fold stays one implementation, so
-the panel and the check cannot drift about what a command is. The route is
-read-only, filtered and bounded: only `tool/call`, `tool/result` and a HUMAN
-`user/message` are sent, at most 400 events and roughly 512 KiB from the newest
-end, `hasMore` says when older ones were left out, and the newest event is always
-included even when it alone is oversized, because one enormous command must not
-leave the panel with nothing to draw. A conversation that is not open on this host
-answers `NOT_LIVE` with a **200** - a fact about the host, not a bad request. The
-panel re-reads that route every 6 seconds, every 2 while a command is running,
-stops when nothing is subscribed, pauses in a hidden tab, and publishes nothing at
-all when the fold's signature is unchanged.
-
-The read model is **pure** and exported for the check: `parseExecCall` (the
-executing tools only - `bash`/`pwsh`, foreground *and* persistent, where a missing
-`description` marks the persistent one, plus `run_code` and `terminal_send`),
-`parseExitMarker` (the `[exit code: N]` / `[killed by signal: X]` contract
-`dsh-shell/render` owns, MIRRORED rather than imported exactly as the shipped
-terminal card does, and read only for a foreground shell - a persistent shell can
-report resets and partial output without any single exit status, so it claims
-none), `stripAnsi`, `formatDuration`, `filterActivity` (the filter is applied at
-render time, so changing it never re-reads the conversation) and
-`buildActivityFromEvents`. `activitySignature` is what makes the view affordable:
-the poll runs every few seconds and the log is append-only, so a signature over the
-seq of the events this view consumes changes only when something it DRAWS changed -
-otherwise a poll costs one idle request and no re-render.
-
-Every limit is drawn rather than smoothed over: output arrives at **settle**, not
-live (the harness has exactly two tool events and no output stream), a result
-whose `tool/call` is outside the tail is kept but names no tool and claims no exit
-status, older events outside the tail are named instead of paged, and
-`Run in Terminal` - which TYPES a command into your own shell without submitting
-it - is refused for a multi-line command, whose newlines would submit themselves as
-they were typed.
-
-**A row's status is drawn on the row itself (alpha.9).** The status used to be a
-rail on the LEFT of the block and only for a failure, so a command that succeeded -
-the overwhelmingly common row - drew nothing at all, and the line a reader actually
-scans (the clickable head that drops the output down) carried no mark of its own.
-Every row now wears the status colour on BOTH rails - green for `exit 0`, amber
-while running, red on a failure, a signal or an error - and its head wears a light
-`color-mix(..., transparent)` wash of the same colour. The tone is ONE custom
-property (`--dst-accent`) set per `data-status`, so the two rails, the wash and the
-status pill cannot drift apart, and the wash is mixed with `transparent` rather than
-with a surface colour, so it lightens a light theme, darkens a dark theme, and
-leaves the label's own themed colour alone.
-
-**What the checks pin.** `check-node-routes.mjs` drives the real protocol against
-a real PTY (`init` -> `ready` -> a command answered -> `kill`), proves a JSON line
-is shell input rather than a control frame, proves an unauthenticated upgrade is
-refused - skipping only the live part, loudly, on a host with no PTY - and drives
-the activity route against a stubbed live session: only the three event types the
-panel draws are sent, injected context and assistant streams are dropped, the
-answer is in log order, a conversation that is not open answers `NOT_LIVE`, an
-unreadable log answers `UNREADABLE`, a missing session id is a 400, and a
-conversation past the budget answers with its TAIL with `hasMore` set (including
-the single oversized newest command). `check-client-bundles.mjs` pins the bundle
-id, both seats, the order and the rendered markup, plus (alpha.7) that the switch
-is a MODE, that the bundle reads the route rather than the browser's session
-window, that the poll stops when nothing is subscribed and pauses in a hidden tab,
-(alpha.9) that the stylesheet carries the row's status dress - both rails, the tone
-in one property per `data-status`, and the head's wash - and then DRIVES the whole
-read model with hand-built session events (the executing-tool parse, the
-exit-marker contract, the fold's grouping and statuses, the signature) and RENDERS
-the view itself with a hand-built log, because the switch is off by default and a
-static render of the dock can never reach a row.
+**What it deliberately does not do.** It does not stream: the harness has exactly
+two tool events and no live output channel, so a command shows as `running` from
+the moment it is dispatched and its output lands in one shot at settle. A real
+"live stdout" feed would need a host-side tap on the shell executor *and* a socket
+— which is the shape alpha.12 just deleted, and not something to reintroduce for a
+view.
 
 ## 12. The installer
 
@@ -1575,17 +1502,13 @@ passes that through as the batch's own exit code).
 | The History tab says "git is not installed" | `git` is not on the **server's** `PATH` (the routes spawn it directly and report `GIT_MISSING`); install git on the host running `dsh web` |
 | The History list is empty although the repository has commits | the folder lives inside a repository whose root is higher up, so commits that never touch this folder are deliberately hidden; check `git log` in that folder |
 | No Terminal button in the conversation header | `dsh-terminal` is not mounted (a new package needs one install run: `scripts\install.bat` / `./scripts/install.sh`, or `-Force`), or the bundle did not activate - check the console for `[dsh-terminal]` |
-| The dock says "No terminal on this host" | the harness installation's `node-pty` could not be resolved from this process (`process.argv[1]`, `$DSH_HOME/profiles`, or beside the package); the dock's notice carries the reason, and `GET /api/dsh-terminal/health` reports `available:false` with it. The rest of the pack is unaffected |
+| The bar says the conversation's log cannot be read here | the conversation is not live on **this** host (a stored conversation answers `NOT_LIVE`), or the activity route is unreachable; the host's own reason is in the tooltip, and `GET /api/dsh-terminal/activity?session=<id>` reports it directly. The rest of the pack is unaffected |
 | The dock does not open, or opens at the wrong place | the frame it measures is gone: the dock positions itself from `[data-shell-overlay]`'s parent and that frame's resolved `gridTemplateColumns`, so a harness line that stops using grid columns for the layout needs §11 updated |
-| The terminal panel covers the conversation instead of pushing it up | the middle/right columns' inline `height: calc(100% - <dock>px)` was removed or overridden by something else writing their `style.height` |
+| The dock covers the conversation instead of pushing it up | the middle/right columns' inline `height: calc(100% - <dock>px)` was removed or overridden by something else writing their `style.height` |
 | Opening the dock moves the LEFT bar (its items slide up) | regression of alpha.1, where the room came from the frame's own height: the frame has ONE grid row shared with the left bar, so only the two columns the dock spans may be inset. The check `terminal never resizes the frame` pins this |
-| The terminal shows the wrong number of lines, or the newest output is out of view after a resize | the emulator was not re-fitted: a size change must recompute rows/cols from the new box, send `resize` to the PTY, and `scrollToBottom()`. Pinned by the check `terminal refits on resize and follows the end` |
 | The dock keeps the old left edge after collapsing/expanding the left bar | only the frame's `style` mutation was being watched. The left bar is ANIMATED (one grid rewrite, then a transition), so that mutation reports the pre-transition value and never fires again - the `ResizeObserver` on the two columns is what follows it. Pinned by the check `terminal tracks the animated left bar` |
-| The chip you just left keeps the selected dress after clicking another one | the pick went through `runtime.show()` alone, which writes `dock.active` into the store's map and bumps no revision, so React keeps the `data-active` it rendered last. Every pick must go through `selectSlot()` (store, then show, then `bump()`). Pinned by the check `terminal chip pick publishes to the store` |
-| Terminals past the right edge of the bar cannot be reached | `.dst-chips` went back to `overflow:hidden` (alpha.3), which also traps the `+` inside the clipped strip. It must be a horizontally scrolling box with the `+` outside it. Pinned by the checks `terminal chip strip scrolls instead of clipping` and `terminal strip arrows ride on measured overflow` |
+| The dock shows no commands although the agent ran some | the route answers the conversation's **tail** (at most 400 relevant events and roughly 512 KiB, newest kept) and its `hasMore` says older ones were left out. Sub-agent commands belong to the sub-agent's own session: the root `subagent` call is what appears here |
 | The left bar still shows the fish / "deepseek" wordmark | `dsh-themes` alpha.6 hides whatever occupies `sidebar.brand.mark` / `sidebar.brand.name` and draws the VN mark instead; confirm the served `dsh-themes` bundle prints alpha.6 and hard-refresh. If the sidebar's hashed classes changed in a harness bump, the rule (pinned to them) needs updating |
-| A terminal prints nothing after a page reload | the shell is kept only five minutes after its last socket (`DETACH_GRACE_MS`); past that it was reaped and the dock opens a NEW shell in the same folder |
-| The terminal's `Ctrl+C` copies instead of interrupting | it must not: `Ctrl+C` is SIGINT and clipboard is `Ctrl+Shift+C` (`Cmd+C` on macOS). A single-key difference here is a bug, not a preference |
 | Installer fails with `virtual-store-dir-max-length` | profile created by a different pnpm major; both halves read it from `node_modules/.modules.yaml` and auto-match - re-run the installer |
 | `-Target desktop` is rejected | intentional: DSH Desktop is no longer a target of this pack |
 | `.ps1` parse error after editing | non-ASCII character crept in (smart quotes/dash); keep scripts ASCII-only |
@@ -1604,7 +1527,7 @@ The pack's first **tool-owned** surface: the model writes a diagram with a tool,
 the host validates it, and the result is both a conversation card and a tab of
 its own. It is placed last here because it is the newest section, not because it
 runs last: it is an ordinary row beside the editor, the History tab and the
-terminal.
+agent-command dock.
 
 **What it is.** One row (`diagrams`), six tools (`diagram_write`,
 `diagram_patch`, `diagram_read`, `diagram_verify`, `diagram_publish`,
@@ -2222,8 +2145,10 @@ dependencies and every other Node half imports only `node:*` builtins: the profi
 installs each bundle as a live link into the repo, so a bare
 `import '@deepseek-ai/schemastery'` resolves from the repo folder and fails with
 `ERR_MODULE_NOT_FOUND` (measured). Declaring a `.volatile()` field needs a
-schemastery schema, so the module is loaded at runtime instead through the anchors
-`packages/dsh-terminal/lib/pty.js` established for the harness's own `node-pty`:
+schemastery schema, so the module is loaded at runtime instead through the package
+anchors this pack established for the harness's own out-of-tree resolution (they
+were first written for `dsh-terminal`'s `node-pty`, before alpha.12 deleted that
+PTY; `dsh-terminal` keeps the same anchor list today for the same reason):
 the running entry, then `$DSH_HOME/profiles`, which `dsh-app-boot` keeps as a
 mirror of the installation's dependency closure, so Node's ordinary parent walk
 finds the very same copy the harness loaded. The CJS build is what makes
@@ -2256,12 +2181,13 @@ recording keeps the previously known size and position and flips only the flag,
 because a maximized window reports the screen's size and recording it would lose
 the window worth un-maximizing to.
 
-**What is deliberately NOT remembered.** The terminal dock's **open** state: the
-panel is the window onto a PROCESS, and after a reload the client holds no slots,
-so reopening it would either show an empty panel or - once the server's five
-minute PTY retention has lapsed - start a shell nobody asked for. A height is a
-preference; "a shell was running" is not. The right bar's open tab is per
-conversation and belongs to the bar's own store; it is left for a later pass.
+**What is deliberately NOT remembered.** The dock's **open** state: the panel is a
+window onto a conversation, and after a reload the client holds none, so reopening
+it would show a panel nobody asked for. A height is a preference; "I was looking
+at the agent's commands" is a moment. (Through alpha.11 the same rule had a second,
+stronger reason - the panel held PTYs, so reopening it could have started a shell
+nobody asked for - and the reason outlived the shells.) The right bar's open tab is
+per conversation and belongs to the bar's own store; it is left for a later pass.
 
 ## 18. The media engine (dsh-media)
 

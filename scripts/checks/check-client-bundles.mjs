@@ -1768,7 +1768,10 @@ check('terminal button id', termSeats['conversation.session.header.utilities'].s
 check('terminal button order', termSeats['conversation.session.header.utilities'].spec.order, 30)
 check('terminal dock rides the overlay list', termSeats['shell.overlay'].spec.id, 'dsh-terminal')
 const termButtonMarkup = renderToStaticMarkup(h(termSeats['conversation.session.header.utilities'].component, { sessionId: 's1' }))
-check('terminal button renders', termButtonMarkup.includes('data-dsh-terminal-toggle') && termButtonMarkup.includes('aria-label="Terminal"'))
+check(
+  'terminal button renders',
+  termButtonMarkup.includes('data-dsh-terminal-toggle') && termButtonMarkup.includes('aria-label="The agent\u2019s commands"'),
+)
 check('terminal button reports its state', termButtonMarkup.includes('aria-pressed="false"'))
 // The dock is always mounted (so its effects own the geometry); `data-open` is
 // the intent flag and must be absent while it is closed.
@@ -1776,7 +1779,19 @@ const termDockMarkup = renderToStaticMarkup(h(termSeats['shell.overlay'].compone
 check('terminal dock renders closed', termDockMarkup.includes('data-dsh-terminal-dock') && termDockMarkup.includes('role="region"'))
 check('terminal dock closed by default', termDockMarkup.includes('data-open') === false)
 check('terminal dock draws the kit', termDockMarkup.includes('class="dst-grip"') && termDockMarkup.includes('class="dst-bar"'))
+// alpha.12: the dock draws ONE view and nothing else, and a static render can see
+// all of it - no chip strip, no "+", no Agent toggle (there is no second view to
+// toggle to), and no emulator host even before mount.
 check('terminal dock has no xterm before mount', termDockMarkup.includes('xterm') === false)
+check(
+  'terminal dock carries no chip strip and no add control',
+  termDockMarkup.includes('dst-chips') === false && termDockMarkup.includes('dst-chip') === false && termDockMarkup.includes('dst-nav') === false,
+)
+check('terminal dock has no view toggle any more', termDockMarkup.includes('dst-actToggle') === false)
+check(
+  'terminal dock names the Agent view and wears its state',
+  termDockMarkup.includes('>Agent<') && termDockMarkup.includes('data-state="idle"') && termDockMarkup.includes('class="dst-spacer"'),
+)
 // Two behaviours that only exist after mount, pinned at the source level because
 // a static render runs no effects:
 //
@@ -1784,14 +1799,11 @@ check('terminal dock has no xterm before mount', termDockMarkup.includes('xterm'
 //     the frame instead shortens its single grid row, which shortens the left bar
 //     too - its content visibly slid up the moment the dock opened (alpha.1), and
 //     the left bar must look exactly the same with the dock open;
-//  2. resizing the panel must re-fit the emulator (rows/cols) and leave the view
-//     on the END of the output, or the panel keeps the old line count with the
-//     newest lines out of sight.
+//  2. the panel IS the body, so nothing about it depends on a second view.
 const termSource = readFileSync(path.join(repo, 'packages/dsh-terminal/lib/client.js'), 'utf8')
 check('terminal never resizes the frame', /frame(El)?\.style\.height\s*=/.test(termSource), false)
 check('terminal insets the two columns it spans', termSource.includes('previousElementSibling') && termSource.includes('frame.children[0]'))
 check('terminal gives room by column height', termSource.includes("'calc(100% - ' + String(dock.height) + 'px)'"))
-check('terminal refits on resize and follows the end', termSource.includes('refit()') && termSource.includes('scrollToBottom()'))
 //  3. the LEFT BAR is animated: collapsing it rewrites the grid tracks once and
 //     then transitions them, so a MutationObserver on that write reads the
 //     PRE-transition value and is never called again - the dock stood at the old
@@ -1817,9 +1829,9 @@ check(
 //  dock's rect (the grip moves as the dock moves, so a handler that measured it
 //  would chase itself); moves coalesce to one per animation frame; the drag
 //  closes on `pointercancel` as well as `pointerup`, because a cancelled drag
-//  used to leave its listeners attached and the dock still following the mouse;
-//  and the PTY hears a size at most every SIZE_WIRE_MS, since every size message
-//  makes the shell redraw its prompt (~60 a second at one per frame).
+//  used to leave its listeners attached and the dock still following the mouse.
+//  alpha.12 removed the third rule it used to assert here - the PTY size message
+//  it throttled - because there is no shell to size any more.
 check(
   'terminal drag is frame-coalesced, capturable and cancellable',
   termSource.includes('requestAnimationFrame(apply)') &&
@@ -1829,66 +1841,28 @@ check(
     termCss.includes('body.dst-dragging{'),
 )
 check(
-  'terminal throttles the PTY size message and settles it on release',
-  termSource.includes('const SIZE_WIRE_MS = 120') &&
-    termSource.includes('this.sendSize(entry, false)') &&
-    termSource.includes('sendSize(entry, true)') &&
-    termSource.includes('runtime.settle()'),
+  'terminal settles the HEIGHT on release and sizes nothing',
+  termSource.includes('flushSharedHeight()') &&
+    termSource.includes('runtime.settle()') === false &&
+    termSource.includes('SIZE_WIRE_MS') === false,
 )
-//  4. the bar's chip strip (alpha.4). Two behaviours, both only visible in a live
-//     document, so both are pinned at the source level:
-//
-//     a. picking a chip must PUBLISH the pick. `runtime.show()` writes
-//        `dock.active` straight into the store's map and re-fits the emulator
-//        but never bumps the revision, so routing the click through it alone
-//        left `data-active` on the chip the reader had just left - the terminal
-//        being shown changed and the highlight did not;
-//     b. the strip must SCROLL sideways rather than clip (`overflow:hidden` cut
-//        the chips off with no way to reach them), the `+` must sit outside it,
-//        the arrows must be gated on real overflow, and the wheel listener must
-//        be native and non-passive or its `preventDefault()` is a no-op.
+// alpha.12: THE TERMINAL HALF IS GONE, and it is gone from this bundle rather
+// than merely hidden. Each of these was a real mechanism through alpha.11 - a
+// socket, a vendored engine, an emulator registry, a sentinel view index, a
+// second column of UI - and 0.2's right Sidebar ships terminal tabs of its own,
+// so their return would be a regression rather than a feature.
 check(
-  'terminal chip pick publishes to the store',
-  // alpha.7 moved the write into `selectView` (the activity view is a VIEW, not
-  // a slot, so picking one has to record the view and the terminal it left) -
-  // the invariant is unchanged: the store is written AND the revision bumps, and
-  // `selectSlot` is the only path either way.
-  /function selectView\(sessionId, view\)[\s\S]*?dock\.active\.set\(sessionId, view\)[\s\S]*?bump\(\)[\s\S]{0,40}?\}/.test(
-    termSource,
-  ) && /const selectSlot = useCallback\([\s\S]*?selectView\(sessionId, index\)[\s\S]*?runtime\.show\(index\)/.test(termSource),
+  'terminal half is gone from the browser bundle',
+  termSource.includes('new WebSocket(') === false &&
+    termSource.includes('DSHTerminal') === false &&
+    termSource.includes('/api/dsh-terminal/pty') === false &&
+    termSource.includes('revealDelta') === false &&
+    termSource.includes('ACTIVITY_VIEW') === false &&
+    termSource.includes('DockRuntime') === false &&
+    termSource.includes('onRunInTerminal') === false &&
+    termSource.includes('MAX_TERMINALS') === false &&
+    termSource.includes('dst-chips') === false,
 )
-check('terminal bar draws through selectSlot', termSource.includes('onClick: () => selectSlot(slot.index)'))
-check(
-  'terminal chip strip scrolls instead of clipping',
-  termCss.includes('.dst-chips{flex:1;min-width:0;display:flex;align-items:center;gap:4px;overflow-x:auto;overflow-y:hidden'),
-)
-check(
-  'terminal strip arrows ride on measured overflow',
-  termSource.includes("setChipNav") &&
-    termSource.includes("chipNav.over") &&
-    termSource.includes("'aria-label': 'Scroll the terminals left'") &&
-    termSource.includes("'aria-label': 'Scroll the terminals right'"),
-)
-check(
-  'terminal wheel listener is native and non-passive',
-  /chipsRef[\s\S]*addEventListener\('wheel', onWheel, \{ passive: false \}\)/.test(termSource),
-)
-check(
-  'terminal shows the active chip',
-  termSource.includes('chipRefs.current.get(active)') && termSource.includes('revealDelta(boxRect, chipRect)'),
-)
-// The one piece of the strip a static render cannot exercise: the scroll it takes
-// to reveal a chip. Wrong signs here are the classic scroll-into-view bug (the
-// strip runs further away from the chip it was asked to show), so the arithmetic
-// is driven directly.
-const reveal = terminal.exports.__internals.revealDelta
-const strip = { left: 100, right: 400 }
-check('terminal reveal: a chip on the left pulls back', reveal(strip, { left: 40, right: 140 }), -68)
-check('terminal reveal: a chip on the right pushes on', reveal(strip, { left: 380, right: 480 }), 88)
-check('terminal reveal: a chip already inside does not move', reveal(strip, { left: 120, right: 300 }), 0)
-check('terminal reveal: a chip just inside the edge stays put', reveal(strip, { left: 108, right: 392 }), 0)
-check('terminal reveal: a chip flush with the left edge stays put', reveal(strip, { left: 100, right: 120 }), 0)
-check('terminal reveal: no margin means no air', reveal(strip, { left: 60, right: 120 }, 0), -40)
 // alpha.6: the shared section may only move the dock when the value is NEWS. The
 // dock's height rides a queued, non-optimistic wire write, and the scope
 // re-announces on every accepted view, so an accept handler that re-adopts the
@@ -1908,38 +1882,29 @@ check('terminal adopt: a height already in force moves nothing', adopt({ shared:
 check('terminal adopt: an unready section waits', adopt({ ready: false }), null)
 check('terminal adopt: an absent value is not a height of zero', adopt({ shared: null }), null)
 check('terminal adopt: another window still moves the dock', adopt({ shared: 350, known: 400, current: 280 }), 350)
-check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.11'))
+check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.12'))
 
-// ------------------------------------------------- the agent's own terminal use
-// alpha.7. The dock's second view is a TRANSCRIPT of what the conversation
-// recorded, read from the session's own durable event window through the
-// client's `sessions` service. Everything it claims is arithmetic over that log,
-// so the arithmetic is driven here with hand-built events - the shapes are the
-// ones the harness's own assembler reads (`event.data.message.content[0]` for a
+// ------------------------------------------------------ the agent's own commands
+// The panel is a TRANSCRIPT of what the conversation recorded, read from this
+// package's own host route. Everything it claims is arithmetic over that log, so
+// the arithmetic is driven below with hand-built events - the shapes are the ones
+// the harness's own assembler reads (`event.data.message.content[0]` for a
 // result, `event.data.source.kind === 'user'` for a prompt).
 //
-// The Agent log has ONE control (alpha.10): the button in the dock's bar, which
-// is a TOGGLE between the two views and wears the log's own state. Alpha.7 also
-// put an `Agent` chip at the head of the strip, and that second affordance read
-// as the button having opened a second tab - so the chip is gone, and the state
-// it carried (the running pulse, the failure count, the unreadable warning) is
-// worn by the button instead. The switch is still off by default.
+// alpha.12 removed the view TOGGLE: with the terminals gone there is one view, so
+// the state a button used to wear (the running pulse, the failure count, the
+// unreadable warning) is the bar's own brand and facts line.
 check(
-  'terminal dock offers the agent switch',
-  termDockMarkup.includes('data-dsh-terminal-activity') && termDockMarkup.includes('aria-pressed="false"'),
-)
-check('terminal strip never carries an Agent chip', termSource.includes('dst-chipAct') === false)
-check(
-  'terminal activity button is a toggle wearing the log state',
-  termCss.includes('.dst-actToggle[data-on]{') &&
-    termCss.includes('.dst-actToggle[data-state=warning]') &&
-    termCss.includes('.dst-warn{') &&
-    termSource.includes('const showActivityView = active === ACTIVITY_VIEW') &&
-    termSource.includes('rememberActivity(sessionId, view === ACTIVITY_VIEW)') &&
+  'terminal bar wears the log state without a toggle',
+  termCss.includes('.dst-warn{') &&
+    termCss.includes('.dst-pulse{') &&
+    termCss.includes('.dst-badge{') &&
     termSource.includes('activityUnreadable') &&
-    termSource.includes('activityFactsTitle(activity)'),
+    termSource.includes('activityFactsTitle(activity)') &&
+    termSource.includes("'data-state': activityTone") &&
+    termSource.includes('const showActivityView') === false,
 )
-// alpha.11: the counts the toggle's badge and the header dot are made of are the
+// alpha.11: the counts the bar's badge and the header dot are made of are the
 // COMMANDS' (the fold decides that, below), and the view's own facts line adds the
 // other family's running/failed rows back only while "All tools" can DRAW them.
 check(
@@ -1983,11 +1948,11 @@ check(
     termCss.includes('.dst-headDot{') &&
     termCss.includes('.dst-headDot[data-state=running]{'),
 )
-// The read moved to the HOST: a browser-side session window has to be STAGED
+// The read lives on the HOST: a browser-side session window has to be STAGED
 // first, which is exactly what left the panel on "Reading the conversation..."
-// until something else moved the session along. The client's job is now: ask
-// this package's own read-only route for a filtered tail, fold it with the pure
-// fold below, and stop asking when nobody is watching or the tab is hidden.
+// until something else moved the session along. The client's job is: ask this
+// package's own read-only route for a filtered tail, fold it with the pure fold
+// below, and stop asking when nobody is watching or the tab is hidden.
 check(
   'terminal reads the conversation from its own route',
   termSource.includes("const ACTIVITY_ROUTE = '/api/dsh-terminal/activity'") &&
@@ -2029,19 +1994,6 @@ check(
   /function adoptSession\(sessionId\)[\s\S]*?if \(dock\.sessionId === null \|\| dock\.sessionId === sessionId\) return[\s\S]*?dock\.open = false\n\s*dock\.sessionId = null\n\s*bump\(\)/.test(
     termSource,
   ),
-)
-check(
-  'terminal keeps the activity view when a chip is killed',
-  termSource.includes('if (dock.active.get(sessionId) !== ACTIVITY_VIEW)'),
-)
-// "Run in Terminal" TYPES a command into the panel's shell without submitting
-// it, so it must never be offered for a multi-line command: the newlines would
-// be submitted the moment they were typed.
-check(
-  'terminal run-in-terminal types without submitting',
-  termSource.includes('const canRun = canRunInTerminal && entry.command !== \'\' && !multiLine') &&
-    termSource.includes('entry.ws.send(text)') &&
-    termSource.includes('const text = String(command)'),
 )
 
 const { parseExecCall, parseExitMarker, stripAnsi, buildActivityFromEvents, activitySignature, filterActivity, formatDuration, activityFactsTitle } =
@@ -2125,12 +2077,12 @@ check('activity: a failed command still counts', activityModel.counts.failed, 1)
 check(
   'activity: the tooltip counts commands, not every tool',
   activityFactsTitle(nonCommandModel),
-  'The agent\u2019s own terminal use in this conversation: 0 commands, nothing run yet',
+  'The agent\u2019s own commands in this conversation: 0 commands, nothing run yet',
 )
 check(
   'activity: the tooltip reports what the commands did',
   activityFactsTitle(activityModel),
-  'The agent\u2019s own terminal use in this conversation: 2 commands, 1 running, 1 failed',
+  'The agent\u2019s own commands in this conversation: 2 commands, 1 running, 1 failed',
 )
 const pagedOut = buildActivityFromEvents([resultEvent(9, 'gone', 'out\n[exit code: 0]')])
 check('activity: a result whose call was paged out is kept', pagedOut.groups[0].commands.length, 1)
@@ -2213,10 +2165,23 @@ check(
   'activity view: long output is clamped with a way to see it',
   activityViewMarkup.includes('Show all 20 lines') && activityViewMarkup.includes('line 12') && activityViewMarkup.includes('line 13') === false,
 )
-check('activity view: the actions draw', activityViewMarkup.includes('Copy command') && activityViewMarkup.includes('Copy output') && activityViewMarkup.includes('Run in Terminal'))
+// alpha.12: the row offers copying and NOTHING that runs. "Run in Terminal" typed
+// a command into a PTY this package owned; with the terminals gone there is no
+// shell of ours to type into.
+check(
+  'activity view: the actions draw, and none of them runs anything',
+  activityViewMarkup.includes('Copy command') &&
+    activityViewMarkup.includes('Copy output') &&
+    activityViewMarkup.includes('Run in Terminal') === false,
+)
 check('activity view: the filters draw', activityViewMarkup.includes('>Commands<') && activityViewMarkup.includes('>Failures<'))
 const activityMultiLineMarkup = renderActivityView([callEvent(1, 'm1', 'npm run a\nnpm run b'), resultEvent(2, 'm1', 'ok\n[exit code: 0]')])
-check('activity view: a multi-line command offers no Run in Terminal', activityMultiLineMarkup.includes('multi-line') && activityMultiLineMarkup.includes('Run in Terminal') === false)
+// A multi-line command is drawn like any other now: the `multi-line` note existed
+// only to explain why Run in Terminal was withheld, and there is nothing to withhold.
+check(
+  'activity view: a multi-line command is drawn like any other',
+  activityMultiLineMarkup.includes('multi-line') === false && activityMultiLineMarkup.includes('Run in Terminal') === false,
+)
 const activityRunningMarkup = renderActivityView([callEvent(1, 'r1', 'sleep 30')])
 check('activity view: a running command says so', activityRunningMarkup.includes('>running<') && activityRunningMarkup.includes('Running'))
 const activityUnavailableMarkup = renderToStaticMarkup(

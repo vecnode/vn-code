@@ -151,10 +151,11 @@ map because "where did my file go" is the same question:
 | **Temp / scratch** | `os.tmpdir()`; the distributer uses a private temp dir under it, and `dsh-pdf` rasterizes into one | `-Verify`, `pdf_render`, TikZ compiles |
 | **Chrome** (browser launcher only) | `Chrome` on `PATH` → the standard install folders → the `App Paths` registry entry; `open -a "Google Chrome"`; `google-chrome` / `chromium`; the platform default last | `scripts/run-web.sh` / `scripts/run-web.ps1` |
 
-`dsh-terminal` resolves a shell per host (`pwsh.exe` else `powershell.exe`;
-`$SHELL` else `/bin/zsh` else `/bin/bash`) and inherits its cwd, and the editor,
-git tree and terminal all resolve the **workspace folder** out of the session —
-those are user paths, read not owned, so they are not on this map.
+The editor and the git tree resolve the **workspace folder** out of the session,
+and so did `dsh-terminal`'s PTY while it had one — those are user paths, read not
+owned, so they are not on this map. `dsh-terminal` alpha.12 removed the PTY (and
+with it the pack's only per-OS shell resolver: every plugin here is now
+OS-neutral, and the only per-OS code left is a launcher choosing the host command).
 
 ---
 

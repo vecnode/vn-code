@@ -349,7 +349,7 @@ check_sentinels() {
     packages/dsh-vn-master/cordis.patch.yml \
     packages/dsh-rightbar/lib/client.js \
     packages/dsh-editor/lib/vendor/cm6.min.js \
-    packages/dsh-terminal/lib/vendor/xterm.js \
+    packages/dsh-terminal/lib/client.js \
     packages/dsh-diagrams/lib/vendor/mermaid.min.js \
     packages/dsh-pdf/lib/vendor/pdf.min.mjs \
     packages/dsh-pdf/skills/pdf-analysis/SKILL.md; do

@@ -1,12 +1,17 @@
 # dsh-terminal bundle layer (alpha).
 #
-# One extra row owns the terminal dock: its Node half registers the
-# authenticated /api/dsh-terminal routes (the vendored xterm assets, a health
-# probe, and - alpha.7 - a READ-ONLY /activity route serving the tail of a
-# conversation's command-relevant session events) plus ONE WebSocket upgrade
-# route, /api/dsh-terminal/pty, which attaches a browser xterm to a real PTY.
-# The browser half contributes the header button that opens the dock and the
-# Agent view that folds those events.
+# One extra row owns the agent-activity dock. Its Node half registers ONE
+# read-only route, /api/dsh-terminal/activity, which serves the tail of a
+# conversation's command-relevant session events; its browser half contributes
+# the header button that opens the dock and the view that folds those events.
+#
+# It USED to own a good deal more, and alpha.12 deleted it: a real PTY per dock
+# slot, the authenticated WebSocket upgrade /api/dsh-terminal/pty that attached a
+# browser xterm to it, the vendored xterm.js assets on two /vendor routes, and a
+# /health probe. 0.2's right Sidebar ships terminal TABS of its own
+# (@deepseek-ai/dsh-client-ui-sidebar-terminal), so the pack no longer spawns a
+# shell at all - this row reads a log and nothing else, and `connection` is the
+# only capability it injects.
 #
 # Nothing shipped is patched and no core row is disabled: this package adds
 # surface, it replaces nothing, so there is no `disabled: true` here and nothing

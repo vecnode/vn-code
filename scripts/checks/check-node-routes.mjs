@@ -12,7 +12,6 @@ export {} // (kept import-free: this file is ESM for the dynamic import below)
 
 const { promises: fsp } = await import('node:fs')
 const { existsSync, readdirSync, readFileSync } = await import('node:fs')
-const { createRequire } = await import('node:module')
 const os = await import('node:os')
 const path = (await import('node:path')).default
 const { pathToFileURL, fileURLToPath } = await import('node:url')
@@ -368,12 +367,12 @@ if (!hasGit) {
 }
 
 // ------------------------------------------------------------ dsh-terminal
-// The terminal's Node half is three HTTP routes and ONE WebSocket upgrade. The
-// HTTP ones are driven directly; the upgrade is driven over a real socket
-// against a real PTY, because the contract under test is the wire protocol
-// (init -> ready -> output -> kill) and the authentication gate in front of it.
-// `ws` and `node-pty` both come from the harness's own installation, so the
-// live part is skipped (loudly) where they are not resolvable.
+// The terminal's Node half is ONE read-only route. alpha.12 deleted the rest -
+// the PTY host, the authenticated WebSocket upgrade, the vendored xterm assets
+// and the /health probe - so this block drives the route it still owns AND
+// asserts that the deleted half is really gone. A `webServer` service is handed
+// over on purpose: "no upgrade was registered" is then an observation about this
+// row rather than a capability the check withheld.
 /** Every node_modules root a harness install can live in: the profile closure, then the npm caches. */
 function harnessRoots() {
   const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
@@ -387,23 +386,10 @@ function harnessRoots() {
   return roots
 }
 
-/** Resolve one package from the profile closure or the npm caches. */
-function loadFromHarness(name) {
-  for (const root of harnessRoots()) {
-    try {
-      return createRequire(path.join(root, 'index.js'))(name)
-    } catch (err) {
-      /* try the next root */
-    }
-  }
-  return null
-}
-
 {
   const terminalModule = path.join(repo, 'packages/dsh-terminal/lib/index.js')
-  const termCwd = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-terminal-check-'))
   const routeHandlers = new Map()
-  let upgradeRoute = null
+  let upgrades = 0
   const termModule = await import(pathToFileURL(terminalModule).href)
   // One live session double per conversation the activity route is driven with.
   // `snapshotEvents` is what the harness's own Session exposes (the whole
@@ -436,13 +422,12 @@ function loadFromHarness(name) {
     })
   }
   const hugeEvents = [{ type: 'tool/result', seq: 1, time: 1, data: { turn: 1, step: 1, message: { id: 'r', role: 'user', source: { kind: 'tool', callId: 'huge' }, content: [{ type: 'tool-result', toolCallId: 'huge', content: [{ type: 'text', text: 'x'.repeat(600 * 1024) }] }] } } }]
-  const brokenEvents = []
   const liveSessions = {
-    'session-term': { header: { cwd: termCwd }, snapshotEvents: () => actEvents },
-    'session-big': { header: { cwd: termCwd }, snapshotEvents: () => bigEvents },
-    'session-huge': { header: { cwd: termCwd }, snapshotEvents: () => hugeEvents },
+    'session-term': { header: { cwd: '/tmp/dsh-terminal-check' }, snapshotEvents: () => actEvents },
+    'session-big': { header: { cwd: '/tmp/dsh-terminal-check' }, snapshotEvents: () => bigEvents },
+    'session-huge': { header: { cwd: '/tmp/dsh-terminal-check' }, snapshotEvents: () => hugeEvents },
     'session-broken': {
-      header: { cwd: termCwd },
+      header: { cwd: '/tmp/dsh-terminal-check' },
       snapshotEvents: () => {
         throw new Error('unreadable')
       },
@@ -461,13 +446,15 @@ function loadFromHarness(name) {
               return () => {}
             },
           },
-          requestRejection: (req) => (req.headers['x-check-unauthenticated'] === '1' ? 401 : undefined),
+          // The two-step gate the REMOVED upgrade used to run through. It is
+          // offered, and it must never be reached: there is no socket any more.
+          requestRejection: () => 401,
         }
       }
       if (name === 'webServer') {
         return {
-          registerUpgrade(route) {
-            upgradeRoute = route
+          registerUpgrade() {
+            upgrades += 1
             return () => {}
           },
         }
@@ -477,30 +464,21 @@ function loadFromHarness(name) {
     },
   })
   check(
-    'terminal: routes registered',
+    'terminal: exactly ONE route is registered',
     [...routeHandlers.keys()].sort().join(','),
-    '/api/dsh-terminal/activity,/api/dsh-terminal/health,/api/dsh-terminal/vendor/xterm.css,/api/dsh-terminal/vendor/xterm.js',
+    '/api/dsh-terminal/activity',
   )
-  check('terminal: upgrade registered', upgradeRoute !== null && upgradeRoute.path, '/api/dsh-terminal/pty')
-  const health = await routeHandlers.get('/api/dsh-terminal/health')(new Request('http://x/api/dsh-terminal/health?session=session-term'))
-  const healthBody = await health.json()
-  check('terminal: health answers', health.status, 200)
-  check('terminal: health names the host platform', healthBody.platform, process.platform)
-  check('terminal: health reports capacity', healthBody.available === true ? healthBody.capacity > 0 : typeof healthBody.reason === 'string', true)
-  const vendorJs = await routeHandlers.get('/api/dsh-terminal/vendor/xterm.js')(new Request('http://x/api/dsh-terminal/vendor/xterm.js'))
-  const jsBytes = Buffer.from(await vendorJs.arrayBuffer())
-  check('terminal: serves the vendored engine', vendorJs.status === 200 && jsBytes.length > 100000, true)
-  check('terminal: engine content type', vendorJs.headers.get('content-type'), 'text/javascript; charset=utf-8')
-  const etag = vendorJs.headers.get('etag')
-  const cached = await routeHandlers.get('/api/dsh-terminal/vendor/xterm.js')(new Request('http://x/api/dsh-terminal/vendor/xterm.js', { headers: { 'if-none-match': etag } }))
-  check('terminal: engine is etag-cached', cached.status, 304)
-  const vendorCss = await routeHandlers.get('/api/dsh-terminal/vendor/xterm.css')(new Request('http://x/api/dsh-terminal/vendor/xterm.css'))
-  const cssText = await vendorCss.text()
-  check('terminal: serves the xterm stylesheet', vendorCss.status === 200 && cssText.includes('.xterm-viewport'), true)
+  check('terminal: no WebSocket upgrade is registered', upgrades, 0)
+  check('terminal: the health probe is gone', routeHandlers.has('/api/dsh-terminal/health'), false)
+  check(
+    'terminal: the vendored xterm routes are gone',
+    routeHandlers.has('/api/dsh-terminal/vendor/xterm.js') || routeHandlers.has('/api/dsh-terminal/vendor/xterm.css'),
+    false,
+  )
 
-  // The agent view's read (alpha.7). It reads the HOST's copy of the
-  // conversation log, which is what makes the panel work the moment the app
-  // opens instead of waiting for a browser to stage the conversation.
+  // The panel's read. It reads the HOST's copy of the conversation log, which is
+  // what makes the panel work the moment the app opens instead of waiting for a
+  // browser to stage the conversation.
   const activityCall = (query) => routeHandlers.get('/api/dsh-terminal/activity')(new Request('http://x/api/dsh-terminal/activity' + query))
   const activityRes = await activityCall('?session=session-term')
   const activityBody = await activityRes.json()
@@ -530,123 +508,6 @@ function loadFromHarness(name) {
   const hugeRes = await activityCall('?session=session-huge')
   const hugeBody = await hugeRes.json()
   check('terminal: activity keeps an oversized newest command', hugeBody.entries.length, 1)
-
-  const WebSocket = loadFromHarness('ws')
-  if (healthBody.available !== true || WebSocket === null) {
-    console.log('skip dsh-terminal live socket       (' + (healthBody.available !== true ? 'no PTY on this host' : 'ws is not resolvable') + ')')
-  } else {
-    const { createServer } = await import('node:http')
-    const server = createServer((req, res) => {
-      const handler = routeHandlers.get(new URL(req.url, 'http://x').pathname)
-      if (handler) {
-        void Promise.resolve(handler(new Request(new URL(req.url, 'http://127.0.0.1').href, { method: req.method, headers: req.headers }))).then(async (response) => {
-          res.writeHead(response.status, Object.fromEntries(response.headers))
-          res.end(Buffer.from(await response.arrayBuffer()))
-        })
-        return
-      }
-      res.writeHead(404).end('no')
-    })
-    server.on('upgrade', (req, socket, head) => {
-      if (upgradeRoute !== null && new URL(req.url, 'http://x').pathname === upgradeRoute.path) {
-        void upgradeRoute.handler(req, socket, head)
-        return
-      }
-      socket.destroy()
-    })
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-    const port = server.address().port
-    const wsUrl = 'ws://127.0.0.1:' + String(port) + '/api/dsh-terminal/pty'
-    const socket = new WebSocket(wsUrl)
-    const output = []
-    let ready = null
-    let closed = null
-    socket.on('message', (raw) => {
-      const text = String(raw)
-      if (text.charCodeAt(0) === 0) {
-        const message = JSON.parse(text.slice(1))
-        if (message.t === 'ready') ready = message
-        if (message.t === 'closed') closed = message.reason
-        return
-      }
-      output.push(text)
-    })
-    await new Promise((resolve, reject) => {
-      socket.on('open', resolve)
-      socket.on('error', reject)
-    })
-    socket.send('\u0000' + JSON.stringify({ t: 'init', session: 'session-term', slot: 0, cols: 90, rows: 24 }))
-    const waitFor = async (predicate, ms) => {
-      const started = Date.now()
-      while (!predicate()) {
-        if (Date.now() - started > ms) return false
-        await new Promise((resolve) => setTimeout(resolve, 25))
-      }
-      return true
-    }
-    check('terminal: ready frame arrives', await waitFor(() => ready !== null, 20000))
-    check('terminal: ready names the shell', typeof (ready && ready.shell) === 'string' && ready.shell.length > 0, true)
-    check('terminal: ready carries the session cwd', ready !== null && path.resolve(ready.cwd) === path.resolve(termCwd), true)
-    check('terminal: ready reports the size', ready !== null && ready.cols + 'x' + ready.rows, '90x24')
-    check('terminal: ready pid is null or a number', ready !== null && (ready.pid === null || typeof ready.pid === 'number'), true)
-    // A real command through a real shell: this is the whole feature in one line.
-    socket.send(process.platform === 'win32' ? 'Write-Output DSH_TERM_CHECK_$((2+5))\r' : 'echo DSH_TERM_CHECK_$((2+5))\n')
-    check('terminal: the shell answered', await waitFor(() => output.join('').includes('DSH_TERM_CHECK_7'), 30000))
-    socket.send('\u0000' + JSON.stringify({ t: 'kill' }))
-    check('terminal: kill is honoured', await waitFor(() => closed !== null, 15000))
-    socket.close()
-    // A shell's own JSON must never be mistaken for a control frame.
-    const plain = new WebSocket(wsUrl)
-    let plainReady = false
-    const echo = []
-    plain.on('message', (raw) => {
-      const text = String(raw)
-      if (text.charCodeAt(0) === 0) {
-        if (JSON.parse(text.slice(1)).t === 'ready') plainReady = true
-        return
-      }
-      echo.push(text)
-    })
-    await new Promise((resolve, reject) => {
-      plain.on('open', resolve)
-      plain.on('error', reject)
-    })
-    plain.send('\u0000' + JSON.stringify({ t: 'init', session: 'session-term', slot: 1, cols: 90, rows: 24 }))
-    await waitFor(() => plainReady, 20000)
-    const json = '{"t":"not-a-control-frame","ok":true}'
-    plain.send(process.platform === 'win32' ? "Write-Output '" + json + "'\r" : "echo '" + json + "'\n")
-    check('terminal: a JSON line is shell input, not a frame', await waitFor(() => echo.join('').includes('not-a-control-frame'), 30000))
-    let plainClosed = false
-    plain.on('message', (raw) => {
-      const text = String(raw)
-      if (text.charCodeAt(0) === 0 && JSON.parse(text.slice(1)).t === 'closed') plainClosed = true
-    })
-    plain.send('\u0000' + JSON.stringify({ t: 'kill' }))
-    await waitFor(() => plainClosed, 15000)
-    plain.close()
-    // The authentication gate runs before ws takes the socket.
-    const unauthenticated = await new Promise((resolve) => {
-      const client = new WebSocket(wsUrl, { headers: { 'x-check-unauthenticated': '1' } })
-      client.on('unexpected-response', (req, response) => resolve(response.statusCode))
-      client.on('error', () => resolve(0))
-      client.on('open', () => {
-        client.close()
-        resolve(200)
-      })
-    })
-    check('terminal: unauthenticated upgrade is refused', unauthenticated, 401)
-    server.close()
-  }
-  // The scratch folder was two shells' cwd: on Windows a process that has not
-  // finished exiting keeps it busy, which must never fail the check.
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    try {
-      await fsp.rm(termCwd, { recursive: true, force: true })
-      break
-    } catch (err) {
-      await new Promise((resolve) => setTimeout(resolve, 250))
-    }
-  }
 }
 
 // --------------------------------------------------------------- dsh-themes

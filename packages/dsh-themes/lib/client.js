@@ -59,9 +59,9 @@
  *    the machine running the app. The capture itself can only happen in this
  *    page: `getDisplayMedia` asks the browser for the current tab's own surface,
  *    one frame is drawn into a canvas and encoded as a PNG. Real pixels, so what
- *    the app draws with canvas (the terminal dock's xterm surface), with
- *    compositor effects or inside an open dialog is in the picture - which is
- *    why this is used instead of a DOM-to-canvas library.
+ *    the app draws with canvas, with compositor effects or inside an open dialog
+ *    is in the picture - which is why this is used instead of a DOM-to-canvas
+ *    library.
  *
  *    The FILE does not go through the browser's downloads: the PNG is POSTed to
  *    this package's own host route (`/api/dsh-themes/screenshot`), which writes
@@ -1914,8 +1914,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     //
     // WHY THE BROWSER TAKES THE PICTURE. Only the page can photograph itself in
     // real pixels. A DOM-to-canvas render would have to stand in for the engine
-    // (the terminal dock is an xterm canvas, dialogs and menus are portalled, the
-    // app paints itself from layers of hashed stylesheets), and a headless browser
+    // (dialogs and menus are portalled, the app paints itself from layers of
+    // hashed stylesheets), and a headless browser
     // pointed at the same URL would photograph a FRESH load - the open tab, the
     // editor buffer and the dock are THIS client's state, not the server's.
     // `getDisplayMedia` with `preferCurrentTab` is the one API that hands the page

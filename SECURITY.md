@@ -49,8 +49,10 @@ is in the state you think it is.
   `latest`.
 - **Zero npm dependencies.** No shipped package declares a runtime dependency, so
   installing the pack installs nothing new. The engines it needs are either
-  vendored files in this repo (Mermaid, CodeMirror, pdf.js, xterm.js) or resolved
-  from the harness installation already on disk (`node-pty`, `ws`).
+  vendored files in this repo (Mermaid, CodeMirror, pdf.js) or resolved from the
+  harness installation already on disk. (Terminal alpha.12 removed the last one
+  that was resolved rather than vendored — `node-pty` and `ws`, for the dock's own
+  PTY — and the xterm.js entry with it: the dock is a read-only transcript now.)
 - **No network egress of its own.** No plugin in this pack makes an outbound
   request: the TeX engine runs with auto-install disabled, `tectonic` is refused
   as an engine precisely because it downloads packages, and there is no
@@ -188,9 +190,11 @@ routes behind it*.
 
 Everything the pack adds hangs off layer 4: its HTTP routes go through
 `connection.fetch.register` on the shared `/api` channel (which applies
-`requestRejection` before the handler runs), and its one WebSocket upgrade
-(`/api/dsh-terminal/pty`) calls `connection.requestRejection` itself and writes a
-bare `401`/`403` into the socket **before** `ws` ever sees it.
+`requestRejection` before the handler runs), and it registers **no WebSocket
+upgrade at all** — terminal alpha.12 deleted the only one this pack ever had
+(`/api/dsh-terminal/pty`, which called `connection.requestRejection` itself and
+wrote a bare `401`/`403` into the socket before `ws` saw it). Nothing in this pack
+opens a raw socket today.
 
 A sixth, quieter layer protects the credentials store: the browser-session
 signing secret lives in `$DSH_HOME/.credentials.yaml`, which the provider writes
@@ -334,7 +338,7 @@ including delete is a POST).
 | `GET/HEAD /api/dsh-pdf/state\|health`, `GET/HEAD /api/dsh-pdf/file`, `GET/HEAD /api/dsh-pdf/list`, `POST /api/dsh-pdf/scan`, `GET/HEAD /api/dsh-pdf/vendor/*`, plus the five `pdf_*` tools and the bundled `pdf-analysis` skill | read a document's facts and text, **scan** the pages that are a picture of text, serve the vendored pdf.js engine, list the workspace's PDFs, and show a PDF in the reader tab | **read-only** - no tool modifies, merges, splits, rotates, fills or signs a document; extraction runs in a child process (argv only, a 25 s deadline, a 512 MiB heap cap, an 8 MiB stdout cap) that gates the parser itself (`isEvalSupported:false` - a document's embedded JavaScript is never evaluated - `useWorkerFetch:false` with no URL fetching anywhere, `enableXfa:false`, `useSystemFonts:false`); a session-relative path is realpath-checked to stay inside the workspace (a symlink out is refused) while an absolute path is read directly, and either way the target must be a regular `.pdf` within the ceiling (512 MiB for the tools, 256 MiB for the tab); `pdf_render` writes only NEW PNGs, create-exclusively, under a host-generated name in a caller-named directory; the optional rasterizer (`pdftoppm`/`mutool`/Ghostscript) and `tesseract` are spawned with argv arrays under a pinned environment and killed on a deadline |
 | `POST /api/dsh-themes/screenshot` | write one PNG to the **Desktop** of the machine running the app | requires `content-type: image/png`, a real PNG signature and ≤ 64 MiB; the Desktop is resolved per request (Windows plain or OneDrive-redirected, XDG on Linux, home as the last resort); the file name is host-generated (`vncode-<timestamp>.png`, `-2`, `-3`, ... on a collision) and written create-exclusively, so no file the user already had can be replaced and the client cannot ask for any other location |
 | `POST /api/dsh-open-in-app/open` | open a **file-manager window** on a directory the client names | the app id must be one of the file managers the pack supports (editor and terminal ids are refused), the path must be absolute and must exist; the OS launcher is spawned with an argv array, never a shell string |
-| `WS /api/dsh-terminal/pty` (plus `GET /api/dsh-terminal/health`, `GET /api/dsh-terminal/activity`, `GET /api/dsh-terminal/vendor/*`) | attach the browser's terminal to a **real PTY** on the host, in the session's workspace folder | the upgrade is gated by `connection.requestRejection` (Host/Origin fence, then browser authentication) and a raw 401/403 is written into the socket **before** `ws` ever sees it; one PTY per (conversation, slot), 8 per conversation, detached sessions reaped after 5 minutes; control frames are NUL-prefixed so shell output can never be mistaken for one; past 4 MiB of unflushed socket bytes the PTY is paused rather than dropping output. **This is an unsandboxed shell**: it does NOT pass through the file policy or sandbox the model's tools obey. Anyone who can reach an authenticated browser session on this app has a shell with the privileges of the user running `dsh web`. That is what a terminal is; it is the single largest thing this pack adds, and the reason the app must stay on loopback |
+| `GET /api/dsh-terminal/activity` | read a filtered **tail of one conversation's own session events** (only `tool/call`, `tool/result` and a HUMAN `user/message`), so the dock can draw what the agent ran | **read-only and bounded**: at most 400 relevant events and roughly 512 KiB, newest kept, with `hasMore` stating what was left out; it reads the host's live session registry (a conversation no process has open answers `NOT_LIVE` with a 200), and nothing is written, spawned or downloaded. Terminal alpha.12 deleted the WebSocket upgrade, the PTY, the vendored xterm assets and the `/health` probe that used to sit here, so **this pack no longer exposes a shell of any kind** — which also removed the "unsandboxed shell" caveat this table used to carry. Use the harness's own terminal tabs when you want a shell |
 | six diagram tools + the two bundled skills | let the model write, patch, verify, publish and delete diagrams, and read the two skill documents | a write is validated before it is stored (Mermaid through the vendored engine in a child process behind a DOM stub; TikZ through the machine's own engine), the tools cannot read arbitrary files — only the diagram source they own — and they cannot reach the network |
 | browser halves | add tabs, buttons, dialogs and CSS to the Web GUI | they run in the harness's own module table (`window.__ModuleLoader__`), may `require("react")` only, take no Node imports, and reach every other service through `ctx.get(...)` after declaring it in `inject`; the only DOM they add is their own, and the only shipped thing one of them hides is a header seat/menu the pack replaces on purpose (see `packages/dsh-themes/README.md` and `packages/dsh-editor/README.md`) |
 
@@ -388,11 +392,12 @@ cookie leaks, rotate the signing secret.
   nothing is fetched on your behalf.
 - **Vendored engines are pinned and hashed.** `dsh-editor`'s CodeMirror 6,
   `dsh-diagrams`' Mermaid (`mermaid@11.17.2`, hash recorded in
-  `lib/vendor/VERSION.json`), `dsh-pdf`'s pdf.js (`pdfjs-dist@6.3.289`, every
-  file's bytes+sha256 in its own `lib/vendor/VERSION.json`) and
-  `dsh-terminal`'s `@xterm/xterm@5.5.0` + `@xterm/addon-fit@0.10.0` are built
-  from their `vendor/` folders and served by the packages themselves — no CDN,
-  no runtime download.
+  `lib/vendor/VERSION.json`) and `dsh-pdf`'s pdf.js (`pdfjs-dist@6.3.289`, every
+  file's bytes+sha256 in its own `lib/vendor/VERSION.json`) are built from their
+  `vendor/` folders and served by the packages themselves — no CDN, no runtime
+  download. (`dsh-terminal` vendored xterm.js the same way until alpha.12; the
+  entry and its `vendor/` folder are gone with the terminals, and the pack now
+  vendors three engines rather than four.)
 - **Generated files are marked and checked.** The three forked bundles carry a
   `GENERATED - do not edit by hand` banner; `scripts/sync-vendored.ps1 -Check`
   reports drift without writing, and `.gitattributes` pins their line endings so

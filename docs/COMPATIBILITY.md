@@ -10,7 +10,7 @@ The pack targets the harness line DeepSeek ships to the raw web install
 | `@deepseek-ai/dsh` | `0.2.0-rc.2` |
 | Forked from | the same `0.2.0-rc.2` line (`.dsh-version.json`'s `vendoredFrom`) |
 | Install target | the web profile only (`$DSH_HOME/profiles/web`) |
-| Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell + Node.js and npm/npx - no PowerShell); the plugins themselves are plain JS and the only OS-specific code is a launcher choosing the host command: the file-browser launcher (`explorer.exe` / `open` / `xdg-open`), the terminal's shell resolver (`pwsh.exe` or `powershell.exe` / `$SHELL` or `/bin/zsh` / `$SHELL` or `/bin/bash`) and the run launchers' browser hand-off (Chrome, else the platform default) |
+| Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell + Node.js and npm/npx - no PowerShell); the plugins themselves are plain JS and the only OS-specific code is a launcher choosing the host command: the file-browser launcher (`explorer.exe` / `open` / `xdg-open`) and the run launchers' browser hand-off (Chrome, else the platform default) |
 | Master | **`dsh-vn-master`** - the bundle layer plus one no-op `master` row; no client half, no service, no inject edge and no core-row disables. Carries the pack's row restatements, and alpha.2 enables the shipped **Browser** tab on the web profile (`ui-sidebar-browser`) |
 | Right bar | **owned by the pack** - `dsh-rightbar` / `dsh-rightbar-files` are forks of `@deepseek-ai/dsh-client-ui-sidebar-right` / `-sidebar-files`, and the core rows `ui-sidebar-right` / `ui-sidebar-files` are disabled |
 | Open In file managers | **owned by the pack** - `dsh-open-in-app` forks `@deepseek-ai/dsh-client-ui-open-in-app` (row `ui-open-in-app` disabled) and launches the OS file browser directly |
@@ -102,33 +102,41 @@ the details.
   which the editor or a shipped preview then claims. It replaces nothing and
   publishes no service, so it cannot disturb the bar’s tab-type chain.
   **git must be on `PATH`** for its routes to answer.
-- **dsh-terminal** adds a **real shell in a bottom dock**: a header control at
-  `order: 30` in the same `conversation.session.header.utilities` list (the last
-  utility, right of Open In at `-10`) toggles a horizontal panel that starts at
-  the left bar's right edge, spans the page and sits **under** the middle and
-  right columns. Those two make room for it - and only those two: the left bar
-  keeps its full height and its contents do not move. Inside is vendored
-  **xterm.js** attached
-  over an authenticated WebSocket to a real **PTY** - ConPTY PowerShell on
-  Windows, the login shell on macOS/Linux - so prompts, colors, `Ctrl+C` and
-  resizes all behave, and every resize re-fits the emulator so the visible line
-  count matches the panel and the newest output stays in view. It replaces
-  nothing and publishes no service (it does not
-  use the header corner, which the right bar's toggle owns), forks nothing and
-  disables no core row.
-  - The PTY is the **harness installation's own `node-pty`**, resolved (never
-    installed) from `process.argv[1]`, `$DSH_HOME/profiles` or the package's own
-    directory; a host where it cannot be resolved reports
-    `available:false` on `/api/dsh-terminal/health` and the dock says so - the
-    rest of the pack is unaffected.
-  - **A terminal is an unsandboxed shell.** It does not pass through the
-    file-policy sandbox the model's tools obey; the gate is the connection's own
-    authentication, checked before the socket reaches the PTY.
-  - Clipboard is `Ctrl+Shift+C` / `Ctrl+Shift+V` (`Cmd` on macOS), because a bare
-    `Ctrl+C` has to stay SIGINT.
-  - Detaching (a page reload, or closing the dock) keeps the shell for five
-    minutes so a reattach replays the retained scrollback; after that it is
-    reaped. Sessions do not survive a harness restart.
+- **dsh-terminal** puts the **agent's own commands in a bottom dock**: a header
+  control at `order: 30` in the same `conversation.session.header.utilities` list
+  (the last utility, right of Open In at `-10`) toggles a horizontal panel that
+  starts at the left bar's right edge, spans the page and sits **under** the middle
+  and right columns. Those two make room for it - and only those two: the left bar
+  keeps its full height and its contents do not move. Inside is a read-only
+  **transcript of every `bash` / `pwsh` / `run_code` / `terminal_send` call** the
+  conversation recorded, grouped under the prompt that asked for it, with the tool,
+  the working folder, the duration, the exit status and the output, filters, a
+  per-row **Copy command** / **Copy output**, and a bar that wears the log's own
+  state (the running pulse, the count of what failed, the warning when this
+  conversation's log cannot be read here). It replaces nothing and publishes no
+  service (it does not use the header corner, which the right bar's toggle owns),
+  forks nothing and disables no core row.
+  - **The terminals were removed in alpha.12**, and that is the shape of this
+    package now. Through alpha.11 the dock also held its own xterm.js emulators -
+    one real PTY each from the harness installation's own `node-pty`, over an
+    authenticated WebSocket, with a chip strip and a **Run in Terminal** action -
+    and every one of them is deleted, because 0.2's right Sidebar ships **terminal
+    tabs of its own** (`@deepseek-ai/dsh-client-ui-sidebar-terminal`). A second
+    emulator at the foot of the window was a second answer to a question the
+    harness now answers in the column beside it. The package therefore **reads and
+    never runs**: no shell is spawned, no binary resolved, no engine vendored, no
+    socket gated, and it injects `connection` alone.
+  - **One read-only route**, and it is the panel's whole data source:
+    `GET /api/dsh-terminal/activity?session=<id>` answers a filtered **tail** of
+    the conversation's own session events - only `tool/call`, `tool/result` and a
+    HUMAN `user/message`, at most 400 events and roughly 512 KiB, newest kept, with
+    `hasMore` stating what was left out, and `NOT_LIVE` with a **200** for a
+    conversation no process has open. The browser folds it with the same pure fold
+    the tracked check drives, so what the model is told and what a person sees
+    cannot drift.
+  - `lib/pty.js` and `lib/shell.js` went with the shells, which also makes every
+    plugin in this pack **OS-neutral**: the only per-OS code left is a launcher
+    choosing the host command.
   - **New package**, so the first install after this change needs a plain
     `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 - **dsh-diagrams** adds **Mermaid and TikZ diagrams** as a surface of their own:
@@ -229,9 +237,10 @@ the details.
   - It owns **no route** and adds no file format: the profile's own patch document
     is already user-editable, atomic, schema-validated and hot-reloaded.
     Schemastery (which declaring a `.volatile()` field needs) is resolved at
-    runtime through the same `$DSH_HOME/profiles` anchor `dsh-terminal` uses for
-    `node-pty`, never imported, and a resolved copy too old to carry `.volatile()`
-    is passed over — a bare import resolves from the repo folder and fails there.
+    runtime through the same `$DSH_HOME/profiles` package anchor this pack uses
+    for the harness's own out-of-tree resolution, never imported, and a resolved
+    copy too old to carry `.volatile()` is passed over — a bare import resolves
+    from the repo folder and fails there.
   - It **does not** remember the terminal dock being open: see the notes under
     `dsh-terminal` and in the changelog below.
   - **New package**, so the first install after this change needs a plain
@@ -630,10 +639,12 @@ the details.
 
 - **terminal alpha.5**: the dock's **height** rides the same section, on the same
   terms (localStorage kept underneath). Its **open** state is deliberately NOT
-  remembered: the panel is the window onto a PROCESS, and after a reload the
-  client holds no slots, so reopening it would either show an empty panel or —
-  once the server's five-minute PTY retention has lapsed — start a shell nobody
-  asked for. A height is a preference; "a shell was running" is not.
+  remembered: the panel is the window onto a conversation, and after a reload the
+  client holds none, so reopening it would show a panel nobody asked for. A height
+  is a preference; "I was looking at the agent's commands" is a moment. (Through
+  alpha.11 the rule had a second, stronger reason — the panel held PTYs, so
+  reopening it could have started a shell nobody asked for — and the reason
+  outlived the shells.)
   Version changed: a plain install run (or `-Force`) re-adds the bundle.
 
 - **desktop window geometry (app/)**: the Tauri shell now remembers its own
@@ -671,6 +682,46 @@ the details.
   already resolved to `false` there. This is also the first thing the master has
   ever carried, which is why "the master is blank" now reads as "the master is
   browser-free but is where the pack's row restatements live".
+
+- **terminal alpha.12 - the dock stops being a terminal**: the bottom dock lost its
+  own emulators, and the package is now the **agent's command transcript** and
+  nothing else. What went, all of it: `lib/pty.js` (node-pty resolution, the
+  session registry, the reaper), `lib/shell.js` (the pack's only per-OS file),
+  the vendored **xterm.js 5.5.0** + `@xterm/addon-fit` bundle and stylesheet under
+  `lib/vendor/` with its `vendor/` build folder, the two `/vendor` routes, the
+  `GET /api/dsh-terminal/health` probe, the authenticated WebSocket upgrade
+  `/api/dsh-terminal/pty`, the chip strip with its `+` and per-chip `×`, the
+  per-slot runtime with its reattach/replay and backpressure, **Run in Terminal**,
+  and the `Agent` toggle - because with one view there is nothing to toggle to.
+  The Node half is now **ONE route** (`GET /api/dsh-terminal/activity`) and injects
+  **`connection` alone**; `lib/client.js` reads and never runs. What stays is
+  everything that was about the panel rather than the shells: the dock's geometry
+  and its animated-left-bar tracking, the height's two-store persistence with
+  `adoptDecision`, the read-only tail route and the browser's pure fold over it,
+  the poll's cadence and bounded retry, the bar's command counts, and the alpha.9
+  command-row dress.
+
+  **Why**: 0.2's right Sidebar ships **terminal tabs of its own**
+  (`@deepseek-ai/dsh-client-ui-sidebar-terminal`), so a second emulator at the foot
+  of the window was a second answer to a question the harness now answers in the
+  column beside it - and the pack was maintaining a whole engine to duplicate a
+  feature. A side benefit worth stating: an authenticated WebSocket that could
+  spawn a shell is gone from this pack's surface, and every plugin here is now
+  OS-neutral (the only per-OS code left is a launcher choosing the host command).
+
+  **What a person loses**: a shell in the dock. Use the right bar's own terminal
+  tabs for that; the dock keeps watching what the *agent* ran, which is what it was
+  for. **What a person keeps**: everything about that transcript, unchanged.
+
+  The tracked checks moved with it, in both directions: `check-node-routes.mjs`
+  now drives the one route *and* asserts the deleted half stays deleted (exactly
+  one route registered, **no** upgrade registered even with a `webServer` service
+  offered, and no `/health` or `/vendor` path answering), and
+  `check-client-bundles.mjs` asserts the absence of the socket, the vendored
+  engine, the emulator registry, the view sentinel, the chip strip and the
+  run-in-terminal action, alongside the unchanged geometry and activity
+  assertions. Version changed: a plain install run (or `-Force`) re-adds the
+  bundle.
 
 ## Alpha policy
 

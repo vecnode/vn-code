@@ -46,8 +46,11 @@
  * web profile installs each bundle as a LIVE LINK into the repo, so a bare
  * `import '@deepseek-ai/schemastery'` resolves from the repo folder and fails
  * with ERR_MODULE_NOT_FOUND (measured). The module is therefore loaded at
- * runtime through the anchors `packages/dsh-terminal/lib/pty.js` established for
- * the harness's own node-pty: the running entry, then `$DSH_HOME/profiles` -
+ * runtime through the package anchors this pack established for the harness's
+ * own out-of-tree resolution (they were first written for `dsh-terminal`'s
+ * `node-pty`, before alpha.12 deleted that PTY; `dsh-terminal` keeps the same
+ * anchor list today for the same reason): the running entry, then
+ * `$DSH_HOME/profiles` -
  * which `dsh-app-boot` keeps as a mirror of the installation's dependency
  * closure, so Node's ordinary parent walk finds the very same copy the harness
  * itself loaded. The CJS build is what makes `createRequire` work here

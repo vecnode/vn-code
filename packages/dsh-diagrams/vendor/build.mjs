@@ -6,7 +6,7 @@
  * so the model gets a real error instead of a blank picture. The harness
  * profile installs this bundle as a live LINK, so a package dependency is not
  * installed and a plugin cannot `import 'mermaid'` - the engine is therefore
- * vendored, exactly like the editor's CodeMirror and the terminal's xterm.
+ * vendored, exactly like the editor's CodeMirror and the PDF reader's pdf.js.
  *
  * The artifact is mermaid's own SINGLE-FILE browser build
  * (`dist/mermaid.min.js`, ~3.5 MB). That choice is load-bearing:
