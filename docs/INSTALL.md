@@ -324,26 +324,28 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   file to the ordinary address and lets the registry decide; with neither
   `dsh-editor` nor a shipped preview claiming that extension, nothing can draw
   it. That is the same rule the Files tab follows.
-- **No Terminal button in the header** — `dsh-terminal` is not mounted; a new
+- **No command-bar button in the header** — `dsh-cmdbar` is not mounted; a new
   package needs one install run (`scripts\install.bat` / `./scripts/install.sh`, or `-Force`),
   then a restart. The button is the last one in the header group, immediately
-  right of **Open In…**. Check the console for `[dsh-terminal]` if it still does
-  not show.
-- **The dock says "No terminal on this host"** — the harness installation's
-  `node-pty` could not be resolved from the server process. The notice carries
-  the reason, and `GET /api/dsh-terminal/health` reports `available:false` with
-  it. Nothing else in the pack is affected.
+  right of **Open In…**. Check the console for `[dsh-cmdbar]` if it still does
+  not show. (The package was `dsh-terminal` through alpha.13, so a profile
+  installed before alpha.14 names the old bundle in its list and its live links
+  until that install run.)
+- **The bar says the conversation's log cannot be read here** — the conversation
+  is not live on **this** host (a stored conversation answers `NOT_LIVE`), or the
+  activity route is unreachable. The host's own reason is in the tooltip, and
+  `GET /api/dsh-cmdbar/activity?session=<id>` reports it directly. Nothing else in
+  the pack is affected.
+- **The panel disappears the moment a command line is clicked, or either copy
+  button is used** — that was alpha.13, and alpha.14 repairs both: expanding a row
+  asked for an identifier the bundle never declared, and the copy buttons called
+  the clipboard primitive's name unqualified, and the shell's slot error boundary
+  RETIRES an entry that crashes, so the dock vanished until a reload. Confirm the
+  bar prints `dsh-cmdbar 0.1.0-alpha.14` and hard-refresh (Ctrl+F5).
 - **The dock opens but the panel does not make room for itself** — something is
   writing the middle/right columns' inline `height`; the dock sets
   `calc(100% - <dock>px)` on those two while open and hands back what they had on
   close, and it never touches the left bar.
-- **A shell's output is gone after a page reload** — the shell itself is kept for
-  five minutes after its last connection, but the scrollback ring is 256 KiB:
-  past that the dock opens a new shell in the same folder.
-- **The terminal shows the wrong number of lines after resizing, or the newest
-  output is not visible** — that was alpha.1; alpha.2 re-fits the emulator on
-  every size change and scrolls back to the end. Confirm the dock's bar prints
-  `dsh-terminal 0.1.0-alpha.2` or later and hard-refresh (Ctrl+F5).
 - **Opening the dock moves the items in the left bar up** — that was alpha.1
   (the room was taken from the frame, whose single grid row the left bar shares).
   alpha.2 takes it from the middle and right columns only. Confirm the served
@@ -352,15 +354,7 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   bar** — that was alpha.2 (only the frame's `style` mutation was watched, and the
   left bar is *animated*, so it reported the pre-transition width and never fired
   again). alpha.3 follows the columns' size instead. Confirm the dock's bar prints
-  `dsh-terminal 0.1.0-alpha.3` or later and hard-refresh (Ctrl+F5).
-- **A terminal chip you just left keeps the selected dress, and terminals past the
-  right edge of the bar cannot be reached** — both were alpha.3: the pick went
-  through `runtime.show()` alone, which writes the store without publishing a
-  revision, and the chip strip was `overflow:hidden` (which also trapped the `+`).
-  alpha.4 routes every pick through one `selectSlot()` (store, show, bump) and
-  makes the strip a scrolling box with the `+` beside it, `‹`/`›` arrows that
-  appear only while it really overflows, and a bare wheel that moves it. Confirm
-  the dock's bar prints `dsh-terminal 0.1.0-alpha.4` and hard-refresh (Ctrl+F5).
+  `dsh-cmdbar 0.1.0-alpha.3` or later and hard-refresh (Ctrl+F5).
 - **The left bar still shows the fish and the "deepseek" wordmark** — the branding
   override arrives with `dsh-themes` alpha.6; reinstall (`scripts\install.bat` /
   `./scripts/install.sh`, or `-Force`) so that version is in the profile, then restart and

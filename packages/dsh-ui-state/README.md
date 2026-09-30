@@ -33,7 +33,7 @@ one profile entry is one document both hosts read. That is the whole idea.
 |---|---|---|
 | `pageZoom` | `100` | [`dsh-themes`](../dsh-themes) — the header's Page-zoom control |
 | `theme` | `''` | [`dsh-themes`](../dsh-themes) — an **extension** theme id (Nord / Monokai / Hacker) |
-| `dockHeight` | `280` | [`dsh-terminal`](../dsh-terminal) — the bottom dock |
+| `dockHeight` | `280` | [`dsh-cmdbar`](../dsh-cmdbar) — the bottom dock (the command bar) |
 | `sidebarWidth` | `-1` | this package — the left column |
 | `rightbarWidth` | `-1` | this package — the right bar |
 
@@ -88,7 +88,9 @@ This pack ships zero npm dependencies: the profile installs each bundle as a
 resolves from the repo folder and fails with `ERR_MODULE_NOT_FOUND` (measured).
 Declaring a `.volatile()` field needs a schemastery schema, so the module is
 loaded at runtime instead with `createRequire`, through the anchors
-`packages/dsh-terminal/lib/pty.js` established for the harness's own `node-pty` —
+`packages/dsh-cmdbar/lib/pty.js` established for the harness's own `node-pty` (that
+file is gone — alpha.12 deleted the command bar's PTY — and the anchors stay,
+because what they resolve is schemastery, not a shell) —
 `process.argv[1]`, then `$DSH_HOME/profiles`, which `dsh-app-boot` keeps as a
 mirror of the installation's dependency closure. Duck typing is what makes that
 safe: the form projection treats the schema as a value and reads
@@ -106,7 +108,7 @@ independently would each fence their writes on their own revision, and the
 contract's recovery for a stale revision is a reload that silently drops the
 write — and publishes the client service **`uiState`**
 (`get`/`set`/`unset`/`subscribe`/`snapshot`/`status`), which `dsh-themes` and
-`dsh-terminal` reach **lazily** via `ctx.get`, never in their `inject`, so each
+`dsh-cmdbar` reach **lazily** via `ctx.get`, never in their `inject`, so each
 still works — and still writes its own `localStorage` copy — in a profile without
 this package. `snapshot()` answers `{ status, value, defaults }` and `status()`
 answers `loading` / `ready` / `unavailable` / `absent` (no transport); `set` is

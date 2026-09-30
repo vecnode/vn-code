@@ -102,7 +102,8 @@ the details.
   which the editor or a shipped preview then claims. It replaces nothing and
   publishes no service, so it cannot disturb the bar’s tab-type chain.
   **git must be on `PATH`** for its routes to answer.
-- **dsh-terminal** puts the **agent's own commands in a bottom dock**: a header
+- **dsh-cmdbar** (the **command bar**; `dsh-terminal` through alpha.13) puts the
+  **agent's own commands in a bottom dock**: a header
   control at `order: 30` in the same `conversation.session.header.utilities` list
   (the last utility, right of Open In at `-10`) toggles a horizontal panel that
   starts at the left bar's right edge, spans the page and sits **under** the middle
@@ -127,7 +128,7 @@ the details.
     never runs**: no shell is spawned, no binary resolved, no engine vendored, no
     socket gated, and it injects `connection` alone.
   - **One read-only route**, and it is the panel's whole data source:
-    `GET /api/dsh-terminal/activity?session=<id>` answers a filtered **tail** of
+    `GET /api/dsh-cmdbar/activity?session=<id>` answers a filtered **tail** of
     the conversation's own session events - only `tool/call`, `tool/result` and a
     HUMAN `user/message`, at most 400 events and roughly 512 KiB, newest kept, with
     `hasMore` stating what was left out, and `NOT_LIVE` with a **200** for a
@@ -225,7 +226,7 @@ the details.
   half binds `ctx.configForms.get('ui-state')` once and publishes the `uiState`
   service the pack's other halves write through. `localStorage` is kept
   underneath as the fallback, so a profile that installed `dsh-themes` or
-  `dsh-terminal` without this package behaves exactly as before.
+  `dsh-cmdbar` without this package behaves exactly as before.
   - **Why not `localStorage`**: it is per origin and per browser profile, so a
     Chrome tab and the desktop WebView2 are two stores that can never agree, and
     the desktop shell prefers port 3080 and falls back to a free one.
@@ -241,8 +242,8 @@ the details.
     for the harness's own out-of-tree resolution, never imported, and a resolved
     copy too old to carry `.volatile()` is passed over — a bare import resolves
     from the repo folder and fails there.
-  - It **does not** remember the terminal dock being open: see the notes under
-    `dsh-terminal` and in the changelog below.
+  - It **does not** remember the command bar being open: see the notes under
+    `dsh-cmdbar` and in the changelog below.
   - **New package**, so the first install after this change needs a plain
     `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 - The shipped `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` row stays
@@ -683,6 +684,73 @@ the details.
   ever carried, which is why "the master is blank" now reads as "the master is
   browser-free but is where the pack's row restatements live".
 
+- **master alpha.3 / themes alpha.21 - feedback is removed**: the pack's first
+  **pack-wide product decision**, and the one place a shipped row is disabled
+  without a pack bundle replacing it. vncode is its own product and does not ask its
+  users for feedback — and the shipped feature is not merely a rating: its dialog
+  says in its own words that *"Your submission will include the current conversation
+  log"*, and that submission is what releases an upload to a third party. **Four
+  rows** are hard-disabled in the master's layer rather than hidden:
+
+  - `ui-message-feedback` — the browser half: Like/Dislike in the
+    assistant-message action strip, the dialog in `conversation.input.overlay`, its
+    acknowledgement toast, the `/feedback` composer decoration and the `feedbackUi`
+    service.
+  - `message-feedback` and `command-feedback` — the host halves: the
+    `messageFeedback` / `sessionFeedback` Remotes, the log-only
+    `feedback/message-*` events and the `feedback/record` the `/feedback` command
+    appends.
+  - `session-telemetry-otel` — the export path those events **release**. It runs in
+    `FEEDBACK_ONLY` mode, so it captures a Session-log prefix and POSTs it to the
+    vendor's collector (`https://dsh-otel-collector.deepseeksvc.com/v1/logs`, with
+    `$DSH_HOME/.anonymous-user-id` as the OTel `user.id`) **only** after an explicit
+    feedback event; with the producers gone it has nothing to release, and
+    disabling the row is the launcher's own privacy switch — the same
+    `disabled: true` a non-empty `DSH_TELEMETRY_DISABLED` resolves to
+    (`dsh-app-boot`'s `resolveTelemetryPatch`) — so the exporter is never even
+    constructed and the endpoint is never contacted.
+
+  Nothing else consumes those services (`remote.messageFeedback` /
+  `remote.sessionFeedback` appear only inside the feedback packages), and the
+  shipped Session export guards its own entry as
+  `ctx.get('feedbackUi')?.openSession(...)` behind an availability flag, so
+  `/export` keeps working with the feedback affordance simply absent. The rows are
+  composed at **boot**, so a profile that is already running needs a restart before
+  the surfaces are gone. A disable that belongs to a package REPLACING a row still
+  stays with that package (`dsh-rightbar`'s `ui-sidebar-right` /
+  `ui-sidebar-files`), so a partial install still mounts one bar.
+
+  **The account menu's own Feedback item is not a row**, and that is why the change
+  spans two packages. It is hardcoded in
+  `@deepseek-ai/dsh-client-ui-settings-account`'s `AccountMenu`, registered into the
+  `settings.launcher` slot as a whole, and opens an EXTERNAL form in a new window
+  (`contactUrl()` builds it from the row's `contactFormUrl`, a Feishu questionnaire
+  by default, with the uid, the source, the harness version, the locale, the screen
+  size and the device info appended). The only two options were a fork of the whole
+  account bundle (4.5k lines: sign-in, sign-out, quota notices, billing pages,
+  onboarding) or one rule, so **dsh-themes alpha.21** hides the row:
+
+  ```css
+  [role="menu"]>div:has(>button[role="menuitem"] svg path[d^="M4.74024 9.11029"]){display:none}
+  [role="menu"] button[role="menuitem"]:has(svg path[d^="M4.74024 9.11029"]){display:none}
+  ```
+
+  The selector is pinned on the row's **icon artwork** rather than a class name: the
+  Menu primitive renders rows with no id or data attribute in the DOM, while the
+  paper-plane `path` data comes from the design asset and outlives the hashed class
+  names a rebuild renames. It hides the row's wrapper **and** its button, it is
+  scoped to `[role="menu"]` so the same artwork drawn by the chat's turn-trigger
+  notice and by the Session-export header button is untouched, and hiding is enough
+  because a `display:none` row can never take focus while the Menu's keyboard walk
+  still advances past it — Settings and Sign out stay reachable with `ArrowDown`.
+  Setting the row's `contactFormUrl` from the master instead was **rejected on
+  purpose**: a row with `volatile` fields has its whole `config` replaced by the next
+  volatile write from a settings form, so the override would silently evaporate.
+  The accepted failure mode is the one every pin in `dsh-themes` carries — a harness
+  bump that redraws the artwork makes the rule match nothing and the row returns —
+  and `check-client-bundles.mjs` pins the rule, both of its shapes, its
+  `[role="menu"]` scoping and the absence of any hashed class in it.
+
 - **terminal alpha.12 - the dock stops being a terminal**: the bottom dock lost its
   own emulators, and the package is now the **agent's command transcript** and
   nothing else. What went, all of it: `lib/pty.js` (node-pty resolution, the
@@ -709,6 +777,35 @@ the details.
   spawn a shell is gone from this pack's surface, and every plugin here is now
   OS-neutral (the only per-OS code left is a launcher choosing the host command).
 
+- **terminal alpha.13 - the panel follows the conversation, and says less**: two
+  changes, both about the dock describing the wrong thing.
+  *The facts line* (the dock's own bar **and** the Agent control's tooltip) used to
+  open with *The agent's own commands in this conversation: * before the counts.
+  Both surfaces are already labelled **Agent**, so the sentence only pushed the
+  numbers away from the eye; `activityFactsTitle` now returns the counts alone
+  (*2 commands, 1 running, 1 failed*), still pinned as **text** by the tracked
+  check.
+  *Following the reader* is the repair that matters. alpha.11 made a conversation
+  change **close** the dock and forget the conversation it left - but
+  `adoptSession` returned early on an **empty** session id, and the header control
+  only exists while a session header is on screen. Two ordinary paths therefore
+  reported nothing at all: a **new conversation** (no session id yet) and a screen
+  whose header has **gone away** (the Start page). The always-mounted dock kept
+  drawing the previous conversation's commands, counts and poll. An open dock now
+  **re-points** at the conversation in front of the reader instead of closing - the
+  panel keeps its open state, its height and its place, while everything it draws
+  (commands, counts, poll, filters, expanded rows, follow pill) belongs to the new
+  one, and with no conversation at all it says **No conversation open** rather
+  than "Reading the conversation..." for ever. The rule is one pure
+  `followDecision({ open, current, next })` in `__internals`, pinned
+  behaviourally: the same conversation moves nothing, a different one re-points an
+  open panel, an absent id is a **change** and not a no-op, and a closed panel
+  still only forgets (alpha.11). The header control's **unmount** releases the
+  identity it owned, and `ActivityView` is **keyed** on the conversation so the
+  view's own state cannot carry over either. Nothing else about the package moved:
+  still one read-only route, still `connection` alone, still closed by the
+  reader's own control and by nothing else.
+
   **What a person loses**: a shell in the dock. Use the right bar's own terminal
   tabs for that; the dock keeps watching what the *agent* ran, which is what it was
   for. **What a person keeps**: everything about that transcript, unchanged.
@@ -722,6 +819,53 @@ the details.
   run-in-terminal action, alongside the unchanged geometry and activity
   assertions. Version changed: a plain install run (or `-Force`) re-adds the
   bundle.
+
+- **cmdbar alpha.14 - the rename, and the click that killed the dock**: two changes
+  to the bottom dock, one cosmetic and one a real defect.
+  *(The entries ABOVE this one are history and keep the old name, its routes and
+  its `dst-` prefix where that is what those releases shipped; everything a person
+  reads as the current state uses `dsh-cmdbar`.)*
+  *The rename*: the package is **`dsh-cmdbar`** (the **command bar**) and was
+  **`dsh-terminal`** through alpha.13. The old name described the emulator alpha.12
+  deleted and collided with the harness's own `@deepseek-ai/dsh-terminal` PTY seam;
+  what is left is exactly what the new name says. The package folder, the row
+  (`terminal` -> `cmdbar`), the **ONE route** (`/api/dsh-terminal/activity` ->
+  `/api/dsh-cmdbar/activity`), the `data-dsh-terminal-*` attributes ->
+  `data-dsh-cmdbar-*` and the CSS prefix (`dst-` -> `dsc-`, which also ends the
+  accident that dsh-themes' own `.dst-button` shared a namespace with this
+  package's `.dst-btn`) all moved together. The shared `dockHeight` field in
+  **dsh-ui-state** deliberately did **not** move: that key is the pack's own, and
+  renaming it would have thrown away the height every reader had already chosen.
+  The harness packages this bundle only MENTIONS (`dsh-terminal-bash`,
+  `@deepseek-ai/dsh-client-ui-sidebar-terminal`) and the one harness tool it names
+  (`terminal_send`) are untouched.
+  *The defects*, which are why this release is not only a rename: **clicking a
+  command line made the whole panel disappear**, and so did either of the row's
+  copy buttons, and the header button could not bring it back. Both are the same
+  mistake — a name used but never declared. Expanding a row evaluated
+  `expanded && multiLine ? … : null`, and `multiLine` was declared **nowhere** in
+  the bundle; the copy actions called `writeClipboard(text)` **bare**, which is the
+  name of a `@deepseek-ai/dsh-client-ui-primitives` export the bundle already
+  requires for `Tooltip`. Each threw a `ReferenceError` out of a render/click —
+  and a slot occupant is wrapped in the shell's `SlotErrorBoundary`, which for a
+  root-scoped entry such as this dock's `shell.overlay` seat reports the crash with
+  `abdicate: true`: the entry is **retired** and every later render skips it while
+  the boundary draws its own `data-slot-error` box in the panel's place. No static
+  render and no check could have caught either one (a row starts collapsed, so the
+  first condition short-circuited before the identifier was read, and a click is
+  what reaches the second). The full command an expanded row shows is now decided
+  by a pure `commandBody(entry, expanded)` (exported through `__internals`), the row
+  draws its body from it, the write goes through the qualified
+  `primitives.writeClipboard` (guarded, and **Copied** only for a write the host
+  accepted), the tracked check **drives** the three command-body cases and asserts
+  both free identifiers are gone outside prose, and the pack-wide primitive scan
+  grades `writeClipboard` against the real pinned package. The second one was found
+  by auditing the bundle for identifiers it references and never declares.
+  **What an installed profile needs**: one install run (`scripts\install.bat` /
+  `./scripts/install.sh`, or `-Force`) and a restart, because the bundle's NAME
+  changed - the profile's bundle list and its live links still name `dsh-terminal`
+  until then - followed by a hard refresh (Ctrl+F5). The dock's bar prints
+  `dsh-cmdbar 0.1.0-alpha.14`.
 
 ## Alpha policy
 

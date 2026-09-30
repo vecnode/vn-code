@@ -1,16 +1,17 @@
 # dsh-vn-master bundle layer (alpha).
 #
-# The master is deliberately BLANK, and that is the whole design. This layer
-# adds one no-op row and nothing else: no browser half (`dsh.client`), no client
-# service, no `inject` edge, no node in the boot graph. The right bar keeps the
-# `sidebarRightTabs` / `sidebarRight` services other tab types resolve - they
+# The master adds one no-op row and no code: no browser half (`dsh.client`), no
+# client service, no `inject` edge, no node in the boot graph. The right bar keeps
+# the `sidebarRightTabs` / `sidebarRight` services other tab types resolve - they
 # live in the GENERATED fork dsh-rightbar/lib/client.js - so introducing the
-# master cannot disturb the tab-type chain. The core-row disables also stay with
-# the packages that replace those rows (dsh-rightbar disables ui-sidebar-right /
-# ui-sidebar-files), so a partial `-Plugin` install still mounts one bar.
+# master cannot disturb the tab-type chain. A core-row disable that belongs to the
+# package REPLACING a row stays with that package (dsh-rightbar disables
+# ui-sidebar-right / ui-sidebar-files), so a partial `-Plugin` install still
+# mounts one bar; what this layer carries instead is the pack's own PRODUCT
+# decisions about shipped rows (alpha.3's feedback removal below is the first).
 #
 # What it is for:
-#   - pack-wide patches (row restatements, extra disables, ordering) belong
+#   - pack-wide patches (row restatements, pack-wide disables, ordering) belong
 #     here, so the right bar stops carrying responsibilities that are not the
 #     bar's;
 #   - it is installed LAST. `dsh-vn-master` sorts after every other package in
@@ -51,3 +52,63 @@
 # overrides already resolved to `false` there.
 - id: ui-sidebar-browser
   disabled: false
+
+# ---------------------------------------------------------------------------
+# Feedback is REMOVED on this deployment (alpha.3) - a pack-wide PRODUCT
+# decision, which is the other kind of work this layer exists for.
+# ---------------------------------------------------------------------------
+# vncode is its own product on top of the harness, and it does not ask its users
+# for feedback. The shipped surface rates assistant messages and then opens a
+# dialog that says, in its own words, "Your submission will include the current
+# conversation log" - and that submission is precisely what releases an upload to
+# a THIRD PARTY. Three rows carry the feature and a fourth is the export path
+# those rows trigger, so all four are hard-disabled here rather than hidden:
+#
+#   ui-message-feedback    (web-app) the browser half: Like/Dislike in the
+#                          assistant-message action strip, the dialog in
+#                          `conversation.input.overlay`, its acknowledgement
+#                          toast, the `/feedback` composer decoration, and the
+#                          `feedbackUi` service other surfaces reach for.
+#   message-feedback       (web-app) the host half: the `messageFeedback` Remote
+#                          and the log-only `feedback/message-*` events.
+#   command-feedback       (base)    the host half of the other producer: the
+#                          `/feedback` command and the `sessionFeedback` Remote,
+#                          which appends `feedback/record`.
+#   session-telemetry-otel (base)    the export path those events RELEASE. It
+#                          runs in FEEDBACK_ONLY mode: it captures a Session-log
+#                          prefix and ships it to the vendor's collector
+#                          (https://dsh-otel-collector.deepseeksvc.com/v1/logs,
+#                          with $DSH_HOME/.anonymous-user-id as `user.id`) ONLY
+#                          after an explicit feedback event. With every producer
+#                          disabled it has nothing to release - and disabling this
+#                          row is the launcher's OWN privacy switch (the same
+#                          `disabled: true` a non-empty DSH_TELEMETRY_DISABLED
+#                          resolves to; see dsh-app-boot's resolveTelemetryPatch),
+#                          so the exporter is never even constructed.
+#
+# Nothing else in the tree consumes those services: `remote.messageFeedback` and
+# `remote.sessionFeedback` appear only inside the feedback packages themselves,
+# and the shipped Session export guards its own entry as
+# `ctx.get('feedbackUi')?.openSession(...)` behind an availability flag, so
+# `/export` keeps working with the feedback affordance simply absent.
+#
+# The account menu's own **Feedback** item is NOT a row and cannot be disabled
+# here: it is hardcoded in @deepseek-ai/dsh-client-ui-settings-account's
+# AccountMenu and opens an EXTERNAL form in a new window carrying the uid, the
+# locale, the harness version and the device info. dsh-themes hides that one row
+# (its `account-menu` override). It is deliberately NOT done here as a `config`
+# override: a row with `volatile` fields has its WHOLE config replaced by the next
+# volatile write from a settings form, which would silently take a
+# `contactFormUrl` override with it - and a guard that evaporates is worse than
+# none.
+- id: ui-message-feedback
+  disabled: true
+
+- id: message-feedback
+  disabled: true
+
+- id: command-feedback
+  disabled: true
+
+- id: session-telemetry-otel
+  disabled: true

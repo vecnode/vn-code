@@ -15,7 +15,7 @@
  * when one commits while another still holds the old revision (the contract's
  * recovery is a reload, which would silently drop the write). ONE form, one
  * queue, one revision - so this half is the only binder, and
- * dsh-themes and dsh-terminal reach it lazily, living without it when it is
+ * dsh-themes and dsh-cmdbar reach it lazily, living without it when it is
  * absent (a profile that installed one bundle and not the other still works).
  *
  * THE FORM IS THE HOST ROW'S OWN ENTRY. Since `@deepseek-ai/dsh` 0.2.0 the

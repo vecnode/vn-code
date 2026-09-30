@@ -1,4 +1,4 @@
-# dsh-themes (alpha.19)
+# dsh-themes (alpha.22)
 
 **The pack's conversation-header package.** It owns four controls on that header
 and the appearance overrides that dress it.
@@ -26,12 +26,15 @@ and the appearance overrides that dress it.
   very same `dsh web`) does not. See
   [The page-zoom control](#the-page-zoom-control).
 
-It also carries the pack's **appearance overrides** — rules that hold one surface
-on a fixed palette or a fixed shape whatever the app theme is: the **Markdown
-paper**, the **Markdown chrome**, the left column's **top bar** with the pack's
-**VN branding**, the **header ring**, and the **right bar's resize seam**. All of
-them are plain engine-neutral CSS, so they hold in whichever browser the Web GUI
-is opened in. It is a thin control, not a second theme system, and the
+It also carries the pack's **appearance and shipped-UI overrides** — rules that hold
+one surface on a fixed palette or a fixed shape whatever the app theme is, or that
+remove one shipped control the product does not want: the **Markdown paper**, the
+**Markdown chrome**, the left column's **top bar** with the pack's **VN branding**,
+the **header ring**, the **right bar's resize seam**, (alpha.21) the account
+menu's **Feedback row**, and (alpha.22) the left column's **panel order** together
+with the **fullscreen right panel's width under a page zoom**. All of them are
+plain engine-neutral CSS, so they hold in
+whichever browser the Web GUI is opened in. It is a thin control, not a second theme system, and the
 **preference** stays owned by the shipped `@deepseek-ai/dsh-client-ui-theme`: its
 `theme` client service persists the choice in the form the Host projects from its
 own `ui-theme` entry,
@@ -321,7 +324,7 @@ html .pXSMma_fishHitbox::before{content:"";width:26px;height:26px;
   route, no request and no Node half — while the asset file stays the source of
   truth, and the tracked check compares the inlined copy's viewBox and circle
   geometry against it so the two cannot drift. The asset sits at the repository root
-  because it is the *source*; like the vendored engine in `dsh-terminal`, a package
+  because it is the *source*; like the vendored engine in `dsh-cmdbar`, a package
   never depends on a file outside itself.
 - **The name wears the chat title's type.** The shipped brand name is `18px/600`,
   while the conversation's own title — the current crumb in the strip this band is
@@ -487,7 +490,7 @@ html[data-dsh-page-zoomed] [data-rightbar-col] ~ [data-side="rightbar"] {
 Both sides of that are layout pixels, so a zoom cannot separate them again. The
 `!important` is load-bearing: the frame keeps writing its own `left` inline, and
 this rule is what beats it. `data-rightbar-col` is **ui-layout's own stable
-marker** (the one `dsh-terminal` already follows) and `data-side="rightbar"` is the
+marker** (the one `dsh-cmdbar` already follows) and `data-side="rightbar"` is the
 handle's own attribute — never a hashed class — so a harness bump cannot quietly
 turn the rule into one that matches nothing.
 
@@ -591,6 +594,63 @@ so without it the `.5px` outline would grow the button by half a pixel per side.
 the corner is a **`single` slot**, so the rule cannot leak onto unrelated controls;
 it is also installed once, with no palette in it.
 
+## The account menu's Feedback row (alpha.21)
+
+The left bar's account menu — the avatar / **More** trigger in the sidebar footer —
+carries exactly three rows: **Settings**, **Feedback**, and **Sign out** /
+**Sign in**. The middle one is the only control in the app that opens a form in a
+**new window**: `contactUrl()` in `@deepseek-ai/dsh-client-ui-settings-account`
+builds it from `contactFormUrl` (a Feishu questionnaire by default,
+`https://trtgsjkv6r.feishu.cn/share/base/form/shrcnlCoGElW7MQznGy9r3YYXcg`) and
+appends the **uid**, the source, the harness version, the locale, the screen size
+and the device info. vncode is its own product and its owner does not want its
+users' feedback — or their uid and machine details — sent to a third party, so the
+row goes.
+
+**There is no row to disable.** The item is hardcoded in that package's
+`AccountMenu` and registered into the `settings.launcher` slot as a whole, so the
+only alternatives were a **fork** of the entire account bundle (4.5k lines:
+sign-in, sign-out, quota notices, billing pages, onboarding) or one rule over the
+row. This is the same treatment the top bar and the branding already get here.
+
+```css
+[role="menu"]>div:has(>button[role="menuitem"] svg path[d^="M4.74024 9.11029"]){display:none}
+[role="menu"] button[role="menuitem"]:has(svg path[d^="M4.74024 9.11029"]){display:none}
+```
+
+**The selector is pinned on the artwork, not on a class name.** The Menu primitive
+renders every row as `<div class="itemWrap"><button role="menuitem">…` and puts
+the item's `id` nowhere in the DOM, so there is no attribute to match. What *is*
+stable is the row's icon: the paper-plane `path` data above comes from the design
+asset rather than from the CSS module, so it survives the hashed-class churn that
+the left-bar band above has to be pinned against. Both the row's **wrapper** and
+its **button** are hidden, so a primitive that stops wrapping rows still gets the
+row.
+
+**Scoped to a menu row on purpose.** The same artwork is drawn by the `/feedback`
+command's menu glyph (that command is gone with the rest of the feedback surface —
+see `dsh-vn-master`), by the chat's **turn-trigger** notice for an agent-initiated
+turn (not a `role="menuitem"`, not inside a `role="menu"`) and by the
+**Session-export** header button (also not a menu row). Hiding a stray command row
+would be harmless; hiding either of the other two would be a real regression, and
+neither can match.
+
+**Hiding is enough.** The rows are reachable only through the Menu's own keyboard
+walk, which collects `button:not(:disabled)` and moves its **index**: a
+`display:none` row cannot take focus, so it cannot be clicked or activated from the
+keyboard, while the walk still advances past it — **Settings** and **Sign out**
+stay reachable with `ArrowDown` exactly as before. The pointer path *is* the button,
+so there is nothing to press.
+
+**What it does not do.** It cannot stop that URL being opened if the row ever comes
+back: a harness bump that redraws the paper-plane artwork makes the rule match
+nothing and the item returns. That is the accepted failure mode of every pin in
+this package (the top bar and the branding pins say the same thing). Setting the
+row's `contactFormUrl` from the pack's master layer was rejected on purpose — a row
+with `volatile` fields has its **whole `config` replaced** by the next volatile
+write from a settings form, which would take the override with it, and a guard that
+silently evaporates is worse than none.
+
 ## Where it sits
 
 The Session header is composed from slots
@@ -605,7 +665,7 @@ ascending `order`:
 | **Themes** (this package) | `-20` | next — left of Open In |
 | Open In… (`dsh-open-in-app`) | `-10` | next |
 | **Session log download** (this package, shadowing the shipped `session-log-download` seat) | `0` | after that |
-| Terminal (`dsh-terminal`) | `30` | last |
+| Command bar (`dsh-cmdbar`) | `30` | last |
 
 `-40`, `-30` and `-20` are the whole placement: a lower order simply renders
 further left. Nothing shipped is patched and no existing row's order is changed.
@@ -672,6 +732,142 @@ lib/client.js      Browser half: the Page-zoom button + menu (one inline `zoom` 
   arithmetic the frame uses, and `check-client-bundles.mjs` pins both halves of that
   honesty: the rule is inert at 100%, and it keys on stable markers rather than
   hashed classes.
+- **The column's order is a layout property, not a DOM move.** The global panel rows
+  reach the foot with three `order` declarations on the sidebar's flex children — no
+  fork of the shell, no re-registered slot, no `MutationObserver` racing React for a
+  child list it owns. `check-client-bundles.mjs` pins the three values one by one, so
+  a rule that stops moving a row fails there instead of in the eye.
+- **The fullscreen panel's width is a percentage of the frame, never a viewport
+  unit.** `100vw` is a length and a root `zoom` multiplies it, while the frame
+  stretches by percentage and is therefore the whole viewport at every level; the
+  override hands the panel the frame as its containing block while it is fullscreen
+  and `check-client-bundles.mjs` pins both that containment change and the
+  `width:100%` that depends on it — plus that the change stays scoped to the
+  fullscreen state, because the push-mode panel must keep the column dsh-cmdbar
+  shortens for its dock.
+
+## The left bar's panel rows, and the fullscreen panel's width (alpha.22)
+
+Two overrides, one theme: the shell's own geometry, read as vncode wants it.
+
+### The global panel rows move to the column's foot
+
+The left column's own order, top to bottom, is the branding row, **New Session**,
+the **global panel rows** (`sidebar.panellist` — **Plugins**, and *Automation tasks*
+wherever that row is mounted), the **workspaces/sessions browsing region**
+(`sidebar.workspaces`), and the **foot** (`sidebar.footer.action` plus
+`sidebar.settings`). So the panel rows sit *above* the workspace list, wedged
+between it and New Session.
+
+vncode reads that column the other way round: the browsing region is what a person
+opens the bar **for**, so it belongs at the top under New Session, and the global
+panels are navigation to whole **pages** of the app, which belongs down with
+**Settings** — Plugins immediately above Settings, where the eye already goes for
+"the app itself" rather than for a conversation.
+
+```css
+html .hHd-Xa_root .hHd-Xa_regionArea{order:1}
+html .hHd-Xa_root .hHd-Xa_panelList{order:2}
+html .hHd-Xa_root .hHd-Xa_footArea{order:3}
+```
+
+**`order`, because the column is a flex column.** `SidebarRoot` is
+`flex-direction:column`, so the rows move without touching the DOM, re-registering a
+slot, or forking the shell; the region keeps its `flex:1`, so it still absorbs the
+slack and the panel rows plus the foot stay pinned to the bottom of the column. A
+panel's **own** `order` cannot do this — it sorts *within* the panel list, which is
+exactly the list that has to move. The three declarations are needed rather than one
+because a bare `nav{order:1}` would land the rows *below* the foot, whose children
+sit at the default order.
+
+**What it costs, stated plainly.** `order` is visual only, so the Tab walk still
+reaches Plugins before the workspace list. That is the one thing a CSS reorder cannot
+fix, and the alternative — a fork of the sidebar shell — is a generated core bundle
+this pack does not own and has no reason to take. The selectors are three of that
+module's own hashed class names, pinned to the harness line in `.dsh-version.json`
+exactly like the top bar above: on a bump that renames them this matches nothing and
+the shell's own order stands.
+
+### The fullscreen panel is the whole viewport again
+
+The right bar's presentation switch (the button beside the collapse control) makes
+the panel cover the app. The fork sizes it with **one inline declaration**,
+`width:100vw`, and a **viewport unit is not zoom-adjusted**: CSS `zoom` multiplies
+the used value of a **length**, and the spec exempts only `auto` and
+`<percentage>`. The frame, by contrast, stretches by percentage (the pack's own
+measurement in [The page-zoom control](#the-page-zoom-control): at 80% on a 1440px
+window the frame's rect was 1440 while its layout width was 1800). So the frame *is*
+the app viewport at every level and `100vw` is not: at the 90% this machine runs, a
+fullscreen panel painted at **90% of the viewport** and — anchored `right:0` — left a
+10% strip of the left bar uncovered.
+
+```css
+html[data-dsh-page-zoomed] [data-rightbar-col]:has([data-sidebar-right-panel=fullscreen]){position:static}
+html[data-dsh-page-zoomed] [data-sidebar-right-panel=fullscreen]{width:100%!important}
+```
+
+**A percentage instead of a viewport unit.** While a fullscreen panel exists the
+column stops being the panel's containing block, so the panel resolves against
+`.pI_x6G_frame` — the one box measured to be the whole app viewport at any zoom — and
+`100%` is exactly the width asked for. `!important` is required because the component
+writes its width **inline**; `top:0;bottom:0` already give the full height, so no
+height rule is needed; and the shipped `[data-windows-titlebar]` `max-width` still
+wins if a desktop shell ever sets that attribute, because `max-width` beats `width`.
+
+**Scoped to fullscreen, and inert at 100%.** Both rules are gated on the marker the
+zoom control writes (`data-dsh-page-zoomed`), exactly like the seam rule that
+already repairs this same zoom fact one box over: at the resting level `100vw` and
+the frame agree to the pixel, so a page nobody has zoomed keeps the fork's own
+geometry untouched. And the containment change is scoped to the **fullscreen** state
+on purpose — a blanket `[data-rightbar-col]{position:static}` would move the
+push-mode panel out of the column too, and **dsh-cmdbar** shortens that column
+while the command dock is open precisely so the panel's absolute box sits inside the
+shortened column. In fullscreen the dock yields instead, so the two never meet.
+
+
+## The glyphs that stopped existing, and the rows that must measure the same (alpha.23)
+
+Two reports from the running app, one root cause and one measurement.
+
+**The three-dot menu came back.** The 0.2.0-rc.2 line of
+`@deepseek-ai/dsh-client-ui-primitives` renamed every `…16` glyph export to
+`…Regular`, and this package still asked for the old spelling: the glyph the
+download seat wears (`IconDownloadOutline16`) is not an export there, so the read
+was `undefined` and `React.createElement(undefined, …)` threw *Element type is
+invalid* the moment the seat rendered.
+
+That is not a broken icon, and the difference is the whole story: the slots core
+treats a render crash as **abdication** — the crashed entry is retired from its
+cell and the next entry for the same id takes the seat. So the reader got the
+shipped `session-log-download` occupant back, i.e. the three-dot **More actions**
+menu with its one `Download session log` item: exactly the control
+[The Session-log download seat](#the-session-log-download-seat) replaced with one
+button. The same trap was loaded against the Themes control, whose three
+preference glyphs (`IconLightOutline16`, `IconDarkOutline16`,
+`IconFollowsystemOutline16`) had gone the same way.
+
+No glyph is read straight off the primitives object any more. `glyphOf([…])`
+walks the spellings the harness lines have used, newest first, and a list that
+resolves to nothing is ONE warning plus a placeholder component — never
+`undefined`, because a header seat must not be lost to a renamed export. The
+guard is graded from both sides: `check-client-bundles.mjs` now fails when any
+`primitives.<Name>` this pack reads is absent from the **pinned** line, and when a
+glyph list no longer reaches a single shipped name. Its primitives stand-in also
+stopped carrying the old `…16` names: a stub richer than the package it stands in
+for is what hid this in the first place.
+
+**Plugins sat 6px shorter than Settings.** The shell draws a global panel row
+`min-height:36px` with `padding:7px 8px` around a 22px line and the Settings
+trigger `height:42px` with `padding:0 10px 0 8px` inside a row 4px wider than the
+column. Both sit at the foot of the same column since alpha.22 moved the panel
+rows there, so the difference read as "the Plugins button is smaller". The
+panel-order stylesheet gives the panel row the Settings row's own box —
+`height:42px; min-height:42px; width:calc(100% + 4px); margin:4px -2px;
+padding:0 10px 0 8px; font-size:14px; line-height:22px` — scoped with
+`:not(.hHd-Xa_collapsed)`, because collapsed the shell draws both as the same 36px
+square and the numbers belong to the wide column. Two checks in
+`check-client-bundles.mjs` pin the rule and its scope.
+
 
 ## Install / uninstall
 

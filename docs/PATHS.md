@@ -152,8 +152,8 @@ map because "where did my file go" is the same question:
 | **Chrome** (browser launcher only) | `Chrome` on `PATH` → the standard install folders → the `App Paths` registry entry; `open -a "Google Chrome"`; `google-chrome` / `chromium`; the platform default last | `scripts/run-web.sh` / `scripts/run-web.ps1` |
 
 The editor and the git tree resolve the **workspace folder** out of the session,
-and so did `dsh-terminal`'s PTY while it had one — those are user paths, read not
-owned, so they are not on this map. `dsh-terminal` alpha.12 removed the PTY (and
+and so did `dsh-cmdbar`'s PTY while it had one — those are user paths, read not
+owned, so they are not on this map. `dsh-cmdbar` (then `dsh-terminal`) alpha.12 removed the PTY (and
 with it the pack's only per-OS shell resolver: every plugin here is now
 OS-neutral, and the only per-OS code left is a launcher choosing the host command).
 

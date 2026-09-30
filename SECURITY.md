@@ -191,7 +191,8 @@ routes behind it*.
 Everything the pack adds hangs off layer 4: its HTTP routes go through
 `connection.fetch.register` on the shared `/api` channel (which applies
 `requestRejection` before the handler runs), and it registers **no WebSocket
-upgrade at all** — terminal alpha.12 deleted the only one this pack ever had
+upgrade at all** — the command bar's alpha.12 (the package was `dsh-terminal`
+then, and is `dsh-cmdbar` from alpha.14) deleted the only one this pack ever had
 (`/api/dsh-terminal/pty`, which called `connection.requestRejection` itself and
 wrote a bare `401`/`403` into the socket before `ws` saw it). Nothing in this pack
 opens a raw socket today.
@@ -295,13 +296,16 @@ Get-NetTCPConnection -LocalPort 3080 -State Listen |
 
 ```sh
 # 2. Unauthenticated access is refused. Expect 401 and a one-line body.
-curl -i http://127.0.0.1:3080/api/dsh-terminal/health
+#    (Any registered route does; the command bar's read-only one is used here -
+#    the /api/dsh-terminal/health probe this example used to name was deleted in
+#    alpha.12, and the package is dsh-cmdbar from alpha.14.)
+curl -i http://127.0.0.1:3080/api/dsh-cmdbar/activity
 curl -i http://127.0.0.1:3080/            # the index answers 401 too
 
 # 3. The Host fence works. Expect 403 for a foreign authority...
-curl -i -H 'Host: evil.example' http://127.0.0.1:3080/api/dsh-terminal/health
+curl -i -H 'Host: evil.example' http://127.0.0.1:3080/api/dsh-cmdbar/activity
 # ...and 403 for a page claiming to be cross-site.
-curl -i -H 'Sec-Fetch-Site: cross-site' http://127.0.0.1:3080/api/dsh-terminal/health
+curl -i -H 'Sec-Fetch-Site: cross-site' http://127.0.0.1:3080/api/dsh-cmdbar/activity
 ```
 
 ```sh
@@ -338,7 +342,7 @@ including delete is a POST).
 | `GET/HEAD /api/dsh-pdf/state\|health`, `GET/HEAD /api/dsh-pdf/file`, `GET/HEAD /api/dsh-pdf/list`, `POST /api/dsh-pdf/scan`, `GET/HEAD /api/dsh-pdf/vendor/*`, plus the five `pdf_*` tools and the bundled `pdf-analysis` skill | read a document's facts and text, **scan** the pages that are a picture of text, serve the vendored pdf.js engine, list the workspace's PDFs, and show a PDF in the reader tab | **read-only** - no tool modifies, merges, splits, rotates, fills or signs a document; extraction runs in a child process (argv only, a 25 s deadline, a 512 MiB heap cap, an 8 MiB stdout cap) that gates the parser itself (`isEvalSupported:false` - a document's embedded JavaScript is never evaluated - `useWorkerFetch:false` with no URL fetching anywhere, `enableXfa:false`, `useSystemFonts:false`); a session-relative path is realpath-checked to stay inside the workspace (a symlink out is refused) while an absolute path is read directly, and either way the target must be a regular `.pdf` within the ceiling (512 MiB for the tools, 256 MiB for the tab); `pdf_render` writes only NEW PNGs, create-exclusively, under a host-generated name in a caller-named directory; the optional rasterizer (`pdftoppm`/`mutool`/Ghostscript) and `tesseract` are spawned with argv arrays under a pinned environment and killed on a deadline |
 | `POST /api/dsh-themes/screenshot` | write one PNG to the **Desktop** of the machine running the app | requires `content-type: image/png`, a real PNG signature and ≤ 64 MiB; the Desktop is resolved per request (Windows plain or OneDrive-redirected, XDG on Linux, home as the last resort); the file name is host-generated (`vncode-<timestamp>.png`, `-2`, `-3`, ... on a collision) and written create-exclusively, so no file the user already had can be replaced and the client cannot ask for any other location |
 | `POST /api/dsh-open-in-app/open` | open a **file-manager window** on a directory the client names | the app id must be one of the file managers the pack supports (editor and terminal ids are refused), the path must be absolute and must exist; the OS launcher is spawned with an argv array, never a shell string |
-| `GET /api/dsh-terminal/activity` | read a filtered **tail of one conversation's own session events** (only `tool/call`, `tool/result` and a HUMAN `user/message`), so the dock can draw what the agent ran | **read-only and bounded**: at most 400 relevant events and roughly 512 KiB, newest kept, with `hasMore` stating what was left out; it reads the host's live session registry (a conversation no process has open answers `NOT_LIVE` with a 200), and nothing is written, spawned or downloaded. Terminal alpha.12 deleted the WebSocket upgrade, the PTY, the vendored xterm assets and the `/health` probe that used to sit here, so **this pack no longer exposes a shell of any kind** — which also removed the "unsandboxed shell" caveat this table used to carry. Use the harness's own terminal tabs when you want a shell |
+| `GET /api/dsh-cmdbar/activity` | read a filtered **tail of one conversation's own session events** (only `tool/call`, `tool/result` and a HUMAN `user/message`), so the dock can draw what the agent ran | **read-only and bounded**: at most 400 relevant events and roughly 512 KiB, newest kept, with `hasMore` stating what was left out; it reads the host's live session registry (a conversation no process has open answers `NOT_LIVE` with a 200), and nothing is written, spawned or downloaded. Terminal alpha.12 deleted the WebSocket upgrade, the PTY, the vendored xterm assets and the `/health` probe that used to sit here, so **this pack no longer exposes a shell of any kind** — which also removed the "unsandboxed shell" caveat this table used to carry. Use the harness's own terminal tabs when you want a shell |
 | six diagram tools + the two bundled skills | let the model write, patch, verify, publish and delete diagrams, and read the two skill documents | a write is validated before it is stored (Mermaid through the vendored engine in a child process behind a DOM stub; TikZ through the machine's own engine), the tools cannot read arbitrary files — only the diagram source they own — and they cannot reach the network |
 | browser halves | add tabs, buttons, dialogs and CSS to the Web GUI | they run in the harness's own module table (`window.__ModuleLoader__`), may `require("react")` only, take no Node imports, and reach every other service through `ctx.get(...)` after declaring it in `inject`; the only DOM they add is their own, and the only shipped thing one of them hides is a header seat/menu the pack replaces on purpose (see `packages/dsh-themes/README.md` and `packages/dsh-editor/README.md`) |
 
@@ -395,7 +399,7 @@ cookie leaks, rotate the signing secret.
   `lib/vendor/VERSION.json`) and `dsh-pdf`'s pdf.js (`pdfjs-dist@6.3.289`, every
   file's bytes+sha256 in its own `lib/vendor/VERSION.json`) are built from their
   `vendor/` folders and served by the packages themselves — no CDN, no runtime
-  download. (`dsh-terminal` vendored xterm.js the same way until alpha.12; the
+  download. (`dsh-cmdbar` - then named `dsh-terminal` - vendored xterm.js the same way until alpha.12; the
   entry and its `vendor/` folder are gone with the terminals, and the pack now
   vendors three engines rather than four.)
 - **Generated files are marked and checked.** The three forked bundles carry a

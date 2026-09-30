@@ -314,22 +314,44 @@ function loadBundle(relative, extraRequire) {
       }
       // Button renders its children, so a footer's label reaches the markup.
       const Push = (props) => (props && props.children !== undefined ? props.children : null)
+      // The clipboard helper the pinned line really exports
+      // (`writeClipboard(text)`, which answers whether the host accepted the
+      // write). It is here because the REAL package exports it: a stub poorer
+      // than the package it stands in for would let an unqualified
+      // `writeClipboard(...)` call in a bundle look like a call to an absent
+      // primitive - a quiet no-op here - while throwing a ReferenceError in the
+      // browser. alpha.14 was exactly that bug, twice over.
+      const Clip = async () => true
       return {
         Menu: Anchor,
         Tooltip: Child,
         MarkdownText: Text,
         Modal: Dialog,
         Button: Push,
+        writeClipboard: Clip,
         // The toast portals a message anchored to a control; a static render only
         // needs it to exist (it is rendered after an attempt, never at rest).
         Toast: Null,
-        IconChevronDownOutline14: Null,
-        IconLightOutline16: Null,
-        IconDarkOutline16: Null,
-        IconFollowsystemOutline16: Null,
-        IconDownloadOutline16: Null,
-        IconCheckOutline16: Null,
-        IconWarningOutline16: Null,
+        // THE GLYPH NAMES ARE THE PINNED LINE'S, SPELLING INCLUDED, and that is
+        // load-bearing: this list used to carry the `…16` names of an older line,
+        // so dsh-themes could read `primitives.IconDownloadOutline16` here - and
+        // render a download button - while the real 0.2.0-rc.2 primitives had no
+        // such export at all, `h(undefined)` threw, and the slots core ABDICATED
+        // the seat, bringing the shipped three-dot menu back. A stub that is
+        // richer than the package it stands in for hides exactly this class of
+        // bug, which is why the old spellings are gone rather than kept beside
+        // the new ones. (Medium is here because the real ui-theme reads it.)
+        IconChevronDownOutlineRegular: Null,
+        IconChevronUpOutlineRegular: Null,
+        IconLightOutlineRegular: Null,
+        IconLightOutlineMedium: Null,
+        IconDarkOutlineRegular: Null,
+        IconDarkOutlineMedium: Null,
+        IconFollowsystemOutlineRegular: Null,
+        IconFollowsystemOutlineMedium: Null,
+        IconDownloadOutlineRegular: Null,
+        IconCheckOutlineRegular: Null,
+        IconWarningOutlineRegular: Null,
       }
     }
     throw new Error('unexpected require in a client bundle: ' + name)
@@ -1469,6 +1491,30 @@ check(
 )
 check('branding covers the collapsed rail too', topBar.includes('.hHd-Xa_railMark::before'))
 
+// alpha.22: the global panel rows at the column's FOOT. `SidebarRoot` is a flex
+// column, so three `order` declarations move the rows without touching the DOM:
+// the workspaces/sessions region takes the seat the panel rows vacate (under
+// "New Session"), Plugins comes to rest immediately above Settings, and the
+// region keeps its `flex:1` so the rows below it stay pinned to the bottom. The
+// three values are pinned one by one, so a rule that stops moving a row - or one
+// that lands the region BELOW the foot - fails here rather than in the eye.
+const orderTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/sidebar-order.css').pop()
+const panelOrder = orderTag ? orderTag.textContent : ''
+check('panel-order rule injected', panelOrder.includes('.hHd-Xa_panelList{order:2}'))
+check('the workspaces region takes the panel rows\' seat', panelOrder.includes('.hHd-Xa_regionArea{order:1}'))
+check('the foot (Settings) stays last', panelOrder.includes('.hHd-Xa_footArea{order:3}'))
+check('panel-order is engine-neutral', panelOrder.includes(':has('), false)
+// alpha.23: the two rows now sit side by side at the foot, so they must MEASURE
+// the same. The shell draws a panel row 36px tall and the Settings trigger 42px,
+// which read as "the Plugins button is smaller"; the rule gives the panel row the
+// Settings box - and only while the column is wide, because both collapse to the
+// same 36px square in the rail.
+check('the panel row wears the Settings row\'s box', panelOrder.includes('.hHd-Xa_panelRow{height:42px;min-height:42px'))
+check(
+  'and only while the column is wide',
+  panelOrder.includes(':not(.hHd-Xa_collapsed) .hHd-Xa_panelList .hHd-Xa_panelRow'),
+)
+
 // alpha.9: the header's icon-button RING. The pack's own header buttons draw it
 // themselves, so this package's copy is pinned here; the shipped right-bar toggle
 // in the header corner cannot (it lives in a GENERATED fork), so one rule keyed
@@ -1552,9 +1598,62 @@ check(
 )
 check(
   'the seam override is inert at the resting level',
-  zoomSeam.split('html[data-dsh-page-zoomed]').length - 1 === 2 && zoomSeam.replace(/html\[data-dsh-page-zoomed\]/g, '').includes('html[') === false,
+  zoomSeam.split('html[data-dsh-page-zoomed]').length - 1 === 4 && zoomSeam.replace(/html\[data-dsh-page-zoomed\]/g, '').includes('html[') === false,
 )
 check('the seam keys on a stable marker', zoomSeam.includes('_handle') === false && zoomSeam.includes('pI_x6G') === false)
+// alpha.22, the SAME zoom fact one box over: the fullscreen panel's width. The
+// fork sizes it with an inline `width:100vw`, and a viewport LENGTH is not
+// zoom-adjusted (only `auto`/percentages are exempt from the `zoom` multiplier),
+// so at the 90% this machine runs the panel painted at 90% of the app viewport
+// and - anchored `right:0` - left a 10% strip of the left bar uncovered. The
+// repair gives it a PERCENTAGE of the frame instead: with the column static
+// while a fullscreen panel exists, the panel's containing block is the frame,
+// the one box that IS the whole viewport at any zoom. Three things are pinned:
+// the percentage (which must beat the inline width), the containment change it
+// depends on, and that the change is scoped to FULLSCREEN - a blanket
+// `[data-rightbar-col]{position:static}` would also move the push-mode panel out
+// of the column that dsh-cmdbar shortens while the command dock is open.
+check(
+  'the fullscreen panel sizes against the frame, not the viewport',
+  zoomSeam.includes('[data-rightbar-col]:has([data-sidebar-right-panel=fullscreen]){position:static}'),
+)
+check(
+  'the fullscreen panel width is a percentage, beating the inline 100vw',
+  zoomSeam.includes('[data-sidebar-right-panel=fullscreen]{width:100%!important}'),
+)
+check(
+  'the push-mode panel keeps its containing block',
+  zoomSeam.includes('[data-rightbar-col]{position:static}') === false,
+)
+// The account menu's shipped **Feedback** row (alpha.21). vncode does not ask
+// its users for feedback, and that one row is the only control in the app that
+// opens an EXTERNAL form in a new window - the Feishu questionnaire
+// @deepseek-ai/dsh-client-ui-settings-account's `contactUrl()` builds with the
+// uid, the locale, the harness version and the device info attached. There is no
+// row to disable (the item is hardcoded in that package's AccountMenu), so the
+// row is hidden by one rule. What is pinned here is that the rule keys on the
+// ICON's path data rather than on a hashed class (a rebuild renames the classes
+// and leaves the artwork alone), that it hides the row in BOTH the shape the
+// primitive renders today and the bare-button shape it would fall back to, and
+// that it is scoped to a menu row - the same paper-plane artwork is also drawn by
+// the chat's turn-trigger notice and by the Session-export header button, and
+// hiding either of those would be a real regression.
+const accountTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/account-menu.css').pop()
+const accountMenu = accountTag ? accountTag.textContent : ''
+check('account menu override injected', accountTag !== undefined)
+check(
+  'account menu: the Feedback row is hidden in both shapes',
+  accountMenu.includes('[role="menu"]>div:has(>button[role="menuitem"] svg path[d^="M4.74024 9.11029"]){display:none}') &&
+    accountMenu.includes('[role="menu"] button[role="menuitem"]:has(svg path[d^="M4.74024 9.11029"]){display:none}'),
+)
+check(
+  'account menu: the rule is scoped to a menu row, never to the artwork alone',
+  (accountMenu.match(/\[role="menu"\]/g) || []).length === 2 && accountMenu.includes('[role="menuitem"]'),
+)
+check(
+  'account menu: the rule pins no hashed class',
+  /[._][A-Za-z0-9]{5,}_/.test(accountMenu) === false && accountMenu.includes('data-menu-item') === false,
+)
 
 // --------------------------------------------------------------- dsh-gittree
 const gitTree = loadBundle('packages/dsh-gittree/lib/client.js', {})
@@ -1734,24 +1833,24 @@ check('gittree: the pull request wears its chip', gitRailMarkup.includes('data-g
 check('gittree: the branch HEAD points at wears a chip', gitRailMarkup.includes('data-kind="head"') && gitRailMarkup.includes('data-gittree-ref="main"'))
 check('gittree: a plain branch wears a chip', gitRailMarkup.includes('data-gittree-ref="feature"'))
 
-// -------------------------------------------------------------- dsh-terminal
-const terminal = loadBundle('packages/dsh-terminal/lib/client.js', {})
-const termCssTag = terminal.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-terminal/terminal.css').pop()
-const termCss = termCssTag ? termCssTag.textContent : ''
-check('terminal bundle id', terminal.id, 'dsh-terminal')
-check('terminal inject', JSON.stringify(terminal.exports.inject), '["slots"]')
+// -------------------------------------------------------------- dsh-cmdbar
+const cmdbar = loadBundle('packages/dsh-cmdbar/lib/client.js', {})
+const cmdbarCssTag = cmdbar.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-cmdbar/cmdbar.css').pop()
+const cmdbarCss = cmdbarCssTag ? cmdbarCssTag.textContent : ''
+check('cmdbar bundle id', cmdbar.id, 'dsh-cmdbar')
+check('cmdbar inject', JSON.stringify(cmdbar.exports.inject), '["slots"]')
 check(
-  'terminal stylesheet injected',
-  termCss.includes('.dst-dock{position:fixed;') &&
-    termCss.includes('.dst-dock[data-open]:not([data-suspended]){display:flex}') &&
-    termCss.includes('.dst-grip{'),
+  'cmdbar stylesheet injected',
+  cmdbarCss.includes('.dsc-dock{position:fixed;') &&
+    cmdbarCss.includes('.dsc-dock[data-open]:not([data-suspended]){display:flex}') &&
+    cmdbarCss.includes('.dsc-grip{'),
 )
-const termSeats = {}
-terminal.exports.apply({
+const cmdbarSeats = {}
+cmdbar.exports.apply({
   slots: {
     inject: (name, fn) => fn(),
     register(spec, component) {
-      termSeats[spec.name] = { spec, component }
+      cmdbarSeats[spec.name] = { spec, component }
       return () => {}
     },
   },
@@ -1759,38 +1858,38 @@ terminal.exports.apply({
   logger: { debug() {}, warn() {} },
 })
 check(
-  'terminal seats',
-  Object.keys(termSeats).sort().join(','),
+  'cmdbar seats',
+  Object.keys(cmdbarSeats).sort().join(','),
   'conversation.session.header.utilities,shell.overlay',
 )
-check('terminal button id', termSeats['conversation.session.header.utilities'].spec.id, 'dsh-terminal')
+check('cmdbar button id', cmdbarSeats['conversation.session.header.utilities'].spec.id, 'dsh-cmdbar')
 // Right of Open In... (-10) and left of the right bar's own toggle in the corner.
-check('terminal button order', termSeats['conversation.session.header.utilities'].spec.order, 30)
-check('terminal dock rides the overlay list', termSeats['shell.overlay'].spec.id, 'dsh-terminal')
-const termButtonMarkup = renderToStaticMarkup(h(termSeats['conversation.session.header.utilities'].component, { sessionId: 's1' }))
+check('cmdbar button order', cmdbarSeats['conversation.session.header.utilities'].spec.order, 30)
+check('cmdbar dock rides the overlay list', cmdbarSeats['shell.overlay'].spec.id, 'dsh-cmdbar')
+const cmdbarButtonMarkup = renderToStaticMarkup(h(cmdbarSeats['conversation.session.header.utilities'].component, { sessionId: 's1' }))
 check(
-  'terminal button renders',
-  termButtonMarkup.includes('data-dsh-terminal-toggle') && termButtonMarkup.includes('aria-label="The agent\u2019s commands"'),
+  'cmdbar button renders',
+  cmdbarButtonMarkup.includes('data-dsh-cmdbar-toggle') && cmdbarButtonMarkup.includes('aria-label="The agent\u2019s commands"'),
 )
-check('terminal button reports its state', termButtonMarkup.includes('aria-pressed="false"'))
+check('cmdbar button reports its state', cmdbarButtonMarkup.includes('aria-pressed="false"'))
 // The dock is always mounted (so its effects own the geometry); `data-open` is
 // the intent flag and must be absent while it is closed.
-const termDockMarkup = renderToStaticMarkup(h(termSeats['shell.overlay'].component, {}))
-check('terminal dock renders closed', termDockMarkup.includes('data-dsh-terminal-dock') && termDockMarkup.includes('role="region"'))
-check('terminal dock closed by default', termDockMarkup.includes('data-open') === false)
-check('terminal dock draws the kit', termDockMarkup.includes('class="dst-grip"') && termDockMarkup.includes('class="dst-bar"'))
+const cmdbarDockMarkup = renderToStaticMarkup(h(cmdbarSeats['shell.overlay'].component, {}))
+check('cmdbar dock renders closed', cmdbarDockMarkup.includes('data-dsh-cmdbar-dock') && cmdbarDockMarkup.includes('role="region"'))
+check('cmdbar dock closed by default', cmdbarDockMarkup.includes('data-open') === false)
+check('cmdbar dock draws the kit', cmdbarDockMarkup.includes('class="dsc-grip"') && cmdbarDockMarkup.includes('class="dsc-bar"'))
 // alpha.12: the dock draws ONE view and nothing else, and a static render can see
 // all of it - no chip strip, no "+", no Agent toggle (there is no second view to
 // toggle to), and no emulator host even before mount.
-check('terminal dock has no xterm before mount', termDockMarkup.includes('xterm') === false)
+check('cmdbar dock has no xterm before mount', cmdbarDockMarkup.includes('xterm') === false)
 check(
-  'terminal dock carries no chip strip and no add control',
-  termDockMarkup.includes('dst-chips') === false && termDockMarkup.includes('dst-chip') === false && termDockMarkup.includes('dst-nav') === false,
+  'cmdbar dock carries no chip strip and no add control',
+  cmdbarDockMarkup.includes('dsc-chips') === false && cmdbarDockMarkup.includes('dsc-chip') === false && cmdbarDockMarkup.includes('dsc-nav') === false,
 )
-check('terminal dock has no view toggle any more', termDockMarkup.includes('dst-actToggle') === false)
+check('cmdbar dock has no view toggle any more', cmdbarDockMarkup.includes('dsc-actToggle') === false)
 check(
-  'terminal dock names the Agent view and wears its state',
-  termDockMarkup.includes('>Agent<') && termDockMarkup.includes('data-state="idle"') && termDockMarkup.includes('class="dst-spacer"'),
+  'cmdbar dock names the Agent view and wears its state',
+  cmdbarDockMarkup.includes('>Agent<') && cmdbarDockMarkup.includes('data-state="idle"') && cmdbarDockMarkup.includes('class="dsc-spacer"'),
 )
 // Two behaviours that only exist after mount, pinned at the source level because
 // a static render runs no effects:
@@ -1800,17 +1899,17 @@ check(
 //     too - its content visibly slid up the moment the dock opened (alpha.1), and
 //     the left bar must look exactly the same with the dock open;
 //  2. the panel IS the body, so nothing about it depends on a second view.
-const termSource = readFileSync(path.join(repo, 'packages/dsh-terminal/lib/client.js'), 'utf8')
-check('terminal never resizes the frame', /frame(El)?\.style\.height\s*=/.test(termSource), false)
-check('terminal insets the two columns it spans', termSource.includes('previousElementSibling') && termSource.includes('frame.children[0]'))
-check('terminal gives room by column height', termSource.includes("'calc(100% - ' + String(dock.height) + 'px)'"))
+const cmdbarSource = readFileSync(path.join(repo, 'packages/dsh-cmdbar/lib/client.js'), 'utf8')
+check('cmdbar never resizes the frame', /frame(El)?\.style\.height\s*=/.test(cmdbarSource), false)
+check('cmdbar insets the two columns it spans', cmdbarSource.includes('previousElementSibling') && cmdbarSource.includes('frame.children[0]'))
+check('cmdbar gives room by column height', cmdbarSource.includes("'calc(100% - ' + String(dock.height) + 'px)'"))
 //  3. the LEFT BAR is animated: collapsing it rewrites the grid tracks once and
 //     then transitions them, so a MutationObserver on that write reads the
 //     PRE-transition value and is never called again - the dock stood at the old
 //     left edge. What changes on every frame of that transition is the SIZE of
 //     the columns the dock spans, which is what a ResizeObserver reports.
-check('terminal tracks the animated left bar', termSource.includes('new ResizeObserver(') && termSource.includes('columnObserver.observe(column)'))
-check('terminal also snaps on transitionend', termSource.includes("frame.addEventListener('transitionend', onTransitionEnd)"))
+check('cmdbar tracks the animated left bar', cmdbarSource.includes('new ResizeObserver(') && cmdbarSource.includes('columnObserver.observe(column)'))
+check('cmdbar also snaps on transitionend', cmdbarSource.includes("frame.addEventListener('transitionend', onTransitionEnd)"))
 //  alpha.6: placing the dock and FOLLOWING the frame are two effects. As one,
 //  keyed on the height, every frame of a dock drag disconnected a
 //  MutationObserver and a ResizeObserver and built them again, and their pending
@@ -1818,12 +1917,12 @@ check('terminal also snaps on transitionend', termSource.includes("frame.addEven
 //  on `open` alone (the `|| !open` guard is its tell) and reads `dock.height` at
 //  call time; a drag only ever runs the two-write placement effect.
 check(
-  'terminal installs its frame observers once per open, not per height',
-  termSource.includes('// Geometry, part one: PLACE the dock') &&
-    termSource.includes('// Geometry, part two: FOLLOW the app frame') &&
-    termSource.includes('if (node === null || !open) return undefined') &&
-    termSource.includes('const refit = () => {') &&
-    termSource.includes('observer = new MutationObserver(refit)'),
+  'cmdbar installs its frame observers once per open, not per height',
+  cmdbarSource.includes('// Geometry, part one: PLACE the dock') &&
+    cmdbarSource.includes('// Geometry, part two: FOLLOW the app frame') &&
+    cmdbarSource.includes('if (node === null || !open) return undefined') &&
+    cmdbarSource.includes('const refit = () => {') &&
+    cmdbarSource.includes('observer = new MutationObserver(refit)'),
 )
 //  alpha.6: the drag itself. The height comes from the POINTER, never from the
 //  dock's rect (the grip moves as the dock moves, so a handler that measured it
@@ -1833,18 +1932,18 @@ check(
 //  alpha.12 removed the third rule it used to assert here - the PTY size message
 //  it throttled - because there is no shell to size any more.
 check(
-  'terminal drag is frame-coalesced, capturable and cancellable',
-  termSource.includes('requestAnimationFrame(apply)') &&
-    termSource.includes('setPointerCapture') &&
-    termSource.includes("window.addEventListener('pointercancel', finish)") &&
-    termSource.includes("document.body.classList.add('dst-dragging')") &&
-    termCss.includes('body.dst-dragging{'),
+  'cmdbar drag is frame-coalesced, capturable and cancellable',
+  cmdbarSource.includes('requestAnimationFrame(apply)') &&
+    cmdbarSource.includes('setPointerCapture') &&
+    cmdbarSource.includes("window.addEventListener('pointercancel', finish)") &&
+    cmdbarSource.includes("document.body.classList.add('dsc-dragging')") &&
+    cmdbarCss.includes('body.dsc-dragging{'),
 )
 check(
-  'terminal settles the HEIGHT on release and sizes nothing',
-  termSource.includes('flushSharedHeight()') &&
-    termSource.includes('runtime.settle()') === false &&
-    termSource.includes('SIZE_WIRE_MS') === false,
+  'cmdbar settles the HEIGHT on release and sizes nothing',
+  cmdbarSource.includes('flushSharedHeight()') &&
+    cmdbarSource.includes('runtime.settle()') === false &&
+    cmdbarSource.includes('SIZE_WIRE_MS') === false,
 )
 // alpha.12: THE TERMINAL HALF IS GONE, and it is gone from this bundle rather
 // than merely hidden. Each of these was a real mechanism through alpha.11 - a
@@ -1852,16 +1951,16 @@ check(
 // second column of UI - and 0.2's right Sidebar ships terminal tabs of its own,
 // so their return would be a regression rather than a feature.
 check(
-  'terminal half is gone from the browser bundle',
-  termSource.includes('new WebSocket(') === false &&
-    termSource.includes('DSHTerminal') === false &&
-    termSource.includes('/api/dsh-terminal/pty') === false &&
-    termSource.includes('revealDelta') === false &&
-    termSource.includes('ACTIVITY_VIEW') === false &&
-    termSource.includes('DockRuntime') === false &&
-    termSource.includes('onRunInTerminal') === false &&
-    termSource.includes('MAX_TERMINALS') === false &&
-    termSource.includes('dst-chips') === false,
+  'cmdbar half is gone from the browser bundle',
+  cmdbarSource.includes('new WebSocket(') === false &&
+    cmdbarSource.includes('DSHTerminal') === false &&
+    cmdbarSource.includes('/api/dsh-cmdbar/pty') === false &&
+    cmdbarSource.includes('revealDelta') === false &&
+    cmdbarSource.includes('ACTIVITY_VIEW') === false &&
+    cmdbarSource.includes('DockRuntime') === false &&
+    cmdbarSource.includes('onRunInTerminal') === false &&
+    cmdbarSource.includes('MAX_TERMINALS') === false &&
+    cmdbarSource.includes('dsc-chips') === false,
 )
 // alpha.6: the shared section may only move the dock when the value is NEWS. The
 // dock's height rides a queued, non-optimistic wire write, and the scope
@@ -1871,18 +1970,49 @@ check(
 // one-write-per-pointer-move takes to drain. That is the "the size glitches and I
 // have to hide it" report in arithmetic, so it is pinned behaviourally rather
 // than by the source shapes that let it ship.
-const adoptDecision = terminal.exports.__internals.adoptDecision
+const adoptDecision = cmdbar.exports.__internals.adoptDecision
 const adopt = (input) =>
   adoptDecision(Object.assign({ ready: true, dragging: false, pending: 0, shared: 400, known: null, current: 280 }, input))
-check('terminal adopt: news moves the dock', adopt({}), 400)
-check('terminal adopt: the pointer owns the height', adopt({ dragging: true }), null)
-check('terminal adopt: our own echo is not news', adopt({ shared: 400, known: 400 }), null)
-check('terminal adopt: a write of ours still on the wire is not news', adopt({ pending: 1, shared: 300, known: 400 }), null)
-check('terminal adopt: a height already in force moves nothing', adopt({ shared: 280, current: 280 }), null)
-check('terminal adopt: an unready section waits', adopt({ ready: false }), null)
-check('terminal adopt: an absent value is not a height of zero', adopt({ shared: null }), null)
-check('terminal adopt: another window still moves the dock', adopt({ shared: 350, known: 400, current: 280 }), 350)
-check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0.1.0-alpha.12'))
+check('cmdbar adopt: news moves the dock', adopt({}), 400)
+check('cmdbar adopt: the pointer owns the height', adopt({ dragging: true }), null)
+check('cmdbar adopt: our own echo is not news', adopt({ shared: 400, known: 400 }), null)
+check('cmdbar adopt: a write of ours still on the wire is not news', adopt({ pending: 1, shared: 300, known: 400 }), null)
+check('cmdbar adopt: a height already in force moves nothing', adopt({ shared: 280, current: 280 }), null)
+check('cmdbar adopt: an unready section waits', adopt({ ready: false }), null)
+check('cmdbar adopt: an absent value is not a height of zero', adopt({ shared: null }), null)
+check('cmdbar adopt: another window still moves the dock', adopt({ shared: 350, known: 400, current: 280 }), 350)
+check('cmdbar dock names the version', cmdbarDockMarkup.includes('dsh-cmdbar 0.1.0-alpha.14'))
+// alpha.14: the RENAME. The bundle, its row id, its two seats, the one route it
+// reads and the data-* attributes a person or a test can find it by all moved
+// from `dsh-terminal` to `dsh-cmdbar`, because the old name described the
+// emulator alpha.12 deleted and collided with the harness's own
+// `@deepseek-ai/dsh-terminal` PTY seam. The CSS prefix moved with it (`dst-` ->
+// `dsc-`), which also ends the accident that dsh-themes' own `.dst-button` and
+// this package's `.dst-btn` shared a namespace.
+check(
+  'cmdbar carries its new name everywhere a name is read',
+  cmdbarSource.includes("id: 'dsh-cmdbar'") &&
+    cmdbarSource.includes("const ACTIVITY_ROUTE = '/api/dsh-cmdbar/activity'") &&
+    cmdbarSource.includes("const STORAGE_KEY = 'dsh-cmdbar.dockHeight'") &&
+    cmdbarSource.includes("const CSS_TAG = 'dsh-cmdbar/cmdbar.css'") &&
+    cmdbarSource.includes("'data-dsh-cmdbar-dock'") &&
+    cmdbarSource.includes("'data-dsh-cmdbar-toggle'") &&
+    cmdbarSource.includes("'data-dsh-cmdbar-cmd'") &&
+    cmdbarSource.includes("'dsh-cmdbar ' + PLUGIN_VERSION") &&
+    // ... and the one name that deliberately did NOT move: the pack's own shared
+    // `dockHeight` field, whose rename would have thrown away the height every
+    // reader had already chosen.
+    cmdbarSource.includes("sharedState.get('dockHeight')") &&
+    cmdbarSource.includes('dst-dock') === false &&
+    cmdbarCss.includes('.dsc-dock{position:fixed;'),
+)
+check(
+  'cmdbar does not rename the harness packages it only mentions',
+  cmdbarSource.includes('dsh-terminal-bash') &&
+    cmdbarSource.includes('@deepseek-ai/dsh-client-ui-sidebar-terminal') &&
+    // The one harness TOOL this log reads by name is untouched.
+    cmdbarSource.includes('terminal_send'),
+)
 
 // ------------------------------------------------------ the agent's own commands
 // The panel is a TRANSCRIPT of what the conversation recorded, read from this
@@ -1895,34 +2025,34 @@ check('terminal dock names the version', termDockMarkup.includes('dsh-terminal 0
 // the state a button used to wear (the running pulse, the failure count, the
 // unreadable warning) is the bar's own brand and facts line.
 check(
-  'terminal bar wears the log state without a toggle',
-  termCss.includes('.dst-warn{') &&
-    termCss.includes('.dst-pulse{') &&
-    termCss.includes('.dst-badge{') &&
-    termSource.includes('activityUnreadable') &&
-    termSource.includes('activityFactsTitle(activity)') &&
-    termSource.includes("'data-state': activityTone") &&
-    termSource.includes('const showActivityView') === false,
+  'cmdbar bar wears the log state without a toggle',
+  cmdbarCss.includes('.dsc-warn{') &&
+    cmdbarCss.includes('.dsc-pulse{') &&
+    cmdbarCss.includes('.dsc-badge{') &&
+    cmdbarSource.includes('activityUnreadable') &&
+    cmdbarSource.includes('activityFactsTitle(activity)') &&
+    cmdbarSource.includes("'data-state': activityTone") &&
+    cmdbarSource.includes('const showActivityView') === false,
 )
 // alpha.11: the counts the bar's badge and the header dot are made of are the
 // COMMANDS' (the fold decides that, below), and the view's own facts line adds the
 // other family's running/failed rows back only while "All tools" can DRAW them.
 check(
-  'terminal view counts the commands, plus the rest only under All tools',
-  termSource.includes('if (allTools && model.counts.other > 0) facts.push(String(model.counts.other) + \' other\')') &&
-    termSource.includes('const running = model.counts.running + (allTools ? model.counts.otherRunning || 0 : 0)') &&
-    termSource.includes('const failed = model.counts.failed + (allTools ? model.counts.otherFailed || 0 : 0)'),
+  'cmdbar view counts the commands, plus the rest only under All tools',
+  cmdbarSource.includes('if (allTools && model.counts.other > 0) facts.push(String(model.counts.other) + \' other\')') &&
+    cmdbarSource.includes('const running = model.counts.running + (allTools ? model.counts.otherRunning || 0 : 0)') &&
+    cmdbarSource.includes('const failed = model.counts.failed + (allTools ? model.counts.otherFailed || 0 : 0)'),
 )
 check(
-  'terminal activity styles are injected',
-  termCss.includes('.dst-activity{position:absolute;inset:0;') &&
-    termCss.includes('.dst-cmd{') &&
-    termCss.includes('@keyframes dst-pulse{') &&
-    termCss.includes('.dst-pulse{') &&
-    termCss.includes('.dst-badge{') &&
+  'cmdbar activity styles are injected',
+  cmdbarCss.includes('.dsc-activity{position:absolute;inset:0;') &&
+    cmdbarCss.includes('.dsc-cmd{') &&
+    cmdbarCss.includes('@keyframes dsc-pulse{') &&
+    cmdbarCss.includes('.dsc-pulse{') &&
+    cmdbarCss.includes('.dsc-badge{') &&
     // The shared notice is absolute/inset:0, so the body it sits in must be its
     // containing block or "no commands yet" would cover the filters too.
-    termCss.includes('.dst-actBody{position:relative;'),
+    cmdbarCss.includes('.dsc-actBody{position:relative;'),
 )
 // alpha.9: a command row has to be readable at a glance, in EVERY theme. Both
 // side rails carry the status colour - the exit-0 GREEN included, not only a
@@ -1933,20 +2063,20 @@ check(
 // pill cannot drift apart; the wash is mixed with `transparent`, which lightens
 // a light theme and darkens a dark theme and leaves the label colour alone.
 check(
-  'terminal command rows wear the status on both rails and on the head',
-  termCss.includes('.dst-cmd{--dst-accent:var(--dsw-alias-state-success-primary,#2f9e44)') &&
-    termCss.includes('border-left:2px solid var(--dst-accent);border-right:2px solid var(--dst-accent)') &&
-    termCss.includes('.dst-cmd[data-status=running]{--dst-accent:var(--dsw-alias-state-warning-primary,#d29922)}') &&
-    termCss.includes('.dst-cmd[data-status=failed],.dst-cmd[data-status=signal],.dst-cmd[data-status=error]{--dst-accent:var(--dsw-alias-state-error-primary,#d3382c)}') &&
-    termCss.includes('background:color-mix(in srgb,var(--dst-accent) 14%,transparent)') &&
-    termCss.includes('.dst-cmdHead:hover{background:color-mix(in srgb,var(--dst-accent) 26%,transparent)}'),
+  'cmdbar command rows wear the status on both rails and on the head',
+  cmdbarCss.includes('.dsc-cmd{--dsc-accent:var(--dsw-alias-state-success-primary,#2f9e44)') &&
+    cmdbarCss.includes('border-left:2px solid var(--dsc-accent);border-right:2px solid var(--dsc-accent)') &&
+    cmdbarCss.includes('.dsc-cmd[data-status=running]{--dsc-accent:var(--dsw-alias-state-warning-primary,#d29922)}') &&
+    cmdbarCss.includes('.dsc-cmd[data-status=failed],.dsc-cmd[data-status=signal],.dsc-cmd[data-status=error]{--dsc-accent:var(--dsw-alias-state-error-primary,#d3382c)}') &&
+    cmdbarCss.includes('background:color-mix(in srgb,var(--dsc-accent) 14%,transparent)') &&
+    cmdbarCss.includes('.dsc-cmdHead:hover{background:color-mix(in srgb,var(--dsc-accent) 26%,transparent)}'),
 )
 check(
-  'terminal header control shows agent activity',
-  termSource.includes("h('span', { className: 'dst-headDot'") &&
-    termSource.includes("'data-agent-state'") &&
-    termCss.includes('.dst-headDot{') &&
-    termCss.includes('.dst-headDot[data-state=running]{'),
+  'cmdbar header control shows agent activity',
+  cmdbarSource.includes("h('span', { className: 'dsc-headDot'") &&
+    cmdbarSource.includes("'data-agent-state'") &&
+    cmdbarCss.includes('.dsc-headDot{') &&
+    cmdbarCss.includes('.dsc-headDot[data-state=running]{'),
 )
 // The read lives on the HOST: a browser-side session window has to be STAGED
 // first, which is exactly what left the panel on "Reading the conversation..."
@@ -1954,18 +2084,18 @@ check(
 // package's own read-only route for a filtered tail, fold it with the pure fold
 // below, and stop asking when nobody is watching or the tab is hidden.
 check(
-  'terminal reads the conversation from its own route',
-  termSource.includes("const ACTIVITY_ROUTE = '/api/dsh-terminal/activity'") &&
-    termSource.includes("fetch(ACTIVITY_ROUTE + '?session=' + encodeURIComponent(sessionId)") &&
-    termSource.includes('buildActivityFromEvents(entries)') &&
-    termSource.includes('serviceNow(') === false,
+  'cmdbar reads the conversation from its own route',
+  cmdbarSource.includes("const ACTIVITY_ROUTE = '/api/dsh-cmdbar/activity'") &&
+    cmdbarSource.includes("fetch(ACTIVITY_ROUTE + '?session=' + encodeURIComponent(sessionId)") &&
+    cmdbarSource.includes('buildActivityFromEvents(entries)') &&
+    cmdbarSource.includes('serviceNow(') === false,
 )
 check(
-  'terminal polls only while something watches, and not in a hidden tab',
-  termSource.includes('const hidden = () =>') &&
-    termSource.includes('if (disposed || listeners.size === 0 || hidden()) return') &&
-    termSource.includes("document.addEventListener('visibilitychange', onVisible)") &&
-    termSource.includes('if (listeners.size === 0 && timer !== null)'),
+  'cmdbar polls only while something watches, and not in a hidden tab',
+  cmdbarSource.includes('const hidden = () =>') &&
+    cmdbarSource.includes('if (disposed || listeners.size === 0 || hidden()) return') &&
+    cmdbarSource.includes("document.addEventListener('visibilitychange', onVisible)") &&
+    cmdbarSource.includes('if (listeners.size === 0 && timer !== null)'),
 )
 // alpha.11, the startup half of "the notification follows the conversation".
 // The conversation on screen is attached by the host as the app opens it, so the
@@ -1975,29 +2105,48 @@ check(
 // unreadable falls back to the steady cadence rather than polling at 1.5 s for
 // ever - so the retry is BOUNDED and the answer RESETS it.
 check(
-  'terminal retries a log that has not answered yet, then settles',
-  termSource.includes('const ACTIVITY_RETRY_MS = 1500') &&
-    termSource.includes('const ACTIVITY_RETRY_ATTEMPTS = 4') &&
-    termSource.includes('if (model.available !== true && retries < ACTIVITY_RETRY_ATTEMPTS) return ACTIVITY_RETRY_MS') &&
-    /if \(body !== null && body\.ok === true\) \{[\s\S]{0,240}?retries = 0[\s\S]{0,80}?absorb\(body\)/.test(termSource) &&
+  'cmdbar retries a log that has not answered yet, then settles',
+  cmdbarSource.includes('const ACTIVITY_RETRY_MS = 1500') &&
+    cmdbarSource.includes('const ACTIVITY_RETRY_ATTEMPTS = 4') &&
+    cmdbarSource.includes('if (model.available !== true && retries < ACTIVITY_RETRY_ATTEMPTS) return ACTIVITY_RETRY_MS') &&
+    /if \(body !== null && body\.ok === true\) \{[\s\S]{0,240}?retries = 0[\s\S]{0,80}?absorb\(body\)/.test(cmdbarSource) &&
     // ... and BOTH a fresh answer and a fresh subscription (the conversation
     // coming back on screen) reset the budget, so the retry is never spent once.
-    (termSource.match(/retries = 0/g) || []).length >= 2 &&
-    /const unavailable = \(reason\) => \{\n\s*retries \+= 1/.test(termSource),
+    (cmdbarSource.match(/retries = 0/g) || []).length >= 2 &&
+    /const unavailable = \(reason\) => \{\n\s*retries \+= 1/.test(cmdbarSource),
 )
 // The dock is root-scoped and always mounted, so the conversation it BELONGS to
-// is the only thing that keeps its feed (and its numbers) on the conversation on
-// screen: a closed dock used to hold `dock.sessionId` from the conversation it
-// was last opened in and keep polling that one.
+// is the only thing that keeps its feed (and its numbers) on the conversation in
+// front of the reader: a closed dock used to hold `dock.sessionId` from the
+// conversation it was last opened in and keep polling that one (alpha.11).
+//
+// alpha.13 moved the rule from "a change closes the panel" to "a change
+// RE-POINTS it", and the two ways the old shape failed were both invisible in
+// source: an empty id returned early, so a NEW conversation (no session id yet)
+// or a screen whose header had gone away left the panel drawing the previous
+// conversation's commands, counts and poll. The four fields of `followDecision`
+// are driven below, and the source shape is asserted only for the part no
+// behaviour can show - that the panel is now closed by the READER's own control
+// and by nothing else (two `dock.open = false`, both of them user-facing).
 check(
-  'terminal dock forgets a conversation it no longer belongs to',
-  /function adoptSession\(sessionId\)[\s\S]*?if \(dock\.sessionId === null \|\| dock\.sessionId === sessionId\) return[\s\S]*?dock\.open = false\n\s*dock\.sessionId = null\n\s*bump\(\)/.test(
-    termSource,
-  ),
+  'cmdbar dock follows the conversation instead of closing itself',
+  /function adoptSession\(sessionId\)[\s\S]*?followDecision\(\{ open: dock\.open, current: dock\.sessionId, next: sessionId \}\)[\s\S]*?dock\.sessionId = next/.test(cmdbarSource) &&
+    /function releaseSession\(sessionId\)[\s\S]*?dock\.sessionId !== sessionId\) return[\s\S]*?dock\.sessionId = null/.test(cmdbarSource) &&
+    (cmdbarSource.match(/dock\.open = false/g) || []).length === 2,
+)
+check(
+  'cmdbar dock says why it is empty with nothing on screen',
+  cmdbarSource.includes("hint('No conversation open'") && cmdbarSource.includes("sessionId === null ? '' : activityFactsTitle(activity)"),
+)
+// alpha.13: the sentence that used to open the facts line is gone; the counts are
+// the whole of it (pinned as text below, on both models).
+check(
+  'cmdbar facts line carries the counts alone',
+  cmdbarSource.includes('The agent\u2019s own commands in this conversation') === false,
 )
 
-const { parseExecCall, parseExitMarker, stripAnsi, buildActivityFromEvents, activitySignature, filterActivity, formatDuration, activityFactsTitle } =
-  terminal.exports.__internals
+const { parseExecCall, parseExitMarker, stripAnsi, buildActivityFromEvents, activitySignature, filterActivity, formatDuration, activityFactsTitle, followDecision, commandBody } =
+  cmdbar.exports.__internals
 
 const shellCall = parseExecCall('bash', '{"command":"ls -la","description":"list files"}')
 check('activity: a shell call keeps its command', shellCall.command, 'ls -la')
@@ -2074,16 +2223,32 @@ check(
 check('activity: a failed command still counts', activityModel.counts.failed, 1)
 // The tooltip is where the counts reach a reader as WORDS, and the alpha.11 bug
 // read there first: "0 commands, 1 failed, nothing run yet" in one breath.
+// alpha.13 removed the sentence that used to precede them, so these two strings
+// are now the whole line - the bar's facts line and the control's tooltip alike.
 check(
   'activity: the tooltip counts commands, not every tool',
   activityFactsTitle(nonCommandModel),
-  'The agent\u2019s own commands in this conversation: 0 commands, nothing run yet',
+  '0 commands, nothing run yet',
 )
 check(
   'activity: the tooltip reports what the commands did',
   activityFactsTitle(activityModel),
-  'The agent\u2019s own commands in this conversation: 2 commands, 1 running, 1 failed',
+  '2 commands, 1 running, 1 failed',
 )
+// ... and the sentence is gone from BOTH the tooltip and the dock's bar.
+check('activity: no model, no line', activityFactsTitle(null), '')
+// alpha.13: the panel follows the conversation in front of the reader. An OPEN
+// panel re-points and keeps its place; a closed one only forgets (alpha.11); and
+// an ABSENT id - a new conversation before it has a session, or a screen whose
+// header has gone - is a CHANGE, not the no-op that used to leave the previous
+// conversation's commands, counts and poll on screen.
+check('cmdbar follow: an open panel re-points at the new conversation', followDecision({ open: true, current: 'a', next: 'b' }), 'b')
+check('cmdbar follow: an open panel with nothing on screen points at nothing', followDecision({ open: true, current: 'a', next: null }), null)
+check('cmdbar follow: a new conversation with no id yet is a change, not a no-op', followDecision({ open: true, current: 'a', next: '' }), null)
+check('cmdbar follow: a closed panel just forgets', followDecision({ open: false, current: 'a', next: 'b' }), null)
+check('cmdbar follow: the same conversation moves nothing', followDecision({ open: true, current: 'a', next: 'a' }), 'a')
+check('cmdbar follow: nothing on screen and nothing held', followDecision({ open: true, current: null, next: null }), null)
+check('cmdbar follow: a missing state is not a crash', followDecision(undefined), null)
 const pagedOut = buildActivityFromEvents([resultEvent(9, 'gone', 'out\n[exit code: 0]')])
 check('activity: a result whose call was paged out is kept', pagedOut.groups[0].commands.length, 1)
 // The exit marker is read ONLY for a tool we know is a foreground shell: the
@@ -2137,7 +2302,7 @@ check('activity: a new result IS a change', activitySignature(log.concat([result
 // can never reach a row - the view is rendered here with a hand-built log, which
 // is what proves a command, its exit pill, its working folder, the output clamp
 // and the actions actually draw.
-const ActivityView = terminal.exports.__internals.ActivityView
+const ActivityView = cmdbar.exports.__internals.ActivityView
 const renderActivityView = (entries, props) =>
   renderToStaticMarkup(
     h(
@@ -2157,7 +2322,7 @@ const activityLongOutput = Array.from({ length: 20 }, (unused, index) => 'line '
 const activityViewMarkup = renderActivityView([promptEvent(1, 'run the tests'), callEvent(2, 'c1', 'npm test'), resultEvent(3, 'c1', 'FAIL\n[exit code: 1]'), callEvent(4, 'c2', 'build'), resultEvent(5, 'c2', activityLongOutput + '\n[exit code: 0]')])
 check('activity view: the prompt captions the group', activityViewMarkup.includes('run the tests'))
 check('activity view: the group names its turn', activityViewMarkup.includes('turn 1'))
-check('activity view: a command draws', activityViewMarkup.includes('npm test') && activityViewMarkup.includes('data-dsh-terminal-cmd="c1"'))
+check('activity view: a command draws', activityViewMarkup.includes('npm test') && activityViewMarkup.includes('data-dsh-cmdbar-cmd="c1"'))
 check('activity view: the exit pill draws', activityViewMarkup.includes('exit 1') && activityViewMarkup.includes('exit 0'))
 // 20 output lines (the exit marker is consumed), so the first 12 draw and line 13
 // must not - with the count of what is hidden offered as the way to see it.
@@ -2178,9 +2343,50 @@ check('activity view: the filters draw', activityViewMarkup.includes('>Commands<
 const activityMultiLineMarkup = renderActivityView([callEvent(1, 'm1', 'npm run a\nnpm run b'), resultEvent(2, 'm1', 'ok\n[exit code: 0]')])
 // A multi-line command is drawn like any other now: the `multi-line` note existed
 // only to explain why Run in Terminal was withheld, and there is nothing to withhold.
+// The row is COLLAPSED here, so the full command is not in this markup at all -
+// it appears on expand, which is driven directly below.
 check(
   'activity view: a multi-line command is drawn like any other',
   activityMultiLineMarkup.includes('multi-line') === false && activityMultiLineMarkup.includes('Run in Terminal') === false,
+)
+// alpha.14: THE CLICK THAT KILLED THE DOCK. Expanding a row asked for `multiLine`,
+// an identifier this bundle NEVER declared, so the first click on a command line
+// threw `ReferenceError: multiLine is not defined` out of the row's render - and
+// the shell's slot error boundary answers a root-scoped entry's crash with
+// `{ abdicate: true }`, which RETIRES the entry for the life of the page. The dock
+// did not merely fail to expand: it disappeared and the header button could not
+// bring it back, which is exactly what a reader reported. No static render can
+// click, and a collapsed row short-circuits before the identifier is read, so the
+// decision now lives in a pure function and is DRIVEN here - and the row is pinned
+// to it, because the free identifier must never come back.
+check('activity: a collapsed row draws no command body', commandBody({ command: 'a\nb' }, false), null)
+check('activity: a single-line command has nothing extra to show', commandBody({ command: 'npm test' }, true), null)
+check('activity: an expanded multi-line command is drawn in full', commandBody({ command: 'npm run a\nnpm run b' }, true), 'npm run a\nnpm run b')
+check('activity: a command-less entry is not a crash', commandBody({ command: undefined }, true), null)
+check('activity: no entry at all is not a crash', commandBody(null, true), null)
+check(
+  'activity: the row draws its command body from the pure decision',
+  cmdbarSource.includes('const fullCommand = commandBody(entry, expanded)') &&
+    cmdbarSource.includes("fullCommand === null ? null : h('pre', { className: 'dsc-out dsc-outCmd' }, fullCommand)") &&
+    // Outside prose (doc lines start with ` * `), the free identifier is gone.
+    /[^\w.]multiLine\b/.test(cmdbarSource.replace(/^[ \t]*\*.*$/gm, '')) === false,
+)
+// ... and the SECOND free identifier of that release, found by auditing the
+// bundle for names it references but never declares. The row's two actions called
+// `writeClipboard(text)` BARE - the name of a `@deepseek-ai/dsh-client-ui-primitives`
+// export this bundle already requires for `Tooltip` - so clicking **Copy command**
+// or **Copy output** threw `ReferenceError: writeClipboard is not defined` and the
+// abdicating slot boundary took the whole panel away, exactly like the expand
+// click. The write now goes through the qualified primitive (which the pack-wide
+// primitive scan at the end of this file checks against the REAL pinned package),
+// it is guarded for an engine without the helper, and "Copied" is shown only for a
+// write the host actually accepted.
+check(
+  'activity: the copy buttons call the clipboard PRIMITIVE, qualified',
+  cmdbarSource.includes("typeof primitives.writeClipboard !== 'function'") &&
+    cmdbarSource.includes('const write = primitives.writeClipboard(text)') &&
+    cmdbarSource.includes('if (accepted !== true) return') &&
+    /[\w$]writeClipboard/.test(cmdbarSource.split('primitives.writeClipboard').join('').replace(/^[ \t]*\*.*$/gm, '')) === false,
 )
 const activityRunningMarkup = renderActivityView([callEvent(1, 'r1', 'sleep 30')])
 check('activity view: a running command says so', activityRunningMarkup.includes('>running<') && activityRunningMarkup.includes('Running'))
@@ -4354,43 +4560,43 @@ function activateThemesWithShared(section) {
 check('themes restores a remembered extension theme', JSON.stringify(activateThemesWithShared({ theme: 'nord' }).applied), JSON.stringify(['nord']))
 check('themes restores nothing for a built-in preference', JSON.stringify(activateThemesWithShared({ theme: '' }).applied), '[]')
 
-// ------------------------------------- the shared state, from dsh-terminal
+// ------------------------------------- the shared state, from dsh-cmdbar
 // alpha.5: the dock's HEIGHT rides the same section, with localStorage kept
 // underneath. Its OPEN state deliberately does not: the panel is the window onto
 // a process, and after a reload the client holds no slots, so reopening it would
 // either show an empty panel or - once the server's five minute PTY retention has
 // lapsed - start a shell nobody asked for.
 check(
-  'terminal resolves the shared state lazily',
-  termSource.includes("ctx.get('uiState')") && termSource.includes("const inject = ['slots']"),
+  'cmdbar resolves the shared state lazily',
+  cmdbarSource.includes("ctx.get('uiState')") && cmdbarSource.includes("const inject = ['slots']"),
 )
 check(
-  'terminal reads the shared height first',
-  termSource.includes('sharedReady()') && termSource.includes("sharedState.get('dockHeight')"),
+  'cmdbar reads the shared height first',
+  cmdbarSource.includes('sharedReady()') && cmdbarSource.includes("sharedState.get('dockHeight')"),
 )
 check(
-  'terminal writes both stores on a resize',
-  termSource.includes('function queueSharedHeight') &&
-    termSource.includes("sharedState.set('dockHeight', value)") &&
-    termSource.includes('STORAGE_KEY, String(next)') &&
+  'cmdbar writes both stores on a resize',
+  cmdbarSource.includes('function queueSharedHeight') &&
+    cmdbarSource.includes("sharedState.set('dockHeight', value)") &&
+    cmdbarSource.includes('STORAGE_KEY, String(next)') &&
     // ...and NOT once per pointer move: the section is a queued wire write, and a
     // request per move both floods it and feeds the echo loop below.
-    termSource.includes('SHARED_WRITE_DEBOUNCE_MS') &&
-    termSource.includes('sharedPending += 1'),
+    cmdbarSource.includes('SHARED_WRITE_DEBOUNCE_MS') &&
+    cmdbarSource.includes('sharedPending += 1'),
 )
 check(
-  'terminal adopts only what is news',
-  termSource.includes('sharedState.subscribe(adoptShared)') &&
-    termSource.includes('adoptDecision({') &&
+  'cmdbar adopts only what is news',
+  cmdbarSource.includes('sharedState.subscribe(adoptShared)') &&
+    cmdbarSource.includes('adoptDecision({') &&
     // Every one of the three not-news gates has to be WIRED, not merely defined:
     // the pointer, our own writes still on the wire, and the value in force.
-    termSource.includes('dragging,') &&
-    termSource.includes('pending: sharedPending') &&
-    termSource.includes('known: sharedKnown,') &&
-    termSource.includes('setHeight(next, { persist: false })') &&
-    termSource.includes('sharedPending += 1'),
+    cmdbarSource.includes('dragging,') &&
+    cmdbarSource.includes('pending: sharedPending') &&
+    cmdbarSource.includes('known: sharedKnown,') &&
+    cmdbarSource.includes('setHeight(next, { persist: false })') &&
+    cmdbarSource.includes('sharedPending += 1'),
 )
-check('terminal remembers no open state', termSource.includes('dockOpen') === false)
+check('cmdbar remembers no open state', cmdbarSource.includes('dockOpen') === false)
 
 // -------------------------- extension themes, against the REAL ui-theme runtime
 // The bug this section exists for (found in the field, alpha.17): choosing Nord or
@@ -4594,6 +4800,72 @@ if (coreThemeBundle === null) {
   }
   check('a bundle version marker matches package.json', drifted.join(', '), '')
   check('most bundles still print their version', carriers.length >= 10, true)
+}
+
+// ------------------------------------------ the primitives the pack reads
+// A browser bundle that reads `primitives.<Name>` is asking the PINNED harness
+// line for an export, and a name that line does not have is `undefined` - which
+// `h(undefined, …)` turns into "Element type is invalid" at render, and which the
+// slots core turns into ABDICATION: the entry leaves its cell and whatever the
+// shell shipped for that id renders instead. That is not a hypothetical: dsh-themes
+// alpha.22 read `IconDownloadOutline16` (renamed to `…Regular` on 0.2.0-rc.2), so
+// its own download seat crashed and the shipped three-dot "More actions" menu -
+// the very control the seat exists to replace - came back in the conversation
+// header. The stub above could not catch it because it carried the same stale
+// names; this check grades the names against the package itself.
+{
+  const primitivesFile = findCoreFile('@deepseek-ai/dsh-client-ui-primitives/lib/index.js')
+  if (primitivesFile === null) {
+    console.log('skip the primitives the pack reads (no pinned primitives package on this host)')
+  } else {
+    const exported = new Set(
+      ((readFileSync(primitivesFile, 'utf8').split('\n').filter((line) => line.startsWith('export {')).pop() || '').match(
+        /[A-Za-z_$][\w$]*/g,
+      ) || []),
+    )
+    check('the pinned primitives export a list', exported.size > 50, true)
+    const referenced = new Map()
+    for (const entry of readdirSync(path.join(repo, 'packages'), { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const file = path.join(repo, 'packages', entry.name, 'lib', 'client.js')
+      if (!existsSync(file)) continue
+      for (const match of readFileSync(file, 'utf8').matchAll(/\bprimitives\.([A-Za-z_$][\w$]*)/g)) {
+        if (!referenced.has(match[1])) referenced.set(match[1], entry.name)
+      }
+    }
+    // A floor, not a target: it exists so a broken scan (a regex that stopped
+    // matching, a bundle moved) fails HERE instead of vacuously passing the
+    // comparison below. The count is small by design - most bundles destructure
+    // the primitives once, and dsh-themes resolves its glyphs from a table.
+    check('the primitive scan finds the pack\'s reads', referenced.size > 0, true)
+    check(
+      'every primitive the pack reads exists in the pinned line',
+      [...referenced]
+        .filter(([name]) => !exported.has(name))
+        .map(([name, where]) => name + ' (' + where + ')')
+        .join(', '),
+      '',
+    )
+
+    // The GLYPH LISTS are the other half, and a different question: `glyphOf([…])`
+    // survives a missing name with a placeholder, so the check is not "does the
+    // name exist" but "does at least ONE spelling exist", i.e. whether the glyph a
+    // header seat wears is the shipped artwork or the fallback dot. A list whose
+    // every name is gone is a silently degraded control.
+    const themesFile = path.join(repo, 'packages', 'dsh-themes', 'lib', 'client.js')
+    const unreachable = []
+    let glyphLists = 0
+    if (existsSync(themesFile)) {
+      const source = readFileSync(themesFile, 'utf8')
+      for (const match of source.matchAll(/glyphOf\(\[([^\]]*)\]\)/g)) {
+        glyphLists += 1
+        const names = [...match[1].matchAll(/'([^']+)'/g)].map((name) => name[1])
+        if (!names.some((name) => exported.has(name))) unreachable.push(names.join(' | '))
+      }
+    }
+    check('the pack resolves its glyphs through a list', glyphLists >= 5, true)
+    check('every glyph list still reaches a shipped glyph', unreachable.join(', '), '')
+  }
 }
 
 console.log('')

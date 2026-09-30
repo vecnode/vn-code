@@ -48,8 +48,8 @@
  * with ERR_MODULE_NOT_FOUND (measured). The module is therefore loaded at
  * runtime through the package anchors this pack established for the harness's
  * own out-of-tree resolution (they were first written for `dsh-terminal`'s
- * `node-pty`, before alpha.12 deleted that PTY; `dsh-terminal` keeps the same
- * anchor list today for the same reason): the running entry, then
+ * `node-pty`, before alpha.12 deleted that PTY; the package keeps the same
+ * anchor list today, as `dsh-cmdbar`, for the same reason): the running entry, then
  * `$DSH_HOME/profiles` -
  * which `dsh-app-boot` keeps as a mirror of the installation's dependency
  * closure, so Node's ordinary parent walk finds the very same copy the harness
@@ -95,7 +95,9 @@ const ENTRY_ID = 'ui-state'
  *     duplicating the preference would give one setting two owners that could
  *     disagree.
  *   - `pageZoom: 100` - the resting level, at which no declaration is written.
- *   - `dockHeight: 280` - dsh-terminal's own contract height.
+ *   - `dockHeight: 280` - dsh-cmdbar's own contract height (the command bar; the
+ *     field kept its name through that package's alpha.14 rename, so nobody's
+ *     chosen height was thrown away).
  *   - `sidebarWidth` / `rightbarWidth: -1` - NEGATIVE means "this host has never
  *     recorded a width", which is deliberately not the same as 0: for the
  *     sidebar 0 is a real state (collapsed), so a sentinel is the only way to
@@ -125,7 +127,7 @@ const ZOOM_MARKER = 'data-dsh-page-zoomed'
 
 /**
  * The harness config root: `$DSH_HOME`, else `~/.dsh` (the resolution the
- * installer, dsh-terminal, dsh-diagrams and `dsh-skill-filesystem` all use).
+ * installer, dsh-cmdbar, dsh-diagrams and `dsh-skill-filesystem` all use).
  * @param env - environment to read.
  * @returns {string} the absolute DSH home path.
  */

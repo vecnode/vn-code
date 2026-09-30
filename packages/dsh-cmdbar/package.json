@@ -1,0 +1,28 @@
+{
+  "name": "dsh-cmdbar",
+  "version": "0.1.0-alpha.14",
+  "description": "Command bar: a live transcript of the agent's OWN command use, in a bottom dock of the vncode Web GUI. A header button (the last entry in the header's utilities list, left of the right bar's toggle) opens a horizontal panel that starts at the right edge of the left bar, runs to the full width of the page and sits UNDER the middle and right columns, which make room for it while the left bar keeps its full height and its layout untouched. Inside is ONE view and nothing else: the commands the conversation recorded (bash/pwsh/run_code/terminal_send, grouped under the prompt that asked for them, with exit status, duration and output, filterable to commands only or failures only, Copy command / Copy output per row, and a follow-the-tail pill), read from the HOST's own copy of the conversation log through ONE read-only route, so it fills in as soon as the app opens, pauses while the tab is hidden and polls briskly only while a command is actually running. The bar wears that log's own state - a pulse while a command runs, the count of what failed, a warning when the conversation's log cannot be read here, and the counts in its tooltip - and the header control carries the same dot while the panel is closed. ALPHA.12 REMOVED THE TERMINALS, and that is the shape of this package now: the dock used to hold its own xterm.js emulators, one real PTY each behind an authenticated WebSocket, and the whole half is gone - 0.2's right Sidebar ships terminal TABS of its own, so a second emulator at the foot of the window was a second answer to a question the harness answers in the column beside it. No shell is spawned, no engine is vendored, no socket is gated and there is no Run in Terminal; the package reads and never runs, which is why it injects `connection` alone. ALPHA.13 makes the panel FOLLOW the conversation in front of the reader and nothing else: the facts line is the counts alone - the sentence that used to open it (\"The agent's own commands in this conversation: \") is gone, because the control and the panel are both already labelled Agent - and a conversation change now RE-POINTS the panel instead of closing it, with an ABSENT id (exactly what the new-conversation and Start screens report, where the previous release returned early and left the last conversation's commands, counts and poll on screen) treated as a change like any other. An open panel keeps the place the reader put it in while everything it DRAWS - the commands, the counts, the poll, and the view's own filters, expanded rows and follow-the-tail pill - belongs to the conversation on screen; a closed panel still forgets (alpha.11); and the rule is one pure `followDecision`, pinned behaviourally by the tracked check. Alpha.14 is the RENAME and the repair: this package is `dsh-cmdbar` - the COMMAND BAR - and it was `dsh-terminal` through alpha.13, a name that described the emulator alpha.12 deleted and collided with the harness's own `@deepseek-ai/dsh-terminal` PTY seam, so the row, the one route (`/api/dsh-cmdbar/activity`), the data-* attributes, the `dsc-` CSS prefix and the localStorage key all moved with it (the shared `dockHeight` field in dsh-ui-state deliberately did NOT: that key is the pack's own, and renaming it would have thrown away the height every reader had already chosen). The repair is alpha.13's own crash: clicking a command line to expand it asked for `multiLine`, an identifier declared NOWHERE in the bundle, so the render threw a ReferenceError and the shell's slot error boundary ABDICATED the root-scoped `shell.overlay` entry - the panel did not fail to expand, it DISAPPEARED for the life of the page and the header button could not bring it back (a static render could never see it: rows start collapsed, and `expanded && multiLine` short-circuits). The decision now lives in a pure `commandBody(entry, expanded)` the tracked check drives directly, so the branch a click reaches is no longer the only thing that ever evaluated it. A bundle-wide audit for identifiers used but never DECLARED found the same defect a second time, in the row's other two buttons: `writeClipboard(text)` was called BARE - that is the name of a `@deepseek-ai/dsh-client-ui-primitives` export this bundle already requires for `Tooltip` - so Copy command / Copy output threw `ReferenceError: writeClipboard is not defined` and the abdicating slot boundary took the panel away exactly as the expand click did; the write now goes through the qualified `primitives.writeClipboard`, guarded for an engine without it, showing Copied only for a write the host accepted, and the pack-wide primitive scan grades that name against the real pinned package.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "license": "MIT"
+}

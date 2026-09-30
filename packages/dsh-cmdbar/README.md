@@ -1,6 +1,6 @@
-# dsh-terminal (alpha.12)
+# dsh-cmdbar (alpha.14)
 
-**Terminal** is a **bottom dock** for the DeepSeek Harness web GUI: the commands
+**Command bar** is a **bottom dock** for the DeepSeek Harness web GUI: the commands
 the agent ran in this conversation, in the app, under the conversation. A header
 button — the same 28px round control the right bar's own toggle wears, the last
 entry in the header's utilities list — opens a horizontal panel that starts at the
@@ -13,6 +13,46 @@ Inside the panel is one view and nothing else: every `bash` / `pwsh` / `run_code
 asked for it, with the tool, the working folder, the duration, the exit status and
 the output. It is a *transcript of the conversation you are already in*, served
 from the host's own copy of the log.
+
+## The name, and the click that used to kill the dock (alpha.14)
+
+This package is **`dsh-cmdbar`** — the **command bar** — and it was
+**`dsh-terminal`** through alpha.13. The old name described the emulator alpha.12
+deleted (next section) and collided with the harness's own
+`@deepseek-ai/dsh-terminal` PTY seam, while what is left is exactly what the new
+name says. The package folder, the row (`cmdbar`), the one route
+(`/api/dsh-cmdbar/activity`), the `data-dsh-cmdbar-*` attributes and the CSS prefix
+(`dst-` → `dsc-`) all moved with it. The shared `dockHeight` field in
+`dsh-ui-state` deliberately did **not**: that key is the pack's own, and renaming
+it would have thrown away the height every reader had already chosen.
+
+alpha.14 also repairs **two** instances of the same defect — a name used but never
+declared, which a render-time `ReferenceError` turns into a vanished panel:
+
+- **Expanding a row.** The row asked for `multiLine`
+  (`expanded && multiLine ? … : null`), declared **nowhere** in the bundle. The
+  first click on a command line threw `ReferenceError: multiLine is not defined`
+  out of the row's render.
+- **Copying.** The row's two actions called `writeClipboard(text)` *bare* — that
+  is the name of a `@deepseek-ai/dsh-client-ui-primitives` export this bundle
+  already requires for `Tooltip`, used unqualified. **Copy command** and
+  **Copy output** therefore threw `ReferenceError: writeClipboard is not defined`.
+  The write now goes through `primitives.writeClipboard`, guarded for an engine
+  that lacks it, and **Copied** appears only for a write the host accepted (the
+  primitive answers that).
+
+Why that is so visible: the harness wraps every slot occupant in a
+`SlotErrorBoundary`, and for a **root-scoped** entry like this package's
+`shell.overlay` seat it reports the crash with `abdicate: true` — which
+**retires the entry** for the life of the page. So the panel did not merely fail
+to expand or to copy: it vanished, and the header button could not bring it back
+until the page was reloaded. No static render could have caught either one (a row
+starts collapsed, so the first short-circuited before the identifier was read, and
+a click is what reaches the second), which is why both are now pinned: the command
+body is a pure `commandBody(entry, expanded)` the check **drives** through all
+three cases, the copy call is asserted qualified with the free identifier gone
+outside prose, and the pack-wide primitive scan grades `writeClipboard` against
+the real pinned package.
 
 ## The terminals were removed in alpha.12, and that is the point
 
@@ -43,13 +83,13 @@ this package adds surface. It contributes two things and owns one row.
 
 | Piece | Value |
 |---|---|
-| row | `terminal` (`cordis.patch.yml`, an `insert`) |
+| row | `cmdbar` (`cordis.patch.yml`, an `insert`) |
 | header control | `conversation.session.header.utilities`, `order: 30` |
 | dock | `shell.overlay` (the layout package's root-scoped **list**), `order: 50` |
 | client `inject` | `slots` (code), `@deepseek-ai/dsh-client-ui-conversation` (package) |
 | primitives used | `Tooltip` only — the glyph is drawn here |
 | Node `inject` | `connection` only |
-| Node routes | **one**: `GET /api/dsh-terminal/activity` (read-only) — it answers a filtered **tail** of the conversation's session events, folded in the browser by the same pure fold the check drives |
+| Node routes | **one**: `GET /api/dsh-cmdbar/activity` (read-only) — it answers a filtered **tail** of the conversation's session events, folded in the browser by the same pure fold the check drives |
 
 **Why the header list and not the corner.** `conversation.session.header.corner`
 is a **single**-occupant slot that the right bar's toggle already owns, so
@@ -109,7 +149,7 @@ nodes into a React-managed container), so it positions itself:
     `pointerdown`, never from the dock's rect — the grip moves as the dock moves,
     so a handler that measured it would chase itself. Moves are coalesced to one
     per animation frame, the pointer is captured for the duration, and the drag
-    closes on `pointerup` **and** `pointercancel`. `body.dst-dragging` carries the
+    closes on `pointerup` **and** `pointercancel`. `body.dsc-dragging` carries the
     row-resize cursor and no text selection while the pointer is down;
   - the shared section is written **once, 400ms after the drag settles** (plus a
     flush at release), never per pointer move.
@@ -123,14 +163,22 @@ nodes into a React-managed container), so it positions itself:
 ## What it does
 
 - **One view: the agent's commands**, grouped under the prompt that asked for
-  them. The dock is bound to the conversation that opened it; **switching
-  conversation closes it**.
+  them. The dock is **bound to the conversation in front of you**: switching
+  conversation **re-points it** — the panel keeps the open state, the height and
+  the place you put it in, while everything it *draws* (the commands, the counts,
+  the poll, the filters, the expanded rows and the follow-the-tail pill) belongs
+  to the conversation now on screen (alpha.13). With no conversation at all — the
+  new-conversation and Start screens — the body says **No conversation open**
+  instead of showing anyone else's log.
 - **The bar wears the log's own state** — a pulse while a command runs, the count
   of what **failed** as a red badge, a `⚠` and the warning tone when this
   conversation's log cannot be read here (with the host's own reason in the
-  tooltip), the counts as a sentence, and the version. The header control carries
-  the same running/failed dot while the panel is closed, so "the agent is doing
-  something" is visible without opening it.
+  tooltip), **the counts alone**, and the version. (alpha.13 dropped the sentence
+  those counts used to open with — *The agent's own commands in this
+  conversation: …* — because the control and the panel are both already labelled
+  **Agent**, and the prose only pushed the numbers away from the eye.) The header
+  control carries the same running/failed dot while the panel is closed, so "the
+  agent is doing something" is visible without opening it.
 - **Every number is the COMMANDS'** (alpha.11). A tool call that is not an
   executing tool — a `read`, a `grep`, an `edit` — is a row under the *All tools*
   filter and never a number on the bar: before alpha.11 any failed tool
@@ -164,7 +212,7 @@ the mark behind, and the **exit-0 green counts**. The row's **head** — the
 clickable line that drops the output down, i.e. the line a reader actually scans
 — wears a **light wash of that same colour**, so the command lines separate from
 their own output without the output losing contrast. One custom property
-(`--dst-accent`) holds the tone per status, so the rails, the wash and the pill
+(`--dsc-accent`) holds the tone per status, so the rails, the wash and the pill
 can never disagree: **green for exit 0**, amber while running, red on a failure,
 a signal or an error. The wash is mixed with `transparent` rather than with a
 surface colour, which lightens a light theme, darkens a dark theme, and leaves
@@ -181,7 +229,7 @@ you are at the bottom, stops the moment you scroll up (a **Follow ↓** pill app
 in its bar to come back), and shows the newest command otherwise.
 
 **Where the data comes from** — the conversation's own durable session events,
-served by this package's read-only Node route `GET /api/dsh-terminal/activity`
+served by this package's read-only Node route `GET /api/dsh-cmdbar/activity`
 and folded **in the browser** by the same pure fold the tracked check drives:
 
 | Event | What it contributes |
@@ -215,10 +263,27 @@ cadence, with the budget reset by an answer *and* by the conversation coming bac
 on screen — because the conversation on screen is attached by the host as the app
 opens it, so the very first read can race that attach and answer `NOT_LIVE`: at
 6 s, a restored conversation said so for up to six seconds after every reload. And
-the panel belongs to the conversation on screen and to no other: switching
-conversations closes the dock **and forgets the one it left**, because the dock is
-root-scoped and always mounted, so keeping the old identity meant a hidden panel
-went on reading (and holding numbers from) a conversation nobody was looking at.
+the panel belongs to the conversation on screen and to no other: a **closed** panel
+**forgets the conversation it left**, because the dock is root-scoped and always
+mounted, so keeping the old identity meant a hidden panel went on reading (and
+holding numbers from) a conversation nobody was looking at.
+
+**alpha.13 makes that contract hold for the panel the reader is actually looking
+at.** Through alpha.12 a conversation change *closed* the panel, and an empty id
+was ignored outright — so the two cases that matter most both left the previous
+conversation on screen: a **new conversation**, which has no session id yet, and a
+screen whose header has **gone away entirely** (nothing reports a conversation
+that has no header). An open panel now **re-points** instead of closing: it keeps
+its open state, its height and its place, and everything it draws — the commands,
+the counts, the poll, and the view's own filters, expanded rows and follow pill —
+belongs to the conversation now in front of the reader. With no conversation at
+all the body says **No conversation open**, and the bar's facts line goes quiet
+rather than claiming *0 commands*. The rule is one pure function,
+`followDecision({ open, current, next })`, exported in `__internals` and pinned
+behaviourally by the tracked check; the header control's **unmount** releases the
+conversation it owned (the path nothing else reports), and the view is **keyed on
+the conversation** so its own state cannot carry over either. The panel is closed
+by the reader's own control and by nothing else.
 
 The exit status is recovered from the `\n[exit code: N]` / `\n[killed by
 signal: X]` markers that `@deepseek-ai/dsh-shell/render` appends — the same
@@ -255,7 +320,7 @@ copy) here and run yourself in the harness's own terminal tabs.
 
 ```
 package.json          one dsh bundle: the row, plus the client half
-cordis.patch.yml      bundle layer: inserts the 'terminal' row (nothing else)
+cordis.patch.yml      bundle layer: inserts the 'cmdbar' row (nothing else)
 lib/index.js          Node half: the ONE read-only activity route
 lib/client.js         browser half (module-table bundle, no build step): the dock
                       and the agent-activity view + its feed
@@ -303,10 +368,28 @@ result outside the tail kept but unnamed) — plus `activitySignature`, which is
 what keeps a poll that returns the same log from re-folding it. alpha.11 pins the
 counts as well, on both sides of the same claim: a log whose only tool call was a
 failed `read` folds to *zero failed* (the row is still a failure, and its own
-`otherFailed` counter still sees it), the tooltip `activityFactsTitle` is asserted
-as the exact sentence a reader gets, and the source pins the bounded retry
-(1.5 s, four attempts, reset by an answer) and the dock forgetting the
-conversation it no longer belongs to.
+`otherFailed` counter still sees it) and the tooltip `activityFactsTitle` is
+asserted as the exact text a reader gets. alpha.11 also pins the bounded retry
+(1.5 s, four attempts, reset by an answer). alpha.13 pins the two things a
+conversation change now means: `followDecision` is driven through all of its
+cases (an open panel re-pointing, an absent id being a change rather than a
+no-op, a closed panel only forgetting, and the same conversation moving
+nothing), the facts line is asserted as the counts **alone**, and the source
+pins that the panel is closed by the reader's own control and by nothing else.
+alpha.14 pins the RENAME on both sides of the name — the bundle id and both seat
+ids (`dsh-cmdbar`), the one route (`/api/dsh-cmdbar/activity`), the storage key,
+the CSS tag, every `data-dsh-cmdbar-*` attribute, the version the bar prints, that
+the old `dst-` prefix is gone from the bundle and the new `dsc-` one is in the
+stylesheet — and, next to it, that the two harness packages this bundle only
+MENTIONS (`dsh-terminal-bash` and `@deepseek-ai/dsh-client-ui-sidebar-terminal`)
+and the one harness tool it names (`terminal_send`) were deliberately left alone.
+And it pins the CLICK bugs: `commandBody` is driven through all three cases and the
+row is asserted to draw its body from it, with the free `multiLine` identifier
+asserted gone from the source outside prose — the one thing no static render could
+see, because a row starts collapsed; and the row's copy path is asserted to call
+`primitives.writeClipboard` **qualified** (guarded, and showing **Copied** only for
+an accepted write) with no bare `writeClipboard` left outside prose, while the
+pack-wide primitive scan grades that name against the real pinned package.
 
 ## Known limits
 
@@ -331,3 +414,14 @@ conversation it no longer belongs to.
   would show a panel nobody asked for. Its **height** is remembered (both
   stores). The activity *view* preference that used to be remembered per origin
   is gone with the toggle: with one view there is nothing to remember.
+- **A render error in this panel costs the whole panel, not one row** (the shape
+  alpha.14 was repaired in, **twice**). A slot occupant is wrapped in the shell's
+  `SlotErrorBoundary`, and for a root-scoped entry such as this dock's
+  `shell.overlay` seat the crash is reported with `abdicate: true`: the entry is
+  retired and every later render skips it, while the boundary draws its own
+  `data-slot-error="shell.overlay"` box in the panel's place. That is why
+  alpha.13's two free identifiers — the expand click's `multiLine` and the copy
+  buttons' unqualified `writeClipboard` — read as "the bar closes and disappears"
+  rather than as one row failing to expand or one button doing nothing. It is also
+  why `commandBody` is a pure function the tracked check drives, and why the copy
+  call is pinned as a qualified primitive call.

@@ -366,8 +366,8 @@ if (!hasGit) {
   await fsp.rm(gitRoot, { recursive: true, force: true })
 }
 
-// ------------------------------------------------------------ dsh-terminal
-// The terminal's Node half is ONE read-only route. alpha.12 deleted the rest -
+// ------------------------------------------------------------ dsh-cmdbar
+// The command bar's Node half is ONE read-only route. alpha.12 deleted the rest -
 // the PTY host, the authenticated WebSocket upgrade, the vendored xterm assets
 // and the /health probe - so this block drives the route it still owns AND
 // asserts that the deleted half is really gone. A `webServer` service is handed
@@ -387,10 +387,10 @@ function harnessRoots() {
 }
 
 {
-  const terminalModule = path.join(repo, 'packages/dsh-terminal/lib/index.js')
+  const cmdbarPath = path.join(repo, 'packages/dsh-cmdbar/lib/index.js')
   const routeHandlers = new Map()
   let upgrades = 0
-  const termModule = await import(pathToFileURL(terminalModule).href)
+  const cmdbarModule = await import(pathToFileURL(cmdbarPath).href)
   // One live session double per conversation the activity route is driven with.
   // `snapshotEvents` is what the harness's own Session exposes (the whole
   // contiguous in-memory log), and the events are the durable shapes the client
@@ -423,18 +423,18 @@ function harnessRoots() {
   }
   const hugeEvents = [{ type: 'tool/result', seq: 1, time: 1, data: { turn: 1, step: 1, message: { id: 'r', role: 'user', source: { kind: 'tool', callId: 'huge' }, content: [{ type: 'tool-result', toolCallId: 'huge', content: [{ type: 'text', text: 'x'.repeat(600 * 1024) }] }] } } }]
   const liveSessions = {
-    'session-term': { header: { cwd: '/tmp/dsh-terminal-check' }, snapshotEvents: () => actEvents },
-    'session-big': { header: { cwd: '/tmp/dsh-terminal-check' }, snapshotEvents: () => bigEvents },
-    'session-huge': { header: { cwd: '/tmp/dsh-terminal-check' }, snapshotEvents: () => hugeEvents },
+    'session-cmd': { header: { cwd: '/tmp/dsh-cmdbar-check' }, snapshotEvents: () => actEvents },
+    'session-big': { header: { cwd: '/tmp/dsh-cmdbar-check' }, snapshotEvents: () => bigEvents },
+    'session-huge': { header: { cwd: '/tmp/dsh-cmdbar-check' }, snapshotEvents: () => hugeEvents },
     'session-broken': {
-      header: { cwd: '/tmp/dsh-terminal-check' },
+      header: { cwd: '/tmp/dsh-cmdbar-check' },
       snapshotEvents: () => {
         throw new Error('unreadable')
       },
     },
   }
   const sessions = { get: (id) => liveSessions[id] }
-  termModule.apply({
+  cmdbarModule.apply({
     effect: (fn) => fn(),
     logger: { debug() {}, info() {}, warn() {} },
     get(name) {
@@ -464,50 +464,50 @@ function harnessRoots() {
     },
   })
   check(
-    'terminal: exactly ONE route is registered',
+    'cmdbar: exactly ONE route is registered',
     [...routeHandlers.keys()].sort().join(','),
-    '/api/dsh-terminal/activity',
+    '/api/dsh-cmdbar/activity',
   )
-  check('terminal: no WebSocket upgrade is registered', upgrades, 0)
-  check('terminal: the health probe is gone', routeHandlers.has('/api/dsh-terminal/health'), false)
+  check('cmdbar: no WebSocket upgrade is registered', upgrades, 0)
+  check('cmdbar: the health probe is gone', routeHandlers.has('/api/dsh-cmdbar/health'), false)
   check(
-    'terminal: the vendored xterm routes are gone',
-    routeHandlers.has('/api/dsh-terminal/vendor/xterm.js') || routeHandlers.has('/api/dsh-terminal/vendor/xterm.css'),
+    'cmdbar: the vendored xterm routes are gone',
+    routeHandlers.has('/api/dsh-cmdbar/vendor/xterm.js') || routeHandlers.has('/api/dsh-cmdbar/vendor/xterm.css'),
     false,
   )
 
   // The panel's read. It reads the HOST's copy of the conversation log, which is
   // what makes the panel work the moment the app opens instead of waiting for a
   // browser to stage the conversation.
-  const activityCall = (query) => routeHandlers.get('/api/dsh-terminal/activity')(new Request('http://x/api/dsh-terminal/activity' + query))
-  const activityRes = await activityCall('?session=session-term')
+  const activityCall = (query) => routeHandlers.get('/api/dsh-cmdbar/activity')(new Request('http://x/api/dsh-cmdbar/activity' + query))
+  const activityRes = await activityCall('?session=session-cmd')
   const activityBody = await activityRes.json()
-  check('terminal: activity answers', activityRes.status === 200 && activityBody.ok === true, true)
-  check('terminal: activity sends only what the panel draws', activityBody.entries.map((entry) => entry.event.type).join(','), 'user/message,tool/call,tool/result')
-  check('terminal: activity drops injected context', activityBody.entries.some((entry) => entry.event.seq === 3), false)
-  check('terminal: activity drops assistant streams', activityBody.entries.some((entry) => entry.event.type === 'assistant/message'), false)
-  check('terminal: activity is in log order', activityBody.entries.map((entry) => entry.event.seq).join(','), '2,5,6')
-  check('terminal: activity says whether older ones remain', activityBody.hasMore, false)
+  check('cmdbar: activity answers', activityRes.status === 200 && activityBody.ok === true, true)
+  check('cmdbar: activity sends only what the panel draws', activityBody.entries.map((entry) => entry.event.type).join(','), 'user/message,tool/call,tool/result')
+  check('cmdbar: activity drops injected context', activityBody.entries.some((entry) => entry.event.seq === 3), false)
+  check('cmdbar: activity drops assistant streams', activityBody.entries.some((entry) => entry.event.type === 'assistant/message'), false)
+  check('cmdbar: activity is in log order', activityBody.entries.map((entry) => entry.event.seq).join(','), '2,5,6')
+  check('cmdbar: activity says whether older ones remain', activityBody.hasMore, false)
   const missing = await activityCall('')
-  check('terminal: activity without a session is refused', missing.status, 400)
+  check('cmdbar: activity without a session is refused', missing.status, 400)
   const notLive = await activityCall('?session=nope')
   const notLiveBody = await notLive.json()
-  check('terminal: activity names an unopened conversation', notLive.status === 200 && notLiveBody.ok === false && notLiveBody.reason, 'NOT_LIVE')
+  check('cmdbar: activity names an unopened conversation', notLive.status === 200 && notLiveBody.ok === false && notLiveBody.reason, 'NOT_LIVE')
   const broken = await activityCall('?session=session-broken')
   const brokenBody = await broken.json()
-  check('terminal: activity reports an unreadable log', broken.status === 200 && brokenBody.reason, 'UNREADABLE')
+  check('cmdbar: activity reports an unreadable log', broken.status === 200 && brokenBody.reason, 'UNREADABLE')
   // A conversation past the count budget answers with its TAIL: the newest
   // commands are the ones a reader is looking for.
   const bigRes = await activityCall('?session=session-big')
   const bigBody = await bigRes.json()
-  check('terminal: activity bounds the answer', bigBody.entries.length, 400)
-  check('terminal: activity keeps the newest commands', bigBody.entries[bigBody.entries.length - 1].event.seq, 420)
-  check('terminal: activity flags what it left behind', bigBody.hasMore, true)
+  check('cmdbar: activity bounds the answer', bigBody.entries.length, 400)
+  check('cmdbar: activity keeps the newest commands', bigBody.entries[bigBody.entries.length - 1].event.seq, 420)
+  check('cmdbar: activity flags what it left behind', bigBody.hasMore, true)
   // One enormous command is still sent: a byte budget must not leave the panel
   // with nothing to draw at all.
   const hugeRes = await activityCall('?session=session-huge')
   const hugeBody = await hugeRes.json()
-  check('terminal: activity keeps an oversized newest command', hugeBody.entries.length, 1)
+  check('cmdbar: activity keeps an oversized newest command', hugeBody.entries.length, 1)
 }
 
 // --------------------------------------------------------------- dsh-themes
@@ -1519,7 +1519,7 @@ try {
 // honest: the installers discover bundles from the FILESYSTEM (packages/*/
 // package.json with `dsh.bundle`) and read only the `dsh` pin out of this file,
 // so a bundle whose package.json moved on leaves a stale version and a stale
-// description behind with no error anywhere. It had already drifted (dsh-terminal
+// description behind with no error anywhere. It had already drifted (dsh-cmdbar
 // sat at alpha.6 through alpha.8, dsh-pdf counted SEVEN routes where the code
 // registers TEN). These three checks fail the moment it happens again.
 {
@@ -1556,6 +1556,55 @@ try {
     typeof manifest.dsh === 'string' && manifest.dsh !== '' && typeof manifest.vendoredFrom === 'string' && manifest.vendoredFrom !== '',
     true,
   )
+}
+
+// --------------------------------------------- the master's pack-wide patches
+// The master's `cordis.patch.yml` is the one place a shipped row is disabled
+// WITHOUT a pack bundle replacing it (alpha.3's feedback removal), and nothing
+// else reads it: the file is data, so a typo, a dropped block or a renamed row id
+// would fail silently at boot - the patch warns and is SKIPPED, which is exactly
+// the quiet failure this check exists to prevent. Both halves of the claim are
+// asserted: every id here is a real shipped row in the pinned line's own layers,
+// and every one of them is disabled.
+{
+  const patch = readFileSync(path.join(repo, 'packages', 'dsh-vn-master', 'cordis.patch.yml'), 'utf8')
+  const disabledRows = ['ui-message-feedback', 'message-feedback', 'command-feedback', 'session-telemetry-otel']
+  const blockFor = (id) => {
+    const header = '- id: ' + id + '\n'
+    const at = patch.indexOf(header)
+    if (at === -1) return null
+    const rest = patch.slice(at + header.length)
+    const next = rest.search(/\n- (id|insert):/)
+    return next === -1 ? rest : rest.slice(0, next)
+  }
+  check(
+    'master: the feedback surface stays removed',
+    disabledRows.filter((id) => {
+      const block = blockFor(id)
+      return block === null || /^\s*disabled:\s*true\s*$/m.test(block) === false
+    }).join(','),
+    '',
+  )
+  // ... and the ids are the pinned line's OWN rows: a patch naming a row that does
+  // not exist is skipped with a warning, so a rename in a harness bump would leave
+  // this claim intact while the feedback surface quietly came back.
+  let shippedLayers = null
+  for (const root of harnessRoots()) {
+    const webApp = path.join(root, '@deepseek-ai', 'dsh-web-app', 'cordis.patch.yml')
+    const base = path.join(root, '@deepseek-ai', 'dsh-base', 'cordis.patch.yml')
+    if (existsSync(webApp) && existsSync(base)) {
+      shippedLayers = readFileSync(webApp, 'utf8') + readFileSync(base, 'utf8')
+      break
+    }
+  }
+  if (shippedLayers === null) note('master: no harness install found, the shipped-row ids are unchecked')
+  else {
+    check(
+      'master: those ids are shipped rows of the pinned line',
+      disabledRows.filter((id) => shippedLayers.includes('- id: ' + id) === false).join(','),
+      '',
+    )
+  }
 }
 
 console.log('')

@@ -1,11 +1,11 @@
 /**
- * dsh-terminal — Node half.
+ * dsh-cmdbar — Node half (the COMMAND BAR: `dsh-terminal` through alpha.13).
  *
  * ONE read-only route, and it is the panel's whole data source:
  *
- *   GET /api/dsh-terminal/activity?session=<id>  the tail of this conversation's
- *                                               command-relevant session events
- *                                               (the browser folds them)
+ *   GET /api/dsh-cmdbar/activity?session=<id>  the tail of this conversation's
+ *                                              command-relevant session events
+ *                                              (the browser folds them)
  *
  * It goes through `connection.fetch.register` like dsh-editor's and
  * dsh-gittree's routes, so it inherits the connection's own authentication, and
@@ -13,7 +13,7 @@
  *
  * WHAT THIS FILE USED TO OWN (removed in alpha.12): the terminals themselves - a
  * real PTY per dock slot behind an authenticated WebSocket upgrade on
- * `/api/dsh-terminal/pty`, the vendored xterm.js bundle and its stylesheet on
+ * `/api/dsh-cmdbar/pty`, the vendored xterm.js bundle and its stylesheet on
  * two `/vendor` routes, and a `/health` probe that reported whether a PTY was
  * available at all. Every one of them is gone, because 0.2's right Sidebar ships
  * terminal TABS of its own (`@deepseek-ai/dsh-client-ui-sidebar-terminal`): a
@@ -30,12 +30,12 @@
  * events with the SAME pure fold it uses everywhere else, so what the model is
  * told and what a person sees cannot drift.
  */
-export const name = 'dsh-terminal'
+export const name = 'dsh-cmdbar'
 
 export const inject = ['connection']
 
 /** Keep in sync with the client's hard-coded route constant. */
-const API_ROOT = '/api/dsh-terminal'
+const API_ROOT = '/api/dsh-cmdbar'
 const ACTIVITY_ROUTE = API_ROOT + '/activity'
 /**
  * The session events the agent-activity view consumes: the two tool events and
@@ -132,7 +132,7 @@ function activityEntries(session) {
   return { entries, hasMore }
 }
 
-/** GET /api/dsh-terminal/activity?session=<id> — the commands one conversation ran. */
+/** GET /api/dsh-cmdbar/activity?session=<id> — the commands one conversation ran. */
 function handleActivity(request, ctx) {
   let sessionId = ''
   try {
@@ -172,7 +172,7 @@ export function apply(ctx) {
   ctx.effect(() => {
     const connection = ctx.get ? ctx.get('connection') : undefined
     if (!connection || !connection.fetch || typeof connection.fetch.register !== 'function') {
-      ctx.logger?.warn?.('[dsh-terminal] connection service unavailable - the activity route was not registered')
+      ctx.logger?.warn?.('[dsh-cmdbar] connection service unavailable - the activity route was not registered')
       return () => {}
     }
     // `requestBody: 'buffered'` is required by the connection bridge (a route
@@ -184,12 +184,12 @@ export function apply(ctx) {
       requestBody: 'buffered',
       fetch: (request) => handleActivity(request, ctx),
     })
-    ctx.logger?.debug?.('[dsh-terminal] activity route registered (' + ACTIVITY_ROUTE + ')')
+    ctx.logger?.debug?.('[dsh-cmdbar] activity route registered (' + ACTIVITY_ROUTE + ')')
     return () => {
       try {
         dispose()
       } catch (err) {}
-      ctx.logger?.debug?.('[dsh-terminal] node half disposed')
+      ctx.logger?.debug?.('[dsh-cmdbar] node half disposed')
     }
-  }, 'dsh-terminal: activity route')
+  }, 'dsh-cmdbar: activity route')
 }

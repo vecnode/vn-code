@@ -1,5 +1,5 @@
 /**
- * dsh-terminal — browser half.
+ * dsh-cmdbar — browser half.
  *
  * A **bottom dock**, not a tab: one horizontal panel at the foot of the app,
  * showing the agent's own command activity. It starts at the right edge of the
@@ -22,15 +22,26 @@
  *   - **Geometry** is the part the spike proved before any of this existed:
  *     the left edge is the frame's resolved `gridTemplateColumns` first track,
  *     so it follows the left bar opening, collapsing and being dragged with no
- *     hashed class name involved; the app makes room because the frame's inline
- *     height becomes `calc(100% - <dock>px)` while the dock is open (React never
- *     writes `style.height` on the frame — it writes `gridTemplateColumns` — so
- *     the override is stable) and is restored exactly on close.
+ *     hashed class name involved. The room comes from the **middle and right
+ *     columns only**, as their own `height: calc(100% - <dock>px)` (see
+ *     `columnsFor` / `applyInsets`): shrinking the FRAME instead shortens its
+ *     single grid row, which shortens the left bar with it - that was alpha.1
+ *     and its contents visibly slid up the moment the dock opened.
  *   - **Intent and geometry are separate.** The first spike run failed exactly
  *     here: setting the dock's open state from the observer that tracks the left
- *     bar meant the close which restored the frame's height re-triggered the
+ *     bar meant the close which restored the columns' height re-triggered the
  *     observer and reopened the dock. `data-open` is user intent; `data-suspended`
  *     is derived from the frame. Geometry never touches intent.
+ *
+ * THE NAME (alpha.14): this package is `dsh-cmdbar` - the **command bar** - and
+ * it was `dsh-terminal` through alpha.13. The old name described the EMULATOR the
+ * package used to carry (alpha.12 deleted it) and collided with the harness's own
+ * `@deepseek-ai/dsh-terminal` / `@deepseek-ai/dsh-terminal-bash`, while what is
+ * left is exactly what the new name says: the agent's commands, in a bar at the
+ * foot of the window. The row, the route, the data attributes and the `dsc-` CSS
+ * prefix moved with it; the shared `dockHeight` field in `dsh-ui-state` did NOT,
+ * because that key is the pack's own and a rename would have thrown away the
+ * height every reader had already chosen.
  *
  * WHAT IS IN THE PANEL (alpha.12): the agent's own command use, read out of the
  * conversation the panel belongs to, and NOTHING ELSE. The dock used to carry
@@ -40,14 +51,14 @@
  * (`@deepseek-ai/dsh-client-ui-sidebar-terminal`), so a second emulator at the
  * foot of the window was a second answer to a question the harness now answers
  * in the column beside it. This package therefore READS and never RUNS: one
- * read-only route (`/api/dsh-terminal/activity`), no PTY, no xterm, no socket,
+ * read-only route (`/api/dsh-cmdbar/activity`), no PTY, no xterm, no socket,
  * no "Run in Terminal", and nothing on the other end to focus or resize.
  *
  * Module-table format of every client bundle here; no build step.
  */
 /* global window, document, fetch, location, MutationObserver, ResizeObserver, localStorage */
 window.__ModuleLoader__.load({
-  id: 'dsh-terminal',
+  id: 'dsh-cmdbar',
   factory: (require) => {
     var module = { exports: {} }
     var exports = module.exports
@@ -61,8 +72,16 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     // Constants
     // ---------------------------------------------------------------------
-    /** Shown on the dock's bar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.12'
+    /**
+     * Shown on the dock's bar so a freshly loaded bundle is easy to verify.
+     *
+     * alpha.14 is the RENAME (`dsh-terminal` -> `dsh-cmdbar`) plus the repair of
+     * the alpha.13 crash: clicking a command line to expand it threw a
+     * `ReferenceError` out of a free identifier, and the shell's slot error
+     * boundary ABDICATED the dock for the life of the page - the panel
+     * disappeared and would not come back (see `commandBody`).
+     */
+    const PLUGIN_VERSION = '0.1.0-alpha.14'
     /** The header list this control joins (Open In... is -10). */
     const HEADER_SLOT = 'conversation.session.header.utilities'
     /** The root-scoped overlay list the layout package renders inside the frame. */
@@ -75,7 +94,7 @@ window.__ModuleLoader__.load({
      * The panel's ONLY route, and it is read-only: the host's filtered tail of
      * the conversation's log. Keep in sync with lib/index.js.
      */
-    const ACTIVITY_ROUTE = '/api/dsh-terminal/activity'
+    const ACTIVITY_ROUTE = '/api/dsh-cmdbar/activity'
     /**
      * How often the agent view re-reads the conversation's log.
      *
@@ -106,7 +125,7 @@ window.__ModuleLoader__.load({
     const MIN_HEIGHT = 120
     const DEFAULT_HEIGHT = 280
     const MAX_HEIGHT_RATIO = 0.7
-    const STORAGE_KEY = 'dsh-terminal.dockHeight'
+    const STORAGE_KEY = 'dsh-cmdbar.dockHeight'
     /**
      * How long a settled height waits before it goes to the shared section.
      * A drag changes the height on every frame and the section is a WIRE write
@@ -203,66 +222,66 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
-    // Styles — the pack's tab dress, under this package's own `dst-` prefix.
+    // Styles — the pack's tab dress, under this package's own `dsc-` prefix.
     // ---------------------------------------------------------------------
     const css = `
-.dst-dock{position:fixed;left:0;right:0;bottom:0;z-index:21;box-sizing:border-box;display:none;flex-direction:column;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);border-top:.5px solid var(--dsw-alias-border-l4,rgba(127,127,127,.34));box-shadow:0 -6px 18px rgba(0,0,0,.06);font-size:12.5px;line-height:1.5}
-.dst-dock[data-open]:not([data-suspended]){display:flex}
-.dst-grip{flex:none;height:6px;cursor:row-resize;touch-action:none;background:transparent}
-.dst-grip::after{content:'';display:block;width:44px;height:2px;margin:2px auto 0;border-radius:2px;background:var(--dsw-alias-border-l3,rgba(127,127,127,.3))}
-.dst-grip:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
-.dst-grip:hover::after{background:var(--dsw-alias-label-tertiary,#999)}
+.dsc-dock{position:fixed;left:0;right:0;bottom:0;z-index:21;box-sizing:border-box;display:none;flex-direction:column;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);border-top:.5px solid var(--dsw-alias-border-l4,rgba(127,127,127,.34));box-shadow:0 -6px 18px rgba(0,0,0,.06);font-size:12.5px;line-height:1.5}
+.dsc-dock[data-open]:not([data-suspended]){display:flex}
+.dsc-grip{flex:none;height:6px;cursor:row-resize;touch-action:none;background:transparent}
+.dsc-grip::after{content:'';display:block;width:44px;height:2px;margin:2px auto 0;border-radius:2px;background:var(--dsw-alias-border-l3,rgba(127,127,127,.3))}
+.dsc-grip:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
+.dsc-grip:hover::after{background:var(--dsw-alias-label-tertiary,#999)}
 /* While the edge is being dragged the whole page keeps the resize cursor and
    stops selecting text - the pointer regularly leaves a 6px strip, and a drag
    that started selecting the log's text reads as "it broke". */
-body.dst-dragging{cursor:row-resize;user-select:none}
-.dst-bar{flex:none;display:flex;align-items:center;gap:8px;min-width:0;padding:2px 8px 6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.16))}
+body.dsc-dragging{cursor:row-resize;user-select:none}
+.dsc-bar{flex:none;display:flex;align-items:center;gap:8px;min-width:0;padding:2px 8px 6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.16))}
 /* The bar's flexible gap: with no chip strip to fill the row, this is what keeps
    the facts and the version at the right end and the brand at the left. */
-.dst-spacer{flex:1;min-width:0}
-.dst-brand{flex:none;display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary,#666);font-weight:500}
-.dst-glyph{flex:none;display:inline-flex;color:var(--dsw-alias-label-tertiary,#999)}
-.dst-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#1f1f1f);font:inherit;font-size:12px;padding:0 8px;cursor:pointer;white-space:nowrap;gap:5px}
-.dst-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
-.dst-btn:disabled{opacity:.45;cursor:default}
-.dst-btnIcon{width:24px;padding:0}
-.dst-facts{flex:none;display:inline-flex;align-items:center;gap:8px;min-width:0;color:var(--dsw-alias-label-tertiary,#999);font-size:11.5px}
-.dst-ver{opacity:.7}
-.dst-body{flex:auto;min-height:0;position:relative;background:var(--dsw-alias-bg-base,#fff)}
-.dst-notice{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;text-align:center;color:var(--dsw-alias-label-tertiary,#999);font-size:12.5px}
-.dst-noticeTitle{color:var(--dsw-alias-label-secondary,#666);font-size:13px}
-.dst-noticeErr{color:var(--dsw-alias-state-error-primary,#d3382c)}
-.dst-noticeCode{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:11px;opacity:.85;max-width:640px;white-space:pre-wrap}
+.dsc-spacer{flex:1;min-width:0}
+.dsc-brand{flex:none;display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary,#666);font-weight:500}
+.dsc-glyph{flex:none;display:inline-flex;color:var(--dsw-alias-label-tertiary,#999)}
+.dsc-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#1f1f1f);font:inherit;font-size:12px;padding:0 8px;cursor:pointer;white-space:nowrap;gap:5px}
+.dsc-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
+.dsc-btn:disabled{opacity:.45;cursor:default}
+.dsc-btnIcon{width:24px;padding:0}
+.dsc-facts{flex:none;display:inline-flex;align-items:center;gap:8px;min-width:0;color:var(--dsw-alias-label-tertiary,#999);font-size:11.5px}
+.dsc-ver{opacity:.7}
+.dsc-body{flex:auto;min-height:0;position:relative;background:var(--dsw-alias-bg-base,#fff)}
+.dsc-notice{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;text-align:center;color:var(--dsw-alias-label-tertiary,#999);font-size:12.5px}
+.dsc-noticeTitle{color:var(--dsw-alias-label-secondary,#666);font-size:13px}
+.dsc-noticeErr{color:var(--dsw-alias-state-error-primary,#d3382c)}
+.dsc-noticeCode{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:11px;opacity:.85;max-width:640px;white-space:pre-wrap}
 /* ---- the agent's own command use: the panel's ONLY view (alpha.12) ---------
    There is no toggle left to dress. The bar says what the panel is - the agent's
    own command use in this conversation - and wears that log's own state: the
    pulse while a command runs, the count of what failed, and the warning tone
    when this conversation's log cannot be read. "Run in Terminal" went with the
    terminals: with no PTY of this package's own there is nothing to type into. */
-.dst-warn{flex:none;font-size:11px;line-height:1;color:var(--dsw-alias-state-warning-primary,#d29922)}
-.dst-pulse{flex:none;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-warning-primary,#d29922);animation:dst-pulse 1.1s ease-in-out infinite}
-.dst-headDot{position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;box-sizing:border-box;border:1.5px solid var(--dsw-alias-bg-layer-1,#fff);background:var(--dsw-alias-state-warning-primary,#d29922)}
-.dst-headDot[data-state=running]{animation:dst-pulse 1.1s ease-in-out infinite}
-.dst-headDot[data-state=failed]{background:var(--dsw-alias-state-error-primary,#d3382c)}
-.dst-badge{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;padding:0 4px;box-sizing:border-box;border-radius:8px;font-size:10.5px;font-variant-numeric:tabular-nums;background:var(--dsw-alias-state-error-primary,#d3382c);color:#fff}
-@keyframes dst-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.dsc-warn{flex:none;font-size:11px;line-height:1;color:var(--dsw-alias-state-warning-primary,#d29922)}
+.dsc-pulse{flex:none;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-warning-primary,#d29922);animation:dsc-pulse 1.1s ease-in-out infinite}
+.dsc-headDot{position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;box-sizing:border-box;border:1.5px solid var(--dsw-alias-bg-layer-1,#fff);background:var(--dsw-alias-state-warning-primary,#d29922)}
+.dsc-headDot[data-state=running]{animation:dsc-pulse 1.1s ease-in-out infinite}
+.dsc-headDot[data-state=failed]{background:var(--dsw-alias-state-error-primary,#d3382c)}
+.dsc-badge{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;padding:0 4px;box-sizing:border-box;border-radius:8px;font-size:10.5px;font-variant-numeric:tabular-nums;background:var(--dsw-alias-state-error-primary,#d3382c);color:#fff}
+@keyframes dsc-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 /* The view fills the body: the panel IS the log, and there is nothing to switch
    to, so this box is the whole content area. */
-.dst-activity{position:absolute;inset:0;display:flex;flex-direction:column;box-sizing:border-box;background:var(--dsw-alias-bg-base,#fff)}
-.dst-actBar{flex:none;display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.16));font-size:11.5px}
-.dst-mini{flex:none;height:22px;box-sizing:border-box;padding:0 8px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
-.dst-mini:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
-.dst-mini[data-on]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));border-color:var(--dsw-alias-border-l3,rgba(127,127,127,.34));color:var(--dsw-alias-label-primary,#1f1f1f)}
-.dst-actFacts{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#999)}
-/* Positioned so the shared .dst-notice (absolute, inset 0) covers the BODY and
+.dsc-activity{position:absolute;inset:0;display:flex;flex-direction:column;box-sizing:border-box;background:var(--dsw-alias-bg-base,#fff)}
+.dsc-actBar{flex:none;display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.16));font-size:11.5px}
+.dsc-mini{flex:none;height:22px;box-sizing:border-box;padding:0 8px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
+.dsc-mini:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
+.dsc-mini[data-on]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));border-color:var(--dsw-alias-border-l3,rgba(127,127,127,.34));color:var(--dsw-alias-label-primary,#1f1f1f)}
+.dsc-actFacts{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#999)}
+/* Positioned so the shared .dsc-notice (absolute, inset 0) covers the BODY and
    not the whole view - an unreadable conversation must not hide its own filters. */
-.dst-actBody{position:relative;flex:auto;min-height:0;overflow:auto;font-family:ui-monospace,'Cascadia Code',Consolas,'SF Mono',Menlo,monospace;font-size:12px;line-height:1.45}
-.dst-actList{padding:6px 10px 14px}
-.dst-grp{margin:0 0 10px}
-.dst-grpHead{display:flex;align-items:baseline;gap:8px;margin:6px 0 4px;color:var(--dsw-alias-label-tertiary,#999);font-family:var(--dsw-font-family,inherit)}
-.dst-grpTime{flex:none;font-size:10.5px;font-variant-numeric:tabular-nums}
-.dst-grpTurn{flex:none;font-size:10.5px;opacity:.8}
-.dst-grpPrompt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary,#666);font-size:11.5px}
+.dsc-actBody{position:relative;flex:auto;min-height:0;overflow:auto;font-family:ui-monospace,'Cascadia Code',Consolas,'SF Mono',Menlo,monospace;font-size:12px;line-height:1.45}
+.dsc-actList{padding:6px 10px 14px}
+.dsc-grp{margin:0 0 10px}
+.dsc-grpHead{display:flex;align-items:baseline;gap:8px;margin:6px 0 4px;color:var(--dsw-alias-label-tertiary,#999);font-family:var(--dsw-font-family,inherit)}
+.dsc-grpTime{flex:none;font-size:10.5px;font-variant-numeric:tabular-nums}
+.dsc-grpTurn{flex:none;font-size:10.5px;opacity:.8}
+.dsc-grpPrompt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary,#666);font-size:11.5px}
 /* alpha.9: EVERY row is readable at a glance, in any theme. Both side rails
    carry the status colour - the exit-0 GREEN included, not only a failure's red -
    and the row's own head (the line that drops the output down) wears a LIGHT
@@ -271,33 +290,33 @@ body.dst-dragging{cursor:row-resize;user-select:none}
    property per status, so the rails, the wash and the pill can never disagree;
    the wash is mixed with transparent, so it lightens a light theme and darkens
    a dark one and the label keeps its own themed colour either way. */
-.dst-cmd{--dst-accent:var(--dsw-alias-state-success-primary,#2f9e44);margin:0 0 6px;padding:1px 0 2px;border-left:2px solid var(--dst-accent);border-right:2px solid var(--dst-accent);border-radius:3px}
-.dst-cmd[data-status=running]{--dst-accent:var(--dsw-alias-state-warning-primary,#d29922)}
-.dst-cmd[data-status=failed],.dst-cmd[data-status=signal],.dst-cmd[data-status=error]{--dst-accent:var(--dsw-alias-state-error-primary,#d3382c)}
-.dst-cmdHead{display:flex;align-items:baseline;gap:6px;padding:2px 6px;border-radius:4px;cursor:pointer;background:color-mix(in srgb,var(--dst-accent) 14%,transparent)}
-.dst-cmdHead:hover{background:color-mix(in srgb,var(--dst-accent) 26%,transparent)}
-.dst-cmdHead:focus-visible{outline:1px solid var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:1px}
-.dst-cmdMark{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:10px;transition:transform .12s ease}
-.dst-cmd[data-expanded] .dst-cmdMark{transform:rotate(90deg)}
-.dst-cmdName{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:11px}
-.dst-cmdLine{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary,#1f1f1f)}
-.dst-cmdCwd{flex:none;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#999);font-size:11px;direction:rtl;text-align:left}
-.dst-cmdDur{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:10.5px;font-variant-numeric:tabular-nums}
-.dst-pill{flex:none;padding:0 5px;border-radius:8px;font-size:10.5px;line-height:15px;white-space:nowrap;background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));color:var(--dsw-alias-label-secondary,#666)}
-.dst-pill[data-tone=ok]{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#2f9e44) 18%,transparent);color:var(--dsw-alias-state-success-primary,#2f9e44)}
-.dst-pill[data-tone=failed]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#d3382c) 18%,transparent);color:var(--dsw-alias-state-error-primary,#d3382c)}
-.dst-pill[data-tone=running]{background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,#d29922) 18%,transparent);color:var(--dsw-alias-state-warning-primary,#d29922)}
-.dst-out{margin:2px 0 4px 18px;padding:0;white-space:pre-wrap;word-break:break-word;font:inherit;color:var(--dsw-alias-label-secondary,#666)}
-.dst-outCmd{margin-top:4px;color:var(--dsw-alias-label-primary,#1f1f1f)}
-.dst-cmdWait{margin:2px 0 4px 18px;color:var(--dsw-alias-label-tertiary,#999);font-size:11.5px}
-.dst-cmdActs{display:flex;align-items:center;gap:10px;margin:0 0 2px 18px;min-height:14px}
-.dst-link{padding:0;border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#999);font:inherit;font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-.dst-link:hover{color:var(--dsw-alias-brand-primary,#4d6bfe)}
+.dsc-cmd{--dsc-accent:var(--dsw-alias-state-success-primary,#2f9e44);margin:0 0 6px;padding:1px 0 2px;border-left:2px solid var(--dsc-accent);border-right:2px solid var(--dsc-accent);border-radius:3px}
+.dsc-cmd[data-status=running]{--dsc-accent:var(--dsw-alias-state-warning-primary,#d29922)}
+.dsc-cmd[data-status=failed],.dsc-cmd[data-status=signal],.dsc-cmd[data-status=error]{--dsc-accent:var(--dsw-alias-state-error-primary,#d3382c)}
+.dsc-cmdHead{display:flex;align-items:baseline;gap:6px;padding:2px 6px;border-radius:4px;cursor:pointer;background:color-mix(in srgb,var(--dsc-accent) 14%,transparent)}
+.dsc-cmdHead:hover{background:color-mix(in srgb,var(--dsc-accent) 26%,transparent)}
+.dsc-cmdHead:focus-visible{outline:1px solid var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:1px}
+.dsc-cmdMark{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:10px;transition:transform .12s ease}
+.dsc-cmd[data-expanded] .dsc-cmdMark{transform:rotate(90deg)}
+.dsc-cmdName{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:11px}
+.dsc-cmdLine{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary,#1f1f1f)}
+.dsc-cmdCwd{flex:none;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#999);font-size:11px;direction:rtl;text-align:left}
+.dsc-cmdDur{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:10.5px;font-variant-numeric:tabular-nums}
+.dsc-pill{flex:none;padding:0 5px;border-radius:8px;font-size:10.5px;line-height:15px;white-space:nowrap;background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));color:var(--dsw-alias-label-secondary,#666)}
+.dsc-pill[data-tone=ok]{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#2f9e44) 18%,transparent);color:var(--dsw-alias-state-success-primary,#2f9e44)}
+.dsc-pill[data-tone=failed]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#d3382c) 18%,transparent);color:var(--dsw-alias-state-error-primary,#d3382c)}
+.dsc-pill[data-tone=running]{background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,#d29922) 18%,transparent);color:var(--dsw-alias-state-warning-primary,#d29922)}
+.dsc-out{margin:2px 0 4px 18px;padding:0;white-space:pre-wrap;word-break:break-word;font:inherit;color:var(--dsw-alias-label-secondary,#666)}
+.dsc-outCmd{margin-top:4px;color:var(--dsw-alias-label-primary,#1f1f1f)}
+.dsc-cmdWait{margin:2px 0 4px 18px;color:var(--dsw-alias-label-tertiary,#999);font-size:11.5px}
+.dsc-cmdActs{display:flex;align-items:center;gap:10px;margin:0 0 2px 18px;min-height:14px}
+.dsc-link{padding:0;border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#999);font:inherit;font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.dsc-link:hover{color:var(--dsw-alias-brand-primary,#4d6bfe)}
 `
-    const CSS_TAG = 'dsh-terminal/terminal.css'
+    const CSS_TAG = 'dsh-cmdbar/cmdbar.css'
     if (typeof document !== 'undefined' && document.head && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
       const tag = document.createElement('style')
-      tag.dataset.plugin = 'dsh-terminal'
+      tag.dataset.plugin = 'dsh-cmdbar'
       tag.dataset.pluginCss = CSS_TAG
       tag.textContent = css
       document.head.appendChild(tag)
@@ -458,20 +477,76 @@ body.dst-dragging{cursor:row-resize;user-select:none}
     }
 
     /**
+     * What a conversation change does to the dock's identity.
+     *
+     * PURE, and exported through `__internals`, because this one rule is the
+     * whole of "the panel follows the conversation in front of you", and the way
+     * it can go wrong - an identity that outlives the conversation it named - is
+     * not visible in a source shape.
+     *
+     * alpha.13 is the repair. Through alpha.12 a change CLOSED the panel, and an
+     * empty id was ignored outright, so both of the paths that matter most left
+     * the old conversation on screen: opening a NEW conversation (no session id
+     * yet) or landing on a screen whose header has gone away reported nothing at
+     * all, and the always-mounted panel kept drawing the commands, the counts and
+     * the poll of the conversation it was last opened in. What the reader asked
+     * for is a panel that stays where they put it and always describes what is in
+     * front of them.
+     *
+     * So: the SAME conversation moves nothing; a DIFFERENT one re-points an OPEN
+     * panel - it keeps its open state, its height and its place - while a closed
+     * panel simply forgets (alpha.11's rule: no feed, no poll and no collected
+     * count for a conversation nobody is looking at); and an ABSENT identity is a
+     * change like any other, resolving to `null` so the panel can say "no
+     * conversation open" instead of wearing another conversation's numbers.
+     *
+     * @param state - `{ open, current, next }`: the dock's open flag, the
+     *   conversation it points at, and the one on screen (empty or absent when
+     *   there is none).
+     * @returns the identity the dock should hold.
+     */
+    function followDecision(state) {
+      const known = state !== null && state !== undefined
+      const open = known && state.open === true
+      const current = known && typeof state.current === 'string' && state.current !== '' ? state.current : null
+      const next = known && typeof state.next === 'string' && state.next !== '' ? state.next : null
+      if (current === next) return current
+      return open ? next : null
+    }
+
+    /**
      * A header button reports its conversation: the dock only belongs to one.
      *
-     * alpha.11: the dock also FORGETS a conversation it no longer belongs to.
-     * The panel used to keep `dock.sessionId` while it was closed, so the
-     * always-mounted dock kept a subscription - and a poll - on a conversation
-     * that was no longer on screen, and a count it had collected there stayed in
-     * the store. The header control of the conversation on screen is the only
-     * subscriber that is really "here": dropping the identity is what keeps
-     * every number the panel wears about the conversation in front of you.
+     * alpha.11: the dock FORGETS a conversation it no longer belongs to, so a
+     * closed panel keeps no subscription - and no poll - on a conversation that
+     * is no longer on screen.
+     *
+     * alpha.13: it no longer closes itself, and it no longer ignores an absent
+     * id. An OPEN panel re-points at whatever is on screen (see
+     * `followDecision`) and stays exactly where the reader put it - the panel is
+     * closed by the reader's own control and by nothing else.
      */
     function adoptSession(sessionId) {
-      if (typeof sessionId !== 'string' || sessionId === '') return
-      if (dock.sessionId === null || dock.sessionId === sessionId) return
-      dock.open = false
+      const next = followDecision({ open: dock.open, current: dock.sessionId, next: sessionId })
+      if (next === dock.sessionId) return
+      dock.sessionId = next
+      bump()
+    }
+
+    /**
+     * The header control for a conversation has gone away (alpha.13).
+     *
+     * `adoptSession` runs while a conversation's own header exists; the
+     * new-conversation and Start screens have no header at all, so nothing calls
+     * it there and the panel would keep the identity it had. The control's unmount
+     * is the one signal for that path, and it clears only the identity it owned:
+     * another conversation's control may already have re-pointed the panel by the
+     * time this cleanup runs.
+     *
+     * @param sessionId - the conversation the unmounting control owned.
+     */
+    function releaseSession(sessionId) {
+      if (typeof sessionId !== 'string' || sessionId === '' || dock.sessionId !== sessionId) return
       dock.sessionId = null
       bump()
     }
@@ -1287,17 +1362,25 @@ body.dst-dragging{cursor:row-resize;user-select:none}
     }
 
     /**
-     * The Agent button's tooltip: the counts the bar has no room for.
+     * The Agent button's tooltip and the dock's facts line: the counts alone.
+     *
+     * alpha.13 dropped the sentence this used to open with ("The agent's own
+     * commands in this conversation: "). The control it belongs to is already
+     * labelled - the button is `aria-label="The agent's commands"` and the panel
+     * it opens is branded **Agent** - so the prose only pushed the numbers a
+     * reader actually wants further from the eye. What is left is the counts,
+     * which is the whole of what the line is for.
      *
      * @param activity - the feed's model.
-     * @returns one sentence a reader can act on.
+     * @returns the counts, comma separated, or the empty string for no model.
      */
     function activityFactsTitle(activity) {
+      if (activity === null || typeof activity !== 'object' || activity.counts === null || typeof activity.counts !== 'object') return ''
       const parts = [String(activity.counts.shell) + (activity.counts.shell === 1 ? ' command' : ' commands')]
       if (activity.counts.running > 0) parts.push(String(activity.counts.running) + ' running')
       if (activity.counts.failed > 0) parts.push(String(activity.counts.failed) + ' failed')
       if (activity.counts.shell === 0) parts.push('nothing run yet')
-      return 'The agent\u2019s own commands in this conversation: ' + parts.join(', ')
+      return parts.join(', ')
     }
 
     // ---------------------------------------------------------------------
@@ -1340,6 +1423,34 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       if (entry.status === 'failed') return { tone: 'failed', label: 'exit ' + String(entry.exitCode === null ? '?' : entry.exitCode) }
       if (entry.exitCode !== null && entry.exitCode !== undefined) return { tone: 'ok', label: 'exit ' + String(entry.exitCode) }
       return { tone: 'ok', label: 'done' }
+    }
+
+    /**
+     * The FULL command an expanded row shows above its output, or null.
+     *
+     * The head draws `entry.command.split('\n')[0]`, so a command that is more
+     * than one line long is otherwise only ever visible one line deep; expanding
+     * the row is what shows the rest of it. PURE, and exported for the tracked
+     * check, because this is where alpha.13 shipped a **free identifier**: the
+     * row asked for `multiLine`, which was never declared anywhere in this
+     * bundle, so the `ReferenceError` it threw the FIRST time a reader clicked a
+     * command line reached the shell's own slot error boundary - and for the
+     * root-scoped `shell.overlay` list that boundary reports with
+     * `{ abdicate: true }`, which RETIRES the entry for the life of the page.
+     * The dock did not merely fail to expand: it disappeared and would not come
+     * back. A static render could never catch it, because a row starts collapsed
+     * and `expanded && multiLine` short-circuits before the identifier is read -
+     * which is exactly why the decision lives in a pure function the check can
+     * DRIVE, rather than in a condition only a click reaches.
+     *
+     * @param entry - one folded command entry.
+     * @param expanded - whether the reader has the row open.
+     * @returns the full command text, or null when there is nothing extra to draw.
+     */
+    function commandBody(entry, expanded) {
+      if (expanded !== true) return null
+      const command = entry !== null && typeof entry === 'object' && typeof entry.command === 'string' ? entry.command : ''
+      return command.indexOf('\n') === -1 ? null : command
     }
 
     /**
@@ -1406,10 +1517,42 @@ body.dst-dragging{cursor:row-resize;user-select:none}
         })
       }, [])
 
+      /**
+       * Copy one row's command or its output.
+       *
+       * The write goes through the shipped **`writeClipboard` primitive** - the
+       * one this bundle already requires for `Tooltip` - which tries
+       * `navigator.clipboard.writeText`, falls back to a hidden textarea plus
+       * `document.execCommand('copy')` (a plain-http origin has no
+       * `navigator.clipboard` at all, and the primitive is what the shell's own
+       * copy buttons use), and answers whether the host ACCEPTED the write - so
+       * "Copied" appears only when the text really got there.
+       *
+       * Through alpha.13 this was a bare `writeClipboard(text)`: the primitive's
+       * own name, unqualified, declared NOWHERE in this bundle - so every click on
+       * **Copy command** or **Copy output** threw
+       * `ReferenceError: writeClipboard is not defined`, and since a crashed
+       * root-scoped slot entry is ABDICATED (see `commandBody`), the dock
+       * disappeared for the life of the page. The second button family with this
+       * defect in one release, found by auditing the bundle for identifiers it
+       * never declares.
+       */
       const copy = useCallback((text, key) => {
-        void writeClipboard(text)
-        setCopied(key)
-        window.setTimeout(() => setCopied((prev) => (prev === key ? '' : prev)), 1200)
+        // An older engine may not carry the helper: a copy that cannot happen is
+        // a no-op, never a crash.
+        if (typeof primitives.writeClipboard !== 'function') return
+        const write = primitives.writeClipboard(text)
+        if (write === null || write === undefined || typeof write.then !== 'function') return
+        void write.then(
+          (accepted) => {
+            if (accepted !== true) return
+            setCopied(key)
+            window.setTimeout(() => setCopied((prev) => (prev === key ? '' : prev)), 1200)
+          },
+          () => {
+            /* a refused write is not a failure of the panel */
+          },
+        )
       }, [])
 
       const clock = (time) => {
@@ -1437,10 +1580,10 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       const hint = (title, text, code) =>
         h(
           'div',
-          { className: 'dst-notice' },
-          h('div', { className: 'dst-noticeTitle' }, title),
+          { className: 'dsc-notice' },
+          h('div', { className: 'dsc-noticeTitle' }, title),
           text === '' ? null : h('div', null, text),
-          code === '' ? null : h('div', { className: 'dst-noticeCode' }, code),
+          code === '' ? null : h('div', { className: 'dsc-noticeCode' }, code),
         )
 
       const row = (entry) => {
@@ -1450,20 +1593,24 @@ body.dst-dragging{cursor:row-resize;user-select:none}
         const hidden = lines.length - shown.length
         const info = statusInfo(entry)
         const duration = formatDuration(entry.durationMs)
+        // The command the head CLIPS, shown in full above the output once the row
+        // is open (see `commandBody`: a multi-line command is the only case with
+        // anything left to show).
+        const fullCommand = commandBody(entry, expanded)
         return h(
           'div',
           {
             key: entry.key,
-            className: 'dst-cmd',
+            className: 'dsc-cmd',
             'data-status': entry.status,
             'data-family': entry.family,
             'data-expanded': expanded ? '' : undefined,
-            'data-dsh-terminal-cmd': entry.callId,
+            'data-dsh-cmdbar-cmd': entry.callId,
           },
           h(
             'div',
             {
-              className: 'dst-cmdHead',
+              className: 'dsc-cmdHead',
               role: 'button',
               tabIndex: 0,
               'aria-expanded': expanded ? 'true' : 'false',
@@ -1475,51 +1622,51 @@ body.dst-dragging{cursor:row-resize;user-select:none}
                 }
               },
             },
-            h('span', { className: 'dst-cmdMark' }, '\u276f'),
+            h('span', { className: 'dsc-cmdMark' }, '\u276f'),
             entry.tool === ''
-              ? h('span', { className: 'dst-cmdName' }, 'unknown tool')
-              : h('span', { className: 'dst-cmdName' }, entry.tool),
+              ? h('span', { className: 'dsc-cmdName' }, 'unknown tool')
+              : h('span', { className: 'dsc-cmdName' }, entry.tool),
             entry.family === 'other'
-              ? h('span', { className: 'dst-cmdLine', title: entry.summary }, entry.summary === '' ? '(no summary)' : entry.summary)
-              : h('span', { className: 'dst-cmdLine', title: entry.description === '' ? entry.command : entry.description }, entry.command.split('\n')[0]),
-            entry.workdir === '' ? null : h('span', { className: 'dst-cmdCwd', title: entry.workdir }, entry.workdir),
-            duration === '' ? null : h('span', { className: 'dst-cmdDur' }, duration),
-            h('span', { className: 'dst-pill', 'data-tone': info.tone }, info.label),
+              ? h('span', { className: 'dsc-cmdLine', title: entry.summary }, entry.summary === '' ? '(no summary)' : entry.summary)
+              : h('span', { className: 'dsc-cmdLine', title: entry.description === '' ? entry.command : entry.description }, entry.command.split('\n')[0]),
+            entry.workdir === '' ? null : h('span', { className: 'dsc-cmdCwd', title: entry.workdir }, entry.workdir),
+            duration === '' ? null : h('span', { className: 'dsc-cmdDur' }, duration),
+            h('span', { className: 'dsc-pill', 'data-tone': info.tone }, info.label),
           ),
-          expanded && multiLine ? h('pre', { className: 'dst-out dst-outCmd' }, entry.command) : null,
+          fullCommand === null ? null : h('pre', { className: 'dsc-out dsc-outCmd' }, fullCommand),
           shown.length > 0
-            ? h('pre', { className: 'dst-out' }, shown.join('\n'))
+            ? h('pre', { className: 'dsc-out' }, shown.join('\n'))
             : entry.status === 'running'
-              ? h('div', { className: 'dst-cmdWait' }, entry.background === true ? 'Running in the background\u2026' : 'Running\u2026')
+              ? h('div', { className: 'dsc-cmdWait' }, entry.background === true ? 'Running in the background\u2026' : 'Running\u2026')
               : null,
-          hidden > 0 ? h('button', { type: 'button', className: 'dst-link', onClick: () => toggle(entry.key) }, 'Show all ' + String(lines.length) + ' lines') : null,
+          hidden > 0 ? h('button', { type: 'button', className: 'dsc-link', onClick: () => toggle(entry.key) }, 'Show all ' + String(lines.length) + ' lines') : null,
           expanded && hidden === 0 && lines.length > OUTPUT_CLAMP_LINES
-            ? h('button', { type: 'button', className: 'dst-link', onClick: () => toggle(entry.key) }, 'Collapse')
+            ? h('button', { type: 'button', className: 'dsc-link', onClick: () => toggle(entry.key) }, 'Collapse')
             : null,
           h(
             'div',
-            { className: 'dst-cmdActs' },
+            { className: 'dsc-cmdActs' },
             entry.command === ''
               ? null
-              : h('button', { type: 'button', className: 'dst-link', onClick: () => copy(entry.command, entry.key + ':cmd') }, copied === entry.key + ':cmd' ? 'Copied' : 'Copy command'),
+              : h('button', { type: 'button', className: 'dsc-link', onClick: () => copy(entry.command, entry.key + ':cmd') }, copied === entry.key + ':cmd' ? 'Copied' : 'Copy command'),
             entry.output === ''
               ? null
-              : h('button', { type: 'button', className: 'dst-link', onClick: () => copy(entry.output, entry.key + ':out') }, copied === entry.key + ':out' ? 'Copied' : 'Copy output'),
+              : h('button', { type: 'button', className: 'dsc-link', onClick: () => copy(entry.output, entry.key + ':out') }, copied === entry.key + ':out' ? 'Copied' : 'Copy output'),
           ),
         )
       }
 
       return h(
         'div',
-        { className: 'dst-activity', 'data-dsh-terminal-activity-view': '', 'data-available': model.available ? '' : undefined },
+        { className: 'dsc-activity', 'data-dsh-cmdbar-activity-view': '', 'data-available': model.available ? '' : undefined },
         h(
           'div',
-          { className: 'dst-actBar' },
+          { className: 'dsc-actBar' },
           h(
             'button',
             {
               type: 'button',
-              className: 'dst-mini',
+              className: 'dsc-mini',
               'data-on': allTools ? '' : undefined,
               'aria-pressed': allTools ? 'true' : 'false',
               title: 'Show every tool call, not only the ones that run something',
@@ -1531,7 +1678,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
             'button',
             {
               type: 'button',
-              className: 'dst-mini',
+              className: 'dsc-mini',
               'data-on': failuresOnly ? '' : undefined,
               'aria-pressed': failuresOnly ? 'true' : 'false',
               title: 'Only show what failed',
@@ -1539,44 +1686,50 @@ body.dst-dragging{cursor:row-resize;user-select:none}
             },
             'Failures',
           ),
-          h('span', { className: 'dst-actFacts' }, facts.join(' \u00b7 ')),
-          follow ? null : h('button', { type: 'button', className: 'dst-mini', onClick: () => setFollow(true), title: 'Follow the newest command' }, 'Follow \u2193'),
+          h('span', { className: 'dsc-actFacts' }, sessionId === null ? '' : facts.join(' \u00b7 ')),
+          follow ? null : h('button', { type: 'button', className: 'dsc-mini', onClick: () => setFollow(true), title: 'Follow the newest command' }, 'Follow \u2193'),
         ),
         h(
           'div',
-          { className: 'dst-actBody', ref: bodyRef, onScroll },
-          !model.available && model.reason !== null
-            ? hint('Agent activity is not readable here', model.reason, 'dsh-terminal ' + PLUGIN_VERSION)
-            : !model.available
-              ? hint('Reading the conversation\u2026', 'The commands appear as soon as this conversation\u2019s log answers.', '')
-              : groups.length === 0
-                ? hint(
-                    'No commands yet',
-                    failuresOnly || !allTools
-                      ? 'Nothing here matches the filter.'
-                      : 'When the agent runs something in this conversation, it appears here.',
-                    '',
-                  )
-                : h(
-                    'div',
-                    { className: 'dst-actList' },
-                    groups.map((group) =>
-                      h(
-                        'div',
-                        { className: 'dst-grp', key: group.key },
-                        group.prompt === '' && group.promptTime === null
-                          ? null
-                          : h(
-                              'div',
-                              { className: 'dst-grpHead' },
-                              h('span', { className: 'dst-grpTime' }, clock(group.promptTime)),
-                              typeof group.turn === 'number' ? h('span', { className: 'dst-grpTurn' }, 'turn ' + String(group.turn)) : null,
-                              h('span', { className: 'dst-grpPrompt', title: group.prompt }, group.prompt === '' ? '(no prompt)' : group.prompt),
-                            ),
-                        group.commands.map(row),
+          { className: 'dsc-actBody', ref: bodyRef, onScroll },
+          sessionId === null
+            ? // alpha.13: the panel is open with no conversation in front of it
+              // (the new-conversation and Start screens). Without this the view
+              // would sit on "Reading the conversation..." for ever, which is the
+              // one thing that is certainly not happening.
+              hint('No conversation open', 'The panel follows the conversation in front of you: open one and the commands the agent runs there appear here.', '')
+            : !model.available && model.reason !== null
+              ? hint('Agent activity is not readable here', model.reason, 'dsh-cmdbar ' + PLUGIN_VERSION)
+              : !model.available
+                ? hint('Reading the conversation\u2026', 'The commands appear as soon as this conversation\u2019s log answers.', '')
+                : groups.length === 0
+                  ? hint(
+                      'No commands yet',
+                      failuresOnly || !allTools
+                        ? 'Nothing here matches the filter.'
+                        : 'When the agent runs something in this conversation, it appears here.',
+                      '',
+                    )
+                  : h(
+                      'div',
+                      { className: 'dsc-actList' },
+                      groups.map((group) =>
+                        h(
+                          'div',
+                          { className: 'dsc-grp', key: group.key },
+                          group.prompt === '' && group.promptTime === null
+                            ? null
+                            : h(
+                                'div',
+                                { className: 'dsc-grpHead' },
+                                h('span', { className: 'dsc-grpTime' }, clock(group.promptTime)),
+                                typeof group.turn === 'number' ? h('span', { className: 'dsc-grpTurn' }, 'turn ' + String(group.turn)) : null,
+                                h('span', { className: 'dsc-grpPrompt', title: group.prompt }, group.prompt === '' ? '(no prompt)' : group.prompt),
+                              ),
+                          group.commands.map(row),
+                        ),
                       ),
                     ),
-                  ),
         ),
       )
     }
@@ -1584,7 +1737,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
     // ---------------------------------------------------------------------
     // The header control: toggles the dock for its own conversation.
     // ---------------------------------------------------------------------
-    function TerminalButton({ sessionId }) {
+    function CmdbarButton({ sessionId }) {
       const rev = useRevision()
       const active = dock.open && dock.sessionId === sessionId
       // The header control is the one part of this package that is on screen
@@ -1597,11 +1750,23 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       const activity = useActivity(sessionId)
       const busy = activity.counts.running > 0
       const failed = !busy && activity.counts.failed > 0
-      // The conversation this button belongs to is the one on screen, so this is
-      // where "switching conversation closes the dock" is enforced.
+      // The conversation this button belongs to is the one in front of the
+      // reader, so this is where the panel FOLLOWS it (alpha.13): an open panel
+      // re-points at the new conversation and stays open where the reader put it.
+      // The cleanup is the other half - a conversation whose header leaves the
+      // screen entirely (the new-conversation and Start screens have no header at
+      // all) is one nothing else reports, so letting go on unmount is what stops
+      // the panel drawing a conversation that is no longer anywhere.
       useEffect(() => {
         adoptSession(sessionId)
-        // `rev` keeps this honest when the dock is opened/closed elsewhere.
+        return () => {
+          releaseSession(sessionId)
+        }
+      }, [sessionId])
+      // `rev` keeps this honest when the dock is opened, closed or re-pointed
+      // elsewhere: re-reporting the conversation already in force is a no-op.
+      useEffect(() => {
+        adoptSession(sessionId)
       }, [sessionId, rev])
       const label = active ? 'Hide the agent\u2019s commands' : 'The agent\u2019s commands'
       const onClick = useCallback(() => {
@@ -1614,16 +1779,16 @@ body.dst-dragging{cursor:row-resize;user-select:none}
           'button',
           {
             type: 'button',
-            className: 'dst-btn dst-btnIcon',
+            className: 'dsc-btn dsc-btnIcon',
             'aria-label': 'The agent\u2019s commands',
             'aria-pressed': active ? 'true' : 'false',
-            'data-dsh-terminal-toggle': '',
+            'data-dsh-cmdbar-toggle': '',
             'data-agent-state': busy ? 'running' : failed ? 'failed' : undefined,
             style: { width: '28px', height: '28px', borderRadius: '28px', position: 'relative' },
             onClick,
           },
-          h('span', { className: 'dst-glyph' }, h(ActivityGlyph, { size: 15 })),
-          busy || failed ? h('span', { className: 'dst-headDot', 'data-state': busy ? 'running' : 'failed' }) : null,
+          h('span', { className: 'dsc-glyph' }, h(ActivityGlyph, { size: 15 })),
+          busy || failed ? h('span', { className: 'dsc-headDot', 'data-state': busy ? 'running' : 'failed' }) : null,
         ),
       )
     }
@@ -1753,7 +1918,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
         let frame = 0
         let pending = null
         dragging = true
-        if (document.body) document.body.classList.add('dst-dragging')
+        if (document.body) document.body.classList.add('dsc-dragging')
         try {
           if (grip && typeof grip.setPointerCapture === 'function') grip.setPointerCapture(event.pointerId)
         } catch (err) {
@@ -1781,7 +1946,7 @@ body.dst-dragging{cursor:row-resize;user-select:none}
             setHeight(value)
           }
           dragging = false
-          if (document.body) document.body.classList.remove('dst-dragging')
+          if (document.body) document.body.classList.remove('dsc-dragging')
           try {
             if (
               grip &&
@@ -1811,45 +1976,58 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       // The bar says what the panel is and how the log is doing; the body draws
       // the log itself. There is no second view to switch to, so the state that
       // used to be a toggle's is now the brand's own.
+      //
+      // alpha.13: with NO conversation on screen there are no commands to count,
+      // and "0 commands, nothing run yet" would be a claim about a conversation
+      // that does not exist. The line goes quiet and the body says why.
+      const facts = sessionId === null ? '' : activityFactsTitle(activity)
       const activityTitle =
-        activityFactsTitle(activity) + (activityUnreadable ? '. Not readable here: ' + String(activity.reason) : '')
-
+        sessionId === null ? '' : facts + (activityUnreadable ? '. Not readable here: ' + String(activity.reason) : '')
       return h(
         'div',
         {
           ref: rootRef,
-          className: 'dst-dock',
-          'data-dsh-terminal-dock': '',
+          className: 'dsc-dock',
+          'data-dsh-cmdbar-dock': '',
           'data-open': open ? '' : undefined,
           'data-state': activityTone,
           role: 'region',
           'aria-label': 'The agent\u2019s commands',
         },
-        h('div', { className: 'dst-grip', role: 'separator', 'aria-orientation': 'horizontal', onPointerDown: onGripDown, title: 'Resize' }),
+        h('div', { className: 'dsc-grip', role: 'separator', 'aria-orientation': 'horizontal', onPointerDown: onGripDown, title: 'Resize' }),
         h(
           'div',
-          { className: 'dst-bar' },
+          { className: 'dsc-bar' },
           h(
             'span',
-            { className: 'dst-brand', 'data-state': activityTone },
-            h('span', { className: 'dst-glyph' }, h(ActivityGlyph, { size: 14 })),
+            { className: 'dsc-brand', 'data-state': activityTone },
+            h('span', { className: 'dsc-glyph' }, h(ActivityGlyph, { size: 14 })),
             'Agent',
           ),
-          activityBusy ? h('span', { className: 'dst-pulse', 'data-state': 'running' }) : null,
-          activityUnreadable ? h('span', { className: 'dst-warn', title: String(activity.reason) }, '\u26a0') : null,
+          activityBusy ? h('span', { className: 'dsc-pulse', 'data-state': 'running' }) : null,
+          activityUnreadable ? h('span', { className: 'dsc-warn', title: String(activity.reason) }, '\u26a0') : null,
           activityFailed
-            ? h('span', { className: 'dst-badge', 'data-tone': 'failed', title: String(activity.counts.failed) + ' failed' }, String(activity.counts.failed))
+            ? h('span', { className: 'dsc-badge', 'data-tone': 'failed', title: String(activity.counts.failed) + ' failed' }, String(activity.counts.failed))
             : null,
-          h('span', { className: 'dst-spacer' }),
-          h('span', { className: 'dst-facts', title: activityTitle }, activityFactsTitle(activity)),
-          h('span', { className: 'dst-ver' }, 'dsh-terminal ' + PLUGIN_VERSION),
+          h('span', { className: 'dsc-spacer' }),
+          h('span', { className: 'dsc-facts', title: activityTitle }, facts),
+          h('span', { className: 'dsc-ver' }, 'dsh-cmdbar ' + PLUGIN_VERSION),
           h(
             'button',
-            { type: 'button', className: 'dst-btn dst-btnIcon', title: 'Hide the panel', 'aria-label': 'Hide the panel', onClick: closeDock },
+            { type: 'button', className: 'dsc-btn dsc-btnIcon', title: 'Hide the panel', 'aria-label': 'Hide the panel', onClick: closeDock },
             h(CloseGlyph, { size: 11 }),
           ),
         ),
-        h('div', { className: 'dst-body' }, h(ActivityView, { sessionId, model: activity })),
+        // keyed on the conversation (alpha.13): following a change must reset the
+        // view's own state too - the filters, the expanded rows and the follow
+        // pill belong to the conversation they were set in, and carrying them into
+        // a new one is exactly the "continues from the previous conversation" this
+        // release removes.
+        h(
+          'div',
+          { className: 'dsc-body' },
+          h(ActivityView, { key: sessionId === null ? 'none' : sessionId, sessionId, model: activity }),
+        ),
       )
     }
 
@@ -1903,30 +2081,30 @@ body.dst-dragging{cursor:row-resize;user-select:none}
               ctx.slots.register(
                 {
                   name: HEADER_SLOT,
-                  id: 'dsh-terminal',
+                  id: 'dsh-cmdbar',
                   order: HEADER_ORDER,
                 },
-                TerminalButton,
+                CmdbarButton,
               ),
             ),
-          'dsh-terminal: header control',
+          'dsh-cmdbar: header control',
         )
         ctx.effect(
           () =>
             ctx.slots.inject(OVERLAY_SLOT, () =>
-              ctx.slots.register({ name: OVERLAY_SLOT, id: 'dsh-terminal', order: OVERLAY_ORDER }, Dock),
+              ctx.slots.register({ name: OVERLAY_SLOT, id: 'dsh-cmdbar', order: OVERLAY_ORDER }, Dock),
             ),
-          'dsh-terminal: dock',
+          'dsh-cmdbar: dock',
         )
         // A feed polls while something is subscribed (a timer, a fetch and a
         // visibilitychange listener); unloading this bundle has to stop all of
         // that explicitly.
-        ctx.effect(() => () => disposeFeeds(), 'dsh-terminal: activity feeds')
-        ctx.logger?.debug?.('[dsh-terminal] dock control registered (' + PLUGIN_VERSION + ', order ' + String(HEADER_ORDER) + ')')
+        ctx.effect(() => () => disposeFeeds(), 'dsh-cmdbar: activity feeds')
+        ctx.logger?.debug?.('[dsh-cmdbar] dock control registered (' + PLUGIN_VERSION + ', order ' + String(HEADER_ORDER) + ')')
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('[dsh-terminal] activation failed', err)
-        ctx.logger?.warn?.('[dsh-terminal] activation failed', err && err.message ? err.message : err)
+        console.error('[dsh-cmdbar] activation failed', err)
+        ctx.logger?.warn?.('[dsh-cmdbar] activation failed', err && err.message ? err.message : err)
       }
     }
 
@@ -1952,11 +2130,22 @@ body.dst-dragging{cursor:row-resize;user-select:none}
       activitySignature,
       filterActivity,
       formatDuration,
-      // alpha.11: the sentence the Agent control wears in its tooltip. It is the
-      // one place the counts reach a reader as WORDS, and the bug this release
-      // fixes was visible there first ("0 commands, 1 failed, nothing run yet" in
+      // alpha.14: the expanded row's own command body, and the ONE place a
+      // render could throw on a click. Driven below with a multi-line command, a
+      // single-line one and a collapsed row, because the crash it replaces was
+      // invisible to every static render this check can make.
+      commandBody,
+      // alpha.11: the counts the Agent control and the dock's bar wear as WORDS.
+      // It is the one place those numbers reach a reader, and the bug that release
+      // fixed was visible there first ("0 commands, 1 failed, nothing run yet" in
       // one breath), so it is pinned as text rather than as a source shape.
+      // alpha.13 dropped the sentence it used to open with.
       activityFactsTitle,
+      // alpha.13: the rule that keeps the panel on the conversation in front of
+      // the reader. Four fields and one comparison, and every way it can go wrong
+      // - an open panel closing itself, an absent id being ignored, a closed panel
+      // polling a conversation nobody sees - is a behaviour, not a shape.
+      followDecision,
       // The view itself, so the tracked check can RENDER a hand-built log: the
       // switch is off by default, so a static render of the dock can never reach
       // a row, and "the panel draws a command" would otherwise be unchecked.

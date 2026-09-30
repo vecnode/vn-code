@@ -124,8 +124,17 @@
  * the header corner is the one icon button on that bar that could not be given
  * the group's round outline where it lives (it belongs to a GENERATED forked
  * bundle), so one rule keyed on the header's stable corner marker gives it the
- * same ring this package's two header buttons draw themselves. All four are plain
- * engine-neutral CSS, so they hold in every browser the Web GUI runs in.
+ * same ring this package's two header buttons draw themselves. The fifth
+ * (alpha.22) is the left column's **order**: the global panel rows move from
+ * above the workspaces region to the foot, immediately above Settings (see the
+ * sidebar-order section below). The sixth (alpha.22) is the fullscreen right
+ * panel's **width**: at a page zoom the fork's inline `100vw` paints the panel
+ * at `zoom x` the app viewport, so while a fullscreen panel exists the column
+ * stops being its containing block and the width becomes a PERCENTAGE of the
+ * frame - the one box that is the whole viewport at every level (see the seam
+ * section below; it is the same root cause the alpha.16 seam rule already
+ * repairs one box over). All of them are plain engine-neutral CSS, so they hold
+ * in every browser the Web GUI runs in.
  *
  * Module-table format of every core client package; no build step.
  */
@@ -141,11 +150,81 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
     const { Button, Menu, Modal, Toast, Tooltip } = primitives
-    /** The shipped download glyph the removed Session-log menu item carried. */
-    const DownloadGlyph = primitives.IconDownloadOutline16
+
+    // ---------------------------------------------------------------------
+    // THE GLYPHS, RESOLVED BY NAME (alpha.23).
+    //
+    // WHAT WENT WRONG. `@deepseek-ai/dsh-client-ui-primitives` renamed every
+    // `…16` glyph export to `…Regular` on the 0.2.0-rc.2 line, and this package
+    // still asked for the old spelling: the glyph it wanted for the download seat
+    // (`IconDownloadOutline16`) is not an export there, so the read was
+    // `undefined`, `h(undefined, …)` threw "Element type is invalid" the moment
+    // the seat rendered, and the ABDICATION below did the rest.
+    //
+    // WHY THAT WAS NOT MERELY A BROKEN ICON. The slots core treats a render crash
+    // as ABDICATION: the crashed entry is retired from its cell and the next
+    // entry for the same id takes the seat. So the failure the reader saw was not
+    // an empty header - it was the SHIPPED `session-log-download` occupant coming
+    // back, i.e. the three-dot "More actions" menu this package had replaced with
+    // one download button. The same trap would have taken the Themes control's
+    // three preference glyphs (light / dark / system) with it.
+    //
+    // THE RULE, THEREFORE. No glyph is ever read straight off the primitives
+    // object: each one is looked up through the spellings the harness lines have
+    // used, newest first, and a name that resolves to nothing is ONE warning plus
+    // a placeholder component - never `undefined`. A header seat must not be lost
+    // to a renamed export, and `scripts/checks/check-client-bundles.mjs` now
+    // fails the build when a name this package reads is absent from the pinned
+    // line, so the next rename is caught by the check rather than by the reader.
+    // ---------------------------------------------------------------------
+    /** The glyph names a warning was already printed for (one line per glyph). */
+    const GLYPH_WARNED = new Set()
+    /** The placeholder a glyph that no spelling resolved draws (a 16px dot). */
+    const PlaceholderGlyph = (props) =>
+      h(
+        'svg',
+        {
+          width: (props && props.size) || 16,
+          height: (props && props.size) || 16,
+          viewBox: '0 0 16 16',
+          'aria-hidden': 'true',
+          focusable: 'false',
+        },
+        h('circle', { cx: 8, cy: 8, r: 1.6, fill: 'currentColor' }),
+      )
+    /**
+     * Resolve one of the shipped glyphs by any of the names it has had.
+     * @param names - candidate export names, newest spelling first.
+     * @returns the primitive's glyph, else the placeholder (with one warning).
+     */
+    function glyphOf(names) {
+      for (const name of names) {
+        // A `React.memo` glyph is an OBJECT, not a function, so both shapes count
+        // (the same trap dsh-editor's engine guard documents).
+        const candidate = primitives[name]
+        if (candidate !== undefined && candidate !== null) return candidate
+      }
+      const wanted = names.join(' | ')
+      if (!GLYPH_WARNED.has(wanted)) {
+        GLYPH_WARNED.add(wanted)
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[dsh-themes] none of the shipped glyphs ' +
+            wanted +
+            ' exists in this harness line; a placeholder is drawn instead',
+        )
+      }
+      return PlaceholderGlyph
+    }
+
+    /**
+     * The shipped download glyph the removed Session-log menu item carried. It is
+     * the seat's whole visible mark, so it must never resolve to `undefined`.
+     */
+    const DownloadGlyph = glyphOf(['IconDownloadOutlineRegular', 'IconDownloadOutline16'])
     /** The status glyphs the screenshot toast wears (the shipped check / warning pair). */
-    const CheckGlyph = primitives.IconCheckOutline16
-    const WarningGlyph = primitives.IconWarningOutline16
+    const CheckGlyph = glyphOf(['IconCheckOutlineRegular', 'IconCheckOutline16'])
+    const WarningGlyph = glyphOf(['IconWarningOutlineRegular', 'IconWarningOutline16'])
 
     // ---------------------------------------------------------------------
     // Constants
@@ -153,7 +232,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.20'
+    const PLUGIN_VERSION = '0.1.0-alpha.23'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -290,11 +369,11 @@ window.__ModuleLoader__.load({
     // of the ones beside them in both appearances. Both of them share the class.
     //
     // alpha.9 adds the hairline RING. The bar's icon buttons are meant to read
-    // as one group, and the pack's terminal control (`.dst-btn`, which is also
+    // as one group, and the pack's command-bar control (`.dsc-btn`, which is also
     // the dress the shipped `session-log-download` more-button and the bar's own
     // toggle were cut from) wears a `.5px` outline; this package's buttons wore
     // none, so they sat bare among them. The ring is `--dsw-alias-border-l3` -
-    // the token the terminal control already uses - and `box-sizing:border-box`
+    // the token the command-bar control already uses - and `box-sizing:border-box`
     // keeps the box exactly 28px with the outline inside it.
     //
     // alpha.10 added the CAPTURE rule; alpha.11 narrows it to the tooltip alone.
@@ -400,11 +479,20 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
       'zoom.out': 'Zoom out',
     }
 
-    /** The three preferences ui-theme owns, in the Settings row's order. */
+    /**
+     * The three preferences ui-theme owns, in the Settings row's order. Their
+     * glyphs go through `glyphOf` for the reason the block above gives: a bare
+     * `primitives.…` that the pinned line no longer exports would take this whole
+     * control out of the header.
+     */
     const PREFERENCES = [
-      { id: 'light', label: 'theme.light', Icon: primitives.IconLightOutline16 },
-      { id: 'dark', label: 'theme.dark', Icon: primitives.IconDarkOutline16 },
-      { id: 'system', label: 'theme.system', Icon: primitives.IconFollowsystemOutline16 },
+      { id: 'light', label: 'theme.light', Icon: glyphOf(['IconLightOutlineRegular', 'IconLightOutline16']) },
+      { id: 'dark', label: 'theme.dark', Icon: glyphOf(['IconDarkOutlineRegular', 'IconDarkOutline16']) },
+      {
+        id: 'system',
+        label: 'theme.system',
+        Icon: glyphOf(['IconFollowsystemOutlineRegular', 'IconFollowsystemOutline16']),
+      },
     ]
 
     /**
@@ -1416,11 +1504,100 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     }
 
     // ---------------------------------------------------------------------
+    // The global panel rows at the column's FOOT (alpha.22).
+    //
+    // WHAT THE SHELL DOES. The left column's own order, top to bottom, is the
+    // branding row, "New Session", the GLOBAL PANEL ROWS (`sidebar.panellist` -
+    // Plugins, and Schedule wherever that row is mounted), the
+    // workspaces/sessions browsing region (`sidebar.workspaces`), and the foot
+    // (`sidebar.footer.action` plus `sidebar.settings`). So the panel rows sit
+    // ABOVE the workspace list, wedged between it and "New Session".
+    //
+    // WHY IT MOVES. vncode reads that column the other way round. The browsing
+    // region is what a person opens the bar FOR, so it belongs at the top under
+    // "New Session"; the global panels are navigation to whole PAGES of the app,
+    // which belongs down with Settings - Plugins immediately above Settings,
+    // where the eye already goes for "the app itself" rather than for a
+    // conversation.
+    //
+    // HOW. `order` on the column's flex children. `SidebarRoot` is a flex column
+    // (`flex-direction:column`), so this moves the rows without touching the DOM,
+    // re-registering a slot or forking the shell; the region area keeps its
+    // `flex:1`, so it still absorbs the slack and the panel rows plus the foot
+    // stay pinned to the bottom of the column. A panel's OWN `order` cannot do
+    // this - it sorts WITHIN the panel list, which is exactly the list that has
+    // to move.
+    //
+    // WHAT IT COSTS. `order` is visual only, so the Tab walk still reaches
+    // Plugins before the workspace list. That is the one thing a CSS reorder
+    // cannot fix, and the alternative - a fork of the sidebar shell - is a
+    // generated core bundle this pack does not own and has no reason to take.
+    // The selectors are three of that module's own hashed class names, pinned to
+    // the harness line in `.dsh-version.json` exactly like the top bar above: on
+    // a bump that renames them this matches nothing and the shell's own order
+    // stands, which is the accepted failure mode of every override here.
+    // ---------------------------------------------------------------------
+    /** The panel-order override's style-tag identity (idempotent injection). */
+    const ORDER_TAG = 'dsh-themes/sidebar-order.css'
+
+    /**
+     * Install the global panel rows at the column's foot (alpha.22): the
+     * workspaces region takes the slot the panel rows vacate, and Plugins sits
+     * immediately above Settings.
+     * @returns whether the rules are in place.
+     */
+    function installSidebarOrder() {
+      if (typeof document === 'undefined') return false
+      const order = [
+        // The browsing region first. It stays the FLEXIBLE child, so the two
+        // rows below it are pushed to the foot whatever their height is.
+        'html .hHd-Xa_root .hHd-Xa_regionArea{order:1}',
+        // The global panel rows: below the region, above the foot.
+        'html .hHd-Xa_root .hHd-Xa_panelList{order:2}',
+        // The foot (footer actions, then Settings) last, as the shell had it.
+        'html .hHd-Xa_root .hHd-Xa_footArea{order:3}',
+        // Plugins and Settings are the same KIND of row - one navigation target
+        // each, stacked at the foot of the same column - so they have to MEASURE
+        // the same, and by the shell's own dress they do not: a panel row is
+        // `min-height:36px` with `padding:7px 8px` around a 22px line, while the
+        // Settings trigger is `height:42px` with `padding:0 10px 0 8px` inside a
+        // row 4px wider than the column (`width:calc(100% + 4px);margin:4px -2px`
+        // on `.VOzbGW_triggerRow`). Side by side at the foot, the six missing
+        // pixels read as "the Plugins button is smaller". This makes the panel row
+        // wear the Settings row's own box, so the two are interchangeable.
+        //
+        // WIDE ONLY. Every one of those numbers is the wide column's; collapsed,
+        // the shell draws both as the same 36px square (`.hHd-Xa_panelRow` and
+        // `.VOzbGW_rail`), which is why the rule is scoped to a column that is
+        // NOT `hHd-Xa_collapsed`. The panel's own hashed class and the collapsed
+        // marker are pinned to the harness line in `.dsh-version.json` exactly
+        // like the three rules above: on a bump that renames them this matches
+        // nothing and the shell's own sizes stand, which is the accepted failure
+        // mode of every override here.
+        'html .hHd-Xa_root:not(.hHd-Xa_collapsed) .hHd-Xa_panelList .hHd-Xa_panelRow{height:42px;min-height:42px;width:calc(100% + 4px);margin:4px -2px;padding:0 10px 0 8px;font-size:14px;line-height:22px}',
+      ].join('')
+      let tag = null
+      try {
+        tag = document.querySelector('style[data-plugin-css=' + JSON.stringify(ORDER_TAG) + ']')
+      } catch (e) {
+        tag = null
+      }
+      if (!tag) {
+        tag = document.createElement('style')
+        tag.dataset.plugin = 'dsh-themes'
+        tag.dataset.pluginCss = ORDER_TAG
+        document.head.appendChild(tag)
+      }
+      if (tag.textContent !== order) tag.textContent = order
+      return true
+    }
+
+    // ---------------------------------------------------------------------
     // The header's icon-button RING (alpha.9).
     //
     // The conversation header's icon buttons read as one group, and the pack's
-    // own controls draw that group's dress themselves: the terminal control
-    // (`.dst-btn`) wears a `.5px` round outline, the Themes control now wears the
+    // own controls draw that group's dress themselves: the command-bar control
+    // (`.dsc-btn`) wears a `.5px` round outline, the Themes control now wears the
     // same one, and the Session-log download seat does too. The ONE control on
     // that bar that could not be given it where it lives is the right bar's own
     // collapse/expand toggle in the header corner: it is the pack's forked right
@@ -1466,7 +1643,103 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     }
 
     // ---------------------------------------------------------------------
-    // The right bar's outer resize seam, under a page zoom (alpha.16).
+    // The account menu's **Feedback** item (alpha.21).
+    //
+    // WHAT IT IS. The left bar's account menu (the avatar / "More" trigger in the
+    // sidebar footer) carries exactly three rows: Settings, **Feedback**, and
+    // Sign out / Sign in. The middle one is labelled `contactUs` - "Feedback" in
+    // English, "意见反馈" in Chinese - and its one job is to open a form in a NEW
+    // window: `https://trtgsjkv6r.feishu.cn/share/base/form/shrcnlCoGElW7MQznGy9r3YYXcg`,
+    // built by @deepseek-ai/dsh-client-ui-settings-account's `contactUrl()`, which
+    // appends `uid`, `source`, the harness version, the locale, the screen size and
+    // the device info as query parameters. vncode is its own product and its owner
+    // does not want its users' feedback (or their uid and machine details) sent to
+    // a third party, so the row goes.
+    //
+    // WHY CSS AND NOT A ROW DISABLE. There is no row to disable: the item is
+    // hardcoded in that package's `AccountMenu` and registered into the
+    // `settings.launcher` slot as a whole, so the only ways to remove ONE row are
+    // to fork the entire account bundle (4.5k lines: sign-in, sign-out, quota
+    // notices, billing pages, onboarding) or to hide the row. This is the same
+    // treatment the top bar and the branding already get from this package: one
+    // rule over a shipped control, no fork, no core file touched.
+    //
+    // THE SELECTOR is pinned on things that do not move with a rebuild. The
+    // primitive renders every menu row as `<div class="itemWrap"><button
+    // role="menuitem">…` and carries NO id or data attribute for the row - the
+    // item's own `id` ("contact") lives only in React - so the handle is the
+    // ICON's artwork: the paper-plane path data (`d="M4.74024 9.11029…"`) that
+    // this one row draws. That path comes from the design asset rather than from
+    // the CSS module, so it survives the hashed class names the rest of the pack's
+    // overrides have to pin. Both the row's wrapper and its button are hidden: on
+    // a primitive that stops wrapping rows, the second rule still lands.
+    //
+    // WHAT ELSE THAT SELECTOR COULD MATCH, and why nothing does: the same artwork
+    // is used by the `/feedback` COMMAND's menu glyph (that command is disabled
+    // with the rest of the feedback surface - see dsh-vn-master), by the chat's
+    // turn-trigger notice for an agent-initiated turn (not a `role="menuitem"`,
+    // and not inside a `role="menu"`), and by the Session-export header button
+    // (also not a menu row). Hiding a stray command row would be harmless anyway;
+    // hiding the trigger notice or the export button would not, and neither can
+    // match.
+    //
+    // WHY HIDING IS ENOUGH. The rows are reachable only through the menu's own
+    // keyboard walk, which collects `button:not(:disabled)` and moves its index -
+    // a `display:none` row cannot take focus (so it cannot be clicked or activated
+    // from the keyboard) while the walk still advances past it, leaving Settings
+    // and Sign out reachable with ArrowDown as before. The Menu's pointer path is
+    // the button itself, so there is nothing to press.
+    //
+    // WHAT THIS DOES NOT DO. It cannot stop the URL being OPENED if the row ever
+    // comes back - on a harness bump that redraws the paper-plane artwork this
+    // rule matches nothing and the item returns. That is the accepted failure mode
+    // of every override in this package (the top bar and the branding pins say the
+    // same thing), and the alternative was rejected on purpose: setting the row's
+    // `contactFormUrl` from the pack's master layer would be a guard that
+    // evaporates, because a row with `volatile` fields has its WHOLE config
+    // replaced by the next volatile write from a settings form.
+    // ---------------------------------------------------------------------
+    /** The account-menu override's style-tag identity (idempotent injection). */
+    const ACCOUNT_TAG = 'dsh-themes/account-menu.css'
+    /**
+     * The prefix of the shipped paper-plane icon's path data, which is what
+     * identifies the Feedback row (see the block above).
+     */
+    const PAPER_PLANE_PATH = 'M4.74024 9.11029'
+
+    /**
+     * Install the account-menu override (alpha.21): the shipped **Feedback** row
+     * is hidden, so nothing in the app opens the external feedback form.
+     * @returns whether the rule is in place.
+     */
+    function installAccountMenu() {
+      if (typeof document === 'undefined') return false
+      const icon = 'svg path[d^="' + PAPER_PLANE_PATH + '"]'
+      const accountMenu =
+        '[role="menu"]>div:has(>button[role="menuitem"] ' +
+        icon +
+        '){display:none}[role="menu"] button[role="menuitem"]:has(' +
+        icon +
+        '){display:none}'
+      let tag = null
+      try {
+        tag = document.querySelector('style[data-plugin-css=' + JSON.stringify(ACCOUNT_TAG) + ']')
+      } catch (e) {
+        tag = null
+      }
+      if (!tag) {
+        tag = document.createElement('style')
+        tag.dataset.plugin = 'dsh-themes'
+        tag.dataset.pluginCss = ACCOUNT_TAG
+        document.head.appendChild(tag)
+      }
+      if (tag.textContent !== accountMenu) tag.textContent = accountMenu
+      return true
+    }
+
+    // ---------------------------------------------------------------------
+    // The right bar's outer resize seam, under a page zoom (alpha.16), and the
+    // FULLSCREEN panel's width, under the same zoom (alpha.22).
     //
     // THE BUG. `zoom` on <html> divides the initial containing block, so the
     // frame's `getBoundingClientRect().width` reports the SCALED width while
@@ -1485,7 +1758,7 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     //
     // THE FIX is to stop deriving the seam from a measured rect and derive it
     // from the LAYOUT: the right column carries `data-rightbar-col` (ui-layout's
-    // own stable marker, the one dsh-terminal already follows), that column is
+    // own stable marker, the one dsh-cmdbar already follows), that column is
     // named as a CSS ANCHOR while a zoom is in force, and the seam is placed at
     // the anchor's left edge. Both sides of that are layout pixels, so a zoom
     // cannot separate them again - verified at 80%, 100% and 125% in the real
@@ -1504,7 +1777,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     const SEAM_TAG = 'dsh-themes/zoom-seam.css'
 
     /**
-     * Install the right-bar seam override (alpha.16).
+     * Install the right-bar seam override (alpha.16) and the fullscreen panel's
+     * width repair (alpha.22).
      * @returns whether the rule is in place.
      */
     function installZoomSeam() {
@@ -1515,7 +1789,46 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         '] [data-rightbar-col]{anchor-name:--dsh-themes-rightbar-seam}' +
         'html[' +
         ZOOM_MARKER +
-        '] [data-rightbar-col]~[data-side="rightbar"]{left:anchor(--dsh-themes-rightbar-seam left)!important}'
+        '] [data-rightbar-col]~[data-side="rightbar"]{left:anchor(--dsh-themes-rightbar-seam left)!important}' +
+        // THE FULLSCREEN PANEL'S WIDTH (alpha.22 again, and the SAME root cause
+        // one box over). The forked right bar sizes the fullscreen panel with
+        // ONE INLINE DECLARATION - `width:100vw` - and a viewport unit is NOT
+        // zoom-adjusted: CSS `zoom` multiplies the used value of a LENGTH, and
+        // the spec exempts only `auto` and `<percentage>`. So the frame (which
+        // stretches by percentage and therefore IS the app viewport at every
+        // level) and the panel disagree by exactly the zoom factor: at the 90%
+        // this machine runs, a fullscreen panel painted at 90% of the viewport
+        // and, anchored `right:0`, left a 10% strip of the left bar uncovered.
+        // The repair hands the panel a PERCENTAGE instead: while a fullscreen
+        // panel exists the column stops being the panel's containing block
+        // (`position:static`), so the panel resolves against the frame - the one
+        // box measured to be the whole app viewport at any zoom - and `100%` is
+        // exactly the width asked for. `!important` is required because the
+        // component writes its width INLINE. `top:0;bottom:0` already give the
+        // full height, so nothing else is needed, and the shipped
+        // `[data-windows-titlebar]` max-width (if a desktop shell ever sets that
+        // attribute) still wins, because `max-width` beats `width`.
+        //
+        // Both rules are GATED ON THE ZOOM MARKER, like the seam above: at the
+        // resting level `100vw` and the frame agree to the pixel, so a page
+        // nobody has zoomed keeps the fork's own geometry untouched. (The
+        // tracked check counts the marker occurrences, so a rule added here
+        // without the gate fails there rather than quietly changing a page at
+        // 100%.)
+        //
+        // The `:has()` is scoped to the FULLSCREEN state on purpose. A blanket
+        // `[data-rightbar-col]{position:static}` would move the PUSH-mode panel
+        // out of the column too - and dsh-cmdbar shortens that column while
+        // the command dock is open precisely so the panel's absolute box sits
+        // inside the shortened column. In fullscreen the dock yields instead
+        // (it skips its inset while `data-rightbar-fullscreen` is set), so the
+        // two never meet.
+        'html[' +
+        ZOOM_MARKER +
+        '] [data-rightbar-col]:has([data-sidebar-right-panel=fullscreen]){position:static}' +
+        'html[' +
+        ZOOM_MARKER +
+        '] [data-sidebar-right-panel=fullscreen]{width:100%!important}'
       let tag = null
       try {
         tag = document.querySelector('style[data-plugin-css=' + JSON.stringify(SEAM_TAG) + ']')
@@ -2819,6 +3132,12 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
       // the frame rather than to any one appearance.
       installLeftTopBar()
 
+      // One-shot (alpha.22): the global panel rows move to the column's foot -
+      // the workspaces region takes their seat under "New Session" and Plugins
+      // comes to rest immediately above Settings. Static CSS again, and part of
+      // the frame's own arrangement rather than of any one appearance.
+      installSidebarOrder()
+
       // One-shot (alpha.9): the header's shipped corner toggle joins the round
       // outline the pack's own header icon buttons draw.
       installHeaderRing()
@@ -2826,6 +3145,10 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
       // One-shot (alpha.16): the right bar's outer seam keeps sitting on the
       // right column's edge while a page zoom is in force - inert at 100%.
       installZoomSeam()
+
+      // One-shot (alpha.21): the account menu's shipped **Feedback** row is
+      // hidden, so nothing here opens the external feedback form.
+      installAccountMenu()
 
       try {
         ctx.effect(

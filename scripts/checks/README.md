@@ -37,7 +37,7 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
     section first, the layout first, neither, a narrow frame, a remembered `0`
     collapsed through the toggle, and a store shape it must REFUSE rather than
     run blind). It also pins the same wiring from the other side: that
-    `dsh-themes` and `dsh-terminal` resolve the service lazily, never declare it
+    `dsh-themes` and `dsh-cmdbar` resolve the service lazily, never declare it
     in `inject`, and keep their `localStorage` copies underneath;
   - `dsh-editor` - the tab type, `canOpen` (Markdown claimed, previews vetoed),
     the guide contract, the **Preview** hand-off naming the registry's kind (and
@@ -53,7 +53,17 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
     token names and their glyphs), the
     Session-log download seat, the screenshot control, the **Markdown paper**
     (the light declarations it copies out of fake theme stylesheets, and the
-    dark ones it must skip), the left-top-bar branding and the header ring; plus -
+    dark ones it must skip), the left-top-bar branding, the header ring, and
+    (alpha.21) the **account-menu override** - the shipped *Feedback* row hidden by
+    a rule pinned on the row's icon path rather than a hashed class, in both the
+    wrapper and bare-button shapes and scoped to `[role="menu"]`; plus -
+    (alpha.22) the **left column's panel order** (the three `order` values pinned
+    one by one, so a rule that stops moving a row - or one that lands the
+    workspaces region below the foot - fails there) and the **fullscreen right
+    panel's width under a page zoom** (the column's containing-block change and the
+    `width:100%` that depends on it, that the change stays scoped to the
+    fullscreen state, and that the zoom marker now gates exactly FOUR rules);
+    plus -
     the one section that loads a HARNESS bundle rather than a pack one - the
     **extension-theme regression** against the **real ui-theme runtime**: choosing
     Nord applies it through the real service, `adopt()`'s re-adopt of the durable
@@ -75,7 +85,8 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
     rail of a four-commit merge is checked for one rail per row, the lane widths,
     the hollow merge node, both curves, the node on the lane's centre line and the
     `#12` chip;
-  - `dsh-terminal` - the bundle id, both seats, order 30, and the geometry
+  - `dsh-cmdbar` (the command bar; `dsh-terminal` through alpha.13) - the bundle
+    id, both seats, order 30, and the geometry
     invariants the dock must keep at the source level (never the frame's height,
     inset the two columns, follow the left bar through the mutation observer
     *and* the column `ResizeObserver`), plus the dock's ONE view as a static
@@ -83,8 +94,14 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
     wearing the log's state. **alpha.12 is pinned by ABSENCE**, because the
     terminal half must not come back: the check fails if a socket, the vendored
     engine (`DSHTerminal`), the emulator registry (`DockRuntime`), the view
-    sentinel (`ACTIVITY_VIEW`), the chip strip (`dst-chips`), `MAX_TERMINALS` or
-    `onRunInTerminal` reappears anywhere in the browser half. The shared-height
+    sentinel (`ACTIVITY_VIEW`), the chip strip (`dsc-chips`), `MAX_TERMINALS` or
+    `onRunInTerminal` reappears anywhere in the browser half. **alpha.14 pins the
+    rename and the CLICK**: the new name everywhere a name is read (bundle id,
+    seats, route, storage key, CSS tag, `data-dsh-cmdbar-*`, the printed version,
+    `dsc-` in the stylesheet and `dst-` gone from it) with the harness packages it
+    only MENTIONS left alone, and `commandBody` driven through all three cases
+    (collapsed, single-line, multi-line) with the free `multiLine` identifier that
+    used to crash the dock on a click asserted gone outside prose. The shared-height
     arithmetic is DRIVEN through the bundle's pure `__internals.adoptDecision`
     (news moves the dock; the pointer, our own echo, an outstanding write, the
     height already in force, an unready section and an absent value do not).
@@ -104,8 +121,22 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
     log. alpha.11 pins the COUNTS the bar wears as the commands' own - a
     failed `read` folds to zero failures (and to `otherFailed: 1`), its tooltip
     sentence is asserted as text, and the bounded retry (1.5 s over the first four
-    reads with no answer, cleared by an answer) and the dock forgetting the
-    conversation it no longer belongs to are pinned at the source level;
+    reads with no answer, cleared by an answer) is pinned at the source level.
+    alpha.13 pins the two things a conversation change now means: the facts line is
+    the counts **alone** (the sentence is asserted absent), and the dock FOLLOWS
+    the conversation - `followDecision` is DRIVEN through all of its cases (an open
+    panel re-pointing, an absent id being a change rather than the no-op that used
+    to leave the last conversation's commands on screen, a closed panel only
+    forgetting, the same conversation moving nothing, a missing state not
+    crashing), with the source pinned so the panel is closed by the reader's own
+    control and by nothing else.
+  - The repo manifest and the master's pack-wide patches are checked by
+    `check-node-routes.mjs`: `.dsh-version.json` must agree with every
+    package.json, and `packages/dsh-vn-master/cordis.patch.yml` must keep the
+    feedback rows disabled AND name ids that exist in the pinned line's own layers
+    (`dsh-web-app` / `dsh-base`) - a patch naming a row that is not there is
+    SKIPPED with a warning, which is exactly the quiet failure that would bring the
+    feedback surface back with the check still green;
   - `dsh-rightbar` - the forked bar's own source invariants (module-table id,
     the module-table surface other bundles inject);
   - `dsh-diagrams` - both tab types and their seats, all six tool cards, and the
@@ -168,11 +199,13 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
     root commit's file list, the option-injection guard and the GRAPH fields the
     tab's rail is drawn from (a merge's two parents, the `%D` ref `HEAD` points
     at, a tag ref, and a root commit with no parents);
-  - **terminal** - ONE route, and the check asserts that in both directions. The
-    row is driven with a `connection` **and** a `webServer` service offered, and
-    it must register exactly `/api/dsh-terminal/activity` and **no upgrade** -
-    alpha.12 deleted the PTY, the socket, the vendored assets and the `/health`
-    probe, so their return is a regression rather than a feature. The route itself
+  - **cmdbar** (the command bar) - ONE route, and the check asserts that in both
+    directions. The row is driven with a `connection` **and** a `webServer` service
+    offered, and it must register exactly `/api/dsh-cmdbar/activity` and **no
+    upgrade** - alpha.12 deleted the PTY, the socket, the vendored assets and the
+    `/health` probe, so their return is a regression rather than a feature (the
+    package was `dsh-terminal` through alpha.13; alpha.14 renamed it and the route,
+    the row and the attributes with it). The route itself
     is driven against a stubbed live session and must send only the three event
     types the panel draws (injected context and assistant streams dropped), in log
     order, answer `NOT_LIVE` for a conversation that is not open on this host (a

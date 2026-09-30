@@ -100,7 +100,7 @@ packages/dsh-open-in-app/         # the file-manager half of the Open In button
 **The master is a separate, browser-free bundle.** `dsh-vn-master` carries the
 pack's bundle layer, and of its own it has nothing but the no-op `master` row: no
 `dsh.client` (so it contributes no node to the boot graph), no service, no `inject`
-edge and no core-row disables. That is what makes it safe to own pack-wide patches.
+edge and no code. That is what makes it safe to own pack-wide patches.
 The `sidebarRightTabs` / `sidebarRight` services stay in the generated fork of the
 bar, so introducing the master cannot touch the tab-type chain. It is also installed
 **last** - its name is the only one here that sorts after every other, and
@@ -115,9 +115,49 @@ install. Nothing else about the row is restated, and nothing in this repo has to
 draw the tab's door either: the browser package registers its type AND its own guide
 entry ("Browser" / "Browse web pages") into `sidebarRightTabs`, the same registry
 this pack's own tab types use, so the Start page lists it by itself. The core-row
-disables deliberately stay with the packages that replace those rows: a disable
-belongs next to the insertion that supersedes it, so `-Plugin dsh-rightbar` on its
-own still mounts exactly one bar.
+disables that belong to a package REPLACING a row deliberately stay with that
+package: a replace-disable belongs next to the insertion that supersedes it, so
+`-Plugin dsh-rightbar` on its own still mounts exactly one bar.
+
+**alpha.3 is the other kind of entry: a pack-wide PRODUCT decision.** The master
+is the only layer that can state one once for every profile, and the first is the
+**feedback removal** — vncode is its own product and does not ask its users for
+feedback, and the shipped feature is not merely a rating: its dialog says in its
+own words that a submission includes the current conversation log, and that
+submission is what releases an upload to a third party. Four rows are hard-disabled
+rather than hidden:
+
+- `ui-message-feedback` (web-app) — the browser half: Like/Dislike in the
+  assistant-message action strip, the dialog in `conversation.input.overlay`, its
+  acknowledgement toast, the `/feedback` composer decoration and the `feedbackUi`
+  service.
+- `message-feedback` and `command-feedback` (web-app / base) — the host halves: the
+  `messageFeedback` and `sessionFeedback` Remotes, the `feedback/message-*` events
+  and the `feedback/record` the `/feedback` command appends.
+- `session-telemetry-otel` (base) — the export path those events **release**. It
+  runs in `FEEDBACK_ONLY` mode, so it captures a Session-log prefix and POSTs it to
+  the vendor's collector (`https://dsh-otel-collector.deepseeksvc.com/v1/logs`,
+  with `$DSH_HOME/.anonymous-user-id` as the OTel `user.id`) **only** after an
+  explicit feedback event. With the producers gone it has nothing to release — and
+  disabling the row is the launcher's own privacy switch (the same
+  `disabled: true` a non-empty `DSH_TELEMETRY_DISABLED` resolves to, see
+  `dsh-app-boot`'s `resolveTelemetryPatch`), so the exporter is never constructed
+  and the endpoint is never contacted at all.
+
+Nothing else in the tree consumes those services (`remote.messageFeedback` /
+`remote.sessionFeedback` appear only inside the feedback packages), and the shipped
+Session export guards its own entry as `ctx.get('feedbackUi')?.openSession(...)`
+behind an availability flag — so `/export` keeps working with the feedback
+affordance simply absent. Two consequences worth stating: the rows are composed at
+**boot**, so a profile that is already running needs a restart before the surfaces
+are gone; and the account menu's own **Feedback** item is *not* a row (it is
+hardcoded in `@deepseek-ai/dsh-client-ui-settings-account`'s `AccountMenu` and
+opens an external form in a new window carrying the uid, the locale, the harness
+version and the device info), so it is removed by a `dsh-themes` override instead —
+see §9. Doing it here as a `config` override of that row's `contactFormUrl` was
+rejected on purpose: a row with `volatile` fields has its whole `config` replaced
+by the next volatile write from a settings form (`applyEntryPatches` replaces
+`config`, it does not merge it), so the override would silently evaporate.
 
 > History: the pack shipped its own right-hand panel as `dsh-focus` (row
 > `focus`) through alpha.9, then as `dsh-files` (row `files`) from alpha.10,
@@ -1063,7 +1103,7 @@ pins each one: it is **gated on `html[data-dsh-page-zoomed]`** (the marker
 `applyZoom` writes beside the declaration it belongs to), so at the resting level
 no rule of `dsh-themes` matches the seam and the frame's own inline `left` still
 governs; it keys on `[data-rightbar-col]`, `ui-layout`'s own **stable marker** (the
-one `dsh-terminal` already follows) and on the handle's own `data-side` attribute,
+one `dsh-cmdbar` already follows) and on the handle's own `data-side` attribute,
 **never a hashed class**; and the `!important` beats the inline `left` the frame
 keeps writing. A browser without CSS anchor positioning drops both declarations and
 keeps the behaviour of before this change. Nothing is forked and no core row is
@@ -1072,6 +1112,118 @@ the desktop window at 80%, 100% and 125% driving the control's own menu and the
 drag with real pointer input: the seam sits on the column's left edge to 0.00px and
 a drag still resizes the panel, and back at 100% the marker is cleared and the
 computed `left` falls back to the frame's inline value.
+
+### 9.1 The account menu's Feedback row (alpha.21)
+
+This is the one override in the pack that **removes** a shipped control instead of
+dressing one. The sidebar footer's account menu — the avatar / **More** trigger —
+carries exactly three rows: **Settings**, **Feedback**, **Sign out** / **Sign in**.
+The middle one is the only control in the app that opens a form in a **new window**:
+`contactUrl()` in `@deepseek-ai/dsh-client-ui-settings-account` builds it from the
+row's `contactFormUrl` (a Feishu questionnaire by default,
+`https://trtgsjkv6r.feishu.cn/share/base/form/shrcnlCoGElW7MQznGy9r3YYXcg`) and
+appends the **uid**, the source, the harness version, the locale, the screen size
+and the device info as query parameters. vncode is its own product and does not send
+its users' feedback — or their uid and machine details — to a third party, so the
+row goes.
+
+**There is no row to disable.** The item is hardcoded in that package's
+`AccountMenu` and registered into the `settings.launcher` slot as a whole, so the
+only two options were a **fork** of the entire account bundle (4.5k lines: sign-in,
+sign-out, quota notices, billing pages, onboarding) or one rule over the row. This
+is the same treatment the top bar and the branding already get here:
+
+```css
+[role="menu"]>div:has(>button[role="menuitem"] svg path[d^="M4.74024 9.11029"]){display:none}
+[role="menu"] button[role="menuitem"]:has(svg path[d^="M4.74024 9.11029"]){display:none}
+```
+
+The selector is pinned on the row's **icon artwork**, not on a class name, and that
+is the interesting part: the Menu primitive renders every row as
+`<div class="itemWrap"><button role="menuitem">…` and puts the item's `id` nowhere
+in the DOM — there is no attribute to match — while the paper-plane `path` data comes
+from the design asset rather than from the CSS module, so it survives the
+hashed-class churn the left-bar band above has to be pinned against. Both the row's
+**wrapper** and its **button** are hidden, so a primitive that stops wrapping rows
+still gets the row; and the rule is scoped to `[role="menu"]` on purpose, because
+the same artwork is drawn by the chat's **turn-trigger** notice and by the
+**Session-export** header button, neither of which is a menu row — hiding either
+would be a real regression. Hiding is sufficient: the Menu's keyboard walk collects
+`button:not(:disabled)` and advances its **index**, so a `display:none` row can never
+take focus (or be clicked) while the walk still moves past it, leaving Settings and
+Sign out reachable with `ArrowDown` exactly as before.
+
+The accepted failure mode is the one every pin in this package carries: a future
+harness that redraws the artwork makes the rule match nothing and the row returns.
+Setting `contactFormUrl` from the master layer instead was rejected on purpose — a
+row with `volatile` fields has its whole `config` replaced by the next volatile write
+from a settings form, so the override would silently evaporate, and a guard that
+disappears is worse than none. `check-client-bundles.mjs` pins the injected rule, its
+two shapes, its `[role="menu"]` scoping and the fact that it carries **no hashed
+class**.
+
+### 9.2 The left column's panel order (alpha.22)
+
+The left column's own order, top to bottom, is the branding row, **New Session**, the
+**global panel rows** (`sidebar.panellist` — **Plugins**, and *Automation tasks*
+wherever that row is mounted), the **workspaces/sessions browsing region**
+(`sidebar.workspaces`), and the **foot** (`sidebar.footer.action` plus
+`sidebar.settings`). The panel rows therefore sit *above* the workspace list.
+
+vncode reads that column the other way round: the browsing region is what a person
+opens the bar **for**, so it belongs at the top under New Session, and the global
+panels are navigation to whole **pages** of the app, which belongs down with
+**Settings** — Plugins immediately above Settings. Three `order` declarations do it:
+
+```css
+html .hHd-Xa_root .hHd-Xa_regionArea{order:1}
+html .hHd-Xa_root .hHd-Xa_panelList{order:2}
+html .hHd-Xa_root .hHd-Xa_footArea{order:3}
+```
+
+`order` works because `SidebarRoot` is a flex column, so the rows move without
+touching the DOM, re-registering a slot or forking the shell; the region keeps its
+`flex:1`, so it still absorbs the slack and the rows below it stay pinned to the
+bottom. Three values rather than one, because a bare `nav{order:1}` would land the
+rows *below* the foot, whose children sit at the default order. A panel's **own**
+`order` cannot do this — it sorts *within* the panel list, which is exactly the list
+that has to move. The cost is stated in the code: `order` is visual only, so the Tab
+walk still reaches Plugins before the workspace list, and the alternative (a fork of
+a generated core bundle) is not worth it. `check-client-bundles.mjs` pins the three
+values one by one, so a rule that stops moving a row — or one that lands the region
+below the foot — fails there rather than in the eye.
+
+### 9.3 The fullscreen panel's width under a page zoom (alpha.22)
+
+The right bar's presentation switch makes the panel cover the app, and the forked bar
+sizes it with **one inline declaration** — `width:100vw`. A **viewport unit is not
+zoom-adjusted**: CSS `zoom` multiplies the used value of a **length**, and the spec
+exempts only `auto` and `<percentage>`. The frame stretches by percentage and is
+therefore *exactly* the app viewport at every level (the measurement in §9's page-zoom
+material: at 80% on a 1440px window the frame's rect was 1440 while its layout width
+was 1800). So the frame and `100vw` disagree by precisely the zoom factor: at the 90%
+this machine runs, a fullscreen panel painted at **90% of the viewport** and — anchored
+`right:0` — left a 10% strip of the left bar uncovered.
+
+```css
+html[data-dsh-page-zoomed] [data-rightbar-col]:has([data-sidebar-right-panel=fullscreen]){position:static}
+html[data-dsh-page-zoomed] [data-sidebar-right-panel=fullscreen]{width:100%!important}
+```
+
+While a fullscreen panel exists the column stops being its containing block, so the
+panel resolves against `.pI_x6G_frame` — the one box that *is* the whole viewport at
+any zoom — and `100%` is exactly the width asked for. `!important` is required because
+the component writes its width **inline**; `top:0;bottom:0` already give the full
+height, so no height rule is needed; and the shipped `[data-windows-titlebar]`
+`max-width` (a desktop shell variant this profile never enters) still wins, because
+`max-width` beats `width`. Both rules are gated on the marker a live zoom writes, so a
+page at 100% keeps the fork's own geometry; the containment change is scoped to the
+fullscreen state on purpose, because **dsh-cmdbar** shortens that column while its
+dock is open precisely so the *push-mode* panel's absolute box sits inside the
+shortened column (in fullscreen the dock yields instead). `check-client-bundles.mjs`
+pins the containment change, the percentage that depends on it, that the change stays
+scoped to fullscreen, and that the zoom marker gates **exactly four** rules.
+
 
 ## 10. The file-manager half of Open In (dsh-open-in-app)
 
@@ -1114,15 +1266,50 @@ data in `sync-vendored.ps1`: a harness bump that moves the patched code fails th
 re-sync loudly instead of shipping a fork that silently lost its behavior, and
 the generated banner lists the applied patches.
 
-## 11. The terminal dock (dsh-terminal)
+## 11. The command bar (dsh-cmdbar)
 
-**A bottom dock, not a column.** `dsh-terminal` puts the agent's own commands at
+**A bottom dock, not a column.** `dsh-cmdbar` puts the agent's own commands at
 the foot of the window: a header control at `order: 30` in the slot LIST
 `conversation.session.header.utilities` — the last utility, immediately right of
 the shipped Open In… (`-10`) and left of the right bar's toggle, which owns the
 single-occupant `…header.corner` seat — toggles a horizontal panel that starts at
 the **right edge of the left bar**, runs to the full page width, and sits **under**
 the middle and right columns.
+
+**alpha.14: the name, and two identifiers that were never declared.** The package
+is `dsh-cmdbar` and was `dsh-terminal` through alpha.13 — that name described the
+emulator alpha.12 deleted and collided with the harness's own
+`@deepseek-ai/dsh-terminal` PTY seam — so the row (`cmdbar`), the ONE route
+(`/api/dsh-cmdbar/activity`), the `data-dsh-cmdbar-*` attributes and the CSS prefix
+(`dst-` → `dsc-`) moved with it. The shared `dockHeight` field in `dsh-ui-state`
+did **not**: it is the pack's own key, and renaming it would have thrown away the
+height every reader had already chosen.
+
+The same release repairs the defect that made the panel vanish, in both of the
+places a click reaches:
+
+- the row's expand branch evaluated `expanded && multiLine ? … : null`, and
+  `multiLine` was declared nowhere in the bundle — the full command an expanded
+  row shows is now decided by the pure, checked `commandBody(entry, expanded)`;
+- the row's two copy actions called `writeClipboard(text)` **bare** — that is the
+  name of a `@deepseek-ai/dsh-client-ui-primitives` export the bundle already
+  requires for `Tooltip` — so they now call `primitives.writeClipboard`, guarded
+  for an engine without it, and show **Copied** only for a write the host accepted.
+
+**Why a crash here costs the whole panel.** A slot occupant is wrapped in the
+shell's `SlotErrorBoundary`, and for a **root-scoped** entry the crash is reported
+with `abdicate: true` (`reportEntryError` with the entry added to the renderer's
+`abdicated` set), so every later render skips it while the boundary draws its own
+`data-slot-error` box in its place. The dock is such an entry, which is why a
+`ReferenceError` raised by one click reads as "the bar closed and disappeared" and
+the header button cannot bring it back until a reload. Neither was visible to a
+static render: a row starts collapsed (so the first condition short-circuited
+before the identifier was read) and a click is what reaches the second. Both are
+now pinned — the command body by driving the pure function, the copy call by
+asserting the qualified primitive and the absence of the bare name outside prose —
+and the pack-wide primitive scan grades `writeClipboard` against the real pinned
+package. The second one was found by auditing every bundle here for identifiers it
+references but never declares.
 
 **Why `shell.overlay` and not a second React root.** The dock has to escape the
 frame's `overflow:hidden` to sit at the very bottom of the window, and it has to
@@ -1173,7 +1360,7 @@ writing foreign nodes into a React-managed container — so it positions itself:
   the dock's rect: the grip moves as the dock moves, so a handler that measured it
   would chase itself. Moves are coalesced to one per animation frame, the pointer
   is captured, the drag closes on `pointerup` **and** `pointercancel`, and
-  `body.dst-dragging` carries the row-resize cursor and no text selection.
+  `body.dsc-dragging` carries the row-resize cursor and no text selection.
 - **The height is remembered in two stores**: the pack's shared section
   (`dsh-ui-state`, which is the one document a Chrome tab and the desktop window
   both read) and `localStorage` underneath as the fallback. The shared write is
@@ -1228,7 +1415,7 @@ alpha.7 bug).
 | `tool/result` | `{ turn, step, message, error?, meta? }` — `message.content[0]` is the `ToolResultBlock`: its `content` is the output, its `isError` the failure flag |
 | `user/message` | a prompt when `source.kind === 'user'` (every other kind is injected context, and does not open a group) |
 
-**ONE route, and it is read-only.** `GET /api/dsh-terminal/activity?session=<id>`
+**ONE route, and it is read-only.** `GET /api/dsh-cmdbar/activity?session=<id>`
 is the whole Node half. It is registered through `connection.fetch.register` (so it
 inherits the connection's authentication) with `requestBody: 'buffered'`, and it
 answers a filtered **tail** of `snapshotEvents()`: only those three types are sent,
@@ -1249,7 +1436,7 @@ commands, and that a missing `description` marks the *persistent* shell),
 `@deepseek-ai/dsh-shell/render` appends, mirrored rather than imported, and read
 **only** for a foreground shell), `stripAnsi` (the host's own `TerminalSanitizer`
 kind of filter), `buildActivityFromEvents`, `activitySignature`,
-`filterActivity`, `formatDuration` and `activityFactsTitle` — so what the model is
+`filterActivity`, `formatDuration`, `activityFactsTitle` and `followDecision` — so what the model is
 told and what a person sees cannot drift, and the panel and the transcript can only
 disagree about *presentation*.
 
@@ -1261,16 +1448,39 @@ conversation would say so for up to six seconds after every reload). It runs onl
 while something is subscribed, pauses in a hidden tab, and publishes **nothing**
 when `activitySignature` shows the fold did not change — a steady conversation
 costs an idle request and no re-render. The dock **forgets a conversation it no
-longer belongs to**: it is root-scoped and always mounted, so keeping the old
-identity meant a hidden panel went on polling (and holding counts from) a
-conversation nobody was looking at.
+longer belongs to** while it is **closed**: it is root-scoped and always mounted,
+so keeping the old identity meant a hidden panel went on polling (and holding
+counts from) a conversation nobody was looking at.
+
+**The panel follows the conversation in front of the reader (alpha.13).** The
+alpha.11 rule was not enough on the two paths that matter most, and the shape of
+the miss is worth keeping: `adoptSession` *closed* the panel on any different
+session id and returned early on an **empty** one — so opening a **new
+conversation** (which has no session id yet) or landing on a screen whose header
+has **gone away** (nothing reports a conversation with no header) left the
+always-mounted panel drawing the previous conversation's commands, counts and
+poll. An open panel now **re-points** at whatever is in front of the reader: it
+keeps its open state, its height and its place, while everything it draws — the
+commands, the counts, the poll, the view's filters, its expanded rows and its
+follow pill — belongs to the conversation now on screen (`ActivityView` is keyed
+on the session, so its own state cannot carry over either). With no conversation
+at all the body says **No conversation open** and the facts line goes quiet. The
+rule is one **pure** function, `followDecision({ open, current, next })`, exported
+in `__internals` and pinned behaviourally by the tracked check (the same
+treatment `adoptDecision` gets), and the header control's **unmount** releases the
+identity it owned — the one path no other signal covers. A **closed** panel still
+just forgets (alpha.11), and the panel is now closed by the reader's own control
+and by nothing else.
 
 **Every number on the bar is the COMMANDS'.** The bar wears the log's own state —
 a pulse while a command runs, the count of what **failed** as a red badge, a `⚠`
 and the warning tone when this conversation's log cannot be read here (with the
-host's own reason in the tooltip), and the counts as a sentence — and the header
+host's own reason in the tooltip), and the counts **alone** — and the header
 control carries the same running/failed dot while the panel is closed, so "the
-agent is doing something" is visible without opening it. A tool call that is not an
+agent is doing something" is visible without opening it. (alpha.13 dropped the
+sentence those counts used to open with — *The agent's own commands in this
+conversation: …* — because the control and the panel are both already labelled
+**Agent**.) A tool call that is not an
 executing tool (a `read`, a `grep`, an `edit`) is a row under the *All tools*
 filter and never a number: before alpha.11 any failed tool incremented the failure
 count, so a conversation whose only tool call was a failed `read` wore a red `1`
@@ -1283,7 +1493,7 @@ described honestly.
 **each** side — left *and* right, so a long command line cannot leave the mark
 behind, and the exit-0 green counts — and the row's head (the clickable line that
 drops the output down) wears a light `color-mix(…, transparent)` wash of the same
-colour. ONE `--dst-accent` custom property per `data-status` holds the tone, so the
+colour. ONE `--dsc-accent` custom property per `data-status` holds the tone, so the
 rails, the wash and the pill cannot disagree; the wash is mixed with `transparent`
 rather than a surface colour, which lightens a light theme and darkens a dark one
 and leaves the label's own themed colour alone. Output is clamped to 12 lines with
@@ -1432,7 +1642,7 @@ passes that through as the batch's own exit code).
   its row restatements — plus
   `dsh-rightbar`, `dsh-rightbar-files`, `dsh-editor`, `dsh-gittree`,
   `dsh-image`, `dsh-audio`, `dsh-media`, `dsh-video`, `dsh-diagrams`, `dsh-pdf`,
-  `dsh-skills`, `dsh-terminal`, `dsh-modal`,
+  `dsh-skills`, `dsh-cmdbar`, `dsh-modal`,
   `dsh-ui-state`, `dsh-themes`, `dsh-open-in-app`) as `pnpm link:` symlinks straight into this repo (detected by
   `Test-LiveLink` / `is_live_link()`, comparing realpaths case-insensitively on
   Windows). Code edits then already apply - a restart of
@@ -1501,8 +1711,8 @@ passes that through as the batch's own exit code).
 | The History tab says "Not a git repository" | the conversation folder is not inside a repository: the route runs `git rev-parse --show-toplevel` from it and answers a typed `NOT_A_REPO` instead of guessing |
 | The History tab says "git is not installed" | `git` is not on the **server's** `PATH` (the routes spawn it directly and report `GIT_MISSING`); install git on the host running `dsh web` |
 | The History list is empty although the repository has commits | the folder lives inside a repository whose root is higher up, so commits that never touch this folder are deliberately hidden; check `git log` in that folder |
-| No Terminal button in the conversation header | `dsh-terminal` is not mounted (a new package needs one install run: `scripts\install.bat` / `./scripts/install.sh`, or `-Force`), or the bundle did not activate - check the console for `[dsh-terminal]` |
-| The bar says the conversation's log cannot be read here | the conversation is not live on **this** host (a stored conversation answers `NOT_LIVE`), or the activity route is unreachable; the host's own reason is in the tooltip, and `GET /api/dsh-terminal/activity?session=<id>` reports it directly. The rest of the pack is unaffected |
+| No command-bar button in the conversation header | `dsh-cmdbar` is not mounted (a new package needs one install run: `scripts\install.bat` / `./scripts/install.sh`, or `-Force`), or the bundle did not activate - check the console for `[dsh-cmdbar]` |
+| The bar says the conversation's log cannot be read here | the conversation is not live on **this** host (a stored conversation answers `NOT_LIVE`), or the activity route is unreachable; the host's own reason is in the tooltip, and `GET /api/dsh-cmdbar/activity?session=<id>` reports it directly. The rest of the pack is unaffected |
 | The dock does not open, or opens at the wrong place | the frame it measures is gone: the dock positions itself from `[data-shell-overlay]`'s parent and that frame's resolved `gridTemplateColumns`, so a harness line that stops using grid columns for the layout needs §11 updated |
 | The dock covers the conversation instead of pushing it up | the middle/right columns' inline `height: calc(100% - <dock>px)` was removed or overridden by something else writing their `style.height` |
 | Opening the dock moves the LEFT bar (its items slide up) | regression of alpha.1, where the room came from the frame's own height: the frame has ONE grid row shared with the left bar, so only the two columns the dock spans may be inset. The check `terminal never resizes the frame` pins this |
@@ -2071,7 +2281,7 @@ The form's fields and owners:
 |---|---|---|
 | `pageZoom` | `100` | `dsh-themes` (the header's Page-zoom control) |
 | `theme` | `''` | `dsh-themes` (an **extension** theme id only) |
-| `dockHeight` | `280` | `dsh-terminal` |
+| `dockHeight` | `280` | `dsh-cmdbar` |
 | `sidebarWidth` | `-1` | `dsh-ui-state` itself |
 | `rightbarWidth` | `-1` | `dsh-ui-state` itself |
 
@@ -2148,7 +2358,7 @@ installs each bundle as a live link into the repo, so a bare
 schemastery schema, so the module is loaded at runtime instead through the package
 anchors this pack established for the harness's own out-of-tree resolution (they
 were first written for `dsh-terminal`'s `node-pty`, before alpha.12 deleted that
-PTY; `dsh-terminal` keeps the same anchor list today for the same reason):
+PTY; the package, now `dsh-cmdbar`, keeps the same anchor list today for the same reason):
 the running entry, then `$DSH_HOME/profiles`, which `dsh-app-boot` keeps as a
 mirror of the installation's dependency closure, so Node's ordinary parent walk
 finds the very same copy the harness loaded. The CJS build is what makes
@@ -2162,7 +2372,7 @@ instead of crashing the import. With no copy that answers, the row WARNS and
 degrades - nothing is remembered, and every consumer falls back to the local
 behaviour it had before - rather than failing the boot.
 
-**Degradation is designed, not accidental.** `dsh-themes` and `dsh-terminal`
+**Degradation is designed, not accidental.** `dsh-themes` and `dsh-cmdbar`
 resolve `uiState` with `ctx.get` and never declare it in `inject`, and each keeps
 writing its `localStorage` copy alongside the shared field. So a profile with one
 of those bundles and not this one behaves exactly as before, and the shared

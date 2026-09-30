@@ -100,6 +100,11 @@ if not exist "%VN_MANIFEST%" (
 
 if defined VN_NOBUILD goto :afterbuild
 
+rem The source checkout's own artefact, resolved ONCE, so the build leg and the
+rem failure leg below name the same file - and so the fallback at :buildfailed
+rem has something to run.
+set "VN_APP=%~dp0..\app\src-tauri\target\release\vncode-desktop.exe"
+
 where cargo >nul 2>nul
 if errorlevel 1 (
   echo [vncode] cargo was not found on PATH, so the desktop shell cannot
@@ -114,7 +119,9 @@ cargo build --release --manifest-path "%VN_MANIFEST%"
 if errorlevel 1 goto :buildfailed
 
 :afterbuild
-set "VN_BUILT=%~dp0..\app\src-tauri\target\release\vncode-desktop.exe"
+rem -NoBuild LANDED HERE, before the line above ever ran, so resolve it again.
+if not defined VN_APP set "VN_APP=%~dp0..\app\src-tauri\target\release\vncode-desktop.exe"
+set "VN_BUILT=%VN_APP%"
 if not exist "%VN_BUILT%" (
   echo [vncode] The build reported success but the program is not at
   echo   %VN_BUILT%
@@ -157,9 +164,27 @@ if "%VNCODE_PAUSE%"=="1" pause
 exit /b 0
 
 :buildfailed
+rem A build can fail for one reason this launcher can do nothing about and the
+rem reader can fix in one step: THE SHELL IT IS REPLACING IS STILL RUNNING.
+rem Windows will not let cargo remove a program that is still mapped by a live
+rem process, so `cargo build` stops at
+rem   failed to remove file ...\vncode-desktop.exe: Access is denied. (os error 5)
+rem - and the launch used to end there, even though a perfectly good shell was
+rem sitting on disk. Reported from the machine this was written on, where the
+rem window was simply reopened from a second double-click. So: warn, name the
+rem cause, and RUN the artefact that is already there. `-NoBuild` skips the build
+rem entirely for the same reason.
 echo.
 echo [vncode] cargo build failed - see the errors above.
-goto :failed
+if not exist "%VN_APP%" goto :failed
+echo.
+echo [vncode] A shell is already built at
+echo   %VN_APP%
+echo [vncode] Running that one. The usual reason a build stops here is that the
+echo   shell is still RUNNING: Windows will not let cargo replace a program that
+echo   is in use. Close the vncode window and run this file again to rebuild.
+set "VN_BUILT=%VN_APP%"
+goto :run
 
 :nopowershell
 echo.
