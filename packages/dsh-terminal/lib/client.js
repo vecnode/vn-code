@@ -166,11 +166,11 @@ window.__ModuleLoader__.load({
     // and per browser PROFILE: a Chrome tab and the desktop window's WebView
     // never shared it, and the desktop shell prefers port 3080 and falls back to
     // a free one, so even one host lost it by moving a port. It now goes through
-    // the pack's `uiState` service (dsh-ui-state) - one section of
-    // `$DSH_HOME/settings.yaml` both hosts read - with localStorage kept as the
-    // fallback, so the dock still remembers its height in a profile that
-    // installed this bundle without that one. Resolved lazily, never declared in
-    // `inject`, for that same reason.
+    // the pack's `uiState` service (dsh-ui-state) - the `ui-state` entry's
+    // volatile config in the profile's own Cordis patch document, which both
+    // hosts read - with localStorage kept as the fallback, so the dock still
+    // remembers its height in a profile that installed this bundle without that
+    // one. Resolved lazily, never declared in `inject`, for that same reason.
     //
     // The dock's OPEN state is deliberately NOT remembered: the panel is the
     // window onto a PROCESS, and after a reload the client holds no slots, so

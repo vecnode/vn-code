@@ -65,8 +65,9 @@ A window that forgets its size every launch is a window the reader has to place
 again every morning, so the shell keeps ONE small record at
 `<harness home>/vncode/window.json` and restores it - **before** the window is
 built, which is why this cannot ride the web profile's own remembered state in
-`$DSH_HOME/settings.yaml`: that document is read by the page, long after the
-window exists. The record is `{version, width, height, x, y, maximized}`, the size
+its Cordis patch (`$DSH_HOME/profiles/web/cordis.patch.yml`, the `ui-state`
+entry's `config:`): that document is read by the page, long after the window
+exists. The record is `{version, width, height, x, y, maximized}`, the size
 being the window's **inner** size and the point its **outer** position, all four in
 **logical** pixels (the unit the window builder takes, and the only unit that means
 the same thing on a 100% and on a 150% display; `main.rs` divides the physical

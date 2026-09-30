@@ -1,6 +1,6 @@
 // GENERATED - do not edit by hand.
 //
-// Byte-for-byte fork of @deepseek-ai/dsh-client-ui-sidebar-files@0.1.5-rc.1
+// Byte-for-byte fork of @deepseek-ai/dsh-client-ui-sidebar-files@0.2.0-rc.2
 // (lib/client.js) with only the module-table id rewritten to "dsh-rightbar-files".
 // The pack's bundle layer disables the core row, so this copy is the one that
 // runs. Re-sync with:  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync-vendored.ps1
@@ -11,8 +11,9 @@ window.__ModuleLoader__.load({
 		var module = { exports: {} };
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-		let react_jsx_runtime = require("react/jsx-runtime");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+		require("@deepseek-ai/cordis");
+		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
 		let _deepseek_ai_dsh_client_store = require("@deepseek-ai/dsh-client-store");
 		//#region lib/types/client/definition.js
@@ -20,14 +21,6 @@ window.__ModuleLoader__.load({
 		const FILES_KIND = "files";
 		/** This implementation's identity in the tab system, and the key its body registers under. */
 		const FILES_ID = "@deepseek-ai/dsh-client-ui-sidebar-files";
-		/** The type's coloured folder sheet at the guide capsule's glyph size, as the chip title draws it. */
-		function FolderSheetGlyph({ size, className }) {
-			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.FileTypeIcon, {
-				kind: "folder",
-				size,
-				className
-			});
-		}
 		/**
 		* The files type's registry definition.
 		* @param t - namespace-bound translate, read fresh on every label call.
@@ -40,15 +33,224 @@ window.__ModuleLoader__.load({
 				priority: "builtin",
 				title: () => t("type.label"),
 				guide: [{
+					id: "workspace",
+					commandId: "workspace.files",
 					order: 10,
 					title: () => t("guide.title"),
 					description: () => t("guide.description"),
-					icon: FolderSheetGlyph
+					icon: _deepseek_ai_dsh_client_ui_primitives.GuideArtworkFiles
 				}]
 			};
 		}
 		//#endregion
+		//#region ../../typert/protocol/src/remote-error.ts
+		/**
+		* One Remote call failure: a real Error carrying its stable code and typed
+		* details. Owners throw it at the failure point; the Host Gateway encodes it
+		* onto the wire unchanged; the Client face rebuilds an instance for the
+		* `RemoteResult` error branch, so `throw result.error` keeps throw semantics.
+		* Discrimination is always by `code`, never by instanceof.
+		*/
+		var RemoteError = class extends Error {
+			code;
+			details;
+			/** Structural marker: cross-realm/bundle identification never uses instanceof. */
+			isDSHRemoteError = true;
+			/**
+			* @param code - stable failure code declared in {@link RemoteErrorDetailsMap}.
+			* @param message - human diagnostic carried across the wire.
+			* @param details - structured payload typed by the code.
+			* @param options - standard Error options (`cause` survives in-process only).
+			*/
+			constructor(code, message, details, options) {
+				super(message, options);
+				this.code = code;
+				this.details = details;
+				this.name = "RemoteError";
+			}
+		};
+		//#endregion
+		//#region ../../typert/protocol/src/index.ts
+		/**
+		* Remote decorators and explicit Gateway bindings backed by versioned
+		* descriptors carried on decorated class prototypes. Strict reflection
+		* remains a Typert compiler responsibility.
+		* @module @deepseek-ai/dsh-typert-protocol
+		*/
+		//#endregion
+		//#region lib/types/client/directory-node.js
+		/** One open directory and its active child nodes; cached view preferences live in the store. */
+		var DirectoryNode = class DirectoryNode {
+			path;
+			load;
+			watch;
+			failed;
+			restore;
+			/** Open direct-child directories, keyed by absolute path. */
+			children = /* @__PURE__ */ new Map();
+			controller = new AbortController();
+			signal;
+			task;
+			reading;
+			dirty = false;
+			initialized = false;
+			automatic = true;
+			constructor(path, load, watch, failed, lifetime, restore = []) {
+				this.path = path;
+				this.load = load;
+				this.watch = watch;
+				this.failed = failed;
+				this.restore = restore;
+				this.signal = AbortSignal.any([lifetime, this.controller.signal]);
+			}
+			/**
+			* Start observation once; readiness triggers the initial listing.
+			* @returns this node.
+			*/
+			open() {
+				this.task ??= this.follow();
+				return this;
+			}
+			/**
+			* Find an active node in this subtree.
+			* @param path - absolute directory path.
+			* @returns the matching node, or undefined when that directory is closed.
+			*/
+			find(path) {
+				if (path === this.path) return this;
+				for (const child of this.children.values()) {
+					const found = child.find(path);
+					if (found !== void 0) return found;
+				}
+			}
+			/**
+			* Update the expansion preferences used by pending directory listings.
+			* @param expanded - latest expansion preferences from the store.
+			*/
+			setExpanded(expanded) {
+				this.restore = expanded;
+				for (const child of this.children.values()) child.setExpanded(expanded);
+			}
+			/**
+			* Open a direct child using this node's lifetime and automatic-refresh setting.
+			* @param path - absolute direct-child directory path.
+			* @param restore - descendant expansion preferences to restore after listing.
+			* @returns the active child, or undefined after cancellation.
+			*/
+			expand(path, restore = []) {
+				if (this.signal.aborted) return void 0;
+				let child = this.children.get(path);
+				if (child === void 0) {
+					child = new DirectoryNode(path, this.load, this.watch, this.failed, this.signal, restore);
+					child.automatic = this.automatic;
+					this.children.set(path, child);
+				}
+				return child.open();
+			}
+			/**
+			* Remove a child and its pending restoration preferences.
+			* @param path - absolute direct-child directory path.
+			* @returns once the child subtree's reads and watches have ended.
+			*/
+			async collapse(path) {
+				this.restore = this.restore.filter((value) => value !== path && !value.startsWith(`${path}/`));
+				const child = this.children.get(path);
+				this.children.delete(path);
+				await child?.close();
+			}
+			/**
+			* Control subtree rereads without ending subscriptions.
+			* @param enabled - refresh dirty nodes automatically.
+			*/
+			setAutomatic(enabled) {
+				this.automatic = enabled;
+				if (enabled && this.dirty) this.refresh();
+				for (const child of this.children.values()) child.setAutomatic(enabled);
+			}
+			/** Queue a reread, coalescing with active work. @returns completion of the active read and its coalesced rereads. */
+			refresh() {
+				this.dirty = true;
+				this.reading ??= this.read();
+				return this.reading;
+			}
+			/** Refresh this node and its open descendants. @returns once their listings settle. */
+			async refreshTree() {
+				await this.refresh();
+				await Promise.all([...this.children.values()].map((child) => child.refreshTree()));
+			}
+			/** Cancel the active subtree. @returns once all owned reads and watches have ended. */
+			async close() {
+				this.controller.abort();
+				await Promise.all([
+					this.task,
+					this.reading,
+					...[...this.children.values()].map((child) => child.close())
+				]);
+				this.children.clear();
+			}
+			async follow() {
+				try {
+					for await (const _event of this.watch(this.path, this.signal)) {
+						this.dirty = true;
+						if (!this.initialized || this.automatic) this.refresh();
+					}
+				} catch (error) {
+					if (!this.signal.aborted) {
+						if (!this.initialized) await this.refresh();
+						if (!(typeof error === "object" && error !== null && "code" in error && error.code === "workspace-file/watch-unsupported")) this.failed(this.path, error);
+					}
+				}
+			}
+			async read() {
+				const readAgain = () => this.dirty && this.automatic && !this.signal.aborted;
+				try {
+					do {
+						this.dirty = false;
+						const level = await this.load(this.path, this.signal);
+						if (this.signal.aborted || level === void 0) return;
+						this.initialized = true;
+						const directories = new Set(level.entries.filter((entry) => entry.type === "directory").map((entry) => `${this.path.replace(/[/\\]+$/, "")}/${entry.name}`));
+						for (const path of this.children.keys()) if (!directories.has(path)) await this.collapse(path);
+						for (const path of directories) if (this.restore.includes(path)) this.expand(path, this.restore);
+						this.restore = [];
+					} while (readAgain());
+				} finally {
+					this.reading = void 0;
+				}
+			}
+		};
+		//#endregion
 		//#region lib/types/client/face.js
+		/**
+		* Bind directory observation to the Remote stream supervisor.
+		* @param remote - Client Remote with workspace file streams.
+		* @returns a watcher that awaits stream disposal when its node ends.
+		*/
+		function createWatch(remote) {
+			return async function* (sessionId, path, signal) {
+				const aborted = () => signal.aborted;
+				if (aborted()) return;
+				const stream = remote.$stream({
+					name: `directory ${path}`,
+					open: (lifetime) => remote.workspaceFiles.changes(sessionId, path, lifetime),
+					ended: () => /* @__PURE__ */ new Error(`Directory watch ended: ${path}`)
+				});
+				const abort = () => {
+					stream.dispose();
+				};
+				signal.addEventListener("abort", abort, { once: true });
+				try {
+					for await (const item of stream) {
+						if (aborted()) return;
+						if (item.value.kind === "ready") item.accept();
+						yield item.value.kind;
+					}
+				} finally {
+					signal.removeEventListener("abort", abort);
+					await stream.dispose();
+				}
+			};
+		}
 		/**
 		* Bind the listing to one Remote face, keeping only what the tree stores.
 		* @param remote - the Client Remote face carrying the `workspaceFiles` namespace.
@@ -82,12 +284,14 @@ window.__ModuleLoader__.load({
 		/**
 		* Bind the tree's face to one directory listing.
 		* @param list - the bound `workspaceFiles.list` call.
+		* @param watch - target-scoped directory observation.
 		* @returns the Slot `inject` factory: session and bound actions in, face out.
 		*/
-		function filesFace(list) {
+		function filesFace(list, watch) {
 			return (sessionId, actions) => {
 				/** Per tab, per absolute path: the listing generation a settlement must match; the latest request wins. */
 				const generations = /* @__PURE__ */ new Map();
+				const roots = /* @__PURE__ */ new Map();
 				const nextGeneration = (tabId, path) => {
 					const byPath = generations.get(tabId) ?? /* @__PURE__ */ new Map();
 					generations.set(tabId, byPath);
@@ -95,29 +299,52 @@ window.__ModuleLoader__.load({
 					byPath.set(path, generation);
 					return generation;
 				};
-				const load = (tabId, path, signal) => {
+				const load = async (tabId, path, signal) => {
 					if (signal.aborted) return;
 					const generation = nextGeneration(tabId, path);
 					actions.loading(tabId, path);
-					list(sessionId, path, signal).then((result) => {
-						if (generations.get(tabId)?.get(path) !== generation) return;
+					return list(sessionId, path, signal).then((result) => {
+						if (signal.aborted || generations.get(tabId)?.get(path) !== generation) return;
 						if (result.ok) actions.loaded(tabId, path, result.value);
 						else actions.failed(tabId, path, result.error);
+						return result.ok ? result.value : void 0;
 					});
 				};
 				return {
+					refresh: (tabId) => {
+						roots.get(tabId)?.refreshTree();
+					},
+					setAutoRefresh: (tabId, enabled) => {
+						actions.autoRefresh(tabId, enabled);
+						roots.get(tabId)?.setAutomatic(enabled);
+					},
 					start(tabId, root, signal) {
 						actions.start(tabId, root);
 						signal.addEventListener("abort", () => {
+							roots.get(tabId)?.close();
+							roots.delete(tabId);
 							generations.delete(tabId);
 							actions.forget(tabId);
 						}, { once: true });
-						load(tabId, root, signal);
+						roots.set(tabId, new DirectoryNode(root, (path, lifetime) => load(tabId, path, lifetime), (path, lifetime) => watch(sessionId, path, lifetime), (path, error) => {
+							if (!signal.aborted) actions.failed(tabId, path, new RemoteError("gateway/internal", error instanceof Error ? error.message : String(error), {}));
+						}, signal).open());
 					},
-					load,
-					toggle(tabId, path, loaded, signal) {
+					load: (tabId, path, signal) => {
+						load(tabId, path, signal);
+					},
+					toggle(tabId, parentPath, path, expanded, signal) {
+						if (signal.aborted) return;
+						const root = roots.get(tabId);
+						if (root === void 0) return;
+						const parent = root.find(parentPath);
+						if (parent === void 0 && !expanded.includes(parentPath)) return;
+						const collapsing = expanded.includes(path);
+						const next = collapsing ? expanded.filter((value) => value !== path) : [...expanded, path];
+						root.setExpanded(next);
+						if (collapsing) parent?.collapse(path);
+						else parent?.expand(path, next);
 						actions.toggled(tabId, path);
-						if (!loaded) load(tabId, path, signal);
 					}
 				};
 			};
@@ -178,27 +405,6 @@ window.__ModuleLoader__.load({
 			return path.startsWith("/") || isWindowsStylePath(path);
 		}
 		/**
-		* Split a path for display: the directories through their last separator, and
-		* the final segment after it. Both `/` and `\` separate, so a Windows path
-		* splits where its own segments end; trailing separators are dropped first, so
-		* a directory path names its own last segment. A path with no separator, or a
-		* separator-only path, is all name.
-		* @param path - file or directory path using POSIX or Windows separators.
-		* @returns the directory prefix (possibly empty) and the final segment.
-		*/
-		function pathPartsOf(path) {
-			const trimmed = path.replace(/[/\\]+$/, "");
-			if (trimmed === "") return {
-				directory: "",
-				name: path
-			};
-			const cut = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\")) + 1;
-			return {
-				directory: trimmed.slice(0, cut),
-				name: trimmed.slice(cut)
-			};
-		}
-		/**
 		* The address for a path as a caller holds it: a relative path, or an absolute
 		* path inside the Session's workspace, becomes a `session`-scoped address; an
 		* absolute path outside it, or one whose workspace root is unknown, keeps its
@@ -218,7 +424,7 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-sidebar-files/src/client/FilesBody.module.css.mjs
-		const css = ".k-1LKG_root{height:100%;min-height:0;color:var(--dsw-alias-label-primary);font-size:var(--dsh-content-font-size-secondary,13px);flex-direction:column;flex:auto;line-height:1.5;display:flex}.k-1LKG_header{box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:0 6px 0 16px;display:flex}.k-1LKG_path{white-space:nowrap;flex:auto;justify-content:flex-end;min-width:0;margin-right:12px;font-size:12px;display:flex;overflow:hidden}.k-1LKG_path[data-files-path-clipped]{mask-image:linear-gradient(90deg,#0000,#000 28px)}.k-1LKG_pathText{flex:none;margin-right:auto}.k-1LKG_pathDirectory{color:var(--dsw-alias-label-tertiary)}.k-1LKG_pathName{color:var(--dsw-alias-label-primary)}.k-1LKG_body{scrollbar-gutter:stable;flex:auto;min-height:0;margin-right:2px;padding:8px 0 8px 8px;overflow:auto}.k-1LKG_body::-webkit-scrollbar-track{margin:2px}.k-1LKG_level{margin:0;padding:0;list-style:none}.k-1LKG_level .k-1LKG_level{padding-left:18px}.k-1LKG_item{margin:0;padding:0}.k-1LKG_row{width:100%;min-width:0;color:inherit;font:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:10px;align-items:center;gap:6px;padding:5px 10px;display:flex}.k-1LKG_row:hover{background:var(--dsw-alias-interactive-bg-hover)}.k-1LKG_icon{color:var(--dsw-alias-label-tertiary);flex:none}.k-1LKG_fileIcon{flex:none}.k-1LKG_name{white-space:nowrap;text-overflow:ellipsis;min-width:0;overflow:hidden}.k-1LKG_other{color:var(--dsw-alias-label-tertiary);cursor:default}.k-1LKG_other:hover{background:0 0}.k-1LKG_note{color:var(--dsw-alias-label-tertiary);margin:0;padding:3px 10px;font-size:12px}.k-1LKG_status{flex-direction:column;padding:12px 10px;display:flex}.k-1LKG_statusLine{color:var(--dsw-alias-label-secondary);font-size:var(--dsh-content-font-size-secondary,13px);margin:0;line-height:1.6}.k-1LKG_tool{width:28px;height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:28px;flex:none;justify-content:center;align-items:center;padding:6px;line-height:1;display:inline-flex}.k-1LKG_tool svg{width:15px;height:15px}.k-1LKG_tool:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.k-1LKG_titleIcon{flex:none}";
+		const css = ".k-1LKG_root{height:100%;min-height:0;color:var(--dsw-alias-label-primary);font-size:var(--dsh-content-font-size-secondary,13px);flex-direction:column;flex:auto;line-height:1.5;display:flex}.k-1LKG_header{box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:0 6px 0 16px;display:flex}.k-1LKG_path{margin-right:12px}.k-1LKG_body{scrollbar-gutter:stable;flex:auto;min-height:0;margin-right:2px;padding:8px 0 8px 8px;overflow:auto}.k-1LKG_body::-webkit-scrollbar-track{margin:2px}.k-1LKG_level{margin:0;padding:0;list-style:none}.k-1LKG_level .k-1LKG_level{padding-left:18px}.k-1LKG_item{margin:0;padding:0}.k-1LKG_row{width:100%;min-width:0;color:inherit;font:inherit;text-align:left;border-radius:var(--dsw-radius-md);cursor:pointer;background:0 0;border:0;align-items:center;gap:6px;padding:5px 10px;display:flex}.k-1LKG_row:hover{background:var(--dsw-alias-interactive-bg-hover)}.k-1LKG_icon{color:var(--dsw-alias-label-tertiary);flex:none}.k-1LKG_fileIcon{flex:none}.k-1LKG_name{white-space:nowrap;text-overflow:ellipsis;min-width:0;overflow:hidden}.k-1LKG_other{color:var(--dsw-alias-label-tertiary);cursor:default}.k-1LKG_other:hover{background:0 0}.k-1LKG_note{color:var(--dsw-alias-label-tertiary);margin:0;padding:3px 10px;font-size:12px}.k-1LKG_status{flex-direction:column;padding:12px 10px;display:flex}.k-1LKG_statusLine{color:var(--dsw-alias-label-secondary);font-size:var(--dsh-content-font-size-secondary,13px);margin:0;line-height:1.6}.k-1LKG_tool{width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm);cursor:pointer;background:0 0;border:none;flex:none;justify-content:center;align-items:center;padding:6px;line-height:1;display:inline-flex}.k-1LKG_tool svg{width:15px;height:15px}.k-1LKG_tool:hover,.k-1LKG_tool[aria-pressed=true]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.k-1LKG_titleIcon{flex:none}";
 		const tagId = "@deepseek-ai/dsh-client-ui-sidebar-files/FilesBody.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -238,9 +444,6 @@ window.__ModuleLoader__.load({
 			"note": "k-1LKG_note",
 			"other": "k-1LKG_other",
 			"path": "k-1LKG_path",
-			"pathDirectory": "k-1LKG_pathDirectory",
-			"pathName": "k-1LKG_pathName",
-			"pathText": "k-1LKG_pathText",
 			"root": "k-1LKG_root",
 			"row": "k-1LKG_row",
 			"status": "k-1LKG_status",
@@ -257,10 +460,8 @@ window.__ModuleLoader__.load({
 		* for goes through its injected face. The component itself only decides what to
 		* draw for each absolute path and what a click means: a directory toggles, a
 		* file opens through the owner's `tabActions` for a `file:` viewer to claim, and
-		* anything else is shown but refuses to open. The header row is the text
-		* preview's: the root's path, directories greyed and the last segment in full
-		* ink, then the one control at its end, reload, which drops every listed level
-		* and asks again for the expanded ones.
+		* anything else is shown but refuses to open. The header uses the shared
+		* PathLabel for the root, followed by reload and workspace directory actions.
 		*/
 		/** Natural, case-insensitive name order, so `file2` precedes `file10`. */
 		const byName = new Intl.Collator(void 0, {
@@ -294,35 +495,6 @@ window.__ModuleLoader__.load({
 				default: return t("error.unavailable", { message: failure.message });
 			}
 		}
-		/**
-		* Keep the path row's `data-files-path-clipped` current: set while the path's
-		* text is wider than its box, so the stylesheet fades the clipped start. Read
-		* after each commit that can change the path or mount the header, and whenever
-		* either box resizes; written to the DOM directly because it changes only how
-		* the stylesheet fades what is already rendered.
-		*/
-		function usePathClipped(box, text, path) {
-			(0, react.useLayoutEffect)(() => {
-				const outer = box.current;
-				const inner = text.current;
-				if (outer === null || inner === null) return void 0;
-				const apply = () => {
-					if (inner.offsetWidth > outer.clientWidth) outer.dataset.filesPathClipped = "";
-					else delete outer.dataset.filesPathClipped;
-				};
-				apply();
-				const observer = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(apply);
-				observer?.observe(outer);
-				observer?.observe(inner);
-				return () => {
-					observer?.disconnect();
-				};
-			}, [
-				box,
-				text,
-				path
-			]);
-		}
 		/** One entry's row, and its children when it is an expanded directory. */
 		function Entry({ parent, entry, tree }) {
 			const path = childPath(parent, entry.name);
@@ -337,9 +509,9 @@ window.__ModuleLoader__.load({
 						className: FilesBody_module_css_default.row,
 						"aria-expanded": expanded,
 						onClick: () => {
-							tree.onToggle(path);
+							tree.onToggle(parent, path);
 						},
-						children: [expanded ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpen16, { className: FilesBody_module_css_default.icon }) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderClose16, { className: FilesBody_module_css_default.icon }), (0, react_jsx_runtime.jsx)("span", {
+						children: [expanded ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenRegular, { className: FilesBody_module_css_default.icon }) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseRegular, { className: FilesBody_module_css_default.icon }), (0, react_jsx_runtime.jsx)("span", {
 							className: FilesBody_module_css_default.name,
 							children: entry.name
 						})]
@@ -404,6 +576,11 @@ window.__ModuleLoader__.load({
 			});
 			const entries = orderEntries(level.level.entries);
 			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+				level.failure !== void 0 && (0, react_jsx_runtime.jsx)("li", {
+					className: FilesBody_module_css_default.note,
+					"data-files-row": "failed",
+					children: failureLine(t, level.failure)
+				}),
 				entries.length === 0 && (0, react_jsx_runtime.jsx)("li", {
 					className: FilesBody_module_css_default.note,
 					"data-files-row": "empty",
@@ -422,14 +599,36 @@ window.__ModuleLoader__.load({
 			] });
 		}
 		/** The file tree's body: the workspace root and whatever the reader has opened under it. */
-		function FilesBody({ useTabInfo, sessionId, useSessions, useStore, actions, start, load, toggle, t }) {
+		function FilesBody({ useTabInfo, sessionId, useSessions, useStore, actions, start, refresh, setAutoRefresh, toggle, t, renderSlot }) {
 			const { tab } = useTabInfo();
+			(0, react.useEffect)(() => tab.actions.bindCommands({ refresh: () => {
+				refresh(tab.id);
+			} }), [
+				tab.actions,
+				tab.id,
+				refresh
+			]);
 			const { signal, actions: tabActions } = tab;
 			const cwd = useSessions((sessions) => sessions.byId[sessionId]?.cwd);
 			const state = useStore((store) => store.byTab[tab.id]);
-			const pathRef = (0, react.useRef)(null);
-			const pathTextRef = (0, react.useRef)(null);
-			usePathClipped(pathRef, pathTextRef, state?.root);
+			const bodyRef = (0, react.useRef)(null);
+			const scrollTopRef = (0, react.useRef)(0);
+			const seeded = state !== void 0;
+			(0, react.useLayoutEffect)(() => {
+				const body = bodyRef.current;
+				if (seeded && body !== null) {
+					body.scrollTop = state.scrollTop;
+					scrollTopRef.current = body.scrollTop;
+				}
+			}, [seeded]);
+			(0, react.useEffect)(() => () => {
+				if (seeded && !signal.aborted) actions.scrolled(tab.id, scrollTopRef.current);
+			}, [
+				seeded,
+				signal,
+				tab.id,
+				actions
+			]);
 			(0, react.useEffect)(() => {
 				if (state !== void 0 || cwd === void 0 || signal.aborted) return;
 				start(tab.id, cwd, signal);
@@ -451,8 +650,8 @@ window.__ModuleLoader__.load({
 			if (state === void 0) return null;
 			const tree = {
 				state,
-				onToggle: (path) => {
-					toggle(tab.id, path, state.levels[path] !== void 0, signal);
+				onToggle: (parent, path) => {
+					toggle(tab.id, parent, path, state.expanded, signal);
 				},
 				onOpen: (path) => {
 					tabActions.openResource(fileAddressFor(sessionId, state.root, path));
@@ -460,43 +659,59 @@ window.__ModuleLoader__.load({
 				t
 			};
 			const reload = () => {
-				actions.reset(tab.id);
-				for (const path of state.expanded) load(tab.id, path, signal);
+				refresh(tab.id);
 			};
-			const { directory, name } = pathPartsOf(state.root);
 			return (0, react_jsx_runtime.jsxs)("div", {
 				className: FilesBody_module_css_default.root,
 				"data-files-state": "tree",
 				"data-files-root": state.root,
 				children: [(0, react_jsx_runtime.jsxs)("div", {
 					className: FilesBody_module_css_default.header,
-					children: [(0, react_jsx_runtime.jsx)("div", {
-						ref: pathRef,
-						className: FilesBody_module_css_default.path,
-						title: state.root,
-						"data-files-path": true,
-						children: (0, react_jsx_runtime.jsxs)("span", {
-							ref: pathTextRef,
-							className: FilesBody_module_css_default.pathText,
-							children: [directory !== "" && (0, react_jsx_runtime.jsx)("span", {
-								className: FilesBody_module_css_default.pathDirectory,
-								children: directory
-							}), (0, react_jsx_runtime.jsx)("span", {
-								className: FilesBody_module_css_default.pathName,
-								children: name
-							})]
-						})
-					}), (0, react_jsx_runtime.jsx)("button", {
-						type: "button",
-						className: FilesBody_module_css_default.tool,
-						"aria-label": t("reload"),
-						title: t("reload"),
-						"data-files-reload": true,
-						onClick: reload,
-						children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, {})
-					})]
+					children: [
+						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.PathLabel, {
+							path: state.root,
+							className: FilesBody_module_css_default.path,
+							"data-files-path": true
+						}),
+						(0, react_jsx_runtime.jsx)("span", {
+							hidden: true,
+							children: (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: FilesBody_module_css_default.tool,
+								"aria-label": t("autoRefresh"),
+								"aria-pressed": state.autoRefresh,
+								"data-files-auto-refresh": true,
+								title: t(state.autoRefresh ? "autoRefresh.disable" : "autoRefresh.enable"),
+								onClick: () => {
+									setAutoRefresh(tab.id, !state.autoRefresh);
+								},
+								children: state.autoRefresh ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPauseOutlineRegular, {}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPlayOutlineRegular, {})
+							})
+						}),
+						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Tooltip, {
+							label: t("reload"),
+							shortcutKeys: tab.refreshShortcut?.keys,
+							side: "bottom",
+							delayMs: 500,
+							children: (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: FilesBody_module_css_default.tool,
+								"aria-label": t("reload"),
+								"aria-keyshortcuts": tab.refreshShortcut?.aria,
+								"data-files-reload": true,
+								onClick: reload,
+								children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutlineRegular, {})
+							})
+						}),
+						renderSlot("sidebar.right.tab.files.actions", { absolutePath: state.root })
+					]
 				}), (0, react_jsx_runtime.jsx)("div", {
+					ref: bodyRef,
 					className: FilesBody_module_css_default.body,
+					"data-files-body": true,
+					onScroll: (event) => {
+						scrollTopRef.current = event.currentTarget.scrollTop;
+					},
 					children: (0, react_jsx_runtime.jsx)("ul", {
 						className: FilesBody_module_css_default.level,
 						children: (0, react_jsx_runtime.jsx)(Level, {
@@ -526,6 +741,7 @@ window.__ModuleLoader__.load({
 		//#region lib/types/client/locales.js
 		/** Simplified Chinese dictionary and key-set source of truth. */
 		const zh = {
+			"shortcut.noSession": "请先选择会话",
 			"type.label": "文件",
 			"guide.title": "工作区文件",
 			"guide.description": "浏览会话工作区的文件",
@@ -534,6 +750,9 @@ window.__ModuleLoader__.load({
 			truncated: "条目太多，只显示了一部分。",
 			noWorkspace: "这个会话没有工作区目录。",
 			reload: "重新读取",
+			autoRefresh: "自动刷新",
+			"autoRefresh.enable": "开启自动刷新",
+			"autoRefresh.disable": "关闭自动刷新",
 			"entry.other": "这不是文件或目录，没法打开。",
 			"error.notFound": "这个目录不在了。可能已被移动或删除。",
 			"error.outsideWorkspace": "这个目录在工作区之外，侧栏不会读取它。",
@@ -542,6 +761,7 @@ window.__ModuleLoader__.load({
 		};
 		/** English dictionary, checked against the Chinese key set. */
 		const en = {
+			"shortcut.noSession": "Select a session first",
 			"type.label": "Files",
 			"guide.title": "Workspace files",
 			"guide.description": "Browse files in this session's workspace",
@@ -550,6 +770,9 @@ window.__ModuleLoader__.load({
 			truncated: "Too many entries, showing only some of them.",
 			noWorkspace: "This session has no workspace directory.",
 			reload: "Reload",
+			autoRefresh: "Auto refresh",
+			"autoRefresh.enable": "Enable auto refresh",
+			"autoRefresh.disable": "Disable auto refresh",
 			"entry.other": "Not a file or a directory, so it cannot be opened.",
 			"error.notFound": "That directory is gone. It may have been moved or deleted.",
 			"error.outsideWorkspace": "That directory is outside the workspace, so the sidebar will not read it.",
@@ -559,8 +782,8 @@ window.__ModuleLoader__.load({
 		//#endregion
 		//#region lib/types/client/store.js
 		/**
-		* The file tree's view state: which directories are expanded, and what each
-		* loaded level contains.
+		* The file tree's view state: which directories are expanded, what each
+		* loaded level contains, and where the body is scrolled to.
 		*
 		* The tree is not one resource. A directory listing per level, expanded lazily,
 		* is state the type owns — so it lives in a Slot-standard exclusive store
@@ -593,6 +816,9 @@ window.__ModuleLoader__.load({
 			return (0, _deepseek_ai_dsh_client_store.defineStore)({
 				init: () => ({ byTab: {} }),
 				actions: {
+					autoRefresh: (d, tabId, enabled) => {
+						bucket(d, tabId).autoRefresh = enabled;
+					},
 					/**
 					* Seed one tab's tree at its workspace root, with the root expanded.
 					* @param d - draft state.
@@ -603,7 +829,9 @@ window.__ModuleLoader__.load({
 						d.byTab[tabId] = {
 							root,
 							levels: {},
-							expanded: [root]
+							expanded: [root],
+							scrollTop: 0,
+							autoRefresh: true
 						};
 					},
 					/**
@@ -613,7 +841,8 @@ window.__ModuleLoader__.load({
 					* @param path - absolute directory path.
 					*/
 					loading: (d, tabId, path) => {
-						bucket(d, tabId).levels[path] = { kind: "loading" };
+						const state = bucket(d, tabId);
+						if (state.levels[path]?.kind !== "ready") state.levels[path] = { kind: "loading" };
 					},
 					/**
 					* Record one directory's contents.
@@ -623,7 +852,18 @@ window.__ModuleLoader__.load({
 					* @param level - the listing to show under it.
 					*/
 					loaded: (d, tabId, path, level) => {
-						bucket(d, tabId).levels[path] = {
+						const state = bucket(d, tabId);
+						const previous = state.levels[path];
+						if (previous?.kind === "ready") {
+							const directories = new Set(level.entries.filter((entry) => entry.type === "directory").map((entry) => entry.name));
+							for (const entry of previous.level.entries) {
+								if (entry.type !== "directory" || directories.has(entry.name)) continue;
+								const removed = `${path.replace(/[/\\]+$/, "")}/${entry.name}`;
+								state.expanded = state.expanded.filter((value) => value !== removed && !value.startsWith(`${removed}/`));
+								state.levels = Object.fromEntries(Object.entries(state.levels).filter(([key]) => key !== removed && !key.startsWith(`${removed}/`)));
+							}
+						}
+						state.levels[path] = {
 							kind: "ready",
 							level
 						};
@@ -636,7 +876,11 @@ window.__ModuleLoader__.load({
 					* @param failure - the settled Remote failure.
 					*/
 					failed: (d, tabId, path, failure) => {
-						bucket(d, tabId).levels[path] = {
+						const level = bucket(d, tabId).levels[path];
+						bucket(d, tabId).levels[path] = level?.kind === "ready" ? {
+							...level,
+							failure
+						} : {
 							kind: "failed",
 							failure
 						};
@@ -654,6 +898,15 @@ window.__ModuleLoader__.load({
 						const at = state.expanded.indexOf(path);
 						if (at >= 0) state.expanded.splice(at, 1);
 						else state.expanded.push(path);
+					},
+					/**
+					* Record where one tab's body is scrolled to.
+					* @param d - draft state.
+					* @param tabId - the tab being drawn.
+					* @param scrollTop - the body's scroll offset, in px.
+					*/
+					scrolled: (d, tabId, scrollTop) => {
+						bucket(d, tabId).scrollTop = scrollTop;
 					},
 					/**
 					* Drop every loaded level, keeping what is expanded.
@@ -689,6 +942,7 @@ window.__ModuleLoader__.load({
 			"slots",
 			"locale",
 			"sidebarRightTabs",
+			"sidebarRight",
 			"remote",
 			"remote.workspaceFiles"
 		];
@@ -698,19 +952,71 @@ window.__ModuleLoader__.load({
 		*/
 		function apply(ctx) {
 			const t = ctx.locale.bind(NS);
+			ctx.inject(["shortcuts"], (ctx) => {
+				ctx.effect(() => ctx.shortcuts.register({
+					id: "workspace.files",
+					label: () => t("guide.title"),
+					aliases: ["workspace files", "files"],
+					defaults: {
+						"desktop:macos": {
+							code: "KeyP",
+							modifiers: ["primary"]
+						},
+						"desktop:windows": {
+							code: "KeyP",
+							modifiers: ["primary"]
+						},
+						"desktop:linux": {
+							code: "KeyP",
+							modifiers: ["primary"]
+						},
+						"web:macos": {
+							code: "KeyP",
+							modifiers: ["primary", "alt"]
+						},
+						"web:windows": {
+							code: "KeyP",
+							modifiers: ["primary", "alt"]
+						}
+					},
+					regions: [
+						"page",
+						"editable",
+						"terminal"
+					],
+					modals: [],
+					resolve: ({ target: element }) => {
+						const target = ctx.sidebarRight.commandTarget(element);
+						if (target === void 0) return {
+							status: "blocked",
+							reason: t("shortcut.noSession")
+						};
+						return {
+							status: "handled",
+							run: () => {
+								ctx.sidebarRight.openTabFromTarget("files", target);
+							}
+						};
+					}
+				}), "ui-sidebar-files: shortcut");
+			});
 			ctx.effect(() => ctx.sidebarRightTabs.register(filesDefinition(t)), "ui-sidebar-files: files type");
 			ctx.effect(() => ctx.locale.register(NS, {
 				zh,
 				en
 			}), "ui-sidebar-files: dictionaries");
 			const store = createFilesStore();
-			const inject = filesFace(createList(ctx.remote));
+			const inject = filesFace(createList(ctx.remote), createWatch(ctx.remote));
 			ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
 				name: "sidebar.right.pane.tab",
 				key: FILES_ID,
 				locale: NS,
 				store,
-				inject
+				inject,
+				children: { "sidebar.right.tab.files.actions": {
+					kind: "list",
+					scope: "session"
+				} }
 			}, FilesBody)), "ui-sidebar-files: files tab body");
 			ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
 				name: "sidebar.right.pane.tab.title",

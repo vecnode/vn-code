@@ -44,7 +44,7 @@ is in the state you think it is.
   form, not a core edit. Forks are marked GENERATED and produced by
   `scripts/sync-vendored.ps1`, so what runs is always reviewable here.
 - **Pinned dependency line.** The pack is built, tested and installed against
-  exactly the harness version pinned in `.dsh-version.json` (`0.1.5-rc.1`).
+  exactly the harness version pinned in `.dsh-version.json` (`0.2.0-rc.2`).
   Installs run through `npx @deepseek-ai/dsh@<pinned>`, never a floating
   `latest`.
 - **Zero npm dependencies.** No shipped package declares a runtime dependency, so
@@ -67,8 +67,8 @@ is in the state you think it is.
 | Component | Supported |
 |---|---|
 | Repo default branch (`main`) | yes |
-| Harness line pinned in `.dsh-version.json` (`0.1.5-rc.1`) | yes |
-| Other published harness lines (`0.1.5-rc.2`, `0.1.5-rc.3`, `0.1.7-alpha.1`, …) | **no** — not tested, and not claimed |
+| Harness line pinned in `.dsh-version.json` (`0.2.0-rc.2`) | yes |
+| Other published harness lines (`0.1.5-rc.1`, `0.1.7-rc.2`, `0.2.0-rc.1`, …) | **no** — not tested, and not claimed |
 | Older pins / `master` APIs | no — upgrade the pin, then re-verify |
 
 The pack is **not** a version-range product: it targets one harness line at a
@@ -205,7 +205,7 @@ the machine running it.
 
 **1. Keep it on loopback — the default is already correct.**
 Run it with the pack's launcher (`scripts\run-web.bat` / `./scripts/run-web.sh`) or
-`npx @deepseek-ai/dsh@0.1.5-rc.1 web`. Do **not** pass `--host`, and do not pass
+`npx @deepseek-ai/dsh@0.2.0-rc.2 web`. Do **not** pass `--host`, and do not pass
 `--trusted-host`. Do not put the port behind a reverse proxy, an SSH `-L`
 forward for someone else, a tunnel (ngrok, cloudflared, Tailscale `serve`),
 your router's port forwarding, or a container's published port

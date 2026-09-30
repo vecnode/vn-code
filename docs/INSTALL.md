@@ -159,13 +159,13 @@ nothing is opened and the launcher says so; the URL is in the app's own output.
 ```bat
 :: Windows
 set DSH_HOME=C:\Users\you\.dsh
-npx --yes @deepseek-ai/dsh@0.1.5-rc.1 plugin --profile web add C:\path\to\vncode\packages\dsh-editor
+npx --yes @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add C:\path\to\vncode\packages\dsh-editor
 ```
 
 ```sh
 # macOS / Linux
 export DSH_HOME="$HOME/.dsh"
-npx --yes @deepseek-ai/dsh@0.1.5-rc.1 plugin --profile web add /path/to/vncode/packages/dsh-editor
+npx --yes @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add /path/to/vncode/packages/dsh-editor
 ```
 
 (Requires `pnpm` on PATH.) Remove with the same command but `remove dsh-editor`.
@@ -176,7 +176,7 @@ Start it by hand with the command the run launchers wrap (the app prints its
 `dsh web: http://127.0.0.1:<port>/?token=<token>` URL either way):
 
 ```sh
-npx --yes @deepseek-ai/dsh@0.1.5-rc.1 web
+npx --yes @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
 ## Uninstall
@@ -256,7 +256,7 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 - **No "Editor" capsule on the "+" / Start page** — pick an active
   conversation, restart and hard-refresh (Ctrl+F5); check the browser console
   for `[dsh-editor]` errors if it still does not show. The bar itself is the
-  pack's own (`dsh-rightbar`), forked from the `0.1.5-rc.1` line.
+  pack's own (`dsh-rightbar`), forked from the `0.2.0-rc.2` line.
 - **A text file opens in the read-only preview** — that extension belongs to a
   shipped preview (`.html`, images, `.pdf`, …) or the path is outside the
   conversation folder; the editor deliberately leaves those alone. Markdown is

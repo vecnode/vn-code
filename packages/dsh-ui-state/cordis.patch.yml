@@ -1,12 +1,18 @@
 # dsh-ui-state bundle layer (alpha).
 #
-# One extra row: the Node half registers the pack's `vncode` settings
-# namespace (and inlines the remembered page zoom into the page before the shell
-# mounts), and the browser half binds that namespace, restores the two column
-# widths, and publishes the `uiState` service the pack's other halves write
-# through. Nothing shipped is patched, no core row is disabled: this row owns a
-# namespace of its own and reaches the layout's store through the public slot
-# registry, which is the same surface ui-layout's own AppFrame reads.
+# One extra row, and it is the row the pack's durable state is KEYED BY: the Node
+# half declares this entry's own `.volatile()` Config (the Host projects those
+# fields into a settings form named by the id below and persists an accepted
+# write into the profile's Cordis patch) and inlines the remembered page zoom
+# into the page before the shell mounts, while the browser half binds that form
+# with `ctx.configForms.get('ui-state')`, restores the two column widths, and
+# publishes the `uiState` service the pack's other halves write through. The id
+# below is therefore load-bearing in three places at once - this row id, the
+# Node half's `ENTRY_ID` and the browser half's `ENTRY_ID` - and a mismatch is
+# silent: the form answers `unavailable` and the pack remembers nothing.
+# Nothing shipped is patched, no core row is disabled: this row owns a form of
+# its own and reaches the layout's store through the public slot registry, which
+# is the same surface ui-layout's own AppFrame reads.
 - insert:
     - id: ui-state
       name: 'dsh-ui-state'

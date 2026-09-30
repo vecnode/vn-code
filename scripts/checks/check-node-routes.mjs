@@ -11,7 +11,7 @@
 export {} // (kept import-free: this file is ESM for the dynamic import below)
 
 const { promises: fsp } = await import('node:fs')
-const { existsSync, readdirSync } = await import('node:fs')
+const { existsSync, readdirSync, readFileSync } = await import('node:fs')
 const { createRequire } = await import('node:module')
 const os = await import('node:os')
 const path = (await import('node:path')).default
@@ -374,8 +374,8 @@ if (!hasGit) {
 // (init -> ready -> output -> kill) and the authentication gate in front of it.
 // `ws` and `node-pty` both come from the harness's own installation, so the
 // live part is skipped (loudly) where they are not resolvable.
-/** Resolve one package from the profile closure or the npm caches. */
-function loadFromHarness(name) {
+/** Every node_modules root a harness install can live in: the profile closure, then the npm caches. */
+function harnessRoots() {
   const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
   const roots = [path.join(home, 'profiles', 'node_modules')]
   for (const base of [process.env.LOCALAPPDATA, process.env.APPDATA].filter(Boolean)) {
@@ -384,7 +384,12 @@ function loadFromHarness(name) {
   }
   const cache = path.join(os.homedir(), '.npm', '_npx')
   if (existsSync(cache)) for (const entry of readdirSync(cache)) roots.push(path.join(cache, entry, 'node_modules'))
-  for (const root of roots) {
+  return roots
+}
+
+/** Resolve one package from the profile closure or the npm caches. */
+function loadFromHarness(name) {
+  for (const root of harnessRoots()) {
     try {
       return createRequire(path.join(root, 'index.js'))(name)
     } catch (err) {
@@ -1268,70 +1273,168 @@ try {
 
 // ------------------------------------------------------------ dsh-ui-state
 // The pack's durable UI state has no route to capture: its whole host surface is
-// ONE settings registration plus the page-zoom bootstrap row, so this block
-// drives `apply` against a stub and reads what it registered. Two things are
-// load-bearing and pinned here - the schema really resolves the defaults the
-// browser half's DEFAULTS mirror (drift between the two is what would make a
-// fresh install read a field nobody set), and a value the schema accepts is the
-// only thing that can reach the inlined boot script.
-const uiStateModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-ui-state/lib/index.js')).href)
-const uiStateNamespaces = []
-const uiStateInjected = []
-const uiStateIndexHandlers = []
-let uiStateSection
-uiStateModule.apply({
-  logger: { debug() {}, warn() {} },
-  get: (name) => (name === 'settings' ? { get: (ns) => (ns === 'vncode' ? uiStateSection : undefined) } : undefined),
-  inject: (deps, callback) => {
-    uiStateInjected.push(deps.join(','))
-    callback({ settings: { register: (ns, schema) => uiStateNamespaces.push({ ns, schema }) } })
-  },
-  on: (event, handler) => {
-    if (event === 'webserver/index-inject') uiStateIndexHandlers.push(handler)
-  },
-})
-check('ui-state: registers exactly one namespace', uiStateNamespaces.map((entry) => entry.ns).join(','), 'vncode')
-check('ui-state: asks for the optional settings service', uiStateInjected.join(','), 'settings')
-const uiStateSchema = uiStateNamespaces[0].schema
-check(
-  'ui-state: the schema resolves the documented defaults',
-  JSON.stringify(uiStateSchema({})),
-  JSON.stringify({ theme: '', pageZoom: 100, dockHeight: 280, sidebarWidth: -1, rightbarWidth: -1 }),
-)
-check('ui-state: no field remembers the dock being open', Object.hasOwn(uiStateSchema({}), 'dockOpen'), false)
-check('ui-state: an extension theme id is kept', uiStateSchema({ theme: 'nord' }).theme, 'nord')
-let zoomRefusal = 'accepted'
-try {
-  uiStateSchema({ pageZoom: 900 })
-} catch (err) {
-  zoomRefusal = 'refused'
+// ONE `Config` declaration plus the page-zoom bootstrap row, so this block drives
+// `apply` against a stub and reads what it declared.
+//
+// 0.2.0 moved the medium. There is no `settings.register(namespace, schema)` left
+// to drive: the Host now projects the ACTIVE PROFILE ENTRY's `.volatile()` Config
+// fields into the form the browser half binds (`ctx.configForms.get('ui-state')`),
+// and persists an accepted write into the profile's Cordis patch. So the row's
+// half of that contract is what is pinned here - EVERY field volatile (a plain
+// field is ordinary configuration: not editable through a form, and never written
+// back to the patch), the defaults the browser half's DEFAULTS mirror (drift
+// between the two is what would make a fresh install read a field nobody set),
+// and the fact that only a schema-validated value can reach the inlined boot
+// script.
+/**
+ * The running ENTRY of the pinned harness line, or `null` when this host has no
+ * install of it. This is the anchor `packages/dsh-ui-state/lib/index.js` resolves
+ * its schemastery through in production - `process.argv[1]` IS the harness's own
+ * entry when the harness runs the plugin, so the row finds the exact copy the
+ * harness loaded - and it has to be modelled here because several lines can sit
+ * on one machine at once: this one keeps a 0.1.5-rc.1 mirror in
+ * `$DSH_HOME/profiles/node_modules` (whose schemastery 3.18.2 predates
+ * `.volatile()`) beside the pinned line in the npx cache. Importing the row
+ * without it would grade the form against a schema builder that cannot declare
+ * one.
+ * @returns {object|null} the imported module, or null when the pin is not installed.
+ */
+async function loadPinnedUiState() {
+  let pinned = null
+  try {
+    pinned = JSON.parse(readFileSync(path.join(repo, '.dsh-version.json'), 'utf8')).dsh
+  } catch (err) {
+    return null
+  }
+  for (const root of harnessRoots()) {
+    const manifest = path.join(root, '@deepseek-ai', 'dsh', 'package.json')
+    if (!existsSync(manifest)) continue
+    let version = null
+    try {
+      version = JSON.parse(readFileSync(manifest, 'utf8')).version
+    } catch (err) {
+      continue
+    }
+    if (version !== pinned) continue
+    const previous = process.argv[1]
+    process.argv[1] = path.join(root, '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+    try {
+      return await import(pathToFileURL(path.join(repo, 'packages/dsh-ui-state/lib/index.js')).href)
+    } finally {
+      process.argv[1] = previous
+    }
+  }
+  return null
 }
-check('ui-state: a zoom outside the ladder is refused', zoomRefusal, 'refused')
-let heightRefusal = 'accepted'
-try {
-  uiStateSchema({ dockHeight: 4 })
-} catch (err) {
-  heightRefusal = 'refused'
+
+/** Drive the row's half of the settings-form contract against a stub context. */
+function runUiStateChecks(uiStateModule) {
+  // The entry id is ONE contract shared by three files - this module, the row id in
+  // cordis.patch.yml, and the browser half's binder - and a mismatch is silent: the
+  // form answers `unavailable` and the pack remembers nothing.
+  check('ui-state: names the entry its form is keyed by', uiStateModule.ENTRY_ID, 'ui-state')
+  const uiStateSchema = uiStateModule.Config
+  check('ui-state: declares a Config (no schema, no form)', typeof uiStateSchema, 'function')
+  /** The resolved section, with each `.volatile()` live accessor unwrapped. */
+  const uiStateResolved = (fields) => {
+    const resolved = uiStateSchema(fields || {})
+    const plain = {}
+    for (const [key, value] of Object.entries(resolved)) {
+      plain[key] = value && typeof value.get === 'function' ? value.get() : value
+    }
+    return plain
+  }
+  check(
+    'ui-state: the schema resolves the documented defaults',
+    JSON.stringify(uiStateResolved({})),
+    JSON.stringify({ theme: '', pageZoom: 100, dockHeight: 280, sidebarWidth: -1, rightbarWidth: -1 }),
+  )
+  // Volatility read back off the SERIALIZED schema, because that is exactly what
+  // the Host's `volatileForm` reads to decide which fields a form carries.
+  const uiStateJson = uiStateSchema.toJSON()
+  const uiStateRoot = uiStateJson.refs[uiStateJson.uid]
+  const uiStateFieldMeta = (name) => uiStateJson.refs[uiStateRoot.dict[name]].meta
+  check(
+    'ui-state: every remembered field is volatile',
+    Object.keys(uiStateRoot.dict)
+      .map((name) => name + '=' + (uiStateFieldMeta(name).volatile === true))
+      .join(','),
+    'theme=true,pageZoom=true,dockHeight=true,sidebarWidth=true,rightbarWidth=true',
+  )
+  check('ui-state: no field remembers the dock being open', Object.hasOwn(uiStateRoot.dict, 'dockOpen'), false)
+  check('ui-state: an extension theme id is kept', uiStateResolved({ theme: 'nord' }).theme, 'nord')
+  let zoomRefusal = 'accepted'
+  try {
+    uiStateSchema({ pageZoom: 900 })
+  } catch (err) {
+    zoomRefusal = 'refused'
+  }
+  check('ui-state: a zoom outside the ladder is refused', zoomRefusal, 'refused')
+  let heightRefusal = 'accepted'
+  try {
+    uiStateSchema({ dockHeight: 4 })
+  } catch (err) {
+    heightRefusal = 'refused'
+  }
+  check('ui-state: an unusable dock height is refused', heightRefusal, 'refused')
+  /**
+   * Activate the row once with a live config whose `pageZoom` answers `level`, and
+   * collect the index-injection rows it produced.
+   * @param level - the remembered zoom (or `undefined` for a host with no Config).
+   */
+  const uiStateBoot = (level) => {
+    const table = []
+    const handlers = []
+    const injected = []
+    const configured = []
+    const ctx = {
+      logger: { debug() {}, warn() {} },
+      fiber: { id: 'ui-state' },
+      inject: (deps, callback) => {
+        injected.push(deps.join(','))
+        callback({
+          effect: (fn) => {
+            fn()
+            return () => {}
+          },
+          settings: {
+            configure: (policy, fiber) => {
+              configured.push({ policy, fiber })
+              return () => {}
+            },
+          },
+        })
+      },
+      on: (event, handler) => {
+        if (event === 'webserver/index-inject') handlers.push(handler)
+      },
+    }
+    const config = level === undefined ? undefined : { pageZoom: { get: () => level } }
+    uiStateModule.apply(ctx, config)
+    for (const handler of handlers) handler(table)
+    return { table, injected, configured, fiber: ctx.fiber }
+  }
+  const uiStateApplied = uiStateBoot(125)
+  check('ui-state: asks for the optional settings service', uiStateApplied.injected.join(','), 'settings')
+  // The opt-out: these fields are the interface's own memory, not preferences a
+  // person browses, so no page is generated from them.
+  check('ui-state: opts out of a generated settings page', JSON.stringify(uiStateApplied.configured.map((entry) => entry.policy)), '[{"auto":false}]')
+  check('ui-state: the page policy belongs to this row', uiStateApplied.configured[0].fiber, uiStateApplied.fiber)
+  // The bootstrap row: silent at the resting level (a page nobody has zoomed keeps
+  // the markup the harness shipped), the remembered level otherwise.
+  check('ui-state: the boot row is silent at the resting level', uiStateBoot(100).table.length, 0)
+  const booted = uiStateBoot(125).table
+  check('ui-state: the boot row carries the remembered level', booted.length === 1 && booted[0].kind === 'script' && booted[0].placement === 'body', true)
+  check('ui-state: the boot row sets the zoom and its seam marker', booted[0].text.includes("style.zoom = String(level) + '%'") && booted[0].text.includes('data-dsh-page-zoomed'), true)
+  check('ui-state: the boot row is silent with no Config', uiStateBoot(undefined).table.length, 0)
 }
-check('ui-state: an unusable dock height is refused', heightRefusal, 'refused')
-// The bootstrap row: silent at the resting level (a page nobody has zoomed keeps
-// the markup the harness shipped), the remembered level otherwise.
-const bootRows = (section) => {
-  uiStateSection = section
-  const table = []
-  for (const handler of uiStateIndexHandlers) handler(table)
-  return table
+
+const uiStateModule = await loadPinnedUiState()
+if (uiStateModule === null) {
+  console.log('skip the ui-state settings form (no install of the pinned harness line on this host)')
+} else {
+  runUiStateChecks(uiStateModule)
 }
-check('ui-state: the boot row is silent at the resting level', bootRows({ pageZoom: 100 }).length, 0)
-const booted = bootRows({ pageZoom: 125 })
-check('ui-state: the boot row carries the remembered level', booted.length === 1 && booted[0].kind === 'script' && booted[0].placement === 'body', true)
-check('ui-state: the boot row sets the zoom and its seam marker', booted[0].text.includes("style.zoom = String(level) + '%'") && booted[0].text.includes('data-dsh-page-zoomed'), true)
-check('ui-state: the boot row is silent with no settings service', (() => {
-  const table = []
-  const bare = { logger: { warn() {}, debug() {} }, get: () => undefined, inject: (deps, cb) => cb({ settings: { register: () => {} } }), on: (event, handler) => { if (event === 'webserver/index-inject') handler(table) } }
-  uiStateModule.apply(bare)
-  return table.length
-})(), 0)
 
 // ------------------------------------------------------------- dsh-skills
 // The skills browser's host half: three routes over the HOST's skill registry.

@@ -1,7 +1,7 @@
 # dsh-ui-state (alpha.1)
 
 **UI state that outlives the process**, for the web GUI and the desktop window
-alike. One host-owned settings section holds the things a reload would otherwise
+alike. One host-owned settings form holds the things a reload would otherwise
 forget, and one browser half binds it, restores the two column widths, and
 publishes the **`uiState`** client service the pack's other halves write through:
 
@@ -19,12 +19,13 @@ Alpha.
 Everything that survives a restart survives because it already lives on the
 **host**: `$DSH_HOME/sessions` holds the conversations (which is why a new chat
 opens the last one), `$DSH_HOME/storages/workspace.json` holds the workspaces,
-and `$DSH_HOME/settings.yaml` holds the shipped preferences. What the interface
+and the profile's own Cordis patch, `$DSH_HOME/profiles/web/cordis.patch.yml`,
+holds the shipped preferences as each entry's `config:`. What the interface
 keeps in the **browser** is per **origin** and per browser **profile**: a Chrome
 tab and the desktop window's WebView2 are two different stores, so they never
 share it — even at the same port — and the desktop shell prefers port 3080 and
-falls back to a free one, so even one host loses it by moving a port. A settings
-section is one document both hosts read. That is the whole idea.
+falls back to a free one, so even one host loses it by moving a port. A form over
+one profile entry is one document both hosts read. That is the whole idea.
 
 ## What is remembered
 
@@ -36,9 +37,11 @@ section is one document both hosts read. That is the whole idea.
 | `sidebarWidth` | `-1` | this package — the left column |
 | `rightbarWidth` | `-1` | this package — the right bar |
 
-The file is `$DSH_HOME/settings.yaml`, and a fresh install writes **no**
-`vncode` section at all: every field carries a schema default, so only values
-that actually differ from the contract are written.
+The medium is the profile's own Cordis patch document,
+`$DSH_HOME/profiles/web/cordis.patch.yml`, as the `ui-state` entry's `config:`
+block, and a fresh install writes **no** `config:` block at all: every field
+carries a schema default, so only values that actually differ from the contract
+are written.
 
 There is deliberately **no field for the terminal dock's open state**. The panel
 is the window onto a *process*: after a reload the client holds no slots, so
@@ -50,44 +53,55 @@ Two conventions matter when reading it by hand. **A negative width means "never
 recorded"**, which is deliberately not `0`, because for the sidebar `0` is a real
 state (collapsed) and a remembered `0` is restored through ui-layout's toggle
 rather than its width setter. And **`theme` holds an extension theme only**:
-`light` / `dark` / `system` are already durable in ui-theme's own namespace, and
+`light` / `dark` / `system` are already durable in ui-theme's own form, and
 duplicating a preference would give one setting two owners that could disagree.
 
-## Why a settings namespace
+## Why a `.volatile()` Config
 
 A plugin-owned session event is not an option: `dsh-session-persistence` refuses
 an unknown event type unless the envelope carries `ignorable: true`, which
 `Session.append()` cannot set, so the conversation would become unreadable.
 `ctx.storageDomain` cannot be used either — it needs a projection the browser
-cannot read. A namespace is the documented third-party seam for a preference.
+cannot read. A `.volatile()` field in the row's own `Config` is the documented
+third-party seam for a preference, and the Host is what turns it into a form.
 
 ## The Node half
 
-`lib/index.js` registers the `vncode` namespace and answers
-`webserver/index-inject` with one inline script carrying the remembered page
-zoom, placed immediately after the opening body tag so the level is in force for
-the first paint. The script writes **both** the `zoom` declaration and the
-`data-dsh-page-zoomed` marker, because that marker is the gate `dsh-themes`'
-right-bar seam fix keys on. Should no copy of schemastery be reachable, the row
-**warns and degrades** — nothing is remembered, and the client falls back to its
-own defaults — rather than failing the boot.
+`lib/index.js` declares the row's own `Config` — every remembered field marked
+`.volatile()`, which is what the Host projects into the form keyed by the entry
+id `ui-state` — and answers `webserver/index-inject` with one inline script
+carrying the remembered page zoom, placed immediately after the opening body tag
+so the level is in force for the first paint. It also calls
+`settings.configure({ auto: false })` inside `ctx.inject(['settings'], ...)`, so
+no settings page is generated from those fields: this is the interface's own
+memory, not a preference a person browses. The script writes **both** the `zoom`
+declaration and the `data-dsh-page-zoomed` marker, because that marker is the
+gate `dsh-themes`' right-bar seam fix keys on. Should no copy of schemastery — or
+none new enough to carry `.volatile()` — be reachable, the row **warns and
+degrades** — nothing is remembered, and the client falls back to its own
+defaults — rather than failing the boot.
 
 ## Why schema is resolved at runtime and never imported
 
 This pack ships zero npm dependencies: the profile installs each bundle as a
 **live link** into this repo, so a bare `import '@deepseek-ai/schemastery'`
 resolves from the repo folder and fails with `ERR_MODULE_NOT_FOUND` (measured).
-`settings.register` wants a schemastery schema, so the module is loaded at
-runtime instead with `createRequire`, through the anchors
+Declaring a `.volatile()` field needs a schemastery schema, so the module is
+loaded at runtime instead with `createRequire`, through the anchors
 `packages/dsh-terminal/lib/pty.js` established for the harness's own `node-pty` —
 `process.argv[1]`, then `$DSH_HOME/profiles`, which `dsh-app-boot` keeps as a
 mirror of the installation's dependency closure. Duck typing is what makes that
-safe: `dsh-settings` treats a schema as a function and reads `schema.toJSON()`,
-so class identity never matters across the two module graphs.
+safe: the form projection treats the schema as a value and reads
+`schema.toJSON()`, so class identity never matters across the two module graphs.
+Every resolved copy
+is also probed for `.volatile()` itself, because the 3.18.2 build an older line
+installed has no such method: a stale `$DSH_HOME/profiles/node_modules` mirror is
+passed over rather than crashing the import.
 
 ## The browser half
 
-`lib/client.js` binds that namespace **once** — three bundles binding it
+`lib/client.js` binds that form (`ctx.configForms.get('ui-state')`) **once** —
+three bundles binding it
 independently would each fence their writes on their own revision, and the
 contract's recovery for a stale revision is a reload that silently drops the
 write — and publishes the client service **`uiState`**
@@ -131,8 +145,8 @@ size and position and flips only the flag.
 
 ```
 cordis.patch.yml   bundle layer: inserts the 'ui-state' row (nothing else patched)
-lib/index.js       Node half: registers the `vncode` namespace, inlines the remembered zoom
-lib/client.js      Browser half: binds the namespace, restores the column widths, provides `uiState`
+lib/index.js       Node half: declares the `.volatile()` Config, inlines the remembered zoom
+lib/client.js      Browser half: binds `ctx.configForms.get('ui-state')`, restores the column widths, provides `uiState`
 ```
 
 No route, no fork, no core row disabled, no npm dependency.

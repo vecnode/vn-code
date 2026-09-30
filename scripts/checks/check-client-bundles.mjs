@@ -19,6 +19,33 @@ import path from 'node:path'
 const repo = path.resolve(fileURLToPath(new URL('../../', import.meta.url)))
 
 /** A React + react-dom pair to render with: the profile's, else any npm cache's. */
+/**
+ * The harness line this pack is built and tested against: `.dsh-version.json`'s
+ * `dsh` pin. It decides which copy of the HARNESS's own bundles these checks may
+ * grade against, because several lines can sit on one machine at once - this one
+ * has a 0.1.5-rc.1 mirror in `$DSH_HOME/profiles/node_modules` beside the pinned
+ * 0.2.0-rc.2 in the npx cache, and the mirror is what a plain "first root that
+ * has the file" search finds. Grading a fork against the line it was NOT forked
+ * from is worse than skipping: the assertions would pass while the app breaks.
+ * @returns {string|null} the pinned version, or null when the manifest is unreadable.
+ */
+function pinnedDshVersion() {
+  try {
+    return JSON.parse(readFileSync(path.join(repo, '.dsh-version.json'), 'utf8')).dsh
+  } catch (err) {
+    return null
+  }
+}
+
+/** Whether one node_modules root holds the pinned harness line's packages. */
+function carriesPinnedLine(root, pin) {
+  try {
+    return JSON.parse(readFileSync(path.join(root, '@deepseek-ai', 'dsh-client-ui-theme', 'package.json'), 'utf8')).version === pin
+  } catch (err) {
+    return false
+  }
+}
+
 function moduleRoots() {
   const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
   const roots = [path.join(home, 'profiles', 'node_modules')]
@@ -33,7 +60,13 @@ function moduleRoots() {
     for (const entry of readdirSync(cache)) roots.push(path.join(cache, entry, 'node_modules'))
   }
   roots.push('/usr/local/lib/node_modules', '/usr/lib/node_modules')
-  return roots
+  // The pinned line first, everything else after it as a fallback (a host that
+  // has no install of the pin still runs these checks against whatever core
+  // bundle it can find - the core-dependent sections already skip loudly when
+  // there is none at all).
+  const pin = pinnedDshVersion()
+  if (pin === null) return roots
+  return [...roots.filter((root) => carriesPinnedLine(root, pin)), ...roots.filter((root) => !carriesPinnedLine(root, pin))]
 }
 
 /**
@@ -205,8 +238,36 @@ function loadBundle(relative, extraRequire) {
     if (name === 'react-dom/client') return extraRequire.reactDomClient
     // Seeded by the shell in the real app; stubbed here.
     if (name === '@deepseek-ai/dsh-client-store') {
+      // The engine's products are bare observables - `subscribe`/`getSnapshot`/
+      // `update`/`set` - which is the shape the vendored 0.2.0-rc.2 bundles drive
+      // (`getSnapshot`, and `persist` folded in by the real store when a caller
+      // asks for it). `get` is kept beside `getSnapshot` because this pack's own
+      // hand-written halves were built against the earlier spelling and both must
+      // resolve here; nothing asserts WHICH one a bundle uses.
       return {
-        createSnapshotStore: (initial) => ({ get: () => initial, set() {}, subscribe: () => () => {} }),
+        createSnapshotStore: (initial, opts) => {
+          let value = typeof initial === 'function' ? initial() : initial
+          const listeners = new Set()
+          const write = (next) => {
+            value = typeof next === 'function' ? next(value) : next
+            for (const listener of [...listeners]) listener()
+            return value
+          }
+          return {
+            get: () => value,
+            getSnapshot: () => value,
+            set: write,
+            update: write,
+            subscribe(listener) {
+              listeners.add(listener)
+              return () => listeners.delete(listener)
+            },
+            // Persistence is localStorage-backed in the real store; the stub
+            // records the request so a bundle cannot silently lose it, and the
+            // checks that care about persistence read `localStorage` directly.
+            persist: opts && opts.persist ? opts.persist.name : undefined,
+          }
+        },
         // The real ui-theme builds its two Settings rows from this (see the
         // extension-theme section, which loads that bundle); a handle-shaped
         // stub is enough because those rows are never mounted here.
@@ -766,11 +827,20 @@ editorBareSeats['sidebar.right.pane.tab#dsh-editor'].spec.inject().openPreview('
 check('preview falls back to the pinned kind', bareCalls[0].kind, 'text')
 
 // ---------------------------------------------------------- dsh-open-in-app
+// 0.2.0-rc.2 grew this bundle: it now registers SIX slot occupants (the header's
+// Open In split button, the Files tab's and the document tab's action rows, the
+// unpreviewable-document fallback, and both deliverables action lists), reads
+// its own translations through `ctx.locale.bind(NS)` instead of a bound
+// `t` handed in from outside, and installs a workspace shortcut through
+// `ctx.shortcuts`. The stub below therefore carries those two services - the
+// alternative was a check that crashes on the first `require`d call and reports
+// nothing about the route split it exists to pin.
 const openInApp = loadBundle('packages/dsh-open-in-app/lib/client.js', {})
 check('open-in-app bundle id', openInApp.id, 'dsh-open-in-app')
 const oiaRegistered = {}
 openInApp.exports.apply({
   get: () => undefined,
+  remote: {},
   slots: {
     inject: (name, fn) => fn(),
     register(spec, component) {
@@ -778,16 +848,26 @@ openInApp.exports.apply({
       return () => {}
     },
   },
-  locale: { register: () => () => {} },
+  locale: { register: () => () => {}, bind: () => (key) => key },
+  shortcuts: { register: () => () => {}, catalog: {} },
   effect: (fn) => fn(),
   logger: { debug() {}, warn() {} },
 })
-check('open-in-app slot', Object.keys(oiaRegistered).join(','), 'conversation.session.header.utilities')
+check(
+  'open-in-app slots',
+  Object.keys(oiaRegistered).join(','),
+  'conversation.session.header.utilities,sidebar.right.tab.files.actions,sidebar.right.tab.document.actions,sidebar.right.tab.document.unpreviewable,deliverables.file.actions,deliverables.review.file.actions',
+)
 const launch = oiaRegistered['conversation.session.header.utilities'].spec.inject().launch
 const calls = []
 globalThis.location = { origin: 'http://127.0.0.1:3099' }
+// The route the bundle hands its fetcher is BROWSER-RELATIVE in 0.2.0-rc.2
+// (`open-in-app/open`), and the browser is what resolves it against the page
+// origin - so this double does the same instead of parsing it as absolute, which
+// is what the earlier line held. The pack's own route is absolute and rides the
+// same call unchanged, which is the whole point of the split asserted below.
 globalThis.fetch = async (url, init) => {
-  calls.push({ path: new URL(String(url)).pathname, body: init && init.body })
+  calls.push({ path: new URL(String(url), globalThis.location.origin).pathname, body: init && init.body })
   return { ok: true, status: 200, json: async () => ({ ok: true }) }
 }
 await launch('vscode', 'C:/work')
@@ -3980,18 +4060,27 @@ check(
 )
 
 // ----------------------------------------------------------- dsh-ui-state
-// The pack's durable UI state (alpha.1). Its Node half owns the `vncode`
-// settings namespace and the pre-paint zoom row (driven in check-node-routes.mjs);
-// THIS half binds that namespace once, publishes the `uiState` service, and puts
-// the two COLUMN WIDTHS back - the one piece of interface state no other bundle
-// owns, because ui-layout keeps them in a transient store ("transient layout
-// preferences", in its own words) and `ctx.layout` exposes no width setter. The
-// store is reached through the `root` slot registration's own store handle, which
-// is the same shared instance the frame renders from, so every scenario below
-// drives a double of exactly that shape.
+// The pack's durable UI state (alpha.1). Its Node half DECLARES the row's own
+// `.volatile()` Config - which is what the Host projects into the settings form
+// these fields live in - and the pre-paint zoom row (both driven in
+// check-node-routes.mjs); THIS half binds that form once, publishes the `uiState`
+// service, and puts the two COLUMN WIDTHS back - the one piece of interface state
+// no other bundle owns, because ui-layout keeps them in a transient store
+// ("transient layout preferences", in its own words) and `ctx.layout` exposes no
+// width setter. The store is reached through the `root` slot registration's own
+// store handle, which is the same shared instance the frame renders from, so
+// every scenario below drives a double of exactly that shape.
+//
+// The binder is `ctx.configForms.get(<entry id>)`, the 0.2.0 replacement for the
+// removed `settingsScope` service: the form handle answers the same
+// `getSnapshot()`/`subscribe()`/`set()`/`unset()`/`mutate()` shape a bound scope
+// did, so only the ACQUISITION changed - and the id it is acquired with is a
+// three-file contract worth pinning on its own, because a mismatch is silent
+// (the form answers `unavailable` and the pack simply remembers nothing).
 const uiStateBundle = loadBundle('packages/dsh-ui-state/lib/client.js', {})
 check('ui-state bundle id', uiStateBundle.id, 'dsh-ui-state')
-check('ui-state inject', JSON.stringify(uiStateBundle.exports.inject), '["slots","remote","settingsScope"]')
+check('ui-state inject', JSON.stringify(uiStateBundle.exports.inject), '["slots","remote","configForms"]')
+check('ui-state binds its own profile entry', uiStateBundle.exports.__internals.ENTRY_ID, 'ui-state')
 check(
   'ui-state contract defaults',
   JSON.stringify(uiStateBundle.exports.__internals.DEFAULTS),
@@ -4041,7 +4130,13 @@ function fakeLayoutStore(info) {
   }
 }
 
-/** A settings-scope double: one section, the write log, and a manual notify. */
+/**
+ * A config-form double: one section, the write log, and a manual notify. It
+ * models the public face of the Host's `ConfigFormController` - what
+ * `ctx.configForms.get(entryId)` answers in 0.2.0 - so the bundle under test sees
+ * the same `getSnapshot()` (with `status`/`value`/`revision`), `subscribe()`,
+ * `set()`, `unset()` and `mutate()` a live form carries.
+ */
 function fakeUiScope(value) {
   const writes = []
   const listeners = new Set()
@@ -4098,7 +4193,7 @@ function activateUiState(value, layout, options) {
         return () => slotListeners.delete(listener)
       },
     },
-    settingsScope: { bind: () => settings.scope },
+    configForms: { get: () => settings.scope },
     reflect: { provide: (name, api) => (provided.set(name, api), () => provided.delete(name)) },
     effect: () => {},
     logger: { debug() {}, warn() {} },
@@ -4189,7 +4284,7 @@ const unsetBundle = loadBundle('packages/dsh-ui-state/lib/client.js', {})
 const unsetProvided = new Map()
 unsetBundle.exports.apply({
   slots: { entries: () => [], subscribe: () => () => {} },
-  settingsScope: { bind: () => unsetScope.scope },
+  configForms: { get: () => unsetScope.scope },
   reflect: { provide: (name, api) => (unsetProvided.set(name, api), () => {}) },
   effect: () => {},
   logger: { debug() {}, warn() {} },
@@ -4227,6 +4322,17 @@ check(
 check(
   'themes tells a re-adopt from a deliberate built-in by the durable revision',
   themedSource.includes("const THEME_SERVICE_NAMESPACE = 'ui-theme'") && themedSource.includes('durableRevisionSeen') && themedSource.includes('revision !== durableRevisionSeen'),
+)
+// The tie-break is only as good as the scope it reads: 0.2.0 replaced the
+// `settingsScope` namespace binder with the row's own config form, so the id the
+// form is acquired with has to be ui-theme's ENTRY id - and the removed service
+// must not come back, or the tie-break silently stops reading anything and the
+// bug alpha.18 fixed (any settings write reverting an extension theme) returns.
+check(
+  'themes reads the durable form of the ui-theme entry',
+  !themedSource.includes("ctx.get('settingsScope')") &&
+    themedSource.includes("ctx.get('configForms')") &&
+    themedSource.includes('forms.get(THEME_SERVICE_NAMESPACE)'),
 )
 check(
   'themes clears the field only for a built-in chosen in its own menu',
@@ -4433,10 +4539,10 @@ if (coreThemeBundle === null) {
         ? sharedProvided.get('theme')
         : name === 'uiState'
           ? packUiState
-          : name === 'settingsScope'
-            ? { bind: () => realThemeScope }
+          : name === 'configForms'
+            ? { get: () => realThemeScope }
             : undefined,
-    settingsScope: { bind: () => realThemeScope },
+    configForms: { get: () => realThemeScope },
     logger: { debug() {}, warn() {} },
   }
 

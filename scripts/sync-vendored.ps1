@@ -153,11 +153,13 @@ $vendored = @(
         Patches = @(
             [pscustomobject]@{
                 Label   = 'declare the pack launcher route and the file-manager catalog ids'
-                Find    = (T 2) + 'const OPEN_IN_APP_OPEN_ROUTE = "/open-in-app/open";'
+                # 0.2.0-rc.2 publishes these as BROWSER-RELATIVE forms of the Host
+                # paths (".slice(1)"), so the anchor carries the suffix.
+                Find    = (T 2) + 'const OPEN_IN_APP_OPEN_ROUTE = "/open-in-app/open".slice(1);'
                 # Every element is parenthesized: the comma operator binds tighter
                 # than "+", so bare concatenations would collapse into one line.
                 Replace = (@(
-                        ((T 2) + 'const OPEN_IN_APP_OPEN_ROUTE = "/open-in-app/open";'),
+                        ((T 2) + 'const OPEN_IN_APP_OPEN_ROUTE = "/open-in-app/open".slice(1);'),
                         ((T 2) + '/** dsh-open-in-app: the pack''s own cross-platform file-browser route. */'),
                         ((T 2) + 'const NATIVE_OPEN_ROUTE = "/api/dsh-open-in-app/open";'),
                         ((T 2) + '/** Catalog ids whose launch is a file manager, not an editor or terminal. */'),
@@ -165,11 +167,15 @@ $vendored = @(
                     ) -join "`n")
             },
             [pscustomobject]@{
+                # The 0.2.0 controller hands the route to its fetcher AS A STRING
+                # (the default fetcher is plain `fetch`, which resolves it against
+                # the page origin), so the pack's absolute route rides the same
+                # call - no `new URL(..., hostBase())` wrapper any more.
                 Label   = 'send the file managers through the pack launcher, everything else unchanged'
-                Find    = (T 4) + 'const response = await this.fetcher(new URL(OPEN_IN_APP_OPEN_ROUTE, hostBase()), {'
+                Find    = (T 5) + 'const response = await this.fetcher(OPEN_IN_APP_OPEN_ROUTE, {'
                 Replace = (@(
-                        ((T 4) + 'const route = NATIVE_FILE_MANAGER_APPS.has(appId) ? NATIVE_OPEN_ROUTE : OPEN_IN_APP_OPEN_ROUTE;'),
-                        ((T 4) + 'const response = await this.fetcher(new URL(route, hostBase()), {')
+                        ((T 5) + 'const route = NATIVE_FILE_MANAGER_APPS.has(appId) ? NATIVE_OPEN_ROUTE : OPEN_IN_APP_OPEN_ROUTE;'),
+                        ((T 5) + 'const response = await this.fetcher(route, {')
                     ) -join "`n")
             }
         )

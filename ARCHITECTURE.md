@@ -2,7 +2,7 @@
 
 This document explains how the repo, the installer, and the Editor plugin
 actually work against the DeepSeek Harness line they target
-(`@deepseek-ai/dsh@0.1.5-rc.1`). Start with `AGENTS.md` for the short version.
+(`@deepseek-ai/dsh@0.2.0-rc.2`). Start with `AGENTS.md` for the short version.
 
 ## 1. The install target
 
@@ -88,8 +88,8 @@ packages/dsh-themes/              # sub-plugin: the header's page-zoom, capture,
 packages/dsh-ui-state/            # sub-plugin: the state a reload would otherwise forget (see section 17)
   package.json        # dsh.bundle + dsh.client
   cordis.patch.yml    # inserts the 'ui-state' row (nothing else patched)
-  lib/index.js        # Node half: registers the `vncode` settings namespace, inlines the remembered page zoom
-  lib/client.js       # browser half: binds that namespace once, restores the two column widths, provides `uiState`
+  lib/index.js        # Node half: declares the row's `.volatile()` Config, inlines the remembered page zoom
+  lib/client.js       # browser half: binds that form once, restores the two column widths, provides `uiState`
 packages/dsh-open-in-app/         # the file-manager half of the Open In button
   package.json        # dsh.bundle + dsh.client (forks the shipped client bundle)
   cordis.patch.yml    # disables ui-open-in-app, inserts 'native-open-in-app'
@@ -644,7 +644,7 @@ themes | download next to Open In. Nothing shipped is patched or reordered.
 
 **Why a thin control and not a second theme system: the preference has one
 owner.** `@deepseek-ai/dsh-client-ui-theme` (row `ui-theme` in the web roster)
-persists the choice in the `ui-theme` settings namespace, resolves `system`
+persists the choice in the form the Host projects from its own `ui-theme` entry, resolves `system`
 through `prefers-color-scheme`, and publishes immutable snapshots; ui-layout's
 presenter applies each snapshot to the document
 (`body[data-ds-dark-theme]`, `color-scheme`, the `--dsw-*` overrides). A private
@@ -2105,7 +2105,7 @@ and only the first is shared:
 
 | Tier | Where | Survives a restart | Shared by a Chrome tab and the desktop window |
 |---|---|---|---|
-| Host files | `$DSH_HOME/sessions`, `storages/workspace.json`, `settings.yaml` | yes | **yes** - one file, one picture |
+| Host files | `$DSH_HOME/sessions`, `storages/workspace.json`, `profiles/web/cordis.patch.yml` | yes | **yes** - one file, one picture |
 | Browser storage | `localStorage` (page zoom, dock height) | same browser only | **never** - two browser profiles are two stores, even at the same port |
 | Nothing | the layout store, the open right-bar tab, the extension theme | no | no |
 
@@ -2115,18 +2115,22 @@ it *looks* like persistence, but it is per **origin** and per browser **profile*
 and the desktop shell prefers port 3080 and falls back to a free one, so even a
 single host can lose it by moving a port.
 
-**The answer is a settings namespace, not a new file format.** `dsh-ui-state`'s
-Node half registers ONE namespace - `vncode` - in the harness's own settings
-document, `$DSH_HOME/settings.yaml`, through `ctx.settings.register`. That seam
-already provides everything this needs and nothing it does not: one document both
-launchers read, atomic writes, schema validation, hot reload on a hand edit, and
-a user layer that stays empty until a value actually differs from the contract.
+**The answer is a form over the row's own entry, not a new file format.**
+`dsh-ui-state`'s Node half declares its own `Config` - the same fields, every one
+of them marked `.volatile()` - and since `@deepseek-ai/dsh` 0.2.0 the Host
+projects each volatile field into a settings **form** keyed by the row's own
+PROFILE ENTRY ID, `ui-state`, whose accepted writes are persisted into the
+profile's own Cordis patch document, `$DSH_HOME/profiles/web/cordis.patch.yml`,
+as that entry's `config:` block. That seam already provides everything this needs
+and nothing it does not: one document both launchers read, atomic writes, schema
+validation, hot reload on a hand edit, and a user layer that stays empty until a
+value actually differs from the contract.
 A plugin-owned **session event** was not an option (`dsh-session-persistence`
 refuses an unknown event type unless the envelope carries `ignorable: true`, which
 `Session.append()` cannot set - the conversation would become unreadable), and
 `ctx.storageDomain` needs a projection the browser cannot read.
 
-The namespace's fields and owners:
+The form's fields and owners:
 
 | Field | Default | Written by |
 |---|---|---|
@@ -2141,15 +2145,16 @@ is deliberately not `0`: for the sidebar `0` is a real state (collapsed), so a
 sentinel is the only way to say "leave the layout's contract default alone"
 without lying about a width nobody chose. And **`theme` holds an extension id
 only** - `light` / `dark` / `system` are already durable in ui-theme's own
-namespace, and a setting with two owners is a setting that can disagree.
+form, and a setting with two owners is a setting that can disagree.
 
-**One binder, and why.** `settingsScope` writes are fenced on the LATEST KNOWN
-namespace revision, and each bound scope owns its own queue. Three bundles
-binding `vncode` independently could therefore refuse each other's writes,
+**One binder, and why.** `configForms` writes are fenced on the LATEST KNOWN
+entry revision, and each form owns its own queue. Three bundles binding the
+`ui-state` form independently could therefore refuse each other's writes,
 and the contract's recovery for a stale revision is a reload of host state -
-which would silently drop the write. So the browser half binds the namespace
-once and publishes the **`uiState`** client service (`get` / `set` / `unset` /
-`subscribe` / `snapshot` / `status`) that the other two packages reach lazily.
+which would silently drop the write. So the browser half binds the form once
+(`ctx.configForms.get('ui-state')`) and publishes the **`uiState`** client
+service (`get` / `set` / `unset` / `subscribe` / `snapshot` / `status`) that the
+other two packages reach lazily.
 `unset` exists because clearing is not the same as overwriting: picking a built-in
 theme after Nord must REMOVE the field so it reads as inherited again, not write
 the default into the user's document.
@@ -2157,15 +2162,15 @@ the default into the user's document.
 **An extension theme is a desired state, not a one-shot choice.** This is the
 part that had a real bug in the field, and it is worth recording because the
 mechanism is not obvious. ui-theme's `ThemeRuntime.adopt()` assigns its
-`preference` from its DURABLE section whenever its settings scope notifies, and
-that scope notifies whenever the settings DOCUMENT changes - which any write to
-any namespace causes, this pack's own zoom and dock writes included. An extension
+`preference` from its DURABLE section whenever its durable form notifies, and
+that form notifies whenever the settings DOCUMENT changes - which any write to
+any entry's config causes, this pack's own zoom and dock writes included. An extension
 theme is never written to that durable section (ui-theme's schema accepts
 `light` / `dark` / `system` only), so choosing Nord applied it and the next
 settings write snapped the app back to the durable built-in. That predates the
 persistence: ANY Settings change reverted an extension theme.
 So the control keeps a `desiredTheme` and `reconcileTheme` puts it back on every
-`theme/change`, with ui-theme's own namespace **revision** as the tie-break
+`theme/change`, with ui-theme's own form **revision** as the tie-break
 between the two things that look identical from the outside - a re-adopt
 (revision unmoved: nobody chose anything, so re-apply) and a deliberate built-in
 chosen in the shipped **Settings > Appearance** row (revision moved: that
@@ -2204,16 +2209,19 @@ is restored at all - there the rail is the layout's decision, not a preference.
 dependencies and every other Node half imports only `node:*` builtins: the profile
 installs each bundle as a live link into the repo, so a bare
 `import '@deepseek-ai/schemastery'` resolves from the repo folder and fails with
-`ERR_MODULE_NOT_FOUND` (measured). `settings.register` wants a schemastery schema,
-so the module is loaded at runtime instead through the anchors
+`ERR_MODULE_NOT_FOUND` (measured). Declaring a `.volatile()` field needs a
+schemastery schema, so the module is loaded at runtime instead through the anchors
 `packages/dsh-terminal/lib/pty.js` established for the harness's own `node-pty`:
 the running entry, then `$DSH_HOME/profiles`, which `dsh-app-boot` keeps as a
 mirror of the installation's dependency closure, so Node's ordinary parent walk
 finds the very same copy the harness loaded. The CJS build is what makes
 `createRequire` work (`schemastery` is `type: module` but publishes
-`exports.require`), and duck typing is what makes it safe: `dsh-settings` treats
-the schema as a function and reads `schema.toJSON()`, so it never compares class
-identity across the two module graphs. With no reachable copy the row WARNS and
+`exports.require`), and duck typing is what makes it safe: the form projection
+treats the schema as a value and reads `schema.toJSON()`, so it never compares
+class identity across the two module graphs. Every resolved copy is also probed
+for `.volatile()` itself, because the 3.18.2 build an older line installed has no
+such method: a stale `$DSH_HOME/profiles/node_modules` mirror is passed over
+instead of crashing the import. With no copy that answers, the row WARNS and
 degrades - nothing is remembered, and every consumer falls back to the local
 behaviour it had before - rather than failing the boot.
 
@@ -2222,7 +2230,7 @@ resolve `uiState` with `ctx.get` and never declare it in `inject`, and each keep
 writing its `localStorage` copy alongside the shared field. So a profile with one
 of those bundles and not this one behaves exactly as before, and the shared
 section always wins when both exist. Nothing is written at all until a value
-actually changes, which is why a fresh install grows no `vncode` section.
+actually changes, which is why a fresh install grows no `config` block.
 
 **The desktop window remembers its own geometry, separately.** The window's size
 and position must be known BEFORE the window is built, so they cannot come from a

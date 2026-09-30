@@ -19,8 +19,8 @@
  *    tooltip, which names the active theme - is where the choice is.
  *
  *    The preference itself is NOT owned here. `@deepseek-ai/dsh-client-ui-theme`
- *    owns it (`theme` client service): it persists the choice in the `ui-theme`
- *    settings namespace, resolves `system` through `prefers-color-scheme`, and
+ *    owns it (`theme` client service): it persists the choice in the form the Host
+ *    projects from its own profile entry, resolves `system` through `prefers-color-scheme`, and
  *    ui-layout applies each snapshot to the document (`body[data-ds-dark-theme]`,
  *    the `--dsw-*` tokens). This bundle only reads the published snapshot and
  *    calls `setTheme(id)`, so the header control and the Settings row are the same
@@ -153,16 +153,17 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.19'
+    const PLUGIN_VERSION = '0.1.0-alpha.20'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
-     * The settings namespace ui-theme OWNS, read-only here and for one purpose:
-     * its revision tells a deliberate built-in choice apart from ui-theme
-     * re-adopting its durable value (see `reconcileTheme`).
+     * The profile entry ui-theme OWNS - and so the settings form its durable
+     * fields live in - read-only here and for one purpose: its revision tells a
+     * deliberate built-in choice apart from ui-theme re-adopting its durable
+     * value (see `reconcileTheme`).
      */
     const THEME_SERVICE_NAMESPACE = 'ui-theme'
-    /** A read-only binding to that namespace, resolved lazily by `apply`. */
+    /** A read-only binding to that entry's form, resolved lazily by `apply`. */
     let durableScope = null
     /** The Session header's utilities slot (the group the Open In control sits in). */
     const HEADER_SLOT = 'conversation.session.header.utilities'
@@ -2300,7 +2301,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     // in-process choice a reload threw away.
     //
     // Both now go through the pack's `uiState` service (dsh-ui-state), which is
-    // one section of `$DSH_HOME/settings.yaml` that BOTH hosts read. localStorage
+    // the `ui-state` entry's own volatile config in the profile's Cordis patch
+    // document - one document BOTH hosts read. localStorage
     // stays as the fallback, so this control still remembers its level in a
     // profile that installed this bundle without that one, and the service is
     // resolved lazily and never declared in `inject` for exactly that reason.
@@ -2316,8 +2318,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
      * (alpha.18), and it is worth stating plainly, because the mechanism is not
      * obvious and it was NOT caused by the persistence: ui-theme's
      * `ThemeRuntime.adopt()` assigns its `preference` from its DURABLE section
-     * every time its settings scope notifies, and its scope notifies whenever
-     * the settings DOCUMENT changes - which any write to any namespace causes,
+     * every time its durable form notifies, and that form notifies whenever
+     * the settings DOCUMENT changes - which any write to any entry's config causes,
      * including this pack's own zoom and dock writes. An extension theme is
      * never written to that durable section (the schema does not accept it), so
      * choosing Nord applied it and the very next settings write snapped the app
@@ -2365,24 +2367,30 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     }
 
     /**
-     * A READ-ONLY binding to ui-theme's own durable section, used for ONE thing:
+     * A READ-ONLY binding to ui-theme's own durable form, used for ONE thing:
      * telling a deliberate built-in choice apart from ui-theme re-adopting its
      * durable value. Resolved lazily and never declared in `inject`; a profile
      * without the settings transport simply gets no tie-break.
+     *
+     * The medium is the row's own ENTRY FORM (`ctx.configForms.get('ui-theme')`),
+     * which is what `@deepseek-ai/dsh` 0.2.0 replaced the `settingsScope`
+     * namespace binder with: a plugin's durable preference now lives in the form
+     * the Host projects from its `.volatile()` Config, and the snapshot carries
+     * the same `revision` this tie-break reads.
      * @param ctx - the owning client context.
-     * @returns the bound scope, or `null`.
+     * @returns the bound form scope, or `null`.
      */
     function bindDurableThemeScope(ctx) {
       try {
-        const binder = ctx && typeof ctx.get === 'function' ? ctx.get('settingsScope') : undefined
-        if (!binder || typeof binder.bind !== 'function') return null
-        return binder.bind({ namespace: THEME_SERVICE_NAMESPACE })
+        const forms = ctx && typeof ctx.get === 'function' ? ctx.get('configForms') : undefined
+        if (!forms || typeof forms.get !== 'function') return null
+        return forms.get(THEME_SERVICE_NAMESPACE)
       } catch (err) {
         return null
       }
     }
 
-    /** @returns {number|undefined} ui-theme's durable namespace revision. */
+    /** @returns {number|undefined} ui-theme's durable form revision. */
     function durableRevision() {
       if (durableScope === null) return undefined
       try {

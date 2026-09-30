@@ -1,7 +1,7 @@
 /**
  * dsh-ui-state - browser half.
  *
- * One settings namespace, bound once, and published as the client service the
+ * One settings form, bound once, and published as the client service the
  * rest of the pack writes its own fields through:
  *
  *     const uiState = ctx.get('uiState')
@@ -9,14 +9,24 @@
  *     uiState.get('pageZoom')             // -> 125
  *     uiState.subscribe(rerender)         // fires when an accepted section arrives
  *
- * WHY A SERVICE AND NOT THREE BINDINGS. `settingsScope` writes are framed by the
- * LATEST KNOWN namespace revision, and each bound scope is its own queue: three
- * bundles binding `vncode` independently could refuse each other's writes
+ * WHY A SERVICE AND NOT THREE BINDINGS. A config form's writes are framed by the
+ * LATEST KNOWN revision, and each form is its own queue: three bundles binding
+ * the `ui-state` entry independently could refuse each other's writes
  * when one commits while another still holds the old revision (the contract's
- * recovery is a reload, which would silently drop the write). ONE scope, one
- * queue, one revision per namespace - so this half is the only binder, and
+ * recovery is a reload, which would silently drop the write). ONE form, one
+ * queue, one revision - so this half is the only binder, and
  * dsh-themes and dsh-terminal reach it lazily, living without it when it is
  * absent (a profile that installed one bundle and not the other still works).
+ *
+ * THE FORM IS THE HOST ROW'S OWN ENTRY. Since `@deepseek-ai/dsh` 0.2.0 the
+ * settings subsystem projects each active profile entry's `.volatile()` Config
+ * fields into a form keyed by the ENTRY ID, so `ctx.configForms.get('ui-state')`
+ * is what `settings.register('vncode', schema)` plus
+ * `ctx.get('settingsScope').bind({ namespace: 'vncode' })` used to be - the same
+ * one-document, revisioned, host-validated medium, addressed by the row instead
+ * of by a namespace a plugin invented. The id below and the row id in this
+ * package's `cordis.patch.yml` and the harness' own `Config` marker in
+ * `lib/index.js` are ONE contract three files share.
  *
  * WHAT THIS HALF OWNS ITSELF is the two COLUMN WIDTHS, because nothing else
  * does. ui-layout keeps them in a transient store - "transient layout
@@ -45,11 +55,17 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' })
 
     /** Version marker, mirrored by the package manifest. */
-    const PLUGIN_VERSION = '0.1.0-alpha.1'
+    const PLUGIN_VERSION = '0.1.0-alpha.2'
     /** The client service name other halves of the pack resolve. */
     const SERVICE = 'uiState'
-    /** The settings namespace, owned host-side by this package. Keep in sync. */
-    const NAMESPACE = 'vncode'
+    /**
+     * The profile entry this row is inserted under - and therefore the settings
+     * form the pack's state lives in. Keep in sync with the row id in
+     * `cordis.patch.yml` and with the Node half's `ENTRY_ID`: a mismatch binds
+     * an entry the Host does not serve, whose form reads as `unavailable`, and
+     * the pack silently remembers nothing.
+     */
+    const ENTRY_ID = 'ui-state'
 
     /**
      * The "nothing remembered yet" state, which must stay in step with the host
@@ -81,9 +97,9 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
-    // The namespace scope
+    // The entry's form scope
     // ---------------------------------------------------------------------
-    /** The bound scope, or null when the transport is absent on this host. */
+    /** The bound form scope, or null when the transport is absent on this host. */
     let scope = null
     /** Field writes made before the first accepted section, replayed in order. */
     const pending = new Map()
@@ -107,7 +123,7 @@ window.__ModuleLoader__.load({
     /**
      * Read one remembered field, falling back to the contract default for
      * anything the section does not carry.
-     * @param name - a field of the namespace.
+     * @param name - a field of the form.
      * @returns the remembered value, or the default.
      */
     function get(name) {
@@ -124,7 +140,7 @@ window.__ModuleLoader__.load({
      * is replayed when the first section arrives) and safe to call when there is
      * no transport at all (it resolves without writing, which is what the
      * consumers' localStorage fallbacks are for).
-     * @param name - a field of the namespace.
+     * @param name - a field of the form.
      * @param value - a JSON-shaped value.
      * @returns {Promise<void>} settlement of the queued write.
      */
@@ -144,9 +160,9 @@ window.__ModuleLoader__.load({
      *
      * This is the counterpart of picking a built-in theme after an extension
      * one: the field is REMOVED rather than overwritten with the default, which
-     * keeps the user's own document free of stale ids and lets the namespace
+     * keeps the user's own document free of stale ids and lets the form
      * fall back to the schema. It shares {@link set}'s readiness rules.
-     * @param name - a field of the namespace.
+     * @param name - a field of the form.
      * @returns {Promise<void>} settlement of the queued clear.
      */
     function unset(name) {
@@ -353,22 +369,22 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     /**
      * Required services: `slots` for the layout store and the root registration
-     * signal, `settingsScope` for the namespace, and `remote` because it carries
-     * the forwarded settings invalidation that `bind()` subscribes to on this
-     * context (the same three ui-theme declares for the same reason).
+     * signal, `configForms` for the row's own settings form, and `remote` because
+     * it carries the forwarded settings invalidation that the form subscribes to
+     * on this context (the same three ui-theme declares for the same reason).
      */
-    const inject = ['slots', 'remote', 'settingsScope']
+    const inject = ['slots', 'remote', 'configForms']
 
     /**
-     * Activate the plugin: bind the namespace, provide `uiState`, and put the
+     * Activate the plugin: bind the row's form, provide `uiState`, and put the
      * remembered column widths back.
      * @param ctx - client context.
      */
     function apply(ctx) {
       try {
-        const binder = service(ctx, 'settingsScope')
-        if (binder && typeof binder.bind === 'function') {
-          scope = binder.bind({ namespace: NAMESPACE })
+        const forms = service(ctx, 'configForms')
+        if (forms && typeof forms.get === 'function') {
+          scope = forms.get(ENTRY_ID)
         } else {
           console.warn('[dsh-ui-state] the settings transport is absent - the pack remembers nothing on this host')
         }
@@ -441,7 +457,7 @@ window.__ModuleLoader__.load({
             restored = false
             written = null
           },
-          'dsh-ui-state: namespace scope and remembered widths',
+          'dsh-ui-state: settings form and remembered widths',
         )
 
         ctx.logger?.debug?.('[dsh-ui-state] service provided (' + SERVICE + ', ' + PLUGIN_VERSION + ')')
@@ -457,7 +473,7 @@ window.__ModuleLoader__.load({
     /** The pure half: the tracked check drives these without a live layout. */
     exports.__internals = {
       DEFAULTS,
-      NAMESPACE,
+      ENTRY_ID,
       SERVICE,
       layoutInstance,
       restoreWidths,

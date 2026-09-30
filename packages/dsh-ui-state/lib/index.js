@@ -5,51 +5,65 @@
  * survives a restart today does so because it already lives on the HOST:
  * `$DSH_HOME/sessions` holds the conversations (which is why a new chat opens
  * the last one), `$DSH_HOME/storages/workspace.json` holds the workspaces, and
- * `$DSH_HOME/settings.yaml` holds the shipped preferences (the light/dark/system
- * theme, the content font size, the model and its reasoning effort). Everything
- * the interface forgets lives in the BROWSER instead - and there it is per
- * ORIGIN and per browser PROFILE, so a Chrome tab and the desktop window's
- * WebView2 have never been able to share it, and the desktop shell picks port
- * 3080 only when it is free, so even one host can lose it by moving a port.
+ * the profile's own patch document holds the shipped preferences (the
+ * light/dark/system theme, the content font size, the model and its reasoning
+ * effort). Everything the interface forgets lives in the BROWSER instead - and
+ * there it is per ORIGIN and per browser PROFILE, so a Chrome tab and the
+ * desktop window's WebView2 have never been able to share it, and the desktop
+ * shell picks port 3080 only when it is free, so even one host can lose it by
+ * moving a port.
  *
- * This row makes the pack's own UI state HOST state, in one settings section:
+ * This row makes the pack's own UI state HOST state, through the harness's own
+ * preference medium. Since `@deepseek-ai/dsh` 0.2.0 the settings subsystem is a
+ * form over the ACTIVE PROFILE'S ENTRIES: a plugin declares the fields it wants
+ * kept by marking them `.volatile()` in its exported `Config`, the Host projects
+ * that schema into a form keyed by the entry's own id, and an accepted write is
+ * persisted into the profile's Cordis patch (`$DSH_HOME/profiles/web/
+ * cordis.patch.yml`) as that entry's `config`:
  *
- *   $DSH_HOME/settings.yaml
- *     vncode:
+ *   - id: ui-state
+ *     config:
  *       pageZoom: 125
  *       theme: nord
  *       dockHeight: 340
  *       sidebarWidth: 300
  *
- * A settings namespace is the right medium for exactly the reasons the shipped
- * preferences use one: it is one document both the web profile and the desktop
- * shell read, it is user-editable by hand, its writes are atomic and validated
- * against a schema, and an external edit hot-reloads. It is NOT session state -
- * `dsh-session-persistence` rejects an unknown event type, so a plugin-owned
- * session event would make the conversation unreadable, and `ctx.storageDomain`
- * needs a projection the browser cannot read. A namespace is the documented
- * third-party seam for a preference, which is what all of this is.
+ * The predecessor of that mechanism was a settings NAMESPACE a plugin registered
+ * with a schemastery schema (`settings.register('vncode', schema)`, read back
+ * through `settings.get('vncode')` and bound in the browser with
+ * `ctx.get('settingsScope').bind({ namespace })`). 0.2.0 removed both halves -
+ * `dsh-settings` publishes no `register`, the client tree publishes no
+ * `settingsScope` service, and a `$DSH_HOME/settings.yaml` left by an earlier
+ * release is imported ONCE into the entries of the same id and renamed to
+ * `settings.yaml.imported` (a section whose id names no active entry, like the
+ * old `vncode`, is logged and stays only in the renamed file). A form over this
+ * row's own entry is the documented replacement, so the field NAMES and their
+ * defaults are unchanged and only their address moved: the browser half now
+ * binds `ctx.configForms.get('ui-state')`.
  *
  * WHY SCHEMASTERY IS RESOLVED AND NOT IMPORTED. This pack ships zero npm
  * dependencies and every other Node half imports only `node:*` builtins: the
  * web profile installs each bundle as a LIVE LINK into the repo, so a bare
  * `import '@deepseek-ai/schemastery'` resolves from the repo folder and fails
- * with ERR_MODULE_NOT_FOUND (measured). `settings.register` wants a schemastery
- * schema, so the module is loaded at runtime instead through the anchors
- * `packages/dsh-terminal/lib/pty.js` established for the harness's own node-pty:
- * the running entry, then `$DSH_HOME/profiles` - which `dsh-app-boot` keeps as a
- * mirror of the installation's dependency closure, so Node's ordinary parent
- * walk finds the very same copy the harness itself loaded. The CJS build is what
- * makes `createRequire` work here (schemastery is `type: module` but publishes
- * `exports.require`), and duck typing is what makes it safe: `dsh-settings`
- * treats the schema as a function and reads `schema.toJSON()`, so it never
- * compares class identity across the two module graphs.
+ * with ERR_MODULE_NOT_FOUND (measured). The module is therefore loaded at
+ * runtime through the anchors `packages/dsh-terminal/lib/pty.js` established for
+ * the harness's own node-pty: the running entry, then `$DSH_HOME/profiles` -
+ * which `dsh-app-boot` keeps as a mirror of the installation's dependency
+ * closure, so Node's ordinary parent walk finds the very same copy the harness
+ * itself loaded. The CJS build is what makes `createRequire` work here
+ * (schemastery is `type: module` but publishes `exports.require`), and duck
+ * typing is what makes it safe: the form projection treats the schema as a
+ * value and reads `schema.toJSON()`, so it never compares class identity across
+ * the two module graphs. A host with no reachable copy declares no `Config` and
+ * therefore remembers nothing, which is exactly what the browser half falls back
+ * to - the row still loads.
  *
  * The second job is the page zoom. A zoom that arrives after the client boots is
  * a visible reflow of the whole shell, so - exactly like ui-theme's own theme
  * bootstrap - the remembered level is inlined into the page as a script row
- * before the shell mounts. That is what keeps "the zoom I left it at" from
- * costing a jump on every launch.
+ * before the shell mounts, read from the LIVE form value on every index render
+ * so it tracks a settings write without a restart. That is what keeps "the zoom
+ * I left it at" from costing a jump on every launch.
  */
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -59,23 +73,24 @@ import path from 'node:path'
 export const name = 'dsh-ui-state'
 
 /**
- * The settings namespace this package owns, and the section name a person sees
- * in `$DSH_HOME/settings.yaml`. Keep in sync with the client's constant.
+ * The profile entry id this row is inserted under (see `cordis.patch.yml`), and
+ * with it the name of the settings form the browser half binds. Keep in sync
+ * with the client's `ENTRY_ID` and with the row id in the bundle layer: the
+ * projection is keyed by the ENTRY's id, so a mismatch is a form that reads as
+ * "unavailable" and a pack that remembers nothing.
  */
-const NAMESPACE = 'vncode'
+const ENTRY_ID = 'ui-state'
 
 /**
- * The namespace's schema. Every field carries a default, so the resolved
- * section is a complete object even before anyone has written a thing, while the
- * USER layer in the document stays empty until a value actually differs - a
- * fresh install writes no `vncode` section at all.
- *
- * The defaults ARE the "nothing remembered yet" state, and they must stay in
- * step with the client's `DEFAULTS`:
+ * The namespace's field defaults, and the "nothing remembered yet" state. They
+ * must stay in step with the client's `DEFAULTS`, because the form resolves
+ * every field to its schema default and the browser half reads the resolved
+ * section:
  *
  *   - `theme: ''` - no extension theme is remembered. Light/dark/system are NOT
- *     stored here: ui-theme already persists those durably, and duplicating the
- *     preference would give one setting two owners that could disagree.
+ *     stored here: ui-theme already persists those durably in its own form, and
+ *     duplicating the preference would give one setting two owners that could
+ *     disagree.
  *   - `pageZoom: 100` - the resting level, at which no declaration is written.
  *   - `dockHeight: 280` - dsh-terminal's own contract height.
  *   - `sidebarWidth` / `rightbarWidth: -1` - NEGATIVE means "this host has never
@@ -134,10 +149,32 @@ function schemasteryAnchors() {
 }
 
 /**
+ * Whether a resolved copy of schemastery can declare what this row needs. The
+ * pinned line ships schemastery 3.18.4, whose `.volatile()` is what puts a field
+ * into the form the browser half binds; the 3.18.2 build an earlier line
+ * installed has no such method, and a stale `$DSH_HOME/profiles/node_modules`
+ * mirror is exactly what the parent walk finds when the running entry is not the
+ * harness's own (measured: that mirror held 0.1.5-rc.1's schemastery on the
+ * machine this was written on, while the running line's own copy sat in the npx
+ * cache beside it). A copy that cannot declare a volatile field is not a copy
+ * this row can use, so it is passed over instead of crashing the module at
+ * import time - which is what `z.string().default('').volatile()` would do.
+ * @param z - a candidate schema builder.
+ * @returns {boolean} whether it carries `.volatile()`.
+ */
+function canDeclareVolatileFields(z) {
+  try {
+    return typeof z.string().default('').volatile === 'function'
+  } catch (err) {
+    return false
+  }
+}
+
+/**
  * Load the harness's own schemastery through the anchors above.
  * @returns {object|null} the schema builder (`z`), or `null` when this host has
- *   no reachable copy - in which case the row degrades to "nothing is
- *   remembered" instead of failing the boot.
+ *   no reachable copy - in which case the row declares no form at all and
+ *   degrades to "nothing is remembered" instead of failing the boot.
  */
 function loadSchemastery() {
   const seen = new Set()
@@ -147,7 +184,7 @@ function loadSchemastery() {
     try {
       const loaded = createRequire(anchor)('@deepseek-ai/schemastery')
       const z = loaded && typeof loaded.object === 'function' ? loaded : loaded && loaded.default
-      if (z && typeof z.object === 'function') return z
+      if (z && typeof z.object === 'function' && canDeclareVolatileFields(z)) return z
     } catch (err) {
       /* try the next anchor */
     }
@@ -155,35 +192,43 @@ function loadSchemastery() {
   return null
 }
 
-/**
- * Build the namespace schema from the resolved builder.
- * @param z - the schemastery module.
- * @returns the schema registered for {@link NAMESPACE}.
- */
-function buildSchema(z) {
-  return z.object({
-    theme: z.string().default(FIELD_DEFAULTS.theme),
-    pageZoom: z.number().step(1).min(ZOOM_MIN).max(ZOOM_MAX).default(FIELD_DEFAULTS.pageZoom),
-    dockHeight: z.number().step(1).min(120).max(4000).default(FIELD_DEFAULTS.dockHeight),
-    sidebarWidth: z.number().step(1).min(-1).max(4096).default(FIELD_DEFAULTS.sidebarWidth),
-    rightbarWidth: z.number().step(1).min(-1).max(4096).default(FIELD_DEFAULTS.rightbarWidth),
-  })
-}
+const z = loadSchemastery()
 
 /**
- * The page-zoom level as the HOST currently resolves it, for the boot row. A
- * missing settings service or an unreadable section simply means the resting
- * level, exactly like ui-theme's own `readSection`.
- * @param ctx - host context that may hold the settings service.
+ * The row's Config: the pack's own remembered fields, every one of them
+ * `.volatile()`. Volatility is what puts a field into the Host's form
+ * projection - a plain field stays ordinary configuration, is not editable
+ * through a form, and would never be written back to the profile patch - so
+ * this is the one thing that has to be right for the state to persist at all.
+ *
+ * The whole schema is `undefined` when schemastery is unreachable: a row with no
+ * Config is a row with no form, which is the honest degradation this pack
+ * already had for a host without the settings transport.
+ */
+export const Config =
+  z === null
+    ? undefined
+    : z.object({
+        theme: z.string().default(FIELD_DEFAULTS.theme).volatile(),
+        pageZoom: z.number().step(1).min(ZOOM_MIN).max(ZOOM_MAX).default(FIELD_DEFAULTS.pageZoom).volatile(),
+        dockHeight: z.number().step(1).min(120).max(4000).default(FIELD_DEFAULTS.dockHeight).volatile(),
+        sidebarWidth: z.number().step(1).min(-1).max(4096).default(FIELD_DEFAULTS.sidebarWidth).volatile(),
+        rightbarWidth: z.number().step(1).min(-1).max(4096).default(FIELD_DEFAULTS.rightbarWidth).volatile(),
+      })
+
+/**
+ * The page-zoom level as the HOST currently resolves it, for the boot row. The
+ * live form value already carries the schema default, so an unreadable or absent
+ * config simply means the resting level, exactly like ui-theme's own
+ * `config.preference.get()`.
+ * @param config - the validated live Config (a value accessor per field).
  * @returns {number} the level to inline.
  */
-function readZoom(ctx) {
+function readZoom(config) {
   try {
-    const settings = typeof ctx.get === 'function' ? ctx.get('settings') : undefined
-    if (!settings || typeof settings.get !== 'function') return FIELD_DEFAULTS.pageZoom
-    const section = settings.get(NAMESPACE)
-    const value = section && typeof section.pageZoom === 'number' ? section.pageZoom : FIELD_DEFAULTS.pageZoom
-    if (!Number.isFinite(value)) return FIELD_DEFAULTS.pageZoom
+    const live = config ? config.pageZoom : undefined
+    const raw = live && typeof live.get === 'function' ? live.get() : undefined
+    const value = typeof raw === 'number' && Number.isFinite(raw) ? raw : FIELD_DEFAULTS.pageZoom
     return Math.min(Math.max(Math.round(value), ZOOM_MIN), ZOOM_MAX)
   } catch (err) {
     return FIELD_DEFAULTS.pageZoom
@@ -218,35 +263,49 @@ function bootZoomScript(level) {
 }
 
 /**
- * Activate the plugin row: register the namespace, and answer every index
+ * Activate the plugin row: own the row's form policy, and answer every index
  * injection collection with the remembered page zoom.
  *
- * The registration is wrapped in `ctx.inject(['settings'], ...)` rather than
+ * The policy is registered inside `ctx.inject(['settings'], ...)` rather than
  * declared in the row's own `inject` array so a composition without a settings
- * provider still loads this row - it simply remembers nothing, which is exactly
- * what the client half falls back to.
+ * provider still loads this row - the fields are ordinary Config either way, and
+ * only the OPT-OUT below needs the service.
+ *
+ * `auto: false` says this row ships no settings page of its own, so the Host
+ * must not generate one from the schema: these fields are the interface's own
+ * memory (a zoom, two widths, a dock height), not preferences a person is meant
+ * to browse, and the values stay hand-editable in the profile patch exactly as
+ * the old `settings.yaml` section was. No shipped client builds pages from
+ * `autoGenerate` yet, so this is a statement about intent rather than a visible
+ * change - which is precisely why it belongs here, before one does.
  *
  * @param ctx - cordis context.
+ * @param config - the validated live Config, when this host could declare one.
  */
-export function apply(ctx) {
-  const z = loadSchemastery()
-  if (z === null) {
+export function apply(ctx, config) {
+  if (Config === undefined) {
     ctx.logger?.warn?.(
-      '[dsh-ui-state] no reachable @deepseek-ai/schemastery under $DSH_HOME/profiles; the vncode settings namespace is not registered and the pack remembers nothing',
+      '[dsh-ui-state] no reachable @deepseek-ai/schemastery that carries `.volatile()` (the pinned line ships ' +
+        '3.18.4; a stale $DSH_HOME/profiles/node_modules mirror can hold an older build); the ' +
+        ENTRY_ID +
+        ' settings form is not declared and the pack remembers nothing',
     )
-  } else {
-    const schema = buildSchema(z)
-    ctx.inject(['settings'], (settingsCtx) => {
-      settingsCtx.settings.register(NAMESPACE, schema)
-      ctx.logger?.debug?.('[dsh-ui-state] settings namespace registered (' + NAMESPACE + ')')
-    })
   }
+
+  ctx.inject(['settings'], (child) => {
+    const settings = child ? child.settings : undefined
+    if (!settings || typeof settings.configure !== 'function') return
+    child.effect(() => settings.configure({ auto: false }, ctx.fiber))
+  })
 
   // The zoom bootstrap: one inline script immediately after the opening body
   // tag, before the shell mount, so the level is in force for the first paint.
   ctx.on('webserver/index-inject', (table) => {
-    const level = readZoom(ctx)
+    const level = readZoom(config)
     if (level === FIELD_DEFAULTS.pageZoom) return
     table.push({ kind: 'script', placement: 'body', text: bootZoomScript(level) })
   })
 }
+
+/** The entry id the browser half binds; exported so a check can pin the pair. */
+export { ENTRY_ID, FIELD_DEFAULTS, ZOOM_MIN, ZOOM_MAX }

@@ -182,14 +182,21 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
     command still sent);
   - **themes** - the screenshot route's type/signature/size refusals and the
     create-exclusive write onto a redirected Desktop;
-  - **ui-state** - the pack's settings namespace with no route to capture: the
-    row is driven against a stub so the check can assert what `apply` registered
-    (the `vncode` namespace, asked for through the OPTIONAL settings service)
-    and that the schema really resolves the defaults the browser half mirrors -
-    drift between those two is what would make a fresh install read a field
-    nobody set - plus the ladder and height refusals and the pre-paint zoom row
-    (silent at the resting level, carrying level and seam marker otherwise, and
-    silent when no settings service is composed);
+  - **ui-state** - the pack's settings form with no route to capture: the row is
+    driven against a stub so the check can assert what `apply` declared (the
+    `ui-state` entry's own `.volatile()` Config - EVERY field volatile, since a
+    plain field is ordinary configuration and never reaches a form - the
+    `configure({ auto: false })` page opt-out, asked for through the OPTIONAL
+    settings service) and that the schema really resolves the defaults the
+    browser half mirrors - drift between those two is what would make a fresh
+    install read a field nobody set - plus the ladder and height refusals and the
+    pre-paint zoom row (silent at the resting level, carrying level and seam
+    marker otherwise, and silent when the row got no Config at all). The row is
+    imported through the RUNNING ENTRY of the pinned harness line, because the
+    schemastery that can declare a volatile field is the pinned line's own copy
+    and a stale `$DSH_HOME/profiles` mirror holds an older one; a host with no
+    install of the pin skips the section loudly instead of grading a form the row
+    could not declare;
   - **diagrams** - the route table, the vendored-engine hash, a real Mermaid
     parse, a real TikZ compile when the host has an engine, the lint warnings,
     the empty-source refusals, `diagram_verify` leaving the revision alone, the

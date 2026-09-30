@@ -7,8 +7,8 @@ The pack targets the harness line DeepSeek ships to the raw web install
 
 | | |
 |---|---|
-| `@deepseek-ai/dsh` | `0.1.5-rc.1` |
-| Forked from | the same `0.1.5-rc.1` line (`.dsh-version.json`'s `vendoredFrom`) |
+| `@deepseek-ai/dsh` | `0.2.0-rc.2` |
+| Forked from | the same `0.2.0-rc.2` line (`.dsh-version.json`'s `vendoredFrom`) |
 | Install target | the web profile only (`$DSH_HOME/profiles/web`) |
 | Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell + Node.js and npm/npx - no PowerShell); the plugins themselves are plain JS and the only OS-specific code is a launcher choosing the host command: the file-browser launcher (`explorer.exe` / `open` / `xdg-open`), the terminal's shell resolver (`pwsh.exe` or `powershell.exe` / `$SHELL` or `/bin/zsh` / `$SHELL` or `/bin/bash`) and the run launchers' browser hand-off (Chrome, else the platform default) |
 | Master | **`dsh-vn-master`**, deliberately blank - the bundle layer plus one no-op `master` row; no client half, no service, no inject edge and no core-row disables |
@@ -198,13 +198,16 @@ the details.
   icon** (`assets/vncode.svg`, a 24px black disc with a 1px transparent
   margin) and the text **vncode**, in the wide row and in the collapsed rail.
 - **dsh-ui-state** keeps the UI state that a reload used to forget, **on the
-  host**, so the web profile and the desktop window share one picture: one
-  settings namespace (`vncode` in `$DSH_HOME/settings.yaml`) holding the page
-  zoom, an extension theme, the dock height and the two column widths. It
-  registers the namespace through the harness's own settings service and inlines
-  the remembered zoom into the page **before the shell mounts**, so a level never
-  costs a reflow; its browser half binds that namespace once and publishes the
-  `uiState` service the pack's other halves write through. `localStorage` is kept
+  host**, so the web profile and the desktop window share one picture: the row's
+  own `.volatile()` Config - the page zoom, an extension theme, the dock height
+  and the two column widths - which the Host projects into a settings form keyed
+  by the profile entry id `ui-state`, so an accepted write lands in the profile's
+  own Cordis patch document (`$DSH_HOME/profiles/web/cordis.patch.yml`) as that
+  entry's `config:`. It opts out of a generated settings page with
+  `settings.configure({ auto: false })` and inlines the remembered zoom into the
+  page **before the shell mounts**, so a level never costs a reflow; its browser
+  half binds `ctx.configForms.get('ui-state')` once and publishes the `uiState`
+  service the pack's other halves write through. `localStorage` is kept
   underneath as the fallback, so a profile that installed `dsh-themes` or
   `dsh-terminal` without this package behaves exactly as before.
   - **Why not `localStorage`**: it is per origin and per browser profile, so a
@@ -215,11 +218,12 @@ the details.
     (which `Session.append()` cannot set), so a plugin-owned event would make the
     conversation unreadable; a projection unit needs `zod` schemas, and this pack
     ships zero npm dependencies.
-  - It owns **no route** and adds no file format: the harness's settings document
+  - It owns **no route** and adds no file format: the profile's own patch document
     is already user-editable, atomic, schema-validated and hot-reloaded.
-    Schemastery (which `settings.register` wants) is resolved at runtime through
-    the same `$DSH_HOME/profiles` anchor `dsh-terminal` uses for `node-pty`, never
-    imported — a bare import resolves from the repo folder and fails there.
+    Schemastery (which declaring a `.volatile()` field needs) is resolved at
+    runtime through the same `$DSH_HOME/profiles` anchor `dsh-terminal` uses for
+    `node-pty`, never imported, and a resolved copy too old to carry `.volatile()`
+    is passed over — a bare import resolves from the repo folder and fails there.
   - It **does not** remember the terminal dock being open: see the notes under
     `dsh-terminal` and in the changelog below.
   - **New package**, so the first install after this change needs a plain
@@ -550,37 +554,41 @@ the details.
 - **ui-state alpha.1 (new package)**: the pack gained **`dsh-ui-state`** — the
   state a reload used to forget. The interface's own state was remembered in the
   wrong place: everything that survived lived on the HOST (`$DSH_HOME/sessions`,
-  `storages/workspace.json`, `settings.yaml`) while the page zoom and the dock
-  height sat in `localStorage`, which is per **origin** and per browser
-  **profile** — so a Chrome tab and the desktop window's WebView never shared it,
-  and the desktop shell lost it whenever port 3080 was taken. This package makes
-  that state host state: ONE settings namespace, `vncode`, in
-  `$DSH_HOME/settings.yaml`, holding `pageZoom`, `theme`, `dockHeight`,
-  `sidebarWidth` and `rightbarWidth`. Its Node half owns the namespace and
-  inlines the remembered zoom into the page before the shell mounts; its browser
-  half binds the namespace **once** (three independent bindings would fence each
-  other's writes on a stale revision, and the recovery for that drops the write),
-  restores the two COLUMN WIDTHS through ui-layout's own root-slot store handle
-  (its `ctx.layout` exposes no width setter), and publishes the **`uiState`**
-  client service the other two halves write through. Every field carries a schema
-  default, so a fresh install grows **no** `vncode` section at all. New
-  package, so the first install after this change needs a plain
+  `storages/workspace.json`, the profile's own patch document) while the page
+  zoom and the dock height sat in `localStorage`, which is per **origin** and per
+  browser **profile** — so a Chrome tab and the desktop window's WebView never
+  shared it, and the desktop shell lost it whenever port 3080 was taken. This
+  package makes that state host state: the row declares its own `.volatile()`
+  `Config` holding
+  `pageZoom`, `theme`, `dockHeight`, `sidebarWidth` and `rightbarWidth`, and the
+  Host projects those fields into a settings form keyed by the profile entry id
+  `ui-state`, whose accepted writes land in the profile's Cordis patch document
+  as that entry's `config:`. Its Node half declares that Config, opts out of a
+  generated settings page, and inlines the remembered zoom into the page before
+  the shell mounts; its browser half binds `ctx.configForms.get('ui-state')`
+  **once** (three independent bindings would fence each other's writes on a stale
+  revision, and the recovery for that drops the write), restores the two COLUMN
+  WIDTHS through ui-layout's own root-slot store handle (its `ctx.layout` exposes
+  no width setter), and publishes the **`uiState`** client service the other two
+  halves write through. Every field carries a schema default, so a fresh install
+  grows **no** `config:` block at all. New package, so the first install after
+  this change needs a plain
   `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 
 - **ui-state is shared by both hosts, and that is the point**: `localStorage`
   cannot do this job. Even at the same port, a Chrome tab and the desktop
   window's WebView2 are two different browser profiles with two different stores,
   and the desktop shell prefers 3080 and falls back to a free port, so one host
-  could lose its own state by moving a port. A settings section is one document
-  both launchers read. Anything a profile wants remembered across both should go
-  there, not into storage.
+  could lose its own state by moving a port. A settings form writes into one
+  document both launchers read. Anything a profile wants remembered across both
+  should go there, not into storage.
 
 - **themes alpha.18 - the extension themes were broken, and this fixes them**: in
   the field, clicking **Nord** or **Monokai** appeared to do nothing while Light
   and Dark worked. The cause was **not** the persistence. ui-theme's
   `ThemeRuntime.adopt()` assigns its `preference` from its **durable** section
-  whenever its settings scope notifies, and that scope notifies whenever the
-  settings **document** changes - which any write to any namespace causes,
+  whenever its durable form notifies, and that form notifies whenever the
+  settings **document** changes - which any write to any entry's config causes,
   including this pack's own zoom, dock and width writes. An extension theme is
   never written to that durable section (ui-theme's schema accepts
   `light`/`dark`/`system` only), so choosing Nord applied it and the very next
@@ -588,7 +596,7 @@ the details.
   alpha.17: **any** Settings change reverted an extension theme, and the new
   persistence simply made the revert immediate and visible.
   Fixed by treating an extension theme as a **desired state the control keeps
-  applied** rather than a one-shot choice, with ui-theme's own namespace
+  applied** rather than a one-shot choice, with ui-theme's own form
   **revision** as the tie-break: revision unmoved means nobody chose anything (a
   re-adopt, so the theme goes straight back on), revision moved means a surface
   that writes durably chose a built-in - the shipped **Settings > Appearance**
@@ -604,7 +612,8 @@ the details.
   `light` / `dark` / `system` always persisted (ui-theme owns them); **Nord** and
   **Monokai** did not — ui-theme's durable schema accepts the built-in three
   only, so they were an in-process choice a reload threw away. They now ride the
-  `vncode` section, with the per-origin `localStorage` copy kept UNDERNEATH as
+  `ui-state` entry's volatile config, with the per-origin `localStorage` copy kept
+  UNDERNEATH as
   the fallback, so the control still remembers its level in a profile that
   installed this bundle without `dsh-ui-state`. Picking a built-in theme **clears**
   the field rather than overwriting it, so the document keeps no stale theme id.

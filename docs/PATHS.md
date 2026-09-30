@@ -44,7 +44,7 @@ root** — with the three exceptions in §3.
 |---|---|---|
 | `sessions/` | one file per conversation (the durable transcript) | `dsh-session-persistence-jsonl` |
 | `storages/` | `workspace.json`, `session_projcache*` — host-side UI/workspace state | `dsh-storage-json`, host plugins |
-| `settings.yaml` | every settings namespace, this pack's `vncode` section included (page zoom, theme, dock height, column widths) | `dsh-settings-file`, `dsh-ui-state` |
+| `settings.yaml` (renamed `settings.yaml.imported` after the one-time import) | the harness's own legacy preference medium: its entries are imported once into the matching profile entries and the file is then renamed. **This pack's state is not here** — it is the profile's cordis patch (`profiles/web/cordis.patch.yml`, the `ui-state` entry's `config:`), written by the Host from the row's own `.volatile()` Config | `dsh-settings-file` (the one-time import), the Host's form persistence (the `config:` block) |
 | `.credentials.yaml` | the model API key | `dsh-credentials-local` |
 | `.anonymous-user-id` | one random id, created on first run | `dsh-anonymous-user-id` |
 | `attachments/v1/files/…` | files pasted/attached into a conversation | `dsh-attachment-local` |

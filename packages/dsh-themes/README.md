@@ -33,7 +33,8 @@ paper**, the **Markdown chrome**, the left column's **top bar** with the pack's
 them are plain engine-neutral CSS, so they hold in whichever browser the Web GUI
 is opened in. It is a thin control, not a second theme system, and the
 **preference** stays owned by the shipped `@deepseek-ai/dsh-client-ui-theme`: its
-`theme` client service persists the choice in the `ui-theme` settings namespace,
+`theme` client service persists the choice in the form the Host projects from its
+own `ui-theme` entry,
 resolves `system` through `prefers-color-scheme`, and ui-layout applies every
 snapshot to the document (`body[data-ds-dark-theme]` + the `--dsw-*` tokens). This
 bundle only **reads** the published snapshot and calls `setTheme(id)`, exactly like
@@ -147,14 +148,15 @@ Aliases a theme does not name keep their shipped dark value: the scrims
 black/white alphas and read correctly on any registered dark theme unchanged.
 
 ui-theme's durable preference schema accepts `light` / `dark` / `system` only, so
-an extension theme id is written to the pack's own `vncode` section instead
+an extension theme id is written to the `ui-state` entry's volatile config instead
 (through the `uiState` service `dsh-ui-state` publishes) and put back on the next
 load; picking a built-in clears that field so it reads as inherited again, and the
 shipped preference is never faked. Keeping it in force is the other half: ui-theme
 re-adopts its durable preference whenever the settings DOCUMENT changes, and an
-extension theme is never in that section, so this control treats it as a DESIRED
-STATE it keeps applied (`desiredTheme` + `reconcileTheme` on every `theme/change`)
-rather than a one-shot choice. ui-theme's own namespace REVISION is the tie-break:
+extension theme is never in that durable field, so this control treats it as a
+DESIRED STATE it keeps applied (`desiredTheme` + `reconcileTheme` on every
+`theme/change`)
+rather than a one-shot choice. ui-theme's own form REVISION is the tie-break:
 a re-adopt (revision unmoved) puts the theme back, while a built-in chosen in the
 shipped Settings → Appearance row (revision moved) wins and the remembered id is
 cleared. Re-picking the built-in that was ALREADY durable is the one case the
@@ -271,7 +273,7 @@ html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1
   open and 12px in the rail.
 - **Pinned, and harmless if it drifts.** The selectors are the sidebar module's
   hashed class names, which belong to the harness line in `.dsh-version.json`
-  (0.1.5-rc.1). On a bump that renames them this matches nothing — a no-op, never a
+  (0.2.0-rc.2). On a bump that renames them this matches nothing — a no-op, never a
   broken layout — and the fix is to re-read the new names, not to add `!important`.
 - **Static, installed once.** No palette to read beyond the border token, which
   carries a literal fallback for a profile that never mounts ui-theme, so it gets
@@ -426,8 +428,10 @@ shell an agent works in, and 25% renders its text unreadable. The levels in betw
 are Chrome's own.
 
 **The level is durable, and it is re-applied before the control's first render.**
-The level goes to the pack's own host-side section (`vncode.pageZoom`, through
-the `uiState` service `dsh-ui-state` publishes), which is one document a Chrome tab
+The level goes to the pack's own host-side state (`ui-state`'s volatile
+`pageZoom` field, written through the `uiState` service `dsh-ui-state`
+publishes), which is one
+document a Chrome tab
 and the shell's WebView both read, so it survives a host restart and a port change.
 The `localStorage` copy under `dsh-themes.page-zoom` is written alongside it and
 read as the fallback for a profile that installed this bundle without that package,
@@ -618,7 +622,8 @@ lib/index.js       Node half: one authenticated route, POST /api/dsh-themes/scre
                    browser bundle needs no host otherwise)
 lib/client.js      Browser half: the Page-zoom button + menu (one inline `zoom` on
                    <html>, Chrome's ladder cut at 50/200, remembered in the
-                   `vncode` section with the `localStorage` copy underneath), the
+                   `ui-state` entry's volatile config with the `localStorage` copy
+                   underneath), the
                    Screenshot button (capture + save), the Themes button + menu, the
                    registered themes (THEME_EXTENSIONS: Nord's, Monokai's and Hacker's
                    token maps and menu glyphs, registered through ctx.theme), the
@@ -640,8 +645,8 @@ lib/client.js      Browser half: the Page-zoom button + menu (one inline `zoom` 
   its id, with the generic appearance mark.
 - **Extension themes do not touch ui-theme's durable preference.** `setTheme` only
   writes `light` / `dark` / `system`, so selecting Nord, Monokai or Hacker leaves
-  the stored preference alone; the id it wants in force lives in the pack's own
-  `vncode` section and is kept applied, and picking a built-in clears it. No
+  the stored preference alone; the id it wants in force lives in the `ui-state`
+  entry's volatile config and is kept applied, and picking a built-in clears it. No
   second copy of the built-in preference, and no second path to persist it, exists
   to drift.
 - **The download seat is taken by priority, not by force.** Registering the SHIPPED

@@ -4,6 +4,15 @@ tools/
 .scratch/
 *.log
 
+# A version bump unpacks a throwaway harness install and drives pnpm through a
+# local npm cache; both are hundreds of MB of node_modules that NOTHING in this
+# repo reads (the checks resolve the pinned line from an npm install and the
+# profile mirror, never from here). They are anchored to the root and spelled
+# with a leading dot so a real directory of either name inside a package stays
+# trackable - the same trap `/dsh-diagrams/` documents further down.
+/.upgrade/
+/.npm-cache/
+
 # CREDENTIALS. Nothing of these shapes may ever be staged, because a secret in a
 # commit is a secret on GitHub for as long as the repository exists - in every
 # fork and every clone - even after the file is deleted. The harness keeps its
