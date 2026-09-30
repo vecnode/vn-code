@@ -139,7 +139,7 @@ No route, no fork, no core row disabled, no npm dependency.
 
 ## Install / uninstall
 
-The repo launcher (`install.bat` on Windows, `./install.sh` on macOS/Linux)
+The repo launcher (`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux)
 auto-discovers this package — it is a standard `dsh.bundle`, so a bundle the
 profile does not list yet is added by one plain launcher run (no `-Force`
 needed). The web profile links it into this repo, so code edits only need a

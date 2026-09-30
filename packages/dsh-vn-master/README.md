@@ -55,7 +55,7 @@ lib/index.js       Node half: no-op row (the master is browser-free)
 ## Growing the master
 
 Adding a pack-wide patch is a `cordis.patch.yml` change here — restate a row, or
-disable one — and one `install.bat` / `./install.sh` run (a new row or a changed
+disable one — and one `scripts\install.bat` / `./scripts/install.sh` run (a new row or a changed
 layer needs the profile re-synced), then a restart of `npx @deepseek-ai/dsh web`
 and a hard browser refresh.
 

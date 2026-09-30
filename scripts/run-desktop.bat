@@ -2,8 +2,8 @@
 rem ============================================================
 rem  vncode DESKTOP launcher - Windows (double-click friendly).
 rem
-rem  The same harness run-web.bat shows in a Chrome tab, in a native
-rem  window instead. The shell does the work scripts\run-web.ps1 does
+rem  The same harness scripts/run-web.bat shows in a Chrome tab, in a
+rem  native window instead. The shell does the work scripts/run-web.ps1 does
 rem  for the browser: it starts the pinned
 rem  "npx @deepseek-ai/dsh@<pin> web --no-open" on a free loopback
 rem  port, watches for the "dsh web:" ready line and shows THAT url in
@@ -13,17 +13,17 @@ rem  file, never echoed (the ready line is printed with the token
 rem  redacted) and never handed to a shell. A URL that does not name a
 rem  loopback address is refused instead of opened.
 rem
-rem  This is deliberately ONE file, unlike run-web.bat -> scripts\
-rem  run-web.ps1: the watching half is Rust here, so cmd never has to
+rem  This is deliberately ONE file, unlike run-web.bat -> run-web.ps1:
+rem  the watching half is Rust here, so cmd never has to
 rem  read a running child's output, and there is no PowerShell worker
 rem  left to hold. The commands are the same either way - only the
 rem  window differs.
 rem
 rem  WHERE IT RUNS FROM, AND WHY THAT IS CHECKED FIRST
 rem  ------------------------------------------------
-rem  A DISTRIBUTION has the built shell beside this file, so it runs it
-rem  and needs nothing else - not even Rust. A SOURCE CHECKOUT has no
-rem  built shell, so it builds one with cargo (a no-op while it is
+rem  A DISTRIBUTION has the built shell in the folder ABOVE this one, so
+rem  it runs it and needs nothing else - not even Rust. A SOURCE CHECKOUT
+rem  has no built shell, so it builds one with cargo (a no-op while it is
 rem  current, because cargo's own freshness check IS the cache).
 rem
 rem  The order is not a preference. Both kinds of folder have an app\ -
@@ -33,7 +33,7 @@ rem  two apart. Only the presence of the built executable can, and
 rem  building inside a distribution would demand a Rust toolchain from
 rem  somebody who was only ever asked to click a file.
 rem
-rem  Flags (forwarded to the shell; the same set as run-web.bat):
+rem  Flags (forwarded to the shell; the same set as scripts/run-web.bat):
 rem    -Port <n>          listen on this port instead of a free one
 rem    -DshHome <dir>     override DSH_HOME (default: $DSH_HOME, else ~/.dsh)
 rem    -DshVersion <ver>  override the pinned dsh version from .dsh-version.json
@@ -49,12 +49,13 @@ rem  compiles the shell's dependencies and takes a few minutes. In a
 rem  DISTRIBUTION: nothing - the folder carries its own runtime.
 rem
 rem  The console this runs in is decided in ONE place for every entry
-rem  point: scripts\console\adapt.cmd.
+rem  point: console\adapt.cmd. This file lives in scripts\ beside that
+rem  shared layer and resolves everything else from `%~dp0..`.
 rem ============================================================
 setlocal
 
 if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
-call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode"
+call "%~dp0console\adapt.cmd" "%~f0" "vncode"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
@@ -64,7 +65,7 @@ rem argument only, so a -DshHome path containing "-h" cannot print help instead
 rem of starting the app.
 rem It is safe on the double-click path - where VNCODE_ARGS used to be
 rem UNDEFINED and this very line aborted the whole file with "set was unexpected
-rem at this time." - because scripts\console\adapt.cmd stores "no arguments" as ONE
+rem at this time." - because console\adapt.cmd stores "no arguments" as ONE
 rem SPACE, a defined value that holds no flag. The full account is there.
 if not "%VNCODE_ARGS:-Help=%"=="%VNCODE_ARGS%" goto :help
 set "VN_FIRST="
@@ -86,14 +87,14 @@ set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoBuild=%"
 
 :haverbuild
 rem --- which artefact runs ---------------------------------------------------
-set "VN_BUILT=%~dp0vncode.exe"
+set "VN_BUILT=%~dp0..\vncode.exe"
 if exist "%VN_BUILT%" goto :run
 
-set "VN_MANIFEST=%~dp0app\src-tauri\Cargo.toml"
+set "VN_MANIFEST=%~dp0..\app\src-tauri\Cargo.toml"
 if not exist "%VN_MANIFEST%" (
-  echo [vncode] Neither vncode.exe nor app\src-tauri\Cargo.toml is here.
-  echo   Run run-desktop.bat from the repository root, or from a distribution
-  echo   folder assembled by distribute.bat.
+  echo [vncode] Neither vncode.exe nor app\src-tauri\Cargo.toml is in the
+  echo   folder above this one. Run scripts\run-desktop.bat from a repository
+  echo   checkout, or from a distribution folder assembled by scripts\distribute.bat.
   goto :failed
 )
 
@@ -108,12 +109,12 @@ if errorlevel 1 (
   goto :failed
 )
 
-echo [vncode] Building app\src-tauri ^(cargo does nothing when it is current^)...
+echo [vncode] Building app\src-tauri in the folder above ^(cargo does nothing when it is current^)...
 cargo build --release --manifest-path "%VN_MANIFEST%"
 if errorlevel 1 goto :buildfailed
 
 :afterbuild
-set "VN_BUILT=%~dp0app\src-tauri\target\release\vncode-desktop.exe"
+set "VN_BUILT=%~dp0..\app\src-tauri\target\release\vncode-desktop.exe"
 if not exist "%VN_BUILT%" (
   echo [vncode] The build reported success but the program is not at
   echo   %VN_BUILT%
@@ -131,7 +132,7 @@ exit /b %VN_EXIT%
 
 :help
 echo.
-echo Usage: run-desktop.bat [flags]
+echo Usage: scripts\run-desktop.bat [flags]
 echo.
 echo   -Port ^<n^>          listen on this port instead of a free one
 echo   -DshHome ^<dir^>     override DSH_HOME (default: %%DSH_HOME%%, else %%USERPROFILE%%\.dsh)
@@ -142,14 +143,15 @@ echo   -NoTerminal        stay in this console; do not relaunch
 echo   -Help              print this help
 echo.
 echo Runs the harness from the pinned dsh version in a native window instead of
-echo a Chrome tab - same pin, same profile and same flags as run-web.bat.
+echo a Chrome tab - same pin, same profile and same flags as scripts\run-web.bat.
 echo.
-echo From a distribution folder it runs the vncode.exe beside this file and
-echo needs nothing installed. From a source checkout it builds app\src-tauri
-echo with cargo first, which needs the Rust toolchain and Node.js 22 or newer.
+echo From a distribution folder it runs the vncode.exe in the folder above
+echo this one and needs nothing installed. From a source checkout it builds
+echo app\src-tauri there with cargo first, which needs the Rust toolchain and
+echo Node.js 22 or newer.
 echo.
 echo macOS and Linux: the same shell builds with "cargo build --release" in
-echo app/src-tauri and runs beside ./run-web.sh, the browser launcher.
+echo app/src-tauri and runs beside ./scripts/run-web.sh, the browser launcher.
 echo.
 if "%VNCODE_PAUSE%"=="1" pause
 exit /b 0

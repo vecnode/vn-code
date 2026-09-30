@@ -11,10 +11,11 @@
 #  lists the same version. Passing -Force yourself is still accepted.
 #
 #  Needs Node.js (>= 22) with npm/npx - NOT PowerShell, ever. The work lives in
-#  scripts/install-all.sh, which install.bat's PowerShell twin mirrors with
-#  scripts/install-all.ps1.
+#  install-all.sh beside this file, which install.bat's PowerShell twin mirrors
+#  with install-all.ps1. This file lives in scripts/, so the repository root is
+#  its PARENT folder.
 #
-#  Flags (forwarded to scripts/install-all.sh - run with -Help for the list):
+#  Flags (forwarded to install-all.sh beside this file - run with -Help):
 #    -Plugin <name>     install only the matching bundle(s)
 #    -DshHome <dir>     use this harness home instead of $DSH_HOME
 #    -ProfileName <n>   install into this profile (default: web)
@@ -28,7 +29,7 @@
 #
 #  The colour decision - a terminal gets colour, a redirected log does not, and
 #  NO_COLOR always wins - is made in ONE place for every POSIX entry point:
-#  scripts/console/theme.sh, the twin of scripts/console/theme.ps1.
+#  console/theme.sh, the twin of console/theme.ps1.
 # ============================================================
 set -u
 
@@ -36,11 +37,13 @@ case "$0" in
     */*) here=${0%/*} ;;
     *) here=. ;;
 esac
+# This script lives in scripts/, so the repository root is its PARENT folder:
+# install-all.sh below resolves it the same way.
 here=$(CDPATH= cd -- "$here" && pwd)
 
 # The console contract, shared with the Windows half. It never fails, so `set -u`
 # is the only care needed here.
-. "$here/scripts/console/theme.sh"
+. "$here/console/theme.sh"
 
 # -NoPause means never hold a window open. The Windows half reads the same
 # convention (VNCODE_PAUSE), so the flag behaves identically on both hosts.
@@ -49,7 +52,7 @@ case " $* " in *" -NoPause "*) VNCODE_PAUSE=0 ;; esac
 # The four help spellings every entry point answers. The WORKER owns the words,
 # so this only routes: one help text per command, on both hosts.
 if vn_wants_help "$@"; then
-    exec sh "$here/scripts/install-all.sh" -Help
+    exec sh "$here/install-all.sh" -Help
 fi
 
 # Same default as install.bat: force a re-add unless the caller asked already.
@@ -59,7 +62,7 @@ case " $* " in
 esac
 
 # shellcheck disable=SC2086
-sh "$here/scripts/install-all.sh" "$@" $extra
+sh "$here/install-all.sh" "$@" $extra
 status=$?
 
 # The same words, and the same rule, as install.bat: the rule is printed plain

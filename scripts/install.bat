@@ -30,7 +30,10 @@ rem    -Help / -h / /?    print the help and stop
 rem
 rem  The console this runs in - which window, which PowerShell, whether the
 rem  window is held open - is decided in ONE place for every entry point in
-rem  this repository: scripts\console\adapt.cmd. Read its header for why.
+rem  this repository: console\adapt.cmd. Read its header for why.
+rem
+rem  This file lives in scripts\, beside install.sh and the PowerShell worker,
+rem  so every path below is `%~dp0`-relative and a run works from any directory.
 rem
 rem  macOS and Linux: ./install.sh is the same installer in POSIX sh.
 rem ============================================================
@@ -39,7 +42,7 @@ setlocal
 rem The three lines adapt.cmd documents. The guard on the first one is what keeps
 rem the real flags when Windows Terminal relaunches this file.
 if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
-call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode installer"
+call "%~dp0console\adapt.cmd" "%~f0" "vncode installer"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
@@ -64,22 +67,22 @@ if defined VN_HELPREQ set "VNCODE_ARGS=-Help"
 
 rem The implied -Force, skipped for a help request. Safe with no arguments at all
 rem (where VNCODE_ARGV used to be undefined and this line aborted the whole
-rem file) because scripts\console\adapt.cmd stores "no arguments" as ONE SPACE: a
+rem file) because console\adapt.cmd stores "no arguments" as ONE SPACE: a
 rem defined value holding no flag, so this test reads it exactly as it reads an
 rem argument string that merely lacks -Force - which is the answer wanted here.
 set "VN_EXTRA="
 if not defined VN_HELPREQ if "%VNCODE_ARGV:-Force=%"=="%VNCODE_ARGV%" set "VN_EXTRA=-Force"
 
-rem -NoTerminal belongs to the LAUNCHER, not to the install: scripts\console\adapt.cmd
+rem -NoTerminal belongs to the LAUNCHER, not to the install: console\adapt.cmd
 rem is the file that acts on it, deciding whether to relaunch into Windows Terminal.
-rem scripts\install-all.ps1 declares no such parameter, and PowerShell stops on an
+rem install-all.ps1 declares no such parameter, and PowerShell stops on an
 rem argument it cannot bind - so forwarding it would turn a documented flag into a
 rem failed install. Only that one flag is dropped; -NoPause IS the worker's own.
 rem (Safe with no arguments at all: adapt.cmd guarantees the variable is defined.)
 set "VN_SHELL_ARGS=%VNCODE_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 
-"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-all.ps1" %VN_SHELL_ARGS% %VN_EXTRA%
+"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-all.ps1" %VN_SHELL_ARGS% %VN_EXTRA%
 set "VN_EXIT=%ERRORLEVEL%"
 
 echo.
@@ -105,7 +108,7 @@ echo  Windows PowerShell 5.1 ships with every supported version of
 echo  Windows; if it is missing, install PowerShell 7 from
 echo  https://aka.ms/powershell and run this file again.
 echo.
-echo  (macOS and Linux do not use PowerShell at all: run ./install.sh.)
+echo  (macOS and Linux do not use PowerShell at all: run ./scripts/install.sh.)
 echo.
 if "%VNCODE_PAUSE%"=="1" pause
 exit /b 2

@@ -20,8 +20,8 @@ a frozen generation snapshot of its plugin set that only refreshes on app
 relaunch, which made every code change a two-step dance. The installer, the
 uninstaller and their docs target the web profile alone. Profiles that still
 carry this pack's bundles from that era can be cleaned with
-`uninstall.bat -DshHome "%APPDATA%\dsh-desktop\harness"` (or
-`./uninstall.sh -DshHome ...`) if it is ever needed - but nothing in this repo
+`scripts\uninstall.bat -DshHome "%APPDATA%\dsh-desktop\harness"` (or
+`./scripts/uninstall.sh -DshHome ...`) if it is ever needed - but nothing in this repo
 does that automatically any more.
 
 ## 2. How a plugin ships (bundle / profile / patch)
@@ -965,7 +965,7 @@ which drops a `Menu` holding the level in force plus the two steps, **Zoom in** 
 
 It exists because the gesture it mirrors is the *browser's*: `Ctrl+` / `Ctrl-`
 (and Ctrl+wheel) page zoom belongs to Chrome, and the **native window**
-`run-desktop.bat` opens — a Tauri shell over the very same `dsh web` — has no such
+`scripts\run-desktop.bat` opens — a Tauri shell over the very same `dsh web` — has no such
 gesture at all. No page can invoke the browser's own zoom, so this control writes
 the equivalent itself.
 
@@ -1368,27 +1368,32 @@ neither half needs the other:
 
 | Host | Script | Runner | Needs |
 |---|---|---|---|
-| Windows | `scripts/install-all.ps1` / `uninstall-all.ps1`, root `run-web.bat` + `scripts/run-web.ps1` | `scripts/*.bat`, root `install.bat` / `uninstall.bat` | Windows PowerShell 5.1 or 7 |
-| macOS / Linux | `scripts/install-all.sh` / `uninstall-all.sh`, root `run-web.sh` | `scripts/*.sh`, root `install.sh` / `uninstall.sh` | POSIX sh (dash/bash) + Node.js with npm/npx - **never PowerShell** |
+| Windows | `scripts/install-all.ps1` / `uninstall-all.ps1`, `scripts/run-web.ps1` | `scripts/*.bat`, i.e. `scripts\install.bat` / `scripts\uninstall.bat` / `scripts\run-web.bat` | Windows PowerShell 5.1 or 7 |
+| macOS / Linux | `scripts/install-all.sh` / `uninstall-all.sh`, `run-web.sh` | `scripts/*.sh`, i.e. `scripts/install.sh` / `scripts/uninstall.sh` / `scripts/run-web.sh` | POSIX sh (dash/bash) + Node.js with npm/npx - **never PowerShell** |
 
 Both are ASCII-only; the `.sh` half is POSIX (no bashisms, no `sed`/`grep`
 pipelines - the JSON/YAML parsing is done by `node -e`, which is a prerequisite
 anyway), and both halves accept the same flags (`-Force`, `-Plugin`, `-DshHome`,
 `-ProfileName`, `-DshVersion`, `-Target web|cli`, `-NoPause`), print the same
-messages and reach the same profile state. The root install and uninstall
-launchers are the friendly pair: they add force-the-re-add semantics unless the
-caller asked already. `scripts/sync-vendored.ps1`
+messages and reach the same profile state. **Every launcher lives in `scripts/`,
+workers and entry points together**, and the repository root carries no `.bat` and
+no `.sh` at all; each launcher resolves the repository root as the folder ABOVE
+`scripts/` (`%~dp0..` in batch, one directory up in POSIX sh). The install and
+uninstall launchers are the friendly pair: they add force-the-re-add semantics
+unless the caller asked already. `scripts/sync-vendored.ps1`
 is **maintainer tooling**, not an installer, and is the one script here that wants
 `pwsh` on macOS/Linux.
 
 ### The console layer every launcher shares
 
-Five Windows entry points (`install.bat`, `uninstall.bat`, `run-web.bat`,
-`run-desktop.bat`, `distribute.bat`) plus the generated `START-HERE.bat` all have
+Five Windows entry points (`scripts\install.bat`, `scripts\uninstall.bat`, `scripts\run-web.bat`,
+`scripts\run-desktop.bat`, `scripts\distribute.bat`) plus the generated `START-HERE.bat` all have
 to answer the same questions before doing any work, so they answer them in ONE
 place - `scripts/console/adapt.cmd`, which they reach with `call` (batch has no
-`include`) and which is deliberately **not** `setlocal`'d, because everything it
-decides must still be set when it returns:
+`include`) - a launcher in `scripts\` as `%~dp0console\adapt.cmd`, the generated
+`START-HERE.bat` at a distribution root as `%~dp0scripts\console\adapt.cmd` - and
+which is deliberately **not** `setlocal`'d, because everything it decides must
+still be set when it returns:
 
 | It decides | How |
 |---|---|
@@ -1408,20 +1413,20 @@ allowed only on a real terminal, never in a redirected log, and `NO_COLOR`
 always wins. `scripts/checks/check-dist-layout.mjs` pins the whole contract,
 including that `theme.sh` stays POSIX and that `adapt.cmd` keeps its fallback.
 
-**The run launcher.** `run-web.bat` / `run-web.sh` are the launcher's two ENTRY POINTS -
-one per host, both at the repo root - and are not an install step: they
+**The run launcher.** `scripts\run-web.bat` / `scripts/run-web.sh` are the launcher's two ENTRY POINTS -
+one per host, both in `scripts/` beside every worker - and are not an install step: they
 start the app the docs would otherwise ask for by hand -
 `npx --yes @deepseek-ai/dsh@<pin> web --no-open [--port <n>]` - and open the URL
-the app prints once it is listening. On Windows the entry point is `run-web.bat`, a
+the app prints once it is listening. On Windows the entry point is `scripts\run-web.bat`, a
 double-click wrapper that forwards its flags to `scripts/run-web.ps1`, the worker
-beside the installer scripts; macOS/Linux have no worker, because POSIX `read`
-already streams the app's output line by line, so `run-web.sh` does the whole job
+beside it; macOS/Linux have no worker, because POSIX `read`
+already streams the app's output line by line, so `scripts/run-web.sh` does the whole job
 itself. The Windows split is FORCED, not stylistic: cmd's `for /f` reads a child's
 output only up to EOF, so a pure batch launcher cannot see the ready line while the
-harness is still running. Each half reads `.dsh-version.json` from the repo root -
-`$script_dir` for `run-web.sh` (it lives there) and
-`Split-Path -Parent $PSScriptRoot` for the worker. On Windows the launcher is
-`run-web.bat [flags]`, and a double-click is the point: batch carries no
+harness is still running. Each half reads `.dsh-version.json` from the repo root,
+the folder ABOVE `scripts/` - one directory up from its own location for
+`scripts/run-web.sh` and `Split-Path -Parent $PSScriptRoot` for the worker. On Windows the launcher is
+`scripts\run-web.bat [flags]`, and a double-click is the point: batch carries no
 execution-policy question. Both halves follow the same four steps and
 accept the same flags (`-Port`, `-DshHome`, `-DshVersion`, `-NoBrowser`,
 `-DefaultBrowser`):
@@ -1446,13 +1451,13 @@ The token stays **in memory**: neither half writes it to a file (the shell half
 uses an anonymous FIFO rather than a temp log precisely for that), neither echoes
 it itself, and it reaches the browser as a single argv element - never through
 `cmd /c start`, `sh -c` or any other command string. On Windows that element is
-built by `Start-Process -ArgumentList @($Url)` in `scripts/run-web.ps1`; the root
-`run-web.bat` above it only forwards flags and never sees the URL at all. `--no-open`
+built by `Start-Process -ArgumentList @($Url)` in `scripts/run-web.ps1`; the
+`scripts\run-web.bat` above it only forwards flags and never sees the URL at all. `--no-open`
 is what keeps the hand-off single: the app must not also start a browser. The
 harness runs in the foreground, so Ctrl+C stops it and each half reports the app's
 own exit status (the shell half reads the child directly instead of through a
 pipeline subshell, which is what makes `wait` meaningful; the PowerShell half gets
-the native command's `$LASTEXITCODE` after its streaming pipeline, and `run-web.bat`
+the native command's `$LASTEXITCODE` after its streaming pipeline, and `scripts\run-web.bat`
 passes that through as the batch's own exit code).
 
 - **Detection**: one target - `DSH_HOME` env, else `~/.dsh`; profile `web`
@@ -1482,7 +1487,7 @@ passes that through as the batch's own exit code).
   unless the flag forces a re-add **or the repo version changed**.
 - **Dev sync**: both halves compare the repo `package.json` version against the
   version the profile resolves (`Get-EffectiveInstalledVersion` in PowerShell,
-  `effective_version()` in shell). A plain `install.bat` / `./install.sh` after a
+  `effective_version()` in shell). A plain `scripts\install.bat` / `./scripts/install.sh` after a
   version bump therefore re-adds the bundle, so development changes actually
   reach the profile.
 - **Live links**: the web profile installs every bundle (`dsh-vn-master` — the
@@ -1533,7 +1538,7 @@ passes that through as the batch's own exit code).
 | Old panel still showing after edit | client bundle is read at boot; restart the app and HARD-refresh the browser (Ctrl+F5). The web profile is a live link, so no reinstall is needed |
 | The right bar is missing entirely | the fork did not load: confirm the boot HTML lists `dsh-rightbar/client.js`, and that `dsh-rightbar`'s layer still disables `ui-sidebar-right` / `ui-sidebar-files` (a profile patch that re-enables them mounts two bars, which throws on the duplicate tab-type ids) |
 | The master is in the profile but serves no bundle | expected: `dsh-vn-master` is the blank master. With no `dsh.client` it must NOT appear in the boot HTML; only its no-op `master` row joins the host tree |
-| The bar is the shipped one, not the pack's | `dsh-rightbar` is not in `dsh.profile.bundles` (or the row id was renamed); re-run the installer (`install.bat` / `./install.sh`), then restart |
+| The bar is the shipped one, not the pack's | `dsh-rightbar` is not in `dsh.profile.bundles` (or the row id was renamed); re-run the installer (`scripts\install.bat` / `./scripts/install.sh`), then restart |
 | Two Files panels / a stray dock after upgrading | the retired `dsh-files` (or `dsh-focus`) bundle is still in the profile; re-run the installer (its prune removes both) |
 | No "Editor" in the "+" / Start page | the client bundle did not activate: check the browser console for `[dsh-editor]`; a `sidebarRightTabs` service that never appears leaves activation pending |
 | Editor says "Editor unavailable (HTTP 400)" on the engine | the Node route is missing `requestBody: 'buffered'`, so Connection's bridge throws before the handler runs and the web server answers a bare 400 |
@@ -1547,17 +1552,17 @@ passes that through as the batch's own exit code).
 | Editor tab says "Could not open the file" / `NO_WORKSPACE` | the session root could not be resolved (session not live and not persisted yet) or the path is outside the conversation folder; open the conversation once so its header is available |
 | Save answers "Changed on disk" | the file moved under you; use **Reload** (take the disk copy) or **Save anyway** (overwrite it) in the banner |
 | Code text is black-on-dark in the light theme | the editor did not follow the scheme: confirm the bundle is alpha.5+ (`dsh-editor` prints its version in the tab's file bar) and that ui-layout still writes `body[data-ds-dark-theme]` |
-| No Themes button in the header | `dsh-themes` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or the row did not land: check the console for `[dsh-themes]` |
+| No Themes button in the header | `dsh-themes` is not mounted (a new package needs one install run: `scripts\install.bat` / `./scripts/install.sh`, or `-Force`), or the row did not land: check the console for `[dsh-themes]` |
 | No Page-zoom button in the header | the same row as the Themes button — all four controls are one bundle. Inside the native window it is the only way to zoom at all (the shell has no Ctrl+ / Ctrl- page zoom); confirm the served `dsh-themes` bundle prints alpha.15+ |
 | The page is stuck at a zoom level in the native window | the level is remembered per origin in `localStorage['dsh-themes.page-zoom']`; the button walks it back (it is the leftmost of the four, and the ladder stops at 200% precisely so it cannot go off-screen), and clearing that key resets it to 100% |
 | The right bar cannot be dragged after zooming | the bug alpha.16 fixed: the frame's own pixel arithmetic placed the right seam from the SCALED rect it measures, so a level in force slid the seam off the column's edge (the LEFT bar was fine, its `left` being layout pixels). Confirm the served `dsh-themes` bundle prints alpha.16+ and that the browser supports CSS anchor positioning (Chrome/Edge 125+); the seam override is inert at 100%, so returning to the resting level also restores the old behaviour |
 | The Themes button is greyed out | the `theme` service never appeared, so `@deepseek-ai/dsh-client-ui-theme` (row `ui-theme`) is not in the boot graph; the tooltip says "The theme service is unavailable" |
 | Fork drift after a harness update | `scripts/sync-vendored.ps1 -Check` exits 1; run it without `-Check` and review the diff |
-| No "History" capsule on the "+" / Start page | `dsh-gittree` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or its client bundle did not activate - check the console for `[dsh-gittree]` |
+| No "History" capsule on the "+" / Start page | `dsh-gittree` is not mounted (a new package needs one install run: `scripts\install.bat` / `./scripts/install.sh`, or `-Force`), or its client bundle did not activate - check the console for `[dsh-gittree]` |
 | The History tab says "Not a git repository" | the conversation folder is not inside a repository: the route runs `git rev-parse --show-toplevel` from it and answers a typed `NOT_A_REPO` instead of guessing |
 | The History tab says "git is not installed" | `git` is not on the **server's** `PATH` (the routes spawn it directly and report `GIT_MISSING`); install git on the host running `dsh web` |
 | The History list is empty although the repository has commits | the folder lives inside a repository whose root is higher up, so commits that never touch this folder are deliberately hidden; check `git log` in that folder |
-| No Terminal button in the conversation header | `dsh-terminal` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or the bundle did not activate - check the console for `[dsh-terminal]` |
+| No Terminal button in the conversation header | `dsh-terminal` is not mounted (a new package needs one install run: `scripts\install.bat` / `./scripts/install.sh`, or `-Force`), or the bundle did not activate - check the console for `[dsh-terminal]` |
 | The dock says "No terminal on this host" | the harness installation's `node-pty` could not be resolved from this process (`process.argv[1]`, `$DSH_HOME/profiles`, or beside the package); the dock's notice carries the reason, and `GET /api/dsh-terminal/health` reports `available:false` with it. The rest of the pack is unaffected |
 | The dock does not open, or opens at the wrong place | the frame it measures is gone: the dock positions itself from `[data-shell-overlay]`'s parent and that frame's resolved `gridTemplateColumns`, so a harness line that stops using grid columns for the layout needs §11 updated |
 | The terminal panel covers the conversation instead of pushing it up | the middle/right columns' inline `height: calc(100% - <dock>px)` was removed or overridden by something else writing their `style.height` |
@@ -1573,8 +1578,8 @@ passes that through as the batch's own exit code).
 | `-Target desktop` is rejected | intentional: DSH Desktop is no longer a target of this pack |
 | `.ps1` parse error after editing | non-ASCII character crept in (smart quotes/dash); keep scripts ASCII-only |
 | `sh -n` fails after editing a `.sh` | a bashism crept into the POSIX half (arrays, `[[ ]]`, `local`); keep it dash-compatible |
-| `./install.sh: Permission denied` | the executable bit was lost in a copy: `chmod +x install.sh uninstall.sh scripts/*.sh` |
-| `./install.sh` reports a missing command | Node.js (with npm/npx) is not installed - the shell half needs Node, never PowerShell: https://nodejs.org |
+| `./scripts/install.sh: Permission denied` | the executable bit was lost in a copy: `chmod +x scripts/install.sh scripts/uninstall.sh scripts/*.sh` |
+| `./scripts/install.sh` reports a missing command | Node.js (with npm/npx) is not installed - the shell half needs Node, never PowerShell: https://nodejs.org |
 | `scripts/sync-vendored.ps1` cannot find `pwsh` | expected on a host without PowerShell 7: that script is maintainer tooling. Install PowerShell 7 (`brew install --cask powershell`, or the package for your distro) or run it on Windows |
 | A path with a backslash fails on macOS/Linux | a Windows-only path crept into the PowerShell half (the POSIX half never sees one): build paths with `Join-Path` and take the separator from `[System.IO.Path]` |
 
@@ -1775,14 +1780,14 @@ Mermaid needs no engine at all.
 
 | Symptom | Cause |
 |---|---|
-| No "Diagrams" entry on the "+" / Start page | `dsh-diagrams` is not mounted (a new package needs one install run: `install.bat` / `./install.sh`, or `-Force`), or the bundle did not activate - check the console for `[dsh-diagrams]` |
+| No "Diagrams" entry on the "+" / Start page | `dsh-diagrams` is not mounted (a new package needs one install run: `scripts\install.bat` / `./scripts/install.sh`, or `-Force`), or the bundle did not activate - check the console for `[dsh-diagrams]` |
 | The tool reports `unavailable` for a Mermaid diagram | the child validator could not produce a verdict (engine file missing, spawn blocked, timeout). The diagram IS stored; `node packages/dsh-diagrams/vendor/build.mjs` rebuilds the engine |
 | Every TikZ write says "No TeX engine found on this host" | none of `pdflatex`, `xelatex`, `lualatex` is on the **server's** `PATH`; install a TeX distribution on the host running `dsh web`, then `GET /api/dsh-diagrams/health?refresh=1` |
 | A TikZ write fails with `File 'x.sty' not found` | the package is not installed and auto-install is deliberately off (a compile must not reach the network). Install it on the host, or use one of the libraries the preamble already loads |
 | The tab shows a picture but the status pill says `error` | the compile produced a PDF *and* reported errors - the picture is best-effort; the diagnostics under it are the truth |
 | The pill says `not drawn` / `stale` and nothing else | `not drawn` is `pending`: no browser has reported on this revision (normal headless, and normal before the tab is ever opened). `stale` means the newest report names an OLDER revision, so this revision has never been drawn - a report about revision 4 is not evidence about revision 5 |
 | A TikZ export says "There is nothing to export as svg yet" | the compile produced no artifact (a document with a hard error). The `.tex` export always works; read the diagnostics |
-| An export landed in the conversation folder | that profile's host row is not mounted, so the panel fell back to the browser download; reinstall (`install.bat` / `./install.sh -Force`) so `POST /api/dsh-diagrams/export` exists |
+| An export landed in the conversation folder | that profile's host row is not mounted, so the panel fell back to the browser download; reinstall (`scripts\install.bat` / `./scripts/install.sh -Force`) so `POST /api/dsh-diagrams/export` exists |
 | A `box` sequence diagram reports `unavailable` | fixed in alpha.4 (the DOM stub now exposes `window.CSS`). If it reappears, the profile is serving an older bundle: restart `dsh web` and hard-refresh |
 | A bare chart reports `Environment axis undefined` | fixed in alpha.4 (an `axis` body is wrapped in a `tikzpicture`, which is the only form that compiles on a `standalone` document). Same remedy: an older bundle is in the browser |
 | "This diagram is not in this conversation (it may have been deleted)" | the tab outlived its diagram: `diagram_delete` removed it, or the tab belongs to another session |

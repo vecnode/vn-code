@@ -1,4 +1,4 @@
-//! vncode desktop shell: the Rust half of `run-desktop.bat`.
+//! vncode desktop shell: the Rust half of `scripts\run-desktop.bat`.
 //!
 //! What this is: the same harness the browser launcher runs, in a native
 //! window instead of a Chrome tab. It is NOT a second implementation of the
@@ -8,15 +8,15 @@
 //! `npx @deepseek-ai/dsh@<pin> web` process.
 //!
 //! So the shell does exactly what `scripts/run-web.ps1` does on Windows and
-//! `run-web.sh` does elsewhere, with a webview in place of a browser hand-off:
+//! `scripts/run-web.sh` does elsewhere, with a webview in place of a browser hand-off:
 //!
 //! 1. read the pinned dsh version from `.dsh-version.json` at the repository
 //!    root (found by walking up from this executable, so debug and release
 //!    builds both work, wherever the target directory is);
 //! 2. pick the port: `-Port` when it was given, else the harness's own default
-//!    (3080 - the same origin a `run-web.bat` tab opens on, which is what keeps the
+//!    (3080 - the same origin a `scripts\run-web.bat` tab opens on, which keeps the
 //!    window's per-origin client state) when nothing holds it, else any free
-//!    loopback port, so a desktop window never collides with a `run-web.bat` server
+//!    loopback port, so a desktop window never collides with a `scripts\run-web.bat`
 //!    or with the Web GUI;
 //! 3. run `npx --yes @deepseek-ai/dsh@<pin> web --no-open --port <port>`, with
 //!    its stdout and stderr streamed to this console and exactly one variable
@@ -27,7 +27,7 @@
 //!    a profile with none of this pack's bundles and none of the user's sessions,
 //!    which reads as "the desktop app opens the plain DeepSeek Harness". The
 //!    `~/.dsh` default is the harness's own decision, exactly as it is under
-//!    `run-web.bat`, and this shell leaves it alone;
+//!    `scripts\run-web.bat`, and this shell leaves it alone;
 //! 4. watch that output for the ready line, read its URL and navigate the
 //!    window there - refusing anything that is not loopback;
 //! 5. kill the harness when the window closes, so no orphaned `node` process
@@ -93,13 +93,13 @@ const READY_TIMEOUT: Duration = Duration::from_secs(90);
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 /// The port the harness listens on when it is given none - the same one a
-/// `run-web.bat` tab opens on, and therefore the same ORIGIN.
+/// `scripts\run-web.bat` tab opens on, and therefore the same ORIGIN.
 ///
 /// The window prefers it so the little state the client keeps per origin (the
 /// conversation content width, for one) survives a run, the way it does in
 /// Chrome. It is only a preference and can never change what the window shows:
 /// the URL loaded is the one the harness prints, so a port that is already held
-/// - by `run-web.bat`, by the Web GUI, by anything - falls through to a free one.
+/// - by `scripts\run-web.bat`, by the Web GUI, by anything - falls through to a free one.
 /// A stale value here costs the origin and nothing else.
 const DEFAULT_PORT: u16 = 3080;
 
@@ -126,7 +126,7 @@ struct Options {
     help: bool,
 }
 
-/// The flags, mirroring `run-web.bat` so the two launchers stay interchangeable.
+/// The flags, mirroring `scripts\run-web.bat`, so the two stay interchangeable.
 /// Both spellings of each flag are accepted, and matching is case-insensitive,
 /// because `-Port` is what the batch file documents and `--port` is what a
 /// shell user types.
@@ -152,7 +152,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Options, String> {
             "-help" | "--help" | "-h" | "/?" => options.help = true,
             other => {
                 return Err(format!(
-                    "unknown flag '{other}' - run run-desktop.bat -Help for the accepted flags"
+                    "unknown flag '{other}' - run scripts\\run-desktop.bat -Help for the accepted flags"
                 ))
             }
         }
@@ -167,7 +167,7 @@ fn next_value(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<Str
 
 fn print_usage() {
     println!();
-    println!("Usage: run-desktop.bat [flags]");
+    println!("Usage: scripts\\run-desktop.bat [flags]");
     println!();
     println!("  -Port <n>          listen on this port instead of a free one");
     println!("  -DshHome <dir>     override DSH_HOME (default: $DSH_HOME, else ~/.dsh)");
@@ -175,8 +175,8 @@ fn print_usage() {
     println!("  -Help              print this help");
     println!();
     println!("Shows the harness in a native window instead of a Chrome tab. Same pin,");
-    println!("same profile and same flags as run-web.bat; anything a browser tab can do in");
-    println!("that profile, this window can do, because it is the same server.");
+    println!("same profile and same flags as scripts\\run-web.bat; anything a browser tab");
+    println!("can do in that profile, this window can do, because it is the same server.");
     println!();
 }
 
@@ -203,7 +203,7 @@ fn repo_root() -> Option<PathBuf> {
 /// The pinned dsh version: the flag wins, then `.dsh-version.json`.
 ///
 /// There is deliberately NO built-in fallback. A stale hard-coded pin would
-/// mean a shell that quietly runs a different harness than `run-web.bat` does, so
+/// mean a shell that quietly runs a different harness than `scripts\run-web.bat`, so
 /// an unreadable manifest is an error that names the file.
 fn resolve_version(options: &Options) -> Result<String, String> {
     if let Some(version) = options.dsh_version.as_ref().filter(|value| !value.is_empty()) {
@@ -245,7 +245,7 @@ fn chosen_home(flag: Option<&str>, inherited: Option<&str>) -> Option<String> {
 ///
 /// `None` means the child is given no `DSH_HOME` at all, which is the point:
 /// the harness then applies its own default (`~/.dsh`) exactly as it does when
-/// `run-web.bat` starts it. This shell must never derive a harness home from the
+/// `scripts\run-web.bat` starts it. This shell must never derive a harness home from
 /// user's home directory, because `DSH_HOME` names the harness's own folder
 /// under it - not the home itself. Handing `%USERPROFILE%` over as `DSH_HOME`
 /// is not a cosmetic mistake: the harness accepts it, finds no profile there,
@@ -327,7 +327,8 @@ fn warn_when_pack_missing(options: &Options) {
             "  - there is no web profile at {} yet.",
             profile_dir.display()
         );
-        println!("    Run install.bat (or ./install.sh) first if you expected this pack's bundles.");
+        println!("    Run scripts\\install.bat (or ./scripts/install.sh) first if you expected");
+        println!("    this pack's bundles.");
         return;
     }
     let installed = std::fs::read_to_string(&manifest)
@@ -350,7 +351,8 @@ fn warn_when_pack_missing(options: &Options) {
             "  - the web profile at {} does not list this pack's bundles yet.",
             profile_dir.display()
         );
-        println!("    Run install.bat (or ./install.sh) first if you expected the pack to be there.");
+        println!("    Run scripts\\install.bat (or ./scripts/install.sh) first if you expected the");
+        println!("    pack to be there.");
     }
 }
 
@@ -380,7 +382,7 @@ fn port_is_free(port: u16) -> bool {
 /// The port to ask the harness for: `-Port`, else the harness's own default
 /// when it is free, else any free one.
 ///
-/// The middle case is what makes the window open on the same origin a `run-web.bat`
+/// The middle case is what makes the window open on the same origin a `scripts\run-web.bat`
 /// tab does. It cannot change WHICH app is shown - the loaded URL is the one the
 /// harness prints - so a wrong guess here is only a lost preference, never a
 /// wrong page.
@@ -983,7 +985,7 @@ fn kill_child_tree() {
 ///
 /// The shell still only RUNS. It unpacks, then executes the unpacked folder's
 /// own `START-HERE`, which installs the pack and then starts the unpacked
-/// `vncode`; that keeps the rule the launchers are built on - `install.bat`
+/// `vncode`; that keeps the rule the launchers are built on - `scripts\install.bat`
 /// installs and never opens the app, `vncode.exe` opens the app and never
 /// installs - instead of teaching this binary to install things.
 fn run_standalone_payload() -> Option<i32> {

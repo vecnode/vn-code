@@ -23,14 +23,15 @@
 #  handed to a browser after the URL has been checked to be a loopback address.
 #
 #  POSIX shell only: this script needs Node.js (>= 22) with npm/npx - never
-#  PowerShell. The Windows half is the root `run-web.bat`, which forwards to
-#  scripts/run-web.ps1 - the entry point there is batch so a double-click works,
-#  while the watching-and-opening half is PowerShell, because cmd reads a child's
+#  PowerShell. The Windows half is `scripts/run-web.bat`, which forwards to
+#  run-web.ps1 beside this file - the entry point there is batch, so a
+#  double-click works, while the watching-and-opening half is PowerShell,
+#  because cmd reads a child's
 #  output only up to EOF. The two halves do the same work with the same flags,
 #  print the same messages and put the same tab on screen, so keep them in step.
 #
 #  Usage:
-#    ./run-web.sh [-Port <n>] [-DshHome <dir>] [-DshVersion <version>]
+#    ./scripts/run-web.sh [-Port <n>] [-DshHome <dir>] [-DshVersion <version>]
 #             [-NoBrowser] [-DefaultBrowser]
 # ============================================================
 set -u
@@ -39,14 +40,15 @@ case "$0" in
   */*) script_dir=${0%/*} ;;
   *) script_dir=. ;;
 esac
-# This script lives at the repository root, so it is its own root.
+# This script lives in scripts/, so the repository root is its PARENT folder:
+# .dsh-version.json is read from there.
 script_dir=$(CDPATH= cd -- "$script_dir" && pwd)
-repo_root=$script_dir
+repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 
 # The console contract - colour only on a terminal, NO_COLOR honoured, and the
 # same words the Windows half prints - is defined ONCE for every POSIX entry
-# point: scripts/console/theme.sh, the twin of scripts/console/theme.ps1.
-. "$repo_root/scripts/console/theme.sh"
+# point: console/theme.sh, the twin of console/theme.ps1.
+. "$script_dir/console/theme.sh"
 
 # -NoPause means never hold the window open. The Windows half reads the same
 # convention (VNCODE_PAUSE=0), so the flag behaves identically on both hosts.
@@ -60,7 +62,7 @@ default_browser=0
 
 usage() {
   printf '%s\n' \
-    'Usage: sh run-web.sh [-Port <n>] [-DshHome <dir>] [-DshVersion <version>]' \
+    'Usage: sh scripts/run-web.sh [-Port <n>] [-DshHome <dir>] [-DshVersion <version>]' \
     '                 [-NoBrowser] [-DefaultBrowser]' \
     '' \
     '  -Port <n>          listen on this port instead of the default (3080)' \
@@ -71,8 +73,9 @@ usage() {
     '  -NoPause           never hold this window open' \
     '  -Help / -h / --help   print this help' \
     '' \
-    'Run it from the repository root (it reads .dsh-version.json from there);' \
-    'the Windows half is run-web.bat, which does exactly the same thing.'
+    'Run it from anywhere: .dsh-version.json is read from the repository root,' \
+    'the folder above scripts/. The Windows half is scripts/run-web.bat, which' \
+    'does exactly the same thing.'
 }
 
 while [ $# -gt 0 ]; do
@@ -90,7 +93,7 @@ while [ $# -gt 0 ]; do
     -Help|--help|-h) usage; exit 0 ;;
     *)
       printf 'vncode: unknown option "%s"\n' "$1" >&2
-      printf 'Run "sh run-web.sh --help" for the accepted options.\n' >&2
+      printf 'Run "sh scripts/run-web.sh --help" for the accepted options.\n' >&2
       exit 2
       ;;
   esac
@@ -256,7 +259,7 @@ if [ -f "$harness_home/profiles/web/package.json" ]; then
     process.exit(Array.isArray(held) && held.indexOf("dsh-rightbar") >= 0 ? 0 : 1);
   ' "$harness_home/profiles/web/package.json" >/dev/null 2>&1; then
     printf "  - the web profile at %s does not list this pack's bundles yet.\n" "$harness_home/profiles/web"
-    printf '    Run ./install.sh first if you expected the pack to be there.\n'
+    printf '    Run ./scripts/install.sh first if you expected the pack to be there.\n'
   fi
 fi
 

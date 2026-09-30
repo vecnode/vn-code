@@ -1,6 +1,6 @@
 # Deploying vncode
 
-What stands between today's `distribute.bat` and a distribution somebody can run
+What stands between today's `scripts\distribute.bat` and a distribution somebody can run
 on a machine that has never seen Node, plus the launcher contract, the state map
 and the CI plan for the three operating systems.
 
@@ -20,7 +20,7 @@ Keep all four; every change below has to preserve them.
 | | |
 |---|---|
 | **One ship list** | `scripts/dist-manifest.txt`, read by both halves, with a tracked check that fails when a bundle appears under `packages/` that the list does not carry |
-| **One implementation per host, no drift** | `distribute.bat` → `scripts/dist.ps1` is literally the file `windows-latest` runs with `-Verify` |
+| **One implementation per host, no drift** | `scripts\distribute.bat` → `scripts/dist.ps1` is literally the file `windows-latest` runs with `-Verify` |
 | **`-Verify` is a real proof** | copies the folder elsewhere, installs from the copy into a throwaway home, asserts the profile lists every bundle the folder carries, boots the pinned harness, waits for the ready line, proves the port is free again |
 | **The launch token rules** | read in memory, never written, echoed or shelled; a non-loopback ready line refused rather than opened (`Test-LoopbackUrl`, `readyline.rs`) |
 
@@ -95,7 +95,7 @@ pack started for them.
 
 The current batch files are correct but plain: they hardcode `powershell` (5.1),
 never set a code page, print no colour, always `pause`, and open in `conhost`
-even when Windows Terminal is the default terminal application. `run-desktop.bat`
+even when Windows Terminal is the default terminal application. `scripts\run-desktop.bat`
 is worse than the others — it is **not shipped in the distribution at all** (it is
 absent from `dist-manifest.txt`, verified in the built folder), it embeds its own
 build logic in batch, and its echo wording differs from the other four. §5 is the
@@ -116,14 +116,14 @@ Windows Server 2025 image is `windows-latest`; ARM64 runners exist for all three
 OSes (`windows-11-arm`, `macos-15`, `ubuntu-22.04-arm`). §7 is the corrected
 matrix.
 
-Two smaller workflow gaps: `run-desktop.bat` is not in the `paths:` filter (a push
+Two smaller workflow gaps: `scripts\run-desktop.bat` is not in the `paths:` filter (a push
 touching only it rebuilds nothing), and the 60-minute timeout is thin once each
 leg installs a 223 MB closure that no cache currently holds.
 
 ### G8 — release hygiene
 
 The whole distribution feature is **untracked** (`git status`: `.github/`,
-`distribute.bat`, `distribute.sh`, `docs/DISTRIBUTE.md`, `scripts/dist.ps1`,
+`scripts\distribute.bat`, `scripts/distribute.sh`, `docs/DISTRIBUTE.md`, `scripts/dist.ps1`,
 `scripts/dist.sh`, `scripts/dist-manifest.txt`,
 `scripts/checks/check-dist-layout.mjs`), on `main` at `origin`
 `https://github.com/vecnode/vncode.git`. Nothing CI-related has ever run.
@@ -234,7 +234,7 @@ of machinery in this plan:
 
 ```sh
 sh scripts/dist.sh -Verify -Offline          # macOS / Linux
-distribute.bat -Verify -Offline              # Windows
+scripts\distribute.bat -Verify -Offline              # Windows
 ```
 
 `-Offline` runs the whole existing verify — copy the folder, install from the
@@ -267,18 +267,18 @@ The POSIX halves (`*.sh`) mirror the behaviour, never the mechanism: plain
 
 | File | Host | Role |
 |---|---|---|
-| `install.bat` / `install.sh` | both | add this folder's bundles to the web profile; no admin, ever |
-| `uninstall.bat` / `uninstall.sh` | both | remove only what this pack added |
-| `run-web.bat` / `run-web.sh` | both | start the pinned harness and open it in Chrome (default browser as fallback) |
-| `run-desktop.bat` | Windows | the same harness in the native window (`vncode.exe`) |
-| `distribute.bat` / `distribute.sh` | both | maintainer only — build/assemble/verify a distribution; not shipped |
+| `scripts\install.bat` / `scripts/install.sh` | both | add this folder's bundles to the web profile; no admin, ever |
+| `scripts\uninstall.bat` / `scripts/uninstall.sh` | both | remove only what this pack added |
+| `scripts\run-web.bat` / `scripts/run-web.sh` | both | start the pinned harness and open it in Chrome (default browser as fallback) |
+| `scripts\run-desktop.bat` | Windows | the same harness in the native window (`vncode.exe`) |
+| `scripts\distribute.bat` / `scripts/distribute.sh` | both | maintainer only — build/assemble/verify a distribution; not shipped |
 | `START-HERE.bat` / `START-HERE.sh` | generated | install, then run — the one file a recipient double-clicks |
 
-> **Naming — DECIDED, and done.** The browser launcher is now `run-web.bat` /
-> `run-web.sh`: clearer beside `run-desktop.bat`, and it matches the flag split
+> **Naming — DECIDED, and done.** The browser launcher is now `scripts\run-web.bat` /
+> `scripts/run-web.sh`: clearer beside `scripts\run-desktop.bat`, and it matches the flag split
 > already in the code (`scripts/run-web.ps1`). The rename was taken all the way,
-> with **no `run.bat` forwarder** — so `AGENTS.md`'s rule that the root entry
-> point sits beside its twin now names `run-web.bat`.
+> with **no `run.bat` forwarder** — and every launcher, entry points included,
+> now lives in `scripts/` beside its twin.
 
 ### The adaptive rules (Windows `.bat`)
 
@@ -304,13 +304,13 @@ The POSIX halves (`*.sh`) mirror the behaviour, never the mechanism: plain
 5. **`pause` only when the window would vanish.** Pause on failure when the file
    was double-clicked (stdin is a console and the parent is Explorer); never with
    `-NoPause` / `-Quiet`, never when stdin is not a terminal, and never after a
-   Ctrl+C (the current `run-web.bat` already gets this right by keying on exit code
+   Ctrl+C (the current `scripts\run-web.bat` already gets this right by keying on exit code
    1 — keep that trick, it is the correct one).
 6. **No elevation.** The install is per-user. Say so once, in the banner. If the
    user happens to be elevated, note it and carry on — never ask for admin.
 7. **Flags, uniformly.** `-Help`, `--help`, `-h`, `/?` all print the same help in
-   every file (today `run-desktop.bat` handles more spellings than the others);
-   add `-Quiet` and `-NoPause` everywhere, and `-NoBuild` to `run-desktop.bat`.
+   every file (today `scripts\run-desktop.bat` handles more spellings than the others);
+   add `-Quiet` and `-NoPause` everywhere, and `-NoBuild` to `scripts\run-desktop.bat`.
 8. **One exit-code vocabulary**, documented in each help and in `DIST-README.txt`:
    `0` success, `1` own failure/usage, `2` preflight (a required tool is missing),
    `3` install failure, `4` verify failure. A caller can then tell "you used a bad
@@ -320,7 +320,7 @@ The POSIX halves (`*.sh`) mirror the behaviour, never the mechanism: plain
    `scripts/console/theme.ps1` the colour/width ones, dot-sourced by the workers.
    The five entry files stay thin forwarders, and `check-dist-layout.mjs` pins the
    parity — five copies of a 15-line header is exactly how launchers drift.
-10. **`run-desktop.bat` finally ships**, and it does the *right* thing in a
+10. **`scripts\run-desktop.bat` finally ships**, and it does the *right* thing in a
     distribution: when `vncode.exe` is present and `app/src-tauri/target/`
     (or a Rust toolchain) is not, it runs the binary directly — no cargo, no
     build, no error. In a source checkout it builds as it does today.
@@ -398,7 +398,7 @@ sentinels, and `dist/` being ignored. It should also assert:
 
 - the workflow's runner labels are ones that exist (the `macos-13` failure would
   have been caught here rather than on `main`);
-- `run-desktop.bat` and the console helpers are in `dist-manifest.txt`, and every
+- `scripts\run-desktop.bat` and the console helpers are in `dist-manifest.txt`, and every
   shipped entry point appears in the workflow's `paths:` filter;
 - the launch path contains no `npx` **when `runtime/dsh` exists**, and
   `dist-manifest.txt` carries `runtime/dsh`, `runtime/node` and `runtime/pnpm` at
@@ -449,9 +449,9 @@ is byte-for-byte what it is today:
 
 - `npx @deepseek-ai/dsh@<pin> web` serves the pack, and the packages are live
   links, so an edit to a `client.js` is already "installed";
-- `install.bat` / `run-web.bat` / `run-desktop.bat` behave as they do now, including
+- `scripts\install.bat` / `scripts\run-web.bat` / `scripts\run-desktop.bat` behave as they do now, including
   `-Force`, the `-SkipBuild` fast path and the cargo freshness cache;
-- `distribute.bat -Verify` remains the one command that proves a change end to end;
+- `scripts\distribute.bat -Verify` remains the one command that proves a change end to end;
 - optional host engines (TeX, poppler/mutool/Ghostscript, tesseract) stay optional
   and keep degrading in a sentence;
 - nothing in `packages/` learns that a distribution exists.
@@ -468,9 +468,9 @@ decision; step 3 is the big one.
 
 | # | Work | Proof |
 |---|---|---|
-| 1 | **Fix the matrix** (`macos-13` → `macos-15-intel`, `macos-14` → `macos-15`), add `run-desktop.bat` to the `paths:` filter, raise the timeout, teach `check-dist-layout.mjs` to validate runner labels | `node scripts/checks/check-dist-layout.mjs`; a `workflow_dispatch` run that goes green on four legs |
-| 2 | **The launcher contract** (§5): `scripts/console/adapt.cmd` + `theme.ps1`, rewrite the five entry points, ship `run-desktop.bat`, add `-Quiet` / `-NoPause`, unify help and exit codes, keep the POSIX halves PowerShell-free | a new tracked check for parity + flag coverage; a manual double-click pass on Windows (Terminal present and absent) |
-| 3 | **L1 — vendor the harness**: `runtime/dsh` built per OS in CI, launchers resolve it first, manifest carries it, `-Verify -Offline` gate added | `distribute.bat -Verify -Offline` green, and `profiles/node_modules` junctions visibly pointing inside the folder |
+| 1 | **Fix the matrix** (`macos-13` → `macos-15-intel`, `macos-14` → `macos-15`), add `scripts\run-desktop.bat` to the `paths:` filter, raise the timeout, teach `check-dist-layout.mjs` to validate runner labels | `node scripts/checks/check-dist-layout.mjs`; a `workflow_dispatch` run that goes green on four legs |
+| 2 | **The launcher contract** (§5): `scripts/console/adapt.cmd` + `theme.ps1`, rewrite the five entry points, ship `scripts\run-desktop.bat`, add `-Quiet` / `-NoPause`, unify help and exit codes, keep the POSIX halves PowerShell-free | a new tracked check for parity + flag coverage; a manual double-click pass on Windows (Terminal present and absent) |
+| 3 | **L1 — vendor the harness**: `runtime/dsh` built per OS in CI, launchers resolve it first, manifest carries it, `-Verify -Offline` gate added | `scripts\distribute.bat -Verify -Offline` green, and `profiles/node_modules` junctions visibly pointing inside the folder |
 | 4 | **L2 — vendor the Node runtime** per RID, checksum-verified against the official `SHASUMS256.txt`, npm/npx/corepack trimmed, `BUILD-INFO.json` records version + hash | `-Verify -Offline` green with `node` removed from `PATH` |
 | 5 | **L3 — vendor pnpm**, point the installer at it, pin the store inside `$DSH_HOME`, run the profile install `--offline` | `-Verify -Offline` green from a cold scratch home with the registry pointed at a dead address |
 | 6 | **Shrink the closure** — measure, prune one package at a time (telemetry first), keep only what `-Verify` still passes with | size reported per run; the verify is the only acceptance test |
@@ -487,7 +487,7 @@ installed at all.
 
 **Decided and delivered (steps 1–2):**
 
-1. **The rename — done.** `run-web.bat` / `run-web.sh`, taken fully, no forwarder.
+1. **The rename — done.** `scripts\run-web.bat` / `scripts/run-web.sh`, taken fully, no forwarder.
    Every mention across the repo moved with it, and `AGENTS.md` now records it.
 2. **The ladder target — L2.** Vendor the harness closure *and* a Node runtime, so
    a bare machine can run the folder with no prerequisites at all (~100–115 MB
@@ -498,7 +498,7 @@ installed at all.
    per leg once it has been green twice.
 
 Delivered in this change, with the tracked check extended to pin it: the corrected
-runner matrix, `run-desktop.bat` in the ship list, the shared console layer
+runner matrix, `scripts\run-desktop.bat` in the ship list, the shared console layer
 (`scripts/console/adapt.cmd` + `theme.ps1` + `theme.sh`), all five Windows entry
 points and all four POSIX ones on it, `-NoPause` / `-NoTerminal` / four help
 spellings everywhere, the generated `START-HERE` and `DIST-README` updated, and
@@ -513,7 +513,7 @@ the distributer explicitly excluded from its own output.
 5. **The POSIX workers' internal messages** still print with plain `printf`
    rather than the `theme.sh` writers the entry points use. Behaviour parity
    (flags, help, exit codes, no PowerShell) is complete; colour parity inside
-   `install-all.sh` / `uninstall-all.sh` / `run-web.sh` / `dist.sh` is polish that
+   `install-all.sh` / `uninstall-all.sh` / `scripts/run-web.sh` / `dist.sh` is polish that
    can be adopted incrementally, because `theme.sh` is already sourced where it
    matters.
 

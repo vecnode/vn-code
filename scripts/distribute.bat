@@ -18,10 +18,10 @@ rem  (minus the trees named in scripts\dist-manifest.txt) plus the
 rem  built binary, so it is build output and never content.
 rem
 rem  This file is batch only, so Windows asks no execution-policy
-rem  question before starting; the work is scripts\dist.ps1 - the
+rem  question before starting; the work is dist.ps1 beside this file - the
 rem  SAME file .github\workflows\distribute.yml runs on
 rem  windows-2022, so a local run and a CI run cannot drift.
-rem  macOS/Linux: ./distribute.sh is the same thing in POSIX sh.
+rem  macOS/Linux: ./scripts/distribute.sh is the same thing in POSIX sh.
 rem
 rem  Flags (forwarded to the worker; the full list is in its help):
 rem    -Version <v>      override the pack version used in the names
@@ -42,12 +42,12 @@ rem  build step (skip it with -SkipBuild), Node.js 22+ for -Verify,
 rem  and git/node only for the version stamps.
 rem
 rem  The console this runs in is decided in ONE place for every
-rem  entry point: scripts\console\adapt.cmd.
+rem  entry point: console\adapt.cmd.
 rem ============================================================
 setlocal
 
 if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
-call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode distributer"
+call "%~dp0console\adapt.cmd" "%~f0" "vncode distributer"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
@@ -66,15 +66,15 @@ rem other flags. Rewriting the whole string is what keeps this safe for a -DshHo
 rem path that legitimately contains "-h". See install.bat.
 if defined VN_HELPREQ set "VNCODE_ARGS=-Help"
 
-rem -NoTerminal is the LAUNCHER's flag and scripts\dist.ps1 declares no such
+rem -NoTerminal is the LAUNCHER's flag and dist.ps1 declares no such
 rem parameter; forwarding it would make PowerShell stop on an argument it cannot
 rem bind. See install.bat for the whole reason. Safe with no arguments at all:
-rem scripts\console\adapt.cmd stores "no arguments" as one space, so VN_SHELL_ARGS
+rem console\adapt.cmd stores "no arguments" as one space, so VN_SHELL_ARGS
 rem is always defined.
 set "VN_SHELL_ARGS=%VNCODE_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 
-"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\dist.ps1" %VN_SHELL_ARGS%
+"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0dist.ps1" %VN_SHELL_ARGS%
 set "VN_EXIT=%ERRORLEVEL%"
 
 echo.
@@ -100,7 +100,7 @@ echo  Windows PowerShell 5.1 ships with every supported version of
 echo  Windows; if it is missing, install PowerShell 7 from
 echo  https://aka.ms/powershell and run this file again.
 echo.
-echo  (macOS and Linux do not use PowerShell for this: run ./distribute.sh.)
+echo  (macOS and Linux do not use PowerShell for this: run ./scripts/distribute.sh.)
 echo.
 if "%VNCODE_PAUSE%"=="1" pause
 exit /b 2

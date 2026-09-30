@@ -4,14 +4,14 @@
     Starts the DeepSeek Harness web GUI and opens it in a browser.
 
 .DESCRIPTION
-    This is the WINDOWS half of the launcher; macOS and Linux run the root
-    `run-web.sh` instead (plain POSIX shell - Node.js with npm/npx and no PowerShell
-    at all). On Windows the entry point is the root `run-web.bat`, which is a
-    double-click wrapper that forwards its flags here - this file is the worker
-    and holds all the logic, and it sits in `scripts/` beside the installer
-    scripts so the repository root stays clean. Both halves do the same work with
-    the same flags, print the same messages and put the same tab on screen, so
-    keep them in step.
+    This is the WINDOWS half of the launcher; macOS and Linux run
+    `scripts/run-web.sh` instead (plain POSIX shell - Node.js with npm/npx and no
+    PowerShell at all). On Windows the entry point is `scripts/run-web.bat`, the
+    double-click wrapper next door that forwards its flags here - this file is the
+    worker and holds all the logic. It lives in `scripts/` with every other
+    launcher, so the repository root carries no .bat and no .sh at all. Both
+    halves do the same work with the same flags, print the same messages and put
+    the same tab on screen, so keep them in step.
 
     It can also be run directly:
 
@@ -60,9 +60,9 @@
     Print the accepted flags and exit.
 
 .EXAMPLE
-    run-web.bat
+    scripts\run-web.bat
 .EXAMPLE
-    run-web.bat -Port 3099 -DefaultBrowser
+    scripts\run-web.bat -Port 3099 -DefaultBrowser
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-web.ps1 -Help
 #>
@@ -137,7 +137,7 @@ function Write-Step($msg) { Write-VnStep $msg }
 
 function Show-Usage {
     Write-Host ''
-    Write-Host 'Usage: run-web.bat [flags]'
+    Write-Host 'Usage: scripts\run-web.bat [flags]'
     Write-Host ''
     Write-Host '  -Port <n>          listen on this port instead of the default (3080)'
     Write-Host '  -DshHome <dir>     override DSH_HOME (default: $env:DSH_HOME, else ~/.dsh)'
@@ -148,10 +148,11 @@ function Show-Usage {
     Write-Host '                     the window, so run-web.bat is what holds it open'
     Write-Host '  -Help / -h / /?    print this help'
     Write-Host ''
-    Write-Host 'run-web.bat at the repository root is the entry point - double-click it, or'
-    Write-Host 'pass any of the flags above; it forwards them to this script. Run it from'
-    Write-Host 'the repository root either way, because .dsh-version.json is read there.'
-    Write-Host 'macOS and Linux use ./run-web.sh, which does exactly the same thing.'
+    Write-Host 'scripts\run-web.bat is the entry point - double-click it, or pass any of'
+    Write-Host 'the flags above; it forwards them to this script. It runs from any current'
+    Write-Host 'directory: this worker resolves .dsh-version.json in the repository root,'
+    Write-Host 'the folder ABOVE scripts/.'
+    Write-Host 'macOS and Linux use ./scripts/run-web.sh, which does exactly the same thing.'
     Write-Host ''
 }
 
@@ -304,7 +305,7 @@ if (Test-Path $profileManifest) {
 }
 if (-not $packInstalled) {
     Write-Host "  - the web profile at $profileDir does not list this pack's bundles yet."
-    Write-Host '    Run install.bat (or ./install.sh) first if you expected the pack to be there.'
+    Write-Host '    Run scripts\install.bat (or ./scripts/install.sh) first if you expected the pack to be there.'
 }
 
 $npx = Get-ToolPath -Names (Get-ToolNames -Name 'npx')

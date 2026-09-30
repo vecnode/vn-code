@@ -9,10 +9,11 @@
 #  themselves is left alone, and no session, setting or credential is touched.
 #
 #  Needs Node.js (>= 22) with npm/npx - NOT PowerShell, ever. The work lives in
-#  scripts/uninstall-all.sh, which uninstall.bat's PowerShell twin mirrors with
-#  scripts/uninstall-all.ps1.
+#  uninstall-all.sh beside this file, which uninstall.bat's PowerShell twin
+#  mirrors with uninstall-all.ps1. This file lives in scripts/, so the
+#  repository root is its PARENT folder.
 #
-#  Flags (forwarded to scripts/uninstall-all.sh - run with -Help for the list):
+#  Flags (forwarded to uninstall-all.sh beside this file - run with -Help):
 #    -Plugin <name>     remove only the matching bundle(s)
 #    -DshHome <dir>     use this harness home instead of $DSH_HOME
 #    -ProfileName <n>   remove from this profile (default: web)
@@ -23,7 +24,7 @@
 #  No administrator rights are needed or requested.
 #
 #  The colour decision is made in ONE place for every POSIX entry point:
-#  scripts/console/theme.sh, the twin of scripts/console/theme.ps1.
+#  console/theme.sh, the twin of console/theme.ps1.
 # ============================================================
 set -u
 
@@ -31,17 +32,19 @@ case "$0" in
     */*) here=${0%/*} ;;
     *) here=. ;;
 esac
+# This script lives in scripts/, so the repository root is its PARENT folder:
+# uninstall-all.sh below resolves it the same way.
 here=$(CDPATH= cd -- "$here" && pwd)
 
-. "$here/scripts/console/theme.sh"
+. "$here/console/theme.sh"
 
 case " $* " in *" -NoPause "*) VNCODE_PAUSE=0 ;; esac
 
 if vn_wants_help "$@"; then
-    exec sh "$here/scripts/uninstall-all.sh" -Help
+    exec sh "$here/uninstall-all.sh" -Help
 fi
 
-sh "$here/scripts/uninstall-all.sh" "$@"
+sh "$here/uninstall-all.sh" "$@"
 status=$?
 
 echo

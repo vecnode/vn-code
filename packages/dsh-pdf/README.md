@@ -457,8 +457,8 @@ list the engine reports, and that the per-call cap names the pages it left.
 The package is discovered from `packages/`; both installers pick it up:
 
 ```
-install.bat -Force        # Windows
-./install.sh -Force       # macOS / Linux
+scripts\install.bat -Force        # Windows
+./scripts/install.sh -Force       # macOS / Linux
 ```
 
 Then restart the app and hard-refresh the browser (client bundles are read at

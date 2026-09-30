@@ -22,8 +22,8 @@ other, and the Unix half never needs PowerShell).
 
 | | Windows | macOS / Linux |
 |---|---|---|
-| **Native window** | `run-desktop.bat` | `cargo build --release` in `app/src-tauri` |
-| **Browser tab** | `run-web.bat` | `./run-web.sh` |
+| **Native window** | `scripts\run-desktop.bat` | `cargo build --release` in `app/src-tauri` |
+| **Browser tab** | `scripts\run-web.bat` | `./scripts/run-web.sh` |
 
 Both start `npx @deepseek-ai/dsh@<pin> web` and open the URL it prints: the native
 window loads it in a WebView2 / WKWebView / WebKitGTK window, the other in Chrome,

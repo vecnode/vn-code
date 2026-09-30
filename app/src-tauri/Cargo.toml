@@ -7,7 +7,7 @@ license = "MIT"
 publish = false
 
 # The binary is a CONSOLE application on purpose, and that is load-bearing:
-# run-desktop.bat runs it in the FOREGROUND so the harness's own output - with
+# scripts/run-desktop.bat runs it in the FOREGROUND so the harness's own output -
 # the launch token redacted - stays readable in that window, and the shell
 # prints its own diagnostics (cargo/npx failures, a server that never became
 # ready) to the same place. Adding `#![windows_subsystem = "windows"]` would

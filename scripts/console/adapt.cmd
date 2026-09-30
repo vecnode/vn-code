@@ -5,8 +5,9 @@ rem  in this repository.
 rem
 rem  WHY THIS FILE EXISTS
 rem  --------------------
-rem  install.bat, uninstall.bat, run-web.bat, run-desktop.bat and distribute.bat
-rem  all have to answer the same five questions before they do any work: which
+rem  scripts\install.bat, scripts\uninstall.bat, scripts\run-web.bat,
+rem  scripts\run-desktop.bat and scripts\distribute.bat all have to answer the
+rem  same five questions before they do any work: which
 rem  window am I in, which PowerShell do I have, can this console show colour,
 rem  should I hold the window open at the end, and what were my real arguments?
 rem  Five batch files that each answered those themselves would drift, and the
@@ -16,10 +17,13 @@ rem  Batch has no `include` - but it has `call`, and it has `exit /b`. This is
 rem  the include. It is deliberately tiny, and it must NOT use `setlocal`, so
 rem  that everything it decides is still set when it returns.
 rem
-rem  HOW A CALLER USES IT (exactly three lines, always in this order)
+rem  HOW A CALLER USES IT (exactly three lines, always in this order). The path
+rem  differs by where the caller lives: a launcher in scripts\ reaches this file
+rem  as `%~dp0console\adapt.cmd`, while the generated START-HERE.bat at a
+rem  distribution root uses `%~dp0scripts\console\adapt.cmd`.
 rem  ----------------------------------------------------------------
 rem      if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
-rem      call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode installer"
+rem      call "%~dp0console\adapt.cmd" "%~f0" "vncode installer"
 rem      if errorlevel 10 exit /b 0
 rem      if errorlevel 2 goto :nopowershell
 rem
@@ -92,7 +96,7 @@ rem
 rem One space is the defined value that fixes it: it holds no flag, so every test
 rem below reads it exactly as it reads a flagged run, and it is harmless wherever
 rem it is forwarded - cmd and Rust both split argv on whitespace, so a lone space
-rem never arrives as an argument (measured: run-desktop.bat with no arguments
+rem never arrives as an argument (measured: scripts\run-desktop.bat with none
 rem starts the shell normally). This file is the ONLY place that has to know,
 rem because it must NOT setlocal - its decisions stay visible to the caller by
 rem design - so repairing both names here, once, covers all five entry points.

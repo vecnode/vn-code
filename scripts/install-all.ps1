@@ -17,7 +17,7 @@
     generation snapshot and is no longer installed into.
 
     Runs on Windows PowerShell 5.1 and on PowerShell 7+ (pwsh). The launchers are
-    install-all.bat and the root install.bat; every path, executable name and the
+    install-all.bat and scripts\install.bat; every path, executable name and the
     PATH separator is resolved per platform, so nothing here assumes a particular
     Windows layout.
 
@@ -73,7 +73,7 @@ Initialize-VnConsole
 
 function Show-Usage {
     Write-Host ''
-    Write-Host 'Usage: install.bat [flags]'
+    Write-Host 'Usage: scripts\install.bat [flags]'
     Write-Host ''
     Write-Host '  -Target <web|cli>  which install to add the bundles to (default: web)'
     Write-Host '  -Plugin <name>     install only the bundles matching this substring'
@@ -84,9 +84,11 @@ function Show-Usage {
     Write-Host '  -NoPause           never hold this window open'
     Write-Host '  -Help / -h / /?    print this help'
     Write-Host ''
-    Write-Host 'install.bat is the entry point and forwards every flag here. Run it from'
-    Write-Host 'the repository root either way, because .dsh-version.json is read there.'
-    Write-Host 'macOS and Linux use ./install.sh, which does exactly the same thing.'
+    Write-Host 'scripts\install.bat is the entry point and forwards every flag here. It'
+    Write-Host 'lives in scripts/ beside this worker, and resolves .dsh-version.json in'
+    Write-Host 'the repository root - the folder ABOVE scripts/ - so it runs from any'
+    Write-Host 'current directory.'
+    Write-Host 'macOS and Linux use ./scripts/install.sh, which does exactly the same thing.'
     Write-Host ''
 }
 
@@ -544,11 +546,12 @@ Write-Host ''
 Write-Step 'Done.'
 Write-Host ''
 Write-Host 'Next steps:'
-Write-Host '  - START it with run-web.bat (Windows) or ./run-web.sh (macOS/Linux): that is'
+Write-Host '  - START it with scripts\run-web.bat (Windows) or ./scripts/run-web.sh'
+Write-Host '    (macOS/Linux): that is'
 Write-Host '    "npx @deepseek-ai/dsh web" plus the browser hand-off - it opens the'
 Write-Host '    URL the app prints, token included, in Chrome (default browser as'
 Write-Host '    the fallback) and keeps the harness in that window. On Windows,'
-Write-Host '    just double-click run-web.bat at the repo root.'
+Write-Host '    just double-click scripts\run-web.bat.'
 Write-Host '  - RESTART the app to load the changes. Stop the running'
 Write-Host '    "npx @deepseek-ai/dsh web" (Ctrl+C), start it again, then'
 Write-Host '    HARD-REFRESH the browser tab (Ctrl+F5). The client bundle'

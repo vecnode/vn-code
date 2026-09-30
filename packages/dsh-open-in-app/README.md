@@ -75,7 +75,7 @@ OS-neutral.)
 
 ## Install / uninstall
 
-The repo launcher (`install.bat` on Windows, `./install.sh` on macOS/Linux)
+The repo launcher (`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux)
 auto-discovers this package - it is a standard `dsh.bundle`. Adding a package
 changes the profile's bundle set, and a bundle the profile does not list yet is
 added by one plain launcher run (no `-Force` needed); after that a plain run is

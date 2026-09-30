@@ -127,7 +127,7 @@ function Get-ToolNames {
 
 function Show-Usage {
     Write-Host ''
-    Write-Host 'Usage: distribute.bat [flags]'
+    Write-Host 'Usage: scripts\distribute.bat [flags]'
     Write-Host ''
     Write-Host '  -Version <v>      override the pack version used in the names'
     Write-Host '  -SkipBuild        reuse the binary already under app/src-tauri/target/release'
@@ -144,7 +144,9 @@ function Show-Usage {
     Write-Host ''
     Write-Host 'Builds dist/vncode-<version>-<rid>/ from scripts/dist-manifest.txt plus the'
     Write-Host 'built shell, and zips it beside itself. dist/ is never committed.'
-    Write-Host 'macOS/Linux: ./distribute.sh is the same thing in POSIX shell.'
+    Write-Host 'macOS/Linux: ./scripts/distribute.sh is the same thing in POSIX shell.'
+    Write-Host 'Run it from anywhere: it lives in scripts/ and resolves the repository root'
+    Write-Host 'as the folder above.'
     Write-Host ''
 }
 
@@ -413,7 +415,7 @@ function New-StartHere {
             'rem  already has at their current version and re-adds the ones',
             'rem  whose version moved. If you installed the pack already and',
             'rem  want to skip the check, run vncode.exe directly - or',
-            'rem  run-desktop.bat, which finds and runs that same binary.',
+            'rem  scripts\run-desktop.bat, which finds and runs that same binary.',
             'rem',
             'rem  The console this runs in is decided by the shipped',
             'rem  scripts\console\adapt.cmd, exactly as it is for the other',
@@ -453,8 +455,8 @@ function New-StartHere {
             'rem The shell takes -Port / -DshHome / -DshVersion / -Help and NOTHING',
             'rem else: it NAMES an unknown flag and exits 1 rather than ignoring it, so',
             'rem that a typo is never silently dropped. -NoPause is this launcher''s own',
-            'rem flag (-NoTerminal is already gone above), and run-desktop.bat drops the',
-            'rem same set before the shell sees it.',
+            'rem flag (-NoTerminal is already gone above), and scripts\run-desktop.bat',
+            'rem drops the same set before the shell sees it.',
             'set "VN_APP_ARGS=%VN_SHELL_ARGS%"',
             'set "VN_APP_ARGS=%VN_APP_ARGS:-NoPause=%"',
             '"%~dp0vncode.exe" %VN_APP_ARGS%',
@@ -592,18 +594,23 @@ function New-DistReadme {
         '  folder, wherever it now is) and then open the window. Already',
         '  installed? Run vncode.exe (./vncode) and skip the check.',
         '',
-        '  The window shows the SAME profile a run-web.bat / ./run-web.sh browser tab',
-        '  shows, so sessions, settings and everything the pack remembers are',
-        '  shared with it.',
+        '  The window shows the SAME profile a scripts/run-web.bat or a',
+        '  ./scripts/run-web.sh browser tab shows, so sessions, settings and',
+        '  everything the pack remembers are shared with it.',
         '',
         'THE LAUNCHERS',
+        '  Every launcher lives in scripts/; the repository root carries none.',
+        '',
         '  vncode.exe | ./vncode    the app in its native window',
-        '  run-desktop.bat                  the same, started from a console - and',
-        '                                   it needs no Rust, because it runs the',
-        '                                   binary sitting beside it',
-        '  run-web.bat | ./run-web.sh       the app in a browser tab instead',
-        '  install.bat | ./install.sh       install/re-install the pack, no window',
-        '  uninstall.bat | ./uninstall.sh   remove what this pack installed',
+        '  scripts\run-desktop.bat  the same, started from a console - and it',
+        '                           needs no Rust, because it runs the binary in',
+        '                           the folder ABOVE scripts/',
+        '  scripts\run-web.bat | ./scripts/run-web.sh',
+        '                           the app in a browser tab instead',
+        '  scripts\install.bat | ./scripts/install.sh',
+        '                           install/re-install the pack, no window',
+        '  scripts\uninstall.bat | ./scripts/uninstall.sh',
+        '                           remove what this pack installed',
         '',
         '  All of them take -Help (also -h and /?), -NoPause and -NoTerminal, and',
         '  all of them decide their console in ONE shared place (scripts/console/):',
@@ -635,8 +642,8 @@ function New-DistReadme {
         '  it was built from and the toolchain that built it.',
         '',
         'UNINSTALL',
-        '  Windows:      uninstall.bat',
-        '  macOS/Linux:  ./uninstall.sh',
+        '  Windows:      scripts\uninstall.bat',
+        '  macOS/Linux:  ./scripts/uninstall.sh',
         '  Both remove only what this pack installed; your sessions and settings',
         '  are untouched. Deleting this folder afterwards is the rest of it.'
     )

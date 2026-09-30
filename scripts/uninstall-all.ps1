@@ -16,7 +16,7 @@
     supported by this pack.
 
     Runs on Windows PowerShell 5.1 and on PowerShell 7+ (pwsh); the launchers are
-    uninstall-all.bat and the root uninstall.bat. Every path, executable name and
+    uninstall-all.bat and scripts\uninstall.bat. Every path, executable name and
     the PATH separator is resolved per platform.
 
     pnpm handling: the harness profile stores its pnpm layout in
@@ -47,7 +47,7 @@ Initialize-VnConsole
 
 function Show-Usage {
     Write-Host ''
-    Write-Host 'Usage: uninstall.bat [flags]'
+    Write-Host 'Usage: scripts\uninstall.bat [flags]'
     Write-Host ''
     Write-Host '  -Target <web|cli>  which install to remove the bundles from (default: web)'
     Write-Host '  -Plugin <name>     remove only the bundles matching this substring'
@@ -59,7 +59,7 @@ function Show-Usage {
     Write-Host ''
     Write-Host 'Only what this pack installed is removed: a bundle or skill somebody added'
     Write-Host 'themselves is left alone, and no session, setting or credential is touched.'
-    Write-Host 'macOS and Linux use ./uninstall.sh, which does exactly the same thing.'
+    Write-Host 'macOS and Linux use ./scripts/uninstall.sh, which does exactly the same thing.'
     Write-Host ''
 }
 

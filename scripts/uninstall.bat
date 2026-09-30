@@ -22,14 +22,17 @@ rem    -NoTerminal        stay in this console; do not relaunch
 rem    -Help / -h / /?    print the help and stop
 rem
 rem  The console this runs in is decided in ONE place for every
-rem  entry point: scripts\console\adapt.cmd.
+rem  entry point: console\adapt.cmd.
 rem
-rem  macOS and Linux: ./uninstall.sh is the same remover in POSIX sh.
+rem  macOS and Linux: ./scripts/uninstall.sh is the same remover in POSIX sh.
+rem
+rem  This file lives in scripts\, beside uninstall.sh and the PowerShell worker,
+rem  so every path below is `%~dp0`-relative and a run works from any directory.
 rem ============================================================
 setlocal
 
 if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
-call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode uninstaller"
+call "%~dp0console\adapt.cmd" "%~f0" "vncode uninstaller"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
@@ -48,15 +51,15 @@ rem other flags. Rewriting the whole string is what keeps this safe for a -DshHo
 rem path that legitimately contains "-h". See install.bat.
 if defined VN_HELPREQ set "VNCODE_ARGS=-Help"
 
-rem -NoTerminal is the LAUNCHER's flag and scripts\uninstall-all.ps1 declares no
+rem -NoTerminal is the LAUNCHER's flag and uninstall-all.ps1 declares no
 rem such parameter; forwarding it would make PowerShell stop on an argument it
 rem cannot bind. See install.bat for the whole reason. Safe with no arguments at
-rem all: scripts\console\adapt.cmd stores "no arguments" as one space, so
+rem all: console\adapt.cmd stores "no arguments" as one space, so
 rem VN_SHELL_ARGS is always defined.
 set "VN_SHELL_ARGS=%VNCODE_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 
-"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\uninstall-all.ps1" %VN_SHELL_ARGS%
+"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall-all.ps1" %VN_SHELL_ARGS%
 set "VN_EXIT=%ERRORLEVEL%"
 
 echo.
@@ -82,7 +85,7 @@ echo  Windows PowerShell 5.1 ships with every supported version of
 echo  Windows; if it is missing, install PowerShell 7 from
 echo  https://aka.ms/powershell and run this file again.
 echo.
-echo  (macOS and Linux do not use PowerShell at all: run ./uninstall.sh.)
+echo  (macOS and Linux do not use PowerShell at all: run ./scripts/uninstall.sh.)
 echo.
 if "%VNCODE_PAUSE%"=="1" pause
 exit /b 2

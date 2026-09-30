@@ -183,8 +183,8 @@ cannot quietly drift.
 The package is discovered from `packages/`; both installers pick it up:
 
 ```
-install.bat -Force        # Windows
-./install.sh -Force       # macOS / Linux
+scripts\install.bat -Force        # Windows
+./scripts/install.sh -Force       # macOS / Linux
 ```
 
 This one is a **new bundle**, so the app's profile has to learn about it: run the

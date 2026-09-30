@@ -22,11 +22,11 @@ The pack targets the harness line DeepSeek ships to the raw web install
 ## Running the app
 
 The pack ships its own launcher next to the installers - one entry point per
-platform, `run-web.bat` (Windows, double-click it) and `run-web.sh` (macOS/Linux), both
-at the repo root - so starting the GUI is one command instead of remembering the
+platform, `scripts\run-web.bat` (Windows, double-click it) and `scripts/run-web.sh` (macOS/Linux), both
+in `scripts/` with the workers and the console layer - so starting the GUI is one command instead of remembering the
 command line. On Windows the entry point is a batch wrapper and the work is in
 `scripts/run-web.ps1`, because cmd cannot watch a running child's output (its
-`for /f` reads only up to EOF); `run-web.sh` does the whole job itself. Both run the
+`for /f` reads only up to EOF); `scripts/run-web.sh` does the whole job itself. Both run the
 same pinned invocation the docs use -
 `npx --yes @deepseek-ai/dsh@<pin> web --no-open [--port <n>]` - and then:
 
@@ -43,7 +43,7 @@ same pinned invocation the docs use -
 
 Flags: `-Port <n>`, `-DshHome <dir>`, `-DshVersion <ver>`, `-NoBrowser`
 (start the server only) and `-DefaultBrowser` (skip Chrome). On Windows the
-launcher is `run-web.bat [flags]` (double-click friendly, no execution-policy
+launcher is `scripts\run-web.bat [flags]` (double-click friendly, no execution-policy
 question, because the entry point is batch). The launch token is
 never written to a file: the POSIX half pipes the app's output through an
 anonymous FIFO and both halves keep the token in memory. It reaches the browser as
@@ -122,7 +122,7 @@ the details.
     minutes so a reattach replays the retained scrollback; after that it is
     reaped. Sessions do not survive a harness restart.
   - **New package**, so the first install after this change needs a plain
-    `install.bat` / `./install.sh` run or `-Force`.
+    `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 - **dsh-diagrams** adds **Mermaid and TikZ diagrams** as a surface of their own:
   six tools (`diagram_write` / `diagram_patch` / `diagram_read` / `diagram_verify`
   / `diagram_publish` / `diagram_delete`) whose every write is validated before it
@@ -154,7 +154,7 @@ the details.
     folder carries a marker, so a person's own skill is never overwritten and
     uninstall removes only what it wrote).
   - **New package**, so the first install after this change needs a plain
-    `install.bat` / `./install.sh` run or `-Force`.
+    `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 - **dsh-modal** provides the shared `modals` client service the editor's save-as
   dialog uses. It owns no slot and no ordering edge, and the editor resolves it
   lazily (falling back to the browser's own prompt), so neither plugin requires
@@ -223,7 +223,7 @@ the details.
   - It **does not** remember the terminal dock being open: see the notes under
     `dsh-terminal` and in the changelog below.
   - **New package**, so the first install after this change needs a plain
-    `install.bat` / `./install.sh` run or `-Force`.
+    `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 - The shipped `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` row stays
   enabled: it only consumes `sidebarRightTabs` and the keyed seat, so the
   code/image/PDF/HTML previews keep working inside the pack's bar, and the editor
@@ -262,13 +262,13 @@ the details.
   launcher, so `ui-open-in-app` is disabled and `native-open-in-app` runs
   instead.
 - **os-neutral alpha**: no version bumps - the launchers gained macOS/Linux
-  twins (`install.sh` / `uninstall.sh`, `scripts/*.sh`) and the PowerShell
+  twins (`scripts/install.sh` / `scripts/uninstall.sh`, `scripts/*.sh`) and the PowerShell
   scripts stopped assuming Windows; installed profiles are unaffected.
 - **editor alpha.5 / themes alpha.1**: the editor's CodeMirror palette follows
   the app's light/dark appearance (oneDark only while the app is dark) and
   re-themes live, and the new **dsh-themes** bundle adds the header button that
   switches Light / Dark / System. New package, so the first install after this
-  change needs a plain `install.bat` / `./install.sh` run or `-Force`.
+  change needs a plain `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 - **editor alpha.6 / themes alpha.2**: **Markdown opens editable** in the editor
   (it is text) with a toolbar **Preview** button that hands the file to the
   rendered view by naming the shipped preview's registry kind; and
@@ -278,11 +278,11 @@ the details.
 - **editor alpha.7 / shell-installer alpha**: the rendered Markdown page now
   carries an **Edit** button (the editor's own document body, shadowing the
   shipped one at a lower slot priority), so **Preview is a toggle**: Editor →
-  Preview → Edit → Editor on the same tab and file. Separately, `install.sh` /
-  `uninstall.sh` and `scripts/install-all.sh` / `uninstall-all.sh` are **real
+  Preview → Edit → Editor on the same tab and file. Separately, `scripts/install.sh` /
+  `scripts/uninstall.sh` and `scripts/install-all.sh` / `uninstall-all.sh` are **real
   POSIX shell implementations** now - Node.js + npm/npx only - instead of
   wrappers around PowerShell, so macOS/Linux hosts no longer need PowerShell at
-  all; the `.ps1` half stays the Windows path (`install.bat`), and
+  all; the `.ps1` half stays the Windows path (`scripts\install.bat`), and
   `scripts/sync-vendored.ps1` remains PowerShell-only maintainer tooling.
 
 - **master alpha.1 (new package)**: the pack gained a master bundle of its own,
@@ -296,7 +296,7 @@ the details.
   `sidebarRight` stay in the generated fork, and the `ui-sidebar-right` /
   `ui-sidebar-files` disables stay in `dsh-rightbar`, next to the rows they
   replace. New package, so the first install after this change needs a plain
-  `install.bat` / `./install.sh` run or `-Force`.
+  `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 - **editor alpha.8 / themes alpha.3**: two fixes on the rendered Markdown page.
   The editor's shadow body (alpha.7) replaced the shipped wrapper that undid the
   preview scrollport's plain-text styling, so the page inherited `white-space:pre`
@@ -318,7 +318,7 @@ the details.
   forked and no core row is disabled. A file row opens the file through the
   ordinary file address, so the editor or a shipped preview claims it - the tab
   needs neither. **git must be on `PATH`.** New package, so the first install
-  after this change needs a plain `install.bat` / `./install.sh` run or `-Force`.
+  after this change needs a plain `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 
 - **gittree alpha.2**: the tab is **history-only** - the working-tree listing, its path
   filter, its changed-only switch and the viewer switch are gone; what remains is the
@@ -353,7 +353,7 @@ the details.
   is disabled. A terminal is, by nature, an **unsandboxed shell**: the gate is the
   connection's own authentication, checked before the socket reaches a PTY. New
   package, so the first install after this change needs a plain
-  `install.bat` / `./install.sh` run or `-Force`.
+  `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 
 - **terminal alpha.2**: two things the first run got wrong.
   1. Resizing the dock left the emulator at its old size, so the visible line
@@ -424,7 +424,7 @@ the details.
   corners are transparent and nothing touches the edge.
 
   Installers prune both retired bundle names; upgrade by re-running
-  `install.bat` / `./install.sh`, then restart the app and hard-refresh the
+  `scripts\install.bat` / `./scripts/install.sh`, then restart the app and hard-refresh the
   browser.
 
 - **themes alpha.9**: the middle panel's top bar loses the shipped three-dot
@@ -537,11 +537,11 @@ the details.
   column's branding band all end on (the toolbar had been `8 + 26 + 8 = 42.5px`,
   i.e. ~4.5px low).
 
-- **run launcher (new)**: `run-web.bat` / `run-web.sh` - one file per platform at the repo
+- **run launcher (new)**: `scripts\run-web.bat` / `scripts/run-web.sh` - one file per platform at the repo
   root - start the pinned `dsh web` and open the URL it prints in Chrome, falling
   back to the default browser; see **Running the app** above. The POSIX half holds
   all the work in one POSIX sh file; on Windows the double-clickable root
-  `run-web.bat` is batch only (which is what makes a double-click work with no
+  `scripts\run-web.bat` is batch only (which is what makes a double-click work with no
   execution-policy question) and the work is in `scripts/run-web.ps1`, because cmd
   cannot watch a running child's output. Nothing in the profile changes and no
   bundle was added: the launcher is repo tooling, and an installed profile needs
@@ -565,7 +565,7 @@ the details.
   client service the other two halves write through. Every field carries a schema
   default, so a fresh install grows **no** `vncode` section at all. New
   package, so the first install after this change needs a plain
-  `install.bat` / `./install.sh` run or `-Force`.
+  `scripts\install.bat` / `./scripts/install.sh` run or `-Force`.
 
 - **ui-state is shared by both hosts, and that is the point**: `localStorage`
   cannot do this job. Even at the same port, a Chrome tab and the desktop
@@ -625,7 +625,7 @@ the details.
   a coalesced resize/move plus once at exit, with a monitor check that centres the
   window when the remembered point is on no screen. It is desktop-only state by
   nature — a Chrome tab has no window geometry to share. `app/` is not a plugin
-  and no installer touches it: `run-desktop.bat` rebuilds it on the next launch
+  and no installer touches it: `scripts\run-desktop.bat` rebuilds it on the next launch
   (close any running vncode window first, or the release binary is locked).
 
 ## Alpha policy

@@ -266,7 +266,7 @@ npx --yes esbuild entry.js --bundle --minify --format=iife --global-name=DSHEdit
 
 ## Install / uninstall
 
-The repo launcher (`install.bat` on Windows, `./install.sh` on macOS/Linux)
+The repo launcher (`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux)
 auto-discovers this package — it is a standard `dsh.bundle` — and so does the
 uninstaller; nothing else changes. After a version bump, a plain launcher run
 re-adds it; the web profile gets it as a live link, so code edits just need a

@@ -42,7 +42,8 @@ usage() {
     '  -ProfileName <name>  override the profile name (default: web)' \
     '  -DshVersion <ver>    override the pinned dsh version from .dsh-version.json' \
     '  -Target web|cli      accepted for muscle memory; both mean the web profile' \
-    '  -NoPause             accepted and ignored here; uninstall.sh owns the window' \
+    '  -NoPause             accepted and ignored here; ./scripts/uninstall.sh owns' \
+    '                       the window' \
     '  -Help / -h / --help  print this help'
 }
 

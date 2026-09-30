@@ -391,7 +391,7 @@ its own Zoom in / Zoom out.
 
 **Why it exists.** That zoom is the *browser's*, and no page can invoke it: a Chrome
 tab has the keyboard gesture, while the **native window the desktop launcher opens**
-— `run-desktop.bat`, a Tauri shell over the very same `dsh web` — has no such gesture
+— `scripts\run-desktop.bat`, a Tauri shell over the very same `dsh web` — has no such gesture
 at all. It never listens for a key, because swallowing Ctrl+ and Ctrl- in the page
 would **double** the zoom in a browser, where the gesture already works.
 
@@ -670,11 +670,11 @@ lib/client.js      Browser half: the Page-zoom button + menu (one inline `zoom` 
 
 ## Install / uninstall
 
-The repo launcher (`install.bat` on Windows, `./install.sh` on macOS/Linux)
+The repo launcher (`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux)
 auto-discovers this package — it is a standard `dsh.bundle`. Adding a package
 changes the profile's bundle set, and a bundle the profile does not list yet is
 added by one plain launcher run (no `-Force` needed); after that a plain run is
 enough. The web profile links it into this repo, so code edits only need a restart
 of `npx @deepseek-ai/dsh web` plus a hard browser refresh. Starting it is
-`run-web.bat` / `./run-web.sh` — the launcher that starts `dsh web` and opens the URL
+`scripts\run-web.bat` / `./scripts/run-web.sh` — the launcher that starts `dsh web` and opens the URL
 it prints in Chrome.

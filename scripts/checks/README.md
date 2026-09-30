@@ -308,8 +308,8 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
   above the matrix name the retired labels on purpose, to record why they left -
   and the ARM64 legs must be marked `experimental` (continue-on-error) while
   their toolchains settle, so a preview-image surprise cannot block a release.
-  Every root entry point must also appear in the workflow's `paths:` filter, or a
-  change to it would build nothing.
+  Every launcher lives in `scripts/`, so the workflow's `paths:` filter has to
+  watch `scripts/**` - a change to any of them would otherwise build nothing.
 
   **All of that is skipped LOUDLY while the workflow is parked.**
   `.github/workflows/distribute.yml` was removed on purpose for now, so this one
@@ -319,7 +319,7 @@ the git routes need `git` on `PATH`, and the TikZ cases need a TeX engine.
 
   And it pins the CONSOLE CONTRACT, which is what keeps five Windows launchers
   and four POSIX ones behaving the same way: each Windows entry point must call
-  `scripts/console/adapt.cmd`, keep the `if not defined VNCODE_CONSOLE set
+  `console/adapt.cmd`, keep the `if not defined VNCODE_CONSOLE set
   "VNCODE_ARGV=%*"` guard, mention `%*` exactly once (a second occurrence
   would replace the caller's flags with `--from-terminal` after the Windows
   Terminal relaunch), forward `%VNCODE_ARGS%`, honour `VNCODE_PAUSE` and

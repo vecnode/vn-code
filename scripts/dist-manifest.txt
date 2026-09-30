@@ -44,17 +44,17 @@ include packages
 include .dsh-version.json
 
 # --- launching and maintaining it -------------------------------------------
-include install.bat
-include install.sh
-include uninstall.bat
-include uninstall.sh
-include run-web.bat
-include run-web.sh
-# The desktop launcher ships too. In a distribution it runs the built shell
-# beside it and needs no Rust; see its own header for why the presence of
-# vncode.exe, and not a Cargo.toml, is what decides which path it takes.
-include run-desktop.bat
+# EVERY launcher ships inside scripts/ - the repository root carries no .bat and
+# no .sh at all - so this ONE include carries the entry points (install,
+# uninstall, run-web, run-desktop and the console twins), the PowerShell and
+# POSIX workers and the shared console layer. It also carries the generated
+# START-HERE's own dependencies, which is what makes `include scripts` alone
+# enough for a recipient to install and run the folder.
 include scripts
+# The desktop launcher ships too. In a distribution it runs the built shell in
+# the folder ABOVE scripts\ and needs no Rust; see its own header for why the
+# presence of vncode.exe, and not a Cargo.toml, is what decides which path it
+# takes.
 
 # --- what a reader needs ----------------------------------------------------
 include README.md
@@ -101,13 +101,16 @@ skippath docs/diagrams
 skipfile *.log
 
 # --- the DISTRIBUTER is not part of a distribution ---------------------------
-# The folder is the PRODUCT; these two are the factory that makes it. A recipient
-# gets START-HERE.bat and does not need the tool that assembled the folder - and
-# docs/DISTRIBUTE.md says so out loud ("re-run the distributer in the source
-# repository to change it"). They are named here rather than simply left out
-# because both files DO exist in the repository and `include scripts` would
+# The folder is the PRODUCT; these four are the factory that makes it - the two
+# entry points a maintainer double-clicks and the two workers they call. A
+# recipient gets START-HERE.bat and does not need the tool that assembled the
+# folder - and docs/DISTRIBUTE.md says so out loud ("re-run the distributer in
+# the source repository to change it"). They are named here rather than simply
+# left out because all four DO exist under scripts/ and `include scripts` would
 # otherwise sweep them in by accident; a build tool inside the thing it builds
 # invites a nested dist/ inside a distribution.
+skippath scripts/distribute.bat
+skippath scripts/distribute.sh
 skippath scripts/dist.ps1
 skippath scripts/dist.sh
 

@@ -138,8 +138,8 @@ same extension list and the file route that serves the ranges this tab needs.
 The package is discovered from `packages/`; both installers pick it up:
 
 ```
-install.bat -Force        # Windows
-./install.sh -Force       # macOS / Linux
+scripts\install.bat -Force        # Windows
+./scripts/install.sh -Force       # macOS / Linux
 ```
 
 Run the installer once, then restart `npx @deepseek-ai/dsh web` and hard-refresh

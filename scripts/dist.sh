@@ -22,7 +22,7 @@
 #  WHAT SHIPS is not decided here: scripts/dist-manifest.txt is the one list,
 #  read by both halves and pinned by scripts/checks/check-dist-layout.mjs.
 #
-#  FLAGS (distribute.bat / scripts/dist.ps1 take the same ones)
+#  FLAGS (scripts/distribute.bat / scripts/dist.ps1 take the same ones)
 #      -Version <v>      override the pack version used in the names
 #      -SkipBuild        reuse the binary under app/src-tauri/target/release
 #      -NoZip            assemble the folder only (no .zip, no single file)
@@ -63,7 +63,7 @@ show_help=0
 
 usage() {
   printf '%s\n' \
-    'Usage: ./distribute.sh [flags]' \
+    'Usage: ./scripts/distribute.sh [flags]' \
     '' \
     '  -Version <v>      override the pack version used in the names' \
     '  -SkipBuild        reuse the binary already under app/src-tauri/target/release' \
@@ -80,7 +80,10 @@ usage() {
     '  -Help             print this help' \
     '' \
     'Builds <out>/vncode-<version>-<rid>/ from scripts/dist-manifest.txt plus the' \
-    'built shell, and archives it beside itself. dist/ is never committed.'
+    'built shell, and archives it beside itself. dist/ is never committed.' \
+    '' \
+    'Run it from anywhere: this file lives in scripts/ and resolves the repository' \
+    'root as the folder above.'
 }
 
 # Progress goes to STDERR, like the installer halves': a status line on stdout is
@@ -531,19 +534,25 @@ chmod 755 "$start_here"
   printf '%s\n' '  ./vncode and skip the check. If the executable bit was lost while'
   printf '%s\n' '  copying, run:  sh ./START-HERE.sh'
   printf '\n'
-  printf '%s\n' '  The window shows the SAME profile a ./run-web.sh browser tab shows, so'
-  printf '%s\n' '  sessions, settings and everything the pack remembers are shared.'
+  printf '%s\n' '  The window shows the SAME profile a ./scripts/run-web.sh browser tab'
+  printf '%s\n' '  shows, so sessions, settings and everything the pack remembers are'
+  printf '%s\n' '  shared.'
   printf '\n'
   printf '%s\n' 'THE LAUNCHERS'
-  printf '%s\n' '  ./vncode                      the app in its native window'
-  printf '%s\n' '  ./run-web.sh                      the app in a browser tab instead'
-  printf '%s\n' '  ./install.sh                      install/re-install the pack, no window'
-  printf '%s\n' '  ./uninstall.sh                    remove what this pack installed'
+  printf '%s\n' '  ./vncode                          the app in its native window'
+  printf '%s\n' '  scripts/run-desktop.bat           Windows: the same, from a console -'
+  printf '%s\n' '                                    and it needs no Rust, because it runs'
+  printf '%s\n' '                                    the binary beside it in the folder'
+  printf '%s\n' '                                    ABOVE scripts/'
+  printf '%s\n' '  ./scripts/run-web.sh              the app in a browser tab instead'
+  printf '%s\n' '  ./scripts/install.sh              install/re-install the pack, no window'
+  printf '%s\n' '  ./scripts/uninstall.sh            remove what this pack installed'
   printf '\n'
-  printf '%s\n' '  All of them take -Help (also -h and --help), -NoPause and -NoTerminal,'
-  printf '%s\n' '  and all of them decide their console in ONE shared place'
-  printf '%s\n' '  (scripts/console/): colour appears only on a real terminal and never in'
-  printf '%s\n' '  a redirected log, and the launch token is never written down.'
+  printf '%s\n' '  Every launcher lives in scripts/; the repository root carries none. All'
+  printf '%s\n' '  of them take -Help (also -h and --help), -NoPause and -NoTerminal, and'
+  printf '%s\n' '  all of them decide their console in ONE shared place (scripts/console/):'
+  printf '%s\n' '  colour appears only on a real terminal and never in a redirected log,'
+  printf '%s\n' '  and the launch token is never written down.'
   printf '\n'
   printf '%s\n' 'THE FLAGS THE SHELL TAKES'
   printf '%s\n' '  -Port <n>          listen on this port instead of a free one'
@@ -568,7 +577,7 @@ chmod 755 "$start_here"
   printf '%s\n' '  it was built from and the toolchain that built it.'
   printf '\n'
   printf '%s\n' 'UNINSTALL'
-  printf '%s\n' '  ./uninstall.sh'
+  printf '%s\n' '  ./scripts/uninstall.sh'
   printf '%s\n' '  It removes only what this pack installed; your sessions and settings'
   printf '%s\n' '  are untouched. Deleting this folder afterwards is the rest of it.'
 } > "$dist_dir/DIST-README.txt"

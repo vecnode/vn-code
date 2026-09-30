@@ -4,14 +4,17 @@ Three launchers, one per job:
 
 | | Windows | macOS / Linux |
 |---|---|---|
-| **Install** | `install.bat` | `./install.sh` |
-| **Run** | `run-web.bat` | `./run-web.sh` |
-| **Remove** | `uninstall.bat` | `./uninstall.sh` |
+| **Install** | `scripts\install.bat` | `./scripts/install.sh` |
+| **Run** | `scripts\run-web.bat` | `./scripts/run-web.sh` |
+| **Remove** | `scripts\uninstall.bat` | `./scripts/uninstall.sh` |
 
-Double-click the `.bat` files on Windows; run the `.sh` files from the repo root
-on macOS/Linux. Windows runs PowerShell for install/uninstall
+Double-click the `.bat` files on Windows; run the `.sh` files from anywhere on
+macOS/Linux (each resolves the repository root from its own location). **Every
+launcher lives in `scripts/`** — the entry points, the workers and the shared
+console layer together, so the repository root carries no `.bat` and no `.sh`.
+Windows runs PowerShell for install/uninstall
 (`scripts/install-all.ps1`) and for the run launcher's worker
-(`scripts\run-web.ps1`, which the double-clickable root `run-web.bat` calls — the
+(`scripts\run-web.ps1`, which the double-clickable `scripts\run-web.bat` beside it calls — the
 wrapper itself is batch only, so Windows never asks an execution-policy question
 before starting the GUI). macOS/Linux run the POSIX shell scripts and need
 **no PowerShell at all**.
@@ -25,7 +28,7 @@ before starting the GUI). macOS/Linux run the POSIX shell scripts and need
 - `pnpm` is reused when the system one is new enough for the profile, otherwise
   bootstrapped automatically into `./tools`
 - macOS/Linux only: the launchers need the executable bit, which git preserves
-  (`chmod +x install.sh uninstall.sh run-web.sh scripts/*.sh` if you copied the files
+  (`chmod +x scripts/install.sh scripts/uninstall.sh scripts/run-web.sh scripts/*.sh` if you copied the files
   by hand)
 
 > `scripts/sync-vendored.ps1` (the maintainer fork re-sync) is the one script
@@ -51,12 +54,12 @@ Overrides if the profile lives somewhere else:
 
 ## The launchers
 
-| Platform | Root launchers | Console twins |
+| Platform | Entry points (`scripts/`) | Console twins |
 |---|---|---|
-| Windows | `install.bat` / `uninstall.bat` / `run-web.bat` (all double-click) | `scripts\install-all.bat` / `uninstall-all.bat` |
-| macOS / Linux | `./install.sh` / `./uninstall.sh` / `./run-web.sh` | `./scripts/install-all.sh` / `uninstall-all.sh` |
+| Windows | `scripts\install.bat` / `scripts\uninstall.bat` / `scripts\run-web.bat` (all double-click) | `scripts\install-all.bat` / `uninstall-all.bat` |
+| macOS / Linux | `./scripts/install.sh` / `./scripts/uninstall.sh` / `./scripts/run-web.sh` | `./scripts/install-all.sh` / `uninstall-all.sh` |
 | Windows (direct) | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install-all.ps1 -Force` | same with `uninstall-all.ps1`, and `-File scripts\run-web.ps1` for the app |
-| macOS / Linux (direct) | `sh scripts/install-all.sh -Force` | `sh scripts/uninstall-all.sh`, and `sh run-web.sh` for the app |
+| macOS / Linux (direct) | `sh scripts/install-all.sh -Force` | `sh scripts/uninstall-all.sh`, and `sh scripts/run-web.sh` for the app |
 
 The install and uninstall launchers pass the force flag unless you already did,
 so running them again always installs the latest edits. The console twins behave
@@ -64,8 +67,8 @@ like plain script runs: they skip bundles that are already installed at the same
 version. Both halves accept the same flags (`-Force`, `-Plugin`, `-DshHome`,
 `-ProfileName`, `-DshVersion`, `-Target web|cli`), plus `-NoPause` (never hold the
 window open) and `-NoTerminal` on the Windows side; `-Help`, `-h`, `--help` and
-`/?` all print them. The run launcher is the root `run-web.bat` (which drives
-`scripts\run-web.ps1`) plus `./run-web.sh`. Both take their own flags (see
+`/?` all print them. The run launcher is `scripts\run-web.bat` (which drives
+`scripts\run-web.ps1`, the worker beside it) plus `./scripts/run-web.sh`. Both take their own flags (see
 **Running it** below).
 
 **How the Windows entry points present themselves.** They all share ONE console
@@ -94,23 +97,23 @@ runs PowerShell at all.
 
 Once the pack is installed, start the app with the run launcher — it *is* the
 `npx @deepseek-ai/dsh web` command, with the browser hand-off attached. On Windows
-that is the root `run-web.bat`, which forwards to `scripts\run-web.ps1`; on macOS/Linux
-it is `run-web.sh`, one file that does the whole job.
+that is `scripts\run-web.bat`, which forwards to `scripts\run-web.ps1` beside it; on macOS/Linux
+it is `scripts/run-web.sh`, one file that does the whole job.
 
 ```bat
-:: Windows - just double-click run-web.bat at the repo root, or run it with flags
-run-web.bat
-run-web.bat -Port 3099
-run-web.bat -DefaultBrowser
-run-web.bat -NoBrowser
+:: Windows - just double-click scripts\run-web.bat, or run it with flags
+scripts\run-web.bat
+scripts\run-web.bat -Port 3099
+scripts\run-web.bat -DefaultBrowser
+scripts\run-web.bat -NoBrowser
 ```
 
 ```sh
 # macOS / Linux
-./run-web.sh                     # start + open the URL in Google Chrome
-./run-web.sh -Port 3099          # 3080 already taken
-./run-web.sh -DefaultBrowser     # skip Chrome, use the default browser
-./run-web.sh -NoBrowser          # start the server only
+./scripts/run-web.sh                     # start + open the URL in Google Chrome
+./scripts/run-web.sh -Port 3099          # 3080 already taken
+./scripts/run-web.sh -DefaultBrowser     # skip Chrome, use the default browser
+./scripts/run-web.sh -NoBrowser          # start the server only
 ```
 
 What it does, in order:
@@ -140,7 +143,7 @@ Two properties worth knowing:
   **in memory only**: the launchers never write it to a file, never echo it
   themselves, and never build a command string out of it — it reaches the browser
   as a single argument, handed over with `Start-Process -ArgumentList` on Windows
-  and as an argv element of `open`/`xdg-open` on macOS/Linux. The root `run-web.bat`
+  and as an argv element of `open`/`xdg-open` on macOS/Linux. `scripts\run-web.bat`
   never even sees the URL. The terminal still
   shows the token, because the app prints it; treat a copy of that pane (a
   screenshot, a pasted log) the way you would treat the session cookie itself.
@@ -178,12 +181,12 @@ npx --yes @deepseek-ai/dsh@0.1.5-rc.1 web
 
 ## Uninstall
 
-`uninstall.bat` (Windows) or `./uninstall.sh` (macOS/Linux) — removes the bundles
+`scripts\uninstall.bat` (Windows) or `./scripts/uninstall.sh` (macOS/Linux) — removes the bundles
 from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 
 ## After installing
 
-1. Start (or restart) the app with **`run-web.bat`** (Windows) or **`./run-web.sh`**
+1. Start (or restart) the app with **`scripts\run-web.bat`** (Windows) or **`./scripts/run-web.sh`**
    (macOS/Linux) — or `npx @deepseek-ai/dsh web` by hand — and open/select a
    conversation.
 2. Open the right Sidebar with the **expand button** in the conversation header
@@ -209,9 +212,9 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 
 - **The run launcher says the port is already in use** — an app is already
   listening on 3080 (another terminal, or this one). Use the running one, stop
-  it, or start a second instance on another port: `run-web.bat -Port 3099` /
-  `./run-web.sh -Port 3099`.
-- **`run-web.bat` refuses to start / the window flashes and closes** — the wrapper
+  it, or start a second instance on another port: `scripts\run-web.bat -Port 3099` /
+  `./scripts/run-web.sh -Port 3099`.
+- **`scripts\run-web.bat` refuses to start / the window flashes and closes** — the wrapper
   pauses on the worker's own failures, so read the window; run it from the repo
   root (the worker reads `.dsh-version.json` from there) and check that `node` and
   `npx` are on the `PATH`. The double-click works because the entry point is
@@ -226,23 +229,24 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 - **The launcher refused to open the URL** — the ready line did not name a
   loopback address, so the token was not handed to a browser. That should never
   happen with the pinned line; check what prints the `dsh web:` line.
-- **`./run-web.sh: Permission denied`** — `chmod +x run-web.sh install.sh uninstall.sh
+- **`./scripts/run-web.sh: Permission denied`** — `chmod +x scripts/run-web.sh scripts/install.sh scripts/uninstall.sh
   scripts/*.sh`.
 - **The launcher says the profile does not list this pack's bundles** — a
-  friendly warning, not a failure: the app still starts. Run `install.bat` /
-  `./install.sh` if you expected the pack in it.
+  friendly warning, not a failure: the app still starts. Run `scripts\install.bat` /
+  `./scripts/install.sh` if you expected the pack in it.
 - **`dsh` exits non-zero during install** — most often a network hiccup fetching
   the pinned CLI; re-run, and use `-Verbose` on the PowerShell half to see the
   exact command.
 - **Profile not found** — pass `-DshHome`/`-ProfileName`, or run
   `npx @deepseek-ai/dsh web` once so the profile exists.
-- **`./install.sh` says a command is missing** — install Node.js 22+
+- **`./scripts/install.sh` says a command is missing** — install Node.js 22+
   (https://nodejs.org). The macOS/Linux half needs Node and npm/npx only; it
   never needs PowerShell.
 - **`sh: scripts/install-all.sh: not found` (or a syntax error)** — run it from
-  the repo root or with its full path, and keep the POSIX half dash-compatible
+  the repository root (its `scripts/`-relative path resolves there) or with its
+  full path, and keep the POSIX half dash-compatible
   (`sh -n scripts/install-all.sh` is the syntax check).
-- **`./install.sh: Permission denied`** — `chmod +x install.sh uninstall.sh
+- **`./scripts/install.sh: Permission denied`** — `chmod +x scripts/install.sh scripts/uninstall.sh
   scripts/*.sh`.
 - **`-Target desktop` is rejected** — intentional: DSH Desktop is no longer a
   target of this pack; run without `-Target` (or with `-Target web`).
@@ -270,13 +274,13 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   or the file changed under you: use **Reload** / **Save anyway** in the banner.
 - **No Themes button in the header (or it is greyed out)** — the button sits
   immediately left of **Open In…**; a new package needs one install run
-  (`install.bat` / `./install.sh`, or `-Force`), then a restart. Greyed out means
+  (`scripts\install.bat` / `./scripts/install.sh`, or `-Force`), then a restart. Greyed out means
   the shipped `@deepseek-ai/dsh-client-ui-theme` service (row `ui-theme`) is not
   in the boot graph — the tooltip says "The theme service is unavailable".
 - **A header icon button has no circle around it** — the group's round hairline
   ring arrives with `dsh-themes` alpha.9 (its own Themes button) plus that
   package's one-rule override for the right bar's collapse/expand toggle in the
-  header corner; reinstall (`install.bat` / `./install.sh`, or `-Force`), restart
+  header corner; reinstall (`scripts\install.bat` / `./scripts/install.sh`, or `-Force`), restart
   and hard-refresh, and confirm the served `dsh-themes` bundle prints alpha.9 or
   later.
 - **Code text looks black-on-dark in the light theme** — the editor follows the
@@ -304,7 +308,7 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   them (forcing white without the tokens would be worse). Reinstall so
   `dsh-themes` alpha.3+ is in the profile, then restart.
 - **No "History" capsule on the "+" / Start page** — `dsh-gittree` is not mounted;
-  a new package needs one install run (`install.bat` / `./install.sh`, or
+  a new package needs one install run (`scripts\install.bat` / `./scripts/install.sh`, or
   `-Force`), then a restart. Check the console for `[dsh-gittree]` if it still
   does not show.
 - **History sits on the "Reading the history…" and never stops** — that was
@@ -321,7 +325,7 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   `dsh-editor` nor a shipped preview claiming that extension, nothing can draw
   it. That is the same rule the Files tab follows.
 - **No Terminal button in the header** — `dsh-terminal` is not mounted; a new
-  package needs one install run (`install.bat` / `./install.sh`, or `-Force`),
+  package needs one install run (`scripts\install.bat` / `./scripts/install.sh`, or `-Force`),
   then a restart. The button is the last one in the header group, immediately
   right of **Open In…**. Check the console for `[dsh-terminal]` if it still does
   not show.
@@ -358,8 +362,8 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   appear only while it really overflows, and a bare wheel that moves it. Confirm
   the dock's bar prints `dsh-terminal 0.1.0-alpha.4` and hard-refresh (Ctrl+F5).
 - **The left bar still shows the fish and the "deepseek" wordmark** — the branding
-  override arrives with `dsh-themes` alpha.6; reinstall (`install.bat` /
-  `./install.sh`, or `-Force`) so that version is in the profile, then restart and
+  override arrives with `dsh-themes` alpha.6; reinstall (`scripts\install.bat` /
+  `./scripts/install.sh`, or `-Force`) so that version is in the profile, then restart and
   hard-refresh. The row should show the app icon and **vncode**, at the chat
   title's size (alpha.7), with the same icon beside **Into the Unknown** (alpha.8).
 - **The mark looks clipped or oval** — alpha.7 drew it as a CSS disc, which lost a
@@ -373,7 +377,7 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   new names in `dsh-themes/lib/client.js` (`installLeftTopBar`).
 - **No download icon in the header (the three-dot button is still there)** —
   `dsh-themes` alpha.9 is not in the profile; a plain install run
-  (`install.bat` / `./install.sh`, or `-Force`), a restart and a hard refresh put
+  (`scripts\install.bat` / `./scripts/install.sh`, or `-Force`), a restart and a hard refresh put
   it there. The button takes the seat the three-dot "more actions" button had
   (after **Open In…**), so the old button disappearing IS the change.
 - **The download icon is greyed out with "Session export is unavailable"** — the

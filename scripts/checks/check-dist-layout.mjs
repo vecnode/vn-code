@@ -51,8 +51,8 @@ function read(relative) {
 const manifest = read('scripts/dist-manifest.txt')
 const ps = read('scripts/dist.ps1')
 const sh = read('scripts/dist.sh')
-const bat = read('distribute.bat')
-const distributeSh = read('distribute.sh')
+const bat = read('scripts/distribute.bat')
+const distributeSh = read('scripts/distribute.sh')
 const gitignore = read('.gitignore')
 
 /** The manifest's rules, as { kind, path }. */
@@ -196,14 +196,19 @@ if (ps && sh) {
 // ---------------------------------------------------------------------------
 // 3. The entry points, and the rule that keeps dist/ out of GitHub
 // ---------------------------------------------------------------------------
+// Every launcher lives in scripts/ - the repository root carries no .bat and no
+// .sh at all - so each one reaches its worker through `%~dp0` (cmd) or its own
+// directory (POSIX) and a run works from any current directory. That is what is
+// asserted here: the two distributer entry points must call the worker BESIDE
+// them, as a FILE, never an inline command.
 if (bat) {
   // Batch only, so Windows asks no execution-policy question before starting,
   // and it must forward to the same worker the workflow calls.
-  if (!/scripts\\dist\.ps1/.test(bat)) fail('distribute.bat does not call scripts\\dist.ps1.')
-  if (/^\s*(pwsh|powershell)\s+-Command/m.test(bat)) fail('distribute.bat runs PowerShell inline instead of a file.')
+  if (!/%~dp0dist\.ps1/.test(bat)) fail('scripts/distribute.bat does not call the dist.ps1 beside it (%~dp0dist.ps1).')
+  if (/^\s*(pwsh|powershell)\s+-Command/m.test(bat)) fail('scripts/distribute.bat runs PowerShell inline instead of a file.')
 }
-if (distributeSh && !/scripts\/dist\.sh/.test(distributeSh)) {
-  fail('distribute.sh does not call scripts/dist.sh.')
+if (distributeSh && !/"\$script_dir\/dist\.sh"/.test(distributeSh)) {
+  fail('scripts/distribute.sh does not call the dist.sh beside it ($script_dir/dist.sh).')
 }
 
 if (gitignore && !/^dist\/?$/m.test(gitignore)) {
@@ -305,24 +310,23 @@ if (workflow) {
     ? pathsBlock[1].split(/\r?\n/).map((line) => /-\s*'([^']+)'/.exec(line)?.[1]).filter(Boolean)
     : []
   if (watched.length === 0) fail('.github/workflows/distribute.yml has no readable paths: filter.')
-  // Every root entry point is named individually in that filter, and each has to
-  // be there; `scripts/**` covers the console helpers and the workers.
-  for (const entry of ['install.bat', 'install.sh', 'uninstall.bat', 'uninstall.sh',
-    'run-web.bat', 'run-web.sh', 'run-desktop.bat', 'distribute.bat', 'distribute.sh']) {
-    if (!watched.includes(entry)) {
-      fail(`.github/workflows/distribute.yml's paths: filter does not watch '${entry}' - a change to it would build nothing.`)
-    }
+  // The launchers all live under scripts/ now, so ONE glob covers them; a push
+  // that edits any of them has to build. `scripts/**` is therefore required.
+  if (!watched.includes('scripts/**')) {
+    fail(".github/workflows/distribute.yml's paths: filter does not watch 'scripts/**' - a change to a launcher would build nothing.")
   }
 }
 
 // ---------------------------------------------------------------------------
 // 5. The console contract: one shared layer, five entry points, two hosts
 // ---------------------------------------------------------------------------
-// The entry points are the only files a person double-clicks, and the failure
-// mode this section exists for is drift: a sixth launcher, or an edit to one of
-// the five, that quietly stops asking the shared layer how to behave and starts
-// deciding for itself. Everything below is a property that must hold in EVERY
-// entry point, so it is asserted in a loop rather than five times by hand.
+// The entry points are the only files a person double-clicks, AND THEY ALL LIVE
+// IN scripts/ - so the shared layer is `console\adapt.cmd` / `console/theme.*`
+// NEXT TO THEM, not a folder away. The failure mode this section exists for is
+// drift: a sixth launcher, or an edit to one of the five, that quietly stops
+// asking the shared layer how to behave and starts deciding for itself.
+// Everything below is a property that must hold in EVERY entry point, so it is
+// asserted in a loop rather than five times by hand.
 const consoleFiles = {
   adapt: 'scripts/console/adapt.cmd',
   themePs: 'scripts/console/theme.ps1',
@@ -334,8 +338,8 @@ for (const [key, file] of Object.entries(consoleFiles)) {
   if (consoleText[key] !== null && consoleText[key].trim().length === 0) fail(`${file} is empty.`)
 }
 
-const windowsEntries = ['install.bat', 'uninstall.bat', 'run-web.bat', 'run-desktop.bat', 'distribute.bat']
-const posixEntries = ['install.sh', 'uninstall.sh', 'run-web.sh', 'distribute.sh']
+const windowsEntries = ['scripts/install.bat', 'scripts/uninstall.bat', 'scripts/run-web.bat', 'scripts/run-desktop.bat', 'scripts/distribute.bat']
+const posixEntries = ['scripts/install.sh', 'scripts/uninstall.sh', 'scripts/run-web.sh', 'scripts/distribute.sh']
 
 for (const entry of windowsEntries) {
   const text = read(entry)
@@ -350,9 +354,10 @@ for (const entry of windowsEntries) {
     fail(`${entry} does not strip -NoTerminal before forwarding; its worker declares no such parameter, so the run would fail with a PowerShell parameter error.`)
   }
 
-  // It must consult the shared layer...
-  if (!text.includes('scripts\\console\\adapt.cmd')) {
-    fail(`${entry} does not call scripts\\console\\adapt.cmd - its console behaviour is its own.`)
+  // It must consult the shared layer - which sits BESIDE every one of them in
+  // scripts/, so the path is `%~dp0console\adapt.cmd`...
+  if (!text.includes('console\\adapt.cmd')) {
+    fail(`${entry} does not call console\\adapt.cmd - its console behaviour is its own.`)
   }
 
   // ...using the documentation's exact three lines, in order.
@@ -490,7 +495,7 @@ for (const entry of posixEntries) {
 // means nothing at all - and install.sh / START-HERE.sh still hand it straight
 // through, which makes "accepted and ignored" the only correct answer. run-web.sh
 // parses its own flags and is therefore its own worker, so it belongs here too.
-for (const worker of ['scripts/install-all.sh', 'scripts/uninstall-all.sh', 'scripts/dist.sh', 'run-web.sh']) {
+for (const worker of ['scripts/install-all.sh', 'scripts/uninstall-all.sh', 'scripts/dist.sh', 'scripts/run-web.sh']) {
   const text = read(worker)
   if (text === null) continue
   for (const flag of ['-Help', '-NoPause', '-NoTerminal']) {
@@ -547,34 +552,36 @@ if (consoleText.themeSh) {
   }
 }
 
-// A root entry point that exists but does not ship is a launcher nobody gets -
-// and one that SHIPS but should not is the factory landing inside the product.
+// A launcher that exists but does not ship is a launcher nobody gets - and one
+// that SHIPS but should not is the factory landing inside the product.
 if (manifest) {
   const rules = parseManifest(manifest)
   const shipped = rules.filter((rule) => rule.kind === 'include').map((rule) => rule.path)
   const skippedPaths = rules.filter((rule) => rule.kind === 'skippath').map((rule) => rule.path)
 
+  // Every launcher now lives under scripts/, so `include scripts` is what ships
+  // it - and losing that one include would take the whole console layer, every
+  // worker AND every entry point out of the archive at once.
   for (const entry of [...windowsEntries, ...posixEntries]) {
+    if (!existsSync(path.join(repo, entry))) {
+      fail(`${entry} is missing - it is one of the pack's entry points.`)
+      continue
+    }
     // The distributer is deliberately NOT shipped: it builds distributions, and
     // a distribution is the product, not the workshop.
-    if (entry === 'distribute.bat' || entry === 'distribute.sh') continue
-    if (existsSync(path.join(repo, entry)) && !shipped.includes(entry)) {
-      fail(`dist-manifest.txt does not ship '${entry}' - the folder would have no ${entry}.`)
+    if (entry === 'scripts/distribute.bat' || entry === 'scripts/distribute.sh') continue
+    if (!shipped.includes('scripts')) {
+      fail(`dist-manifest.txt does not ship 'scripts' - the folder would have no ${entry}.`)
     }
   }
 
-  // ...and the exclusion must be explicit, because `include scripts` would
-  // otherwise sweep scripts/dist.ps1 and scripts/dist.sh into every archive.
-  for (const tool of ['scripts/dist.ps1', 'scripts/dist.sh']) {
+  // ...and the exclusions must be explicit, because `include scripts` would
+  // otherwise sweep the whole workshop into every archive: the two distributer
+  // workers and the two distributer entry points.
+  for (const tool of ['scripts/dist.ps1', 'scripts/dist.sh', 'scripts/distribute.bat', 'scripts/distribute.sh']) {
     if (!skippedPaths.includes(tool)) {
       fail(`dist-manifest.txt does not exclude '${tool}' - the distributer would ship inside its own output.`)
     }
-  }
-
-  // scripts/console rides on `include scripts`; losing that include would take
-  // the shared layer out from under every shipped launcher.
-  if (!shipped.includes('scripts')) {
-    fail('dist-manifest.txt does not ship scripts/ - the console layer and workers would be missing.')
   }
 }
 

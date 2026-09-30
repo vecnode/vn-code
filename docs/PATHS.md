@@ -149,7 +149,7 @@ map because "where did my file go" is the same question:
 |---|---|---|
 | **Desktop** | per request: `%USERPROFILE%\Desktop`, a OneDrive-redirected Desktop, `$XDG_DESKTOP_DIR`, the home folder last | `dsh-themes` screenshot route, `dsh-diagrams` export |
 | **Temp / scratch** | `os.tmpdir()`; the distributer uses a private temp dir under it, and `dsh-pdf` rasterizes into one | `-Verify`, `pdf_render`, TikZ compiles |
-| **Chrome** (browser launcher only) | `Chrome` on `PATH` → the standard install folders → the `App Paths` registry entry; `open -a "Google Chrome"`; `google-chrome` / `chromium`; the platform default last | `run-web.sh` / `scripts/run-web.ps1` |
+| **Chrome** (browser launcher only) | `Chrome` on `PATH` → the standard install folders → the `App Paths` registry entry; `open -a "Google Chrome"`; `google-chrome` / `chromium`; the platform default last | `scripts/run-web.sh` / `scripts/run-web.ps1` |
 
 `dsh-terminal` resolves a shell per host (`pwsh.exe` else `powershell.exe`;
 `$SHELL` else `/bin/zsh` else `/bin/bash`) and inherits its cwd, and the editor,

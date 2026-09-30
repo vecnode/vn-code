@@ -3,16 +3,16 @@ rem ============================================================
 rem  vncode launcher - Windows (double-click friendly).
 rem
 rem  The Windows entry point for the BROWSER half, and the pair of
-rem  run-web.sh on macOS/Linux. It does no work of its own: every
-rem  flag is forwarded to scripts\run-web.ps1, the worker that sits
-rem  beside the installer scripts, which runs the pinned
+rem  scripts/run-web.sh on macOS/Linux. It does no work of its own:
+rem  every flag is forwarded to run-web.ps1 beside this file, which
+rem  runs the pinned
 rem  "npx @deepseek-ai/dsh@<pin> web --no-open", streams the app's
 rem  output, reads the "dsh web:" line it prints once the server is
 rem  listening and opens THAT url - launch token included - in
 rem  Google Chrome, falling back to the default browser. The
 rem  harness runs in the FOREGROUND of this window: Ctrl+C stops it.
 rem
-rem  The desktop window is the other half: run-desktop.bat starts
+rem  The desktop window is the other half: scripts/run-desktop.bat starts
 rem  the very same harness and shows that same url in a native
 rem  window instead of a browser tab.
 rem
@@ -21,10 +21,11 @@ rem  is also what carries no execution-policy question, while the
 rem  watching-and-opening half needs PowerShell - cmd's `for /f`
 rem  reads a child's output only up to EOF, so a pure batch launcher
 rem  cannot see the ready line while the harness is still running.
-rem  The root stays clean: one entry point per host, the work beside
-rem  the other scripts.
+rem  This file lives in scripts\ ON PURPOSE, beside its POSIX twin and
+rem  every worker: the repository root carries no launcher at all, so
+rem  ONE folder holds the whole console layer.
 rem
-rem  Flags (the same as ./run-web.sh):
+rem  Flags (the same as ./scripts/run-web.sh):
 rem    -Port <n>          listen on this port instead of the default (3080)
 rem    -DshHome <dir>     override DSH_HOME (default: DSH_HOME, else USERPROFILE\.dsh)
 rem    -DshVersion <ver>  override the pinned dsh version from .dsh-version.json
@@ -35,12 +36,12 @@ rem    -NoTerminal        stay in this console; do not relaunch
 rem    -Help / -h / /?    print the help and stop
 rem
 rem  The console this runs in is decided in ONE place for every
-rem  entry point: scripts\console\adapt.cmd.
+rem  entry point: console\adapt.cmd.
 rem ============================================================
 setlocal
 
 if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
-call "%~dp0scripts\console\adapt.cmd" "%~f0" "vncode"
+call "%~dp0console\adapt.cmd" "%~f0" "vncode"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
@@ -59,19 +60,19 @@ rem other flags. Rewriting the whole string is what keeps this safe for a -DshHo
 rem path that legitimately contains "-h". See install.bat.
 if defined VN_HELPREQ set "VNCODE_ARGS=-Help"
 
-rem -NoTerminal belongs to the LAUNCHER, not to the run: scripts\console\adapt.cmd
+rem -NoTerminal belongs to the LAUNCHER, not to the run: console\adapt.cmd
 rem is the file that acts on it, deciding whether to relaunch into Windows
-rem Terminal. scripts\run-web.ps1 declares no such parameter, and PowerShell stops
+rem Terminal. run-web.ps1 declares no such parameter, and PowerShell stops
 rem on an argument it cannot bind, so forwarding it would turn a documented flag
 rem into a failed run. Only that one flag is dropped: -NoPause IS the worker's own
 rem (it holds its window open), and -Port, -DshHome, -DshVersion, -NoBrowser and
 rem -DefaultBrowser pass through untouched. Safe with no arguments at all (where
 rem VN_SHELL_ARGS used to be undefined and this line aborted the file) because
-rem scripts\console\adapt.cmd stores "no arguments" as ONE SPACE.
+rem console\adapt.cmd stores "no arguments" as ONE SPACE.
 set "VN_SHELL_ARGS=%VNCODE_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 
-"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run-web.ps1" %VN_SHELL_ARGS%
+"%VNCODE_PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0run-web.ps1" %VN_SHELL_ARGS%
 set "VN_EXIT=%ERRORLEVEL%"
 
 rem Exactly 1 is how the worker reports its own failures - a missing manifest, a
@@ -100,7 +101,7 @@ echo  it to watch the harness start. Windows PowerShell 5.1 ships with
 echo  every supported version of Windows; if it is missing, install
 echo  PowerShell 7 from https://aka.ms/powershell and run this again.
 echo.
-echo  (macOS and Linux do not use PowerShell for this: run ./run-web.sh.)
+echo  (macOS and Linux do not use PowerShell for this: run ./scripts/run-web.sh.)
 echo.
 if "%VNCODE_PAUSE%"=="1" pause
 exit /b 2

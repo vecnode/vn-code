@@ -204,7 +204,7 @@ Do these and the app is reachable by exactly one thing: a browser you control, o
 the machine running it.
 
 **1. Keep it on loopback — the default is already correct.**
-Run it with the pack's launcher (`run-web.bat` / `./run-web.sh`) or
+Run it with the pack's launcher (`scripts\run-web.bat` / `./scripts/run-web.sh`) or
 `npx @deepseek-ai/dsh@0.1.5-rc.1 web`. Do **not** pass `--host`, and do not pass
 `--trusted-host`. Do not put the port behind a reverse proxy, an SSH `-L`
 forward for someone else, a tunnel (ngrok, cloudflared, Tailscale `serve`),
@@ -352,8 +352,8 @@ That token is the running process's **launch credential**: the server exchanges
 it for the browser session cookie, and every request that follows rides the
 cookie. Treat the line the way you would treat the cookie itself.
 
-How the pack handles it (`run-web.bat` on Windows, `run-web.sh` on macOS/Linux — the two
-entry points; on Windows `run-web.bat` forwards to `scripts/run-web.ps1`, which holds
+How the pack handles it (`scripts\run-web.bat` on Windows, `scripts/run-web.sh` on macOS/Linux — the two
+entry points; on Windows `scripts\run-web.bat` forwards to `scripts/run-web.ps1`, which holds
 the work):
 
 - it is **read in memory** from the app's own output and never written to a file
@@ -365,7 +365,7 @@ the work):
   macOS/Linux hand the URL to `open` / `xdg-open` as an argument, and Windows
   hands it to `Start-Process -FilePath <chrome> -ArgumentList @($Url)` inside
   `scripts/run-web.ps1` — no `cmd /c start`, no `sh -c`, so nothing in it can be
-  read as a shell metacharacter. The root `run-web.bat` never sees the URL: it only
+  read as a shell metacharacter. `scripts\run-web.bat` never sees the URL: it only
   forwards flags to the worker;
 - the URL is opened **only when it names a loopback address** (`127.0.0.1`,
   `::1`, `localhost`; on Windows only a literal `127.x.x.x` address counts, so a

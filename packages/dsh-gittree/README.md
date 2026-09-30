@@ -179,7 +179,7 @@ centre line, the `#12` chip).
 
 ## Install / uninstall
 
-The repo launcher (`install.bat` on Windows, `./install.sh` on macOS/Linux, plus
+The repo launcher (`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux, plus
 the uninstall twins) auto-discovers this package — it is a standard
 `dsh.bundle`. Adding a package changes the profile's bundle set, so the first
 install after it appeared needs one plain launcher run (or `-Force`). The web

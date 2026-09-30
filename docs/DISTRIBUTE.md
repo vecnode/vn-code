@@ -6,9 +6,9 @@ same story: the GitHub workflow calls the very scripts you run on your machine.
 
 | | Windows | macOS / Linux |
 |---|---|---|
-| **Build it** | double-click `distribute.bat` | `./distribute.sh` |
+| **Build it** | double-click `scripts\distribute.bat` | `./scripts/distribute.sh` |
 | **The work** | `scripts/dist.ps1` | `scripts/dist.sh` |
-| **Logs / flags** | `distribute.bat -Help` | `./distribute.sh -Help` |
+| **Logs / flags** | `scripts\distribute.bat -Help` | `./scripts/distribute.sh -Help` |
 | **CI equivalent** | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Verify` | `sh scripts/dist.sh -Verify` |
 
 ---
@@ -61,7 +61,10 @@ dist/
     app/README.md                      <- the shell's README; the shell itself
                                           ships built, so its source is not here
     assets/vncode.svg  docs/  README.md  LICENSE  SECURITY.md
-    install.bat/.sh  uninstall.bat/.sh  run-web.bat/.sh  run-desktop.bat
+    scripts/install.bat | scripts/install.sh       <- the launchers: one pair
+    scripts/uninstall.bat | scripts/uninstall.sh      per host, plus the
+    scripts/run-web.bat | scripts/run-web.sh          Windows-only desktop
+    scripts/run-desktop.bat                           launcher
   vncode-<version>-<rid>.zip       <- the same folder, archived
   vncode-<version>-<rid>.exe       <- Windows: the zip above appended to the
   vncode-<version>-<rid>.run          shell binary; unpacks itself, then runs
@@ -72,7 +75,7 @@ dist/
 `linux-arm64` - derived from the host, never passed in. `<version>` is
 `package.json`'s version unless `-Version` overrides it.
 
-**The distributer is not in the folder.** `distribute.bat` / `scripts/dist.ps1`
+**The distributer is not in the folder.** `scripts/distribute.bat` / `scripts/dist.ps1`
 and their `.sh` twins are the FACTORY, not the product: a recipient gets
 `START-HERE.bat` and never needs the tool that assembled the folder. Both are
 named explicitly in `scripts/dist-manifest.txt`'s skip rules rather than merely
@@ -88,7 +91,7 @@ whether the window is held open at the end; `scripts/console/theme.ps1` and its
 POSIX twin `scripts/console/theme.sh` own the colour policy (a terminal gets
 colour, a redirected log never does, `NO_COLOR` always wins). That layer is why
 the generated `START-HERE.bat` behaves like the launchers beside it instead of
-like a hand-written one-off, and it ships inside `scripts/`. `run-desktop.bat` is
+like a hand-written one-off, and it ships inside `scripts/`. `scripts\run-desktop.bat` is
 shipped for the same reason it exists: in this folder it runs `vncode.exe`
 directly and needs no Rust toolchain, which is what `-NoBuild` pins down.
 
@@ -101,8 +104,8 @@ rule takes the maintainer tooling out of `scripts/`: `scripts/checks/` runs
 against a checkout (`packages/`, the Rust source, a git history),
 `scripts/sync-vendored.ps1` moves the vendored forks forward and wants `pwsh` on
 every host, and `scripts/make-desktop-icon.mjs` regenerates icons that are not
-shipped either. `run-desktop.bat` does not miss them: it decides between "run
-the binary beside me" and "build from source" on the presence of `vncode.exe`,
+shipped either. `scripts\run-desktop.bat` does not miss them: it decides between "run
+the binary in the folder above" and "build from source" on the presence of `vncode.exe`,
 never on a `Cargo.toml`.
 
 > The **plugins** are the exception, and it is structural rather than a choice:
@@ -127,35 +130,35 @@ distributer.
 
 ```bat
 :: Windows - the whole thing: build the shell, assemble, zip
-distribute.bat
+scripts\distribute.bat
 
 :: skip the cargo build (reuse app\src-tauri\target\release as it is)
-distribute.bat -SkipBuild
+scripts\distribute.bat -SkipBuild
 
 :: assemble and RUN the distribution, in the foreground
-distribute.bat -Run
+scripts\distribute.bat -Run
 
 :: assemble, then install into a throwaway DSH_HOME and boot the pinned
 :: harness from a copy of the folder - the end-to-end check
-distribute.bat -Verify
+scripts\distribute.bat -Verify
 
 :: start over; name the version something else
-distribute.bat -Clean
-distribute.bat -Version 0.2.0
+scripts\distribute.bat -Clean
+scripts\distribute.bat -Version 0.2.0
 
 :: assemble somewhere else, leaving dist/ alone - the case that NEEDS it is a
 :: distribution that is still RUNNING: Windows will not let a live
 :: vncode.exe be overwritten, so the new cut is built beside it and swapped
 :: in after the window is closed
-distribute.bat -OutDir dist2
+scripts\distribute.bat -OutDir dist2
 ```
 
 ```sh
 # macOS / Linux - the same flags, one file
-./distribute.sh -SkipBuild
-./distribute.sh -Verify
-./distribute.sh -OutDir dist2      # assemble beside dist/, leaving it alone
-sh ./distribute.sh -Help          # if the executable bit was lost
+./scripts/distribute.sh -SkipBuild
+./scripts/distribute.sh -Verify
+./scripts/distribute.sh -OutDir dist2      # assemble beside dist/, leaving it alone
+sh ./scripts/distribute.sh -Help          # if the executable bit was lost
 ```
 
 Every run prints the folder and the archive to click. `-OutDir` exists for the
@@ -195,8 +198,8 @@ The throwaway home is deleted afterwards; `-KeepVerifyHome` keeps it.
 > `git log --diff-filter=D --name-only -- .github/workflows/distribute.yml` names
 > the deleting commit, and `git checkout <sha>^ -- .github/workflows/distribute.yml`
 > brings it back - with every assertion in §4 and §7 below applying again. Until
-> then, run the same work locally: `distribute.bat -Verify` (or
-> `./distribute.sh -Verify`), which is what the build legs call.
+> then, run the same work locally: `scripts\distribute.bat -Verify` (or
+> `./scripts/distribute.sh -Verify`), which is what the build legs call.
 
 `.github/workflows/distribute.yml` has five jobs, and which of them run depends on
 the event, because a push and a release want different things:
@@ -296,12 +299,12 @@ do - and what this feature is built around - is make the local run and the CI ru
 | `checks` job | `node scripts/checks/check-dist-layout.mjs`, `check-no-secrets.mjs`, `check-splash.mjs` |
 | `rust-tests` job | `cargo test --manifest-path app/src-tauri/Cargo.toml` |
 | Linux webview deps | nothing on Windows; on Linux, the `apt-get` line in the workflow |
-| build + assemble + `-Verify` | `distribute.bat -Verify` / `./distribute.sh -Verify` |
+| build + assemble + `-Verify` | `scripts\distribute.bat -Verify` / `./scripts/distribute.sh -Verify` |
 | tag/version guard | `node -p "require('./package.json').version"` vs your tag |
 | `upload-artifact` | the zip in `dist/` |
 | `release` job | `gh release create <tag> --generate-notes`, then attach the zips |
 
-So: run `distribute.bat -Verify` locally, and a green run means the CI step has
+So: run `scripts\distribute.bat -Verify` locally, and a green run means the CI step has
 nothing new left to discover. What CI adds on top is only the *other* operating
 systems and the artifact plumbing.
 
@@ -355,7 +358,7 @@ systems and the artifact plumbing.
 | `The ready line did not name a loopback address` | the harness reported something other than `127.0.0.1` and the check refused it rather than trusting it |
 | `Warning: 127.0.0.1:<port> was still listening` | a stray `node` survived the stop; kill it |
 | `START-HERE.bat` opens a window that says the harness server did not start | read its console: `npx` missing, no free port, or the pin unreadable |
-| `run-web.bat` works but the distribution looks unadorned | the pack is not installed in the profile yet - run `START-HERE.bat`, or check it installed from **this** folder with `install.bat -DshHome <home>` |
+| `scripts\run-web.bat` works but the distribution looks unadorned | the pack is not installed in the profile yet - run `START-HERE.bat`, or check it installed from **this** folder with `scripts\install.bat -DshHome <home>` |
 
 ## 7. See also
 
