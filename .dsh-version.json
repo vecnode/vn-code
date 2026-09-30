@@ -1,5 +1,5 @@
 {
-  "comment": "The DeepSeek Harness version line this plugin pack is built and tested against. Plugins are shipped as alpha until the owner promotes them to stable. The installer pins this exact dsh version when driving the CLI. 'vendoredFrom' records the harness line whose client bundles dsh-rightbar / dsh-rightbar-files / dsh-open-in-app were forked from. dsh-vn-master is the pack's blank master: the bundle layer alone, no browser half.",
+  "comment": "The DeepSeek Harness version line this plugin pack is built and tested against. Plugins are shipped as alpha until the owner promotes them to stable. The installer pins this exact dsh version when driving the CLI. 'vendoredFrom' records the harness line whose client bundles dsh-rightbar / dsh-rightbar-files / dsh-open-in-app were forked from. dsh-vn-master is the pack's master: the bundle layer alone - the pack's final word per row, no browser half.",
   "dsh": "0.2.0-rc.2",
   "vendoredFrom": "0.2.0-rc.2",
   "platforms": [
@@ -10,11 +10,11 @@
   "comment_platforms": "The plugins are plain JavaScript and platform-neutral; the only OS-specific code is a launcher choosing the right command for the host: dsh-open-in-app's file-browser launcher (explorer.exe / open / xdg-open, WSL-aware), dsh-terminal's shell resolver (pwsh.exe or powershell.exe / $SHELL or /bin/zsh / $SHELL or /bin/bash) and the run launcher's browser hand-off (Chrome on PATH / the standard install folders / the App Paths registry entry, 'open -a Google Chrome', google-chrome or chromium, else the platform default). The launchers run on Windows (install.bat / uninstall.bat, PowerShell 5.1 or 7, and the run launcher: the double-clickable batch run-web.bat at the root plus its worker scripts/run-web.ps1, because cmd's for /f reads a child's output only up to EOF and cannot watch a running harness) and on macOS/Linux (install.sh / uninstall.sh / run-web.sh, POSIX sh - never PowerShell). The run launcher is run-web.bat + run-web.sh at the repo root, and run-web.sh does the whole job itself. The ready URL reaches the browser as ONE ARGV ELEMENT - Start-Process -ArgumentList on Windows, an argument of open/xdg-open on macOS/Linux - never through a command string.",
   "packages": {
     "dsh-vn-master": {
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.2",
       "rows": [
         "master"
       ],
-      "role": "the pack's master and deliberately blank: the bundle layer alone (installed last, so it is the final word per row); no dsh.client, no service, no inject edge, and no core-row disables - those stay with the packages that replace the rows",
+      "role": "the pack's master: the bundle layer alone (installed last, so it is the final word per row), with no dsh.client, no service, no inject edge and no core-row disables - those stay with the packages that replace the rows. What it carries is the pack's ROW RESTATEMENTS of shipped rows, and alpha.2 adds the first: `ui-sidebar-browser` -> `disabled: false`, because 0.2 declares the right Sidebar's Browser tab desktop-only while this pack targets the raw web profile, and a later layer wins per row. The browser package then registers its own tab type AND its own guide entry into the sidebarRightTabs registry, so the Start page lists the Browser by itself - no pack code draws it and no pack row is involved",
       "rowOverrides": []
     },
     "dsh-rightbar": {

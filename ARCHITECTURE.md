@@ -97,17 +97,27 @@ packages/dsh-open-in-app/         # the file-manager half of the Open In button
   lib/client.js       # GENERATED + PATCHED fork of the shipped open-in-app client
 ```
 
-**The master is a separate, blank bundle.** `dsh-vn-master` carries the pack's
-bundle layer and nothing else: no `dsh.client` (so it contributes no node to the
-boot graph), no service, no `inject` edge and no core-row disables. That is what
-makes it safe to own pack-wide patches. The `sidebarRightTabs` / `sidebarRight`
-services stay in the generated fork of the bar, so introducing the master cannot
-touch the tab-type chain. It is also installed **last** - its name is the only one
-here that sorts after every other, and `dsh plugin add` appends a new bundle -
-which makes its layer the profile's final word per row. The core-row disables
-deliberately stay with the packages that replace those rows: a disable belongs
-next to the insertion that supersedes it, so `-Plugin dsh-rightbar` on its own
-still mounts exactly one bar.
+**The master is a separate, browser-free bundle.** `dsh-vn-master` carries the
+pack's bundle layer, and of its own it has nothing but the no-op `master` row: no
+`dsh.client` (so it contributes no node to the boot graph), no service, no `inject`
+edge and no core-row disables. That is what makes it safe to own pack-wide patches.
+The `sidebarRightTabs` / `sidebarRight` services stay in the generated fork of the
+bar, so introducing the master cannot touch the tab-type chain. It is also installed
+**last** - its name is the only one here that sorts after every other, and
+`dsh plugin add` appends a new bundle - which makes its layer the profile's final
+word per row, and that is the layer a RESTATEMENT of a shipped row belongs in.
+alpha.2 carries the first one: `ui-sidebar-browser` -> `disabled: false`. 0.2 ships
+the right Sidebar's Browser tab **desktop-only** - `dsh-web-app`'s own layer
+declares `disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"` - and
+documents the way in as a patch on the row, while this pack targets the raw **web**
+profile; a later layer wins per row, so the master performs that opt-in for every
+install. Nothing else about the row is restated, and nothing in this repo has to
+draw the tab's door either: the browser package registers its type AND its own guide
+entry ("Browser" / "Browse web pages") into `sidebarRightTabs`, the same registry
+this pack's own tab types use, so the Start page lists it by itself. The core-row
+disables deliberately stay with the packages that replace those rows: a disable
+belongs next to the insertion that supersedes it, so `-Plugin dsh-rightbar` on its
+own still mounts exactly one bar.
 
 > History: the pack shipped its own right-hand panel as `dsh-focus` (row
 > `focus`) through alpha.9, then as `dsh-files` (row `files`) from alpha.10,
@@ -1491,7 +1501,8 @@ passes that through as the batch's own exit code).
   version bump therefore re-adds the bundle, so development changes actually
   reach the profile.
 - **Live links**: the web profile installs every bundle (`dsh-vn-master` — the
-  blank master, so a profile that lists it still gets no client half — plus
+  browser-free master, so a profile that lists it still gets no client half, only
+  its row restatements — plus
   `dsh-rightbar`, `dsh-rightbar-files`, `dsh-editor`, `dsh-gittree`,
   `dsh-image`, `dsh-audio`, `dsh-media`, `dsh-video`, `dsh-diagrams`, `dsh-pdf`,
   `dsh-skills`, `dsh-terminal`, `dsh-modal`,
@@ -1537,7 +1548,8 @@ passes that through as the batch's own exit code).
 |---|---|
 | Old panel still showing after edit | client bundle is read at boot; restart the app and HARD-refresh the browser (Ctrl+F5). The web profile is a live link, so no reinstall is needed |
 | The right bar is missing entirely | the fork did not load: confirm the boot HTML lists `dsh-rightbar/client.js`, and that `dsh-rightbar`'s layer still disables `ui-sidebar-right` / `ui-sidebar-files` (a profile patch that re-enables them mounts two bars, which throws on the duplicate tab-type ids) |
-| The master is in the profile but serves no bundle | expected: `dsh-vn-master` is the blank master. With no `dsh.client` it must NOT appear in the boot HTML; only its no-op `master` row joins the host tree |
+| The master is in the profile but serves no bundle | expected: `dsh-vn-master` is browser-free. With no `dsh.client` it must NOT appear in the boot HTML; only its no-op `master` row joins the host tree, and its bundle layer carries the pack's row restatements |
+| No Browser tab on the Start page | the web profile has `ui-sidebar-browser` disabled by default and the master's layer re-enables it, so check that `dsh-vn-master` is really LAST in `dsh.profile.bundles` (a later layer wins per row) and that its `cordis.patch.yml` still carries `- id: ui-sidebar-browser` / `disabled: false`; a profile patch can also switch it back off |
 | The bar is the shipped one, not the pack's | `dsh-rightbar` is not in `dsh.profile.bundles` (or the row id was renamed); re-run the installer (`scripts\install.bat` / `./scripts/install.sh`), then restart |
 | Two Files panels / a stray dock after upgrading | the retired `dsh-files` (or `dsh-focus`) bundle is still in the profile; re-run the installer (its prune removes both) |
 | No "Editor" in the "+" / Start page | the client bundle did not activate: check the browser console for `[dsh-editor]`; a `sidebarRightTabs` service that never appears leaves activation pending |

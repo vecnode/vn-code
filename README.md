@@ -49,7 +49,7 @@ way and what it touches. The exact versions are in
 
 | Package | What it adds |
 |---|---|
-| [`dsh-vn-master`](packages/dsh-vn-master/README.md) | the blank master, installed **last** - the slot pack-wide patches go in |
+| [`dsh-vn-master`](packages/dsh-vn-master/README.md) | the browser-free master, installed **last** - the slot pack-wide patches and row restatements go in (it enables the Browser tab on the web profile) |
 | [`dsh-rightbar`](packages/dsh-rightbar/README.md) | the pack's own right bar: tab strip, docking panel and the `sidebarRight` registry (a fork of the shipped bar) |
 | [`dsh-rightbar-files`](packages/dsh-rightbar-files/README.md) | the Files tab type on top of that bar |
 | [`dsh-editor`](packages/dsh-editor/README.md) | text and code tabs (vendored CodeMirror 6), with a Markdown preview and Save/Create |

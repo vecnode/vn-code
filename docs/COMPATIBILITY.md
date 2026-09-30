@@ -11,7 +11,7 @@ The pack targets the harness line DeepSeek ships to the raw web install
 | Forked from | the same `0.2.0-rc.2` line (`.dsh-version.json`'s `vendoredFrom`) |
 | Install target | the web profile only (`$DSH_HOME/profiles/web`) |
 | Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell + Node.js and npm/npx - no PowerShell); the plugins themselves are plain JS and the only OS-specific code is a launcher choosing the host command: the file-browser launcher (`explorer.exe` / `open` / `xdg-open`), the terminal's shell resolver (`pwsh.exe` or `powershell.exe` / `$SHELL` or `/bin/zsh` / `$SHELL` or `/bin/bash`) and the run launchers' browser hand-off (Chrome, else the platform default) |
-| Master | **`dsh-vn-master`**, deliberately blank - the bundle layer plus one no-op `master` row; no client half, no service, no inject edge and no core-row disables |
+| Master | **`dsh-vn-master`** - the bundle layer plus one no-op `master` row; no client half, no service, no inject edge and no core-row disables. Carries the pack's row restatements, and alpha.2 enables the shipped **Browser** tab on the web profile (`ui-sidebar-browser`) |
 | Right bar | **owned by the pack** - `dsh-rightbar` / `dsh-rightbar-files` are forks of `@deepseek-ai/dsh-client-ui-sidebar-right` / `-sidebar-files`, and the core rows `ui-sidebar-right` / `ui-sidebar-files` are disabled |
 | Open In file managers | **owned by the pack** - `dsh-open-in-app` forks `@deepseek-ai/dsh-client-ui-open-in-app` (row `ui-open-in-app` disabled) and launches the OS file browser directly |
 | Session log download | **the seat is the pack's** - `dsh-themes` alpha.9 shadows the shipped header seat (same occupant id, `priority: -10`), so a plain download icon replaces the three-dot button; the shipped `session-log-download` row stays **mounted** for `/api/session.export`, the `/export` command and the `sessionLogDownload` controller the button drives (no row disabled, nothing forked, no new package) |
@@ -53,12 +53,20 @@ the details.
 
 ## What this means for the plugin
 
-- **dsh-vn-master** is the pack's master and is **deliberately blank**: one no-op
-  `master` row plus the bundle layer, no `dsh.client`, no service, no `inject`
-  edge and no core-row disables. It is installed last (its name sorts last and
-  `dsh plugin add` appends), so it is the profile's final layer - the slot for
-  pack-wide patches. Because it publishes and consumes nothing, it cannot enter
-  or disturb the right bar's tab-type chain.
+- **dsh-vn-master** is the pack's browser-free master: one no-op `master` row plus
+  the bundle layer, no `dsh.client`, no service, no `inject` edge and no core-row
+  disables. It is installed last (its name sorts last and `dsh plugin add`
+  appends), so it is the profile's final layer - the slot for pack-wide patches,
+  and the slot a RESTATEMENT of a shipped row belongs in. Because it publishes and
+  consumes nothing, it cannot enter or disturb the right bar's tab-type chain.
+  alpha.2 uses that slot once: the shipped **Browser** tab is desktop-only in 0.2
+  (`dsh-web-app` declares `ui-sidebar-browser` with
+  `disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"`) while this
+  pack targets the raw web profile, so the master's `cordis.patch.yml` restates
+  that one row as `disabled: false`. A later layer wins per row, and the browser
+  package then registers its tab type AND its own Start-page guide entry into
+  `sidebarRightTabs` - the same registry the pack's own types use - so the tab is
+  listed on **Start** without any pack code drawing that entry.
 - **dsh-rightbar** provides the right bar (chrome, docking panel, expand button,
   Start page) and the `sidebarRightTabs` / `sidebarRight` services its tab types
   use; **dsh-rightbar-files** provides the Files tab on top of it.
@@ -290,7 +298,7 @@ the details.
   `scripts/sync-vendored.ps1` remains PowerShell-only maintainer tooling.
 
 - **master alpha.1 (new package)**: the pack gained a master bundle of its own,
-  **`dsh-vn-master`**, and it is deliberately **blank** - the bundle layer plus
+  **`dsh-vn-master`**, and it shipped deliberately **blank** - the bundle layer plus
   one no-op `master` host row, with no `dsh.client`, no published service, no
   `inject` edge and no core-row disables. The right bar therefore stops being the
   pack's base and keeps only bar responsibilities; pack-wide patches now belong
@@ -636,6 +644,33 @@ the details.
   nature — a Chrome tab has no window geometry to share. `app/` is not a plugin
   and no installer touches it: `scripts\run-desktop.bat` rebuilds it on the next launch
   (close any running vncode window first, or the release binary is locked).
+
+- **master alpha.2 - the Browser tab comes back, on the web profile**: 0.2 ships
+  the right Sidebar's Browser tab **desktop-only**. `dsh-web-app`'s own layer
+  declares the row as
+  `disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"`, and the
+  package's README documents the way in as a patch on the row, so on a web profile
+  the tab simply is not there. This pack installs into the raw **web** profile, and
+  its master layer is the last one applied - a later layer wins per row - so the
+  master performs that opt-in for every install:
+
+  ```yaml
+  - id: ui-sidebar-browser
+    disabled: false
+  ```
+
+  That one restatement is the whole change, and it is enough for the tab to appear
+  on the **Start** page: the browser package registers its tab type AND its own
+  guide entry ("Browser" / "Browse web pages") into the `sidebarRightTabs`
+  registry - the same service `dsh-rightbar`'s generated fork provides and this
+  pack's own tab types register into - so the Start page lists it by itself. No
+  pack code draws that entry, no pack row is involved, and the master stays
+  browser-free: it still ships no `dsh.client`, no service, no `inject` edge and no
+  core-row disables, and the row keeps the name and package the earlier layer gave
+  it. A desktop profile is unaffected, because the expression being overridden
+  already resolved to `false` there. This is also the first thing the master has
+  ever carried, which is why "the master is blank" now reads as "the master is
+  browser-free but is where the pack's row restatements live".
 
 ## Alpha policy
 

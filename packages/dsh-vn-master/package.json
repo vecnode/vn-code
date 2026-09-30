@@ -1,7 +1,7 @@
 {
   "name": "dsh-vn-master",
-  "version": "0.1.0-alpha.1",
-  "description": "Master: the pack's deliberately BLANK base bundle for the DeepSeek Harness web GUI - one no-op 'master' host row and the bundle layer, installed last so it is the pack's final word on any row. It ships no browser half, provides no service and declares no inject edge, so the right bar's tab-type chain stays exactly where it is. Alpha.",
+  "version": "0.1.0-alpha.2",
+  "description": "Master: the pack's base bundle for the DeepSeek Harness web GUI - one no-op 'master' host row plus the bundle layer, installed LAST so it is the pack's final word on any row. It ships no browser half, provides no service and declares no inject edge, so the right bar's tab-type chain stays exactly where it is. What it carries is ROW RESTATEMENTS of shipped rows: the first (alpha.2) re-enables the right Sidebar's Browser tab, which 0.2 declares desktop-only, because this pack targets the raw WEB profile - the browser package then registers its tab type and its own Start-page guide entry with no pack code involved. Alpha.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
