@@ -2425,7 +2425,45 @@ check(
 const barSource = readFileSync(path.join(repo, 'packages/dsh-rightbar/lib/client.js'), 'utf8')
 const syncSource = readFileSync(path.join(repo, 'scripts/sync-vendored.ps1'), 'utf8')
 check('right bar has no two-pane cap', /dockPaneIds\)\((?:state|layout|surface\.layout)\)\.length [<>]=? 2/.test(barSource), false)
-check('right bar offers every drop band', barSource.includes('dropZones: "edges",') && barSource.includes('dropZones: "horizontal"') === false)
+const dockTreeSource = readFileSync(path.join(repo, 'packages/dsh-rightbar/vendor/dock-tree.js'), 'utf8')
+// alpha.3, and the reason the cap lift alone was not enough: the kit RENDERS a
+// docked layout with `DockLayout`, which draws one pane or two side by side and
+// THROWS on every other shape ("DockLayout requires one pane or two horizontally
+// split panes"). A stacked pane - the 2x2 the top/bottom bands exist for - reached
+// the shell's slot boundary as a crash, and an abdicated entry took the whole bar
+// away until a reload. The fork renders the kit's recursive `DockSurface` instead,
+// through its ONE hand-written component (packages/dsh-rightbar/vendor/dock-tree.js,
+// spliced in by the sync script), keeping the four things the flat renderer gave
+// for free: the `data-dockkit-host` box its own stylesheet hides the bar with, the
+// kit's FloatLayer, the `active` / `expanded` gates, and `keepMounted`.
+check(
+  'right bar renders the recursive surface, and the flat renderer only as a fallback',
+  barSource.includes('DockTree, {') &&
+    barSource.includes('const Surface = dockkit.DockSurface;') &&
+    barSource.includes('const Float = dockkit.FloatLayer;') &&
+    // The flat renderer stays reachable for a kit line that has no surface - and
+    // then the top/bottom bands go with it, because it cannot draw a stack.
+    barSource.includes('if (typeof Surface !== "function")') &&
+    barSource.includes('dropZones: "horizontal"') &&
+    barSource.includes('dropZones: "edges",'),
+)
+check(
+  'right bar keeps the four things the flat renderer provided',
+  // 1. the bar's own stylesheet hides and slides the docked content through this -
+  //    and turns the PANEL's pointer events OFF, which the flat renderer's per-tab
+  //    hosts restored and the surface's panes do not (without it the whole bar is
+  //    deaf to the mouse: measured in a real browser, every click passed through)
+  barSource.includes('"data-dockkit-host": "dock"') &&
+    barSource.includes('pointerEvents: "auto"') &&
+    // 2. floats: the flat renderer drew them as grid cells, the surface does not
+    barSource.includes('canCloseTab: props.canCloseTab') &&
+    // 3. an off-screen session's panel, or a collapsed bar, mounts nothing
+    barSource.includes('props.active !== false') &&
+    barSource.includes('state.expanded === true') &&
+    // 4. a retained tab (the shipped Browser type) stays mounted once shown
+    barSource.includes('typeof keepMounted === "function"') &&
+    barSource.includes('dockkit.findTabPane(state, tab.id)'),
+)
 check('right bar hands the limit to the kit', barSource.includes('canSplit: (0, _deepseek_ai_dsh_client_ui_dockkit.canSplit)(surface.layout),'))
 check(
   'right bar names the four-pane ceiling',
@@ -2433,9 +2471,26 @@ check(
     barSource.includes('"dock.splitPaneDisabled": "\u5df2\u8fbe\u56db\u683c\u4e0a\u9650",'),
 )
 check(
-  'right bar cap lift is a recorded patch',
-  syncSource.includes('lift the two-pane cap') && syncSource.includes('offer every drop band a pane has'),
+  'right bar cap lift and renderer are recorded patches',
+  syncSource.includes('lift the two-pane cap') &&
+    syncSource.includes('offer every drop band a pane has') &&
+    syncSource.includes('draw the tree the kit plans, not the flat grid that refuses it') &&
+    syncSource.includes('vendor/dock-tree.js'),
 )
+// The generated fork's one hand-written component must BE the fragment beside the
+// patch list, byte for byte: a hand edit in either place would otherwise drift
+// silently, which is exactly what the fork/patch-list split exists to prevent.
+{
+  const vendorComponent = dockTreeSource.slice(dockTreeSource.indexOf('\t\t/**')).replace(/\r\n/g, '\n').trimEnd()
+  const from = barSource.indexOf('\t\t/**\n\t\t * The dock renderer')
+  const to = barSource.indexOf('\n\t\tfunction intentsFor(', from)
+  const forkComponent = from < 0 || to < 0 ? '' : barSource.slice(from, to)
+  check(
+    'the renderer in the fork is byte-for-byte the vendor fragment',
+    forkComponent === vendorComponent ? 'same' : String(forkComponent.length) + ' vs ' + String(vendorComponent.length),
+    'same',
+  )
+}
 
 // ------------------------------------------------------------- dsh-diagrams
 // The diagrams bundle registers TWO tab types (one per diagram, plus the

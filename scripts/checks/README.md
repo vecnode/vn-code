@@ -138,7 +138,17 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
     SKIPPED with a warning, which is exactly the quiet failure that would bring the
     feedback surface back with the check still green;
   - `dsh-rightbar` - the forked bar's own source invariants (module-table id,
-    the module-table surface other bundles inject);
+    the module-table surface other bundles inject), the cap lift and the drop bands
+    it hands the kit, and since alpha.3 the RENDERER: that the fork renders the
+    kit's recursive `DockSurface` with `DockLayout` only as a fallback (which is
+    also the one path where the top/bottom bands are withdrawn again), that the
+    wrapper keeps the four things the flat renderer provided
+    (`data-dockkit-host="dock"` for the bar's own hide/slide rule, `pointer-events:
+    auto` because that rule's stylesheet turns the panel's pointer events off - the
+    reason a surface-rendered bar was deaf to the mouse, `FloatLayer`, and the
+    `active` / `expanded` / `keepMounted` gates), that the sync script records and
+    splices that renderer, and that the component inside the generated fork is
+    **byte-for-byte** the fragment in `packages/dsh-rightbar/vendor/dock-tree.js`;
   - `dsh-diagrams` - both tab types and their seats, all six tool cards, and the
     four load-bearing properties of the render path (parse-before-render,
     `suppressErrorRendering`, the plugin's own container, the `finally` sweep),

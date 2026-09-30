@@ -85,6 +85,18 @@ function T($n) { return ("`t" * $n) }
 $splitCapTwo = (-join ([char[]](0x5DF2, 0x8FBE, 0x4E24, 0x683C, 0x4E0A, 0x9650)))
 $splitCapFour = (-join ([char[]](0x5DF2, 0x8FBE, 0x56DB, 0x683C, 0x4E0A, 0x9650)))
 
+<#
+    The fork's ONE hand-written piece: the dock renderer. It lives as a source
+    fragment in the package's own `vendor/` folder - the same place dsh-editor,
+    dsh-pdf and dsh-diagrams keep the inputs that generate what they ship - and is
+    spliced into the generated bundle below. Reading it here is what keeps it a
+    real file: a component this size spelled as a patch literal would be neither
+    readable nor reviewable, and the generated fork itself must never be edited.
+#>
+$dockTreePath = Join-Path (Join-Path (Join-Path (Join-Path $repoRoot 'packages') 'dsh-rightbar') 'vendor') 'dock-tree.js'
+if (-not (Test-Path -LiteralPath $dockTreePath)) { throw "missing $dockTreePath" }
+$dockTreeSource = ([System.IO.File]::ReadAllText($dockTreePath, [System.Text.Encoding]::UTF8)).Replace("`r`n", "`n").TrimEnd([char]10)
+
 # Vendored package -> the core package it forks, plus the patches applied after
 # the module-table id is rewritten. A patch is a literal Find/Replace pair: the
 # Find text must appear exactly once (tab-indented), and a re-sync that cannot
@@ -97,6 +109,17 @@ $vendored = @(
     # into a pane's upper or lower quarter stacks a pane there, which is how a 2x2
     # is built, since the Split control itself always adds a column to the right -
     # and let the disabled Split hint name the ceiling that is actually in force.
+    #
+    # Lifting the cap is not enough on its own: the kit also DRAWS that layout with
+    # the wrong component. `DockLayout` renders one pane or two side by side and
+    # throws on anything else ("DockLayout requires one pane or two horizontally
+    # split panes"), so a stacked pane - and with it the 2x2 the top/bottom bands
+    # exist for - reached the shell's slot boundary as a crash, and an abdicated
+    # slot entry took the whole right bar away until a page reload. The last two
+    # patches render the kit's own `DockSurface` (the same drop-zone host, with the
+    # recursive renderer) and splice in the wrapper that keeps everything the flat
+    # renderer provided for free; the long version of that reasoning is the
+    # wrapper's own comment in packages/dsh-rightbar/vendor/dock-tree.js.
     [pscustomobject]@{
         Name    = 'dsh-rightbar'
         Core    = '@deepseek-ai/dsh-client-ui-sidebar-right'
@@ -139,6 +162,16 @@ $vendored = @(
                 Label   = 'the Chinese disabled split hint names the same ceiling'
                 Find    = '"dock.splitPaneDisabled": "' + $splitCapTwo + '",'
                 Replace = '"dock.splitPaneDisabled": "' + $splitCapFour + '",'
+            },
+            [pscustomobject]@{
+                Label   = 'draw the tree the kit plans, not the flat grid that refuses it'
+                Find    = '_deepseek_ai_dsh_client_ui_dockkit.DockLayout, {'
+                Replace = 'DockTree, {'
+            },
+            [pscustomobject]@{
+                Label   = 'splice in DockTree (packages/dsh-rightbar/vendor/dock-tree.js) above intentsFor'
+                Find    = (T 2) + 'function intentsFor(sessionId, actions, openTab, closeTab, splitPane) {'
+                Replace = ($dockTreeSource + "`n" + (T 2) + 'function intentsFor(sessionId, actions, openTab, closeTab, splitPane) {')
             }
         )
     },
@@ -218,19 +251,66 @@ function Get-CandidateRoots {
 }
 
 <#
-    The first candidate root that carries every core package we vendor.
+    The harness LINE the pack is pinned to - the same field the tracked checks
+    grade the forks against. A re-sync must move the forks to that line and no
+    other, because more than one harness generation sits on an ordinary machine:
+    this one carries 0.1.5-rc.1 in the npx cache beside the pinned 0.2.0-rc.2, and
+    the older line's sidebar-right is a different bundle entirely (140 KB against
+    331 KB, no `DockLayout` JSX at all). A plain "first root that has the file"
+    walk finds the OLD one, and the sync would then quietly regenerate every fork
+    from a line the pack does not target.
+#>
+function Get-PinnedLine {
+    try {
+        $manifest = Get-Content -LiteralPath (Join-Path $repoRoot '.dsh-version.json') -Raw | ConvertFrom-Json
+        if ($manifest.vendoredFrom) { return [string]$manifest.vendoredFrom }
+        if ($manifest.dsh) { return [string]$manifest.dsh }
+    } catch {}
+    return ''
+}
+
+<# The line one candidate root carries (the core packages share the harness version). #>
+function Get-RootLine {
+    param([string]$Root)
+    $probe = Join-Path (Join-Path (Join-Path $Root '@deepseek-ai') 'dsh-client-ui-sidebar-right') 'package.json'
+    try { return [string](Get-Content -LiteralPath $probe -Raw | ConvertFrom-Json).version } catch { return 'unknown' }
+}
+
+<# Whether one root carries every core package this script vendors. #>
+function Test-CoreRoot {
+    param([string]$Root)
+    foreach ($item in $vendored) {
+        $probe = Join-Path (Join-Path $Root '@deepseek-ai') (Split-Path $item.Core -Leaf)
+        if (-not (Test-Path (Join-Path $probe 'package.json'))) { return $false }
+    }
+    return $true
+}
+
+<#
+    The first candidate root that carries every core package we vendor AND the
+    pinned line. An explicit -CoreModules is the one way to sync another line on
+    purpose; without it a mismatch is an error naming what was found, never a
+    silent fork of the wrong generation.
 #>
 function Resolve-CoreModules {
     param([string]$Explicit, [string]$HomeDir)
+    $line = Get-PinnedLine
+    $carrying = @()
     foreach ($root in (Get-CandidateRoots -Explicit $Explicit -HomeDir $HomeDir)) {
-        $ok = $true
-        foreach ($item in $vendored) {
-            $probe = Join-Path (Join-Path $root '@deepseek-ai') (Split-Path $item.Core -Leaf)
-            if (-not (Test-Path (Join-Path $probe 'package.json'))) { $ok = $false; break }
-        }
-        if ($ok) { return $root }
+        if (Test-CoreRoot -Root $root) { $carrying += $root }
     }
-    throw 'Could not find a harness node_modules carrying the core sidebar packages. Pass -CoreModules "<harness>/node_modules".'
+    foreach ($root in $carrying) {
+        if ($line -ne '' -and (Get-RootLine -Root $root) -eq $line) { return $root }
+    }
+    if ($Explicit) {
+        foreach ($root in $carrying) {
+            if ($root -eq $Explicit) { return $root }
+        }
+        throw "-CoreModules '$Explicit' does not carry every core package we vendor."
+    }
+    $found = ($carrying | ForEach-Object { (Get-RootLine -Root $_) + ' at ' + $_ }) -join '; '
+    if ($found -eq '') { $found = 'nothing that carries them' }
+    throw "No harness node_modules carrying the pinned line '$line' was found (found: $found). Pass -CoreModules '<harness>/node_modules' to sync another line on purpose."
 }
 
 function Get-CorePackageDir {

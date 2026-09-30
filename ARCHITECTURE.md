@@ -266,11 +266,10 @@ without waiting for a new seam. The two mechanisms that make it safe:
   `ui-sidebar-documentpreview` row (deliberately left enabled) still loads and
   still finds the `sidebarRightTabs` service, now provided by the pack.
 
-**The only behavioral patch so far: four docked panes, not two** (alpha.2). The
-docking kit itself allows `MAX_DOCK_PANES = 4` - its `canSplit` means *fewer than
-four* - and resolves five drop zones per pane (`center`/`left`/`right` as the
-`row` axis, `top`/`bottom` as the `column` axis), rendering any tree depth with
-`splitRow`/`splitColumn`, per-split dividers and `planResizeSplit`. The shipped
+**Four docked panes, not two** (alpha.2), **and a renderer that can draw them**
+(alpha.3). The docking kit itself allows `MAX_DOCK_PANES = 4` - its `canSplit`
+means *fewer than four* - and resolves five drop zones per pane (`center`/`left`/
+`right` as the `row` axis, `top`/`bottom` as the `column` axis). The shipped
 sidebar-right bundle caps that at two in five places, and the fork had inherited
 it verbatim. The patch list lifts all five and switches the surface from
 `dropZones: "horizontal"` to `"edges"` (the kit's default), so the ceiling is the
@@ -294,6 +293,43 @@ Split control and refuses a drop when a pane cannot hold two strips
 (`SPLIT_MINIMUMS` ≈ 100px chip + 48px body each side), so four panes want a
 widened bar or the panel's fullscreen mode. Floating panels were never counted
 against the dock ceiling, so they remain the way past four.
+
+**alpha.3 is the renderer, and the reason alpha.2's cap lift was not enough.**
+The kit exports TWO renderers over the same state, the same drop resolution and
+the same intents: `DockLayout`, which draws a FLAT grid - one pane, or two side by
+side - and **throws** on every other shape (`DockLayout requires one pane or two
+horizontally split panes`); and `DockSurface`, which walks the split tree
+recursively (`splitRow`/`splitColumn`, a divider per child, one strip per pane) and
+therefore draws exactly what `planDropTab` / `planSplitPane` build. The shipped
+bundle renders `DockLayout`, so with the cap lifted a stacked pane - the whole
+point of the top/bottom bands - committed a state the very next render refused: the
+throw reached the shell's `SlotErrorBoundary`, which reports a root-scoped entry
+with `abdicate: true`, and **the right bar disappeared until a page reload**. The
+fork now renders `DockSurface` through the package's one hand-written component,
+`packages/dsh-rightbar/vendor/dock-tree.js`, spliced in verbatim by
+`scripts/sync-vendored.ps1` and pinned byte-for-byte against the generated fork by
+the tracked client check.
+
+That wrapper carries three things the flat renderer provided per host and the
+surface renderer does not, each of them measured rather than assumed:
+
+- a real box with `data-dockkit-host="dock"` - the bar's own stylesheet hides and
+  slides the docked content through that selector (a collapsed bar measures
+  `visibility:hidden` plus `translateX(<bar width>)`) - and `pointer-events: auto`
+  on it, because the same stylesheet turns the PANEL's pointer events **off** and
+  the flat renderer's per-tab hosts were what turned them back on: without it the
+  surface-rendered bar is deaf to the mouse and every click passes through;
+- the kit's `FloatLayer`, because the flat renderer drew a floated tab as a grid
+  cell while the surface renderer draws no floats at all (a floated tab would be
+  unreachable);
+- the `active` / `expanded` gates and `keepMounted`, so an off-screen session's
+  panel or a collapsed bar mounts no tabs, and a retained tab (the shipped Browser
+  type) stays mounted once it has been in front.
+
+Verified in headless Edge against the real app with real pointer input: four tabs,
+three drags, four panes of 304×428 in a 2×2 (two rows, two even columns, three
+dividers, one strip per pane), no slot error at any point, the collapse round trip
+hiding and restoring all four, and a floated tab docking back.
 
 The contract other plugins use is unchanged (the fork's patches move one limit,
 never the contract) and is the seam the pack's own sub-plugins use:
