@@ -1,5 +1,15 @@
 # dsh-browser (alpha.1)
 
+> **SHIPPED, AND TURNED OFF.** The master layer
+> ([`packages/dsh-vn-master/cordis.patch.yml`](../dsh-vn-master/cordis.patch.yml))
+> disables the `browser` row, so a profile loads **no Browser tab, no
+> `/api/dsh-browser/*` routes, no `browser_render` / `browser_query` /
+> `browser_text` and no client bundle** — the whole surface is out of the boot
+> graph, which is the point: nothing unused should hold attack surface. The code,
+> the docs and `scripts/checks/check-browser-node.mjs` stay in step, so
+> re-enabling it is deleting two lines from that patch. Everything below is what
+> it does when it is on.
+
 **The pack's own Browser tab** — and the replacement for the one the harness
 ships. It renders a page **on the host**, in a throwaway engine behind an egress
 gate, and shows you the picture, the rendered text and the page's own numbers.

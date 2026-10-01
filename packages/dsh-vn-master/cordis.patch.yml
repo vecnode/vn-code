@@ -25,33 +25,49 @@
       name: 'dsh-vn-master'
 
 # ---------------------------------------------------------------------------
-# The Browser tab (alpha.2; RESTATED by dsh-browser in alpha.4 of the pack).
+# The Browser: BUILT, SHIPPED, AND OFF (alpha.4 of this layer).
 # ---------------------------------------------------------------------------
-# 0.2 ships the right Sidebar's Browser tab DESKTOP-ONLY, and alpha.2 of this
-# layer flipped it on for the web profile (see the note below, kept for the
-# record). It was the right patch for the wrong tab: the shipped one renders a
-# remote page in an `<iframe src=...>`, so a site's own framing policy decides
-# whether anything appears at all - google.com answers `X-Frame-Options:
-# SAMEORIGIN`, github.com answers `deny` plus `frame-ancestors 'none'`, and the
-# frame shows "www.google.com refused to connect" (all measured on this machine).
+# The history, kept because each step is a decision rather than a mistake:
 #
-# The pack now ships its OWN Browser tab: dsh-browser renders the page on the
-# HOST, in a disposable engine behind an egress gate (https, port 443, validated
-# public destinations only), so the site's framing policy cannot decide anything
-# and no remote code runs in the user's browser. That package's own layer carries
-# `ui-sidebar-browser -> disabled: true`, exactly as dsh-rightbar carries the
-# disables for the bar rows it replaces.
+#   alpha.2  this layer flipped the SHIPPED tab on for the web profile
+#            (`ui-sidebar-browser -> disabled: false`), because 0.2 declares it
+#            desktop-only. It was the right patch for the wrong tab: the shipped
+#            one renders a remote page in an `<iframe src=...>`, so a site's own
+#            framing policy decides whether anything appears at all - google.com
+#            answers `X-Frame-Options: SAMEORIGIN`, github.com answers `deny`
+#            plus `frame-ancestors 'none'`, and the frame shows "www.google.com
+#            refused to connect" (all measured on this machine).
+#   alpha.4  dsh-browser replaced it: the page is rendered on the HOST, in a
+#            disposable engine behind an egress gate (https, port 443, validated
+#            public destinations only), so no site policy can decide anything and
+#            no remote code runs in the user's browser. That package's own layer
+#            carries `ui-sidebar-browser -> disabled: true`, exactly as
+#            dsh-rightbar carries the disables for the bar rows it replaces.
+#   NOW      the whole thing is TURNED OFF. The owner does not use a browser
+#            inside the harness, and a feature nobody uses is not worth its
+#            attack surface - a rendering engine, an egress path and three tools
+#            the model may call. Disabling the row here takes all of it out of
+#            the boot graph: no Browser tab, no `/api/dsh-browser/*` routes, no
+#            `browser_render` / `browser_query` / `browser_text`, and the client
+#            bundle is never loaded.
+#
+# WHY HERE and not by uninstalling: this layer is installed LAST, so a later
+# layer wins per row. The package keeps its place in the pack, its checks keep
+# running, and re-enabling it is deleting the two lines below - the code, the
+# docs and the tracked check all stay in step. (Uninstalling would also drop the
+# `web-render` skill registration and the artifacts convention with it.)
 #
 # THE RE-ENABLE IS GONE ON PURPOSE. It used to live here:
 #
 #   - id: ui-sidebar-browser
 #     disabled: false
 #
-# This layer is installed LAST, so leaving it in would re-enable the shipped
-# iframe row over dsh-browser's disable and mount TWO Browser tabs - one of them
-# the thing this pack replaced. A layer that restates a row must not fight the
-# package that now owns it.
+# Leaving it in would re-enable the shipped iframe row over dsh-browser's
+# disable and mount TWO Browser tabs - one of them the thing this pack replaced.
+# A layer that restates a row must not fight the package that owns it.
 # ---------------------------------------------------------------------------
+- id: browser
+  disabled: true
 
 # ---------------------------------------------------------------------------
 # Feedback is REMOVED on this deployment (alpha.3) - a pack-wide PRODUCT

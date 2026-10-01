@@ -260,6 +260,14 @@ const indexMod = await load('lib/index.js')
   const skill = indexMod.readSkill(indexMod.SKILLS[0])
   check('the bundled skill resolves inside the package', skill.file.startsWith(pkg), true)
   check('the bundled skill has real content', skill.text.includes('browser_render') && skill.text.length > 1000, true)
+  // SHIPPED OFF, on purpose: the pack's LAST layer disables the row, so a profile
+  // gets no Browser tab, no `/api/dsh-browser/*`, no tools and no client bundle.
+  // Pinned because it is a product decision rather than an accident of install:
+  // re-enabling it must be a deliberate edit to the master's patch, not a silent
+  // regression of this one.
+  const masterPatch = readFileSync(path.join(repo, 'packages', 'dsh-vn-master', 'cordis.patch.yml'), 'utf8')
+  check('the master layer turns the browser row OFF', /- id: browser\s*\n\s+disabled: true/.test(masterPatch), true)
+  check('the package still disables the shipped iframe row', /- id: ui-sidebar-browser\s*\n\s+disabled: true/.test(readFileSync(path.join(pkg, 'cordis.patch.yml'), 'utf8')), true)
   check('the state snapshot names the engine, the policy and the parked mode', (() => {
     const state = deps.state()
     return typeof state.live.available === 'boolean' && state.live.available === false && Array.isArray(state.policy.ports) && 'engine' in state
