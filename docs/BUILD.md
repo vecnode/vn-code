@@ -1,5 +1,14 @@
 # Building vncode
 
+> **Stage 2 is specified in [`STAGE2.md`](STAGE2.md), and its measurements
+> supersede §1–3 of this file.** The measurement changed the design: the pinned
+> harness's production closure is **461.5 MB / 26 642 files**, and `--omit=dev`
+> saves nothing - 461 MB *is* the runtime - so "one lightweight `.exe`" was never
+> achievable. The decision taken is **one `.exe`, fully offline, ~176 MB, shipped
+> whole with LibreOffice included**, because a recipient must be able to start
+> the app with no network and no prerequisites. Read `STAGE2.md` before starting
+> stage 2's work items.
+
 This document is the **build plan** for the vncode distribution. It describes the
 target pipeline, why each decision was made, and the order the work has to happen
 in. It is a specification, not a description of what exists today - see
@@ -15,7 +24,8 @@ turning it into artifacts.
 | Decision | Choice |
 |---|---|
 | What `run-dist` leaves in `dist/` | **Both** - the folder (dev, live-linked) and one self-extracting `.exe` (the thing you hand over) |
-| Runtime | **Vendor DSH locally and bundle a pinned Node runtime** - no `npx`, no `PATH` lookup, no network after install |
+| Runtime | **Vendor the harness AND bundle a pinned Node runtime**, shipped whole (~176 MB). No `npx`, no `PATH` lookup, and **no network at startup** - the network is for the chat and search only. See `STAGE2.md` |
+| Profile | **Pre-built into the payload** and copied on first run, so every launch is pure Node: no npm, no pnpm, no registry |
 | Signing | **Wired behind `-Sign`, off by default** - local builds stay fast and unsigned; CI turns it on with a secret |
 | JavaScript/TypeScript build | **No bundler for `packages/`** - hand-written client bundles, live-linked, preserved as the fast dev loop |
 
