@@ -25,33 +25,33 @@
       name: 'dsh-vn-master'
 
 # ---------------------------------------------------------------------------
-# The Browser tab, on the WEB profile (alpha.2 - the master's first row
-# restatement, and the reason the master is no longer literally empty).
+# The Browser tab (alpha.2; RESTATED by dsh-browser in alpha.4 of the pack).
 # ---------------------------------------------------------------------------
-# 0.2 ships the right Sidebar's Browser tab DESKTOP-ONLY: `dsh-web-app`'s own
-# layer declares it `disabled: !!js "ctx.get('profileContext')?.name !==
-# 'desktop'"`, and the package's README documents the way in as a patch on the
-# row. This pack targets the raw web profile, and a bundle layer may restate a
-# shipped row, so the pack's FINAL layer performs that opt-in itself instead of
-# asking every profile to carry a hand edit.
+# 0.2 ships the right Sidebar's Browser tab DESKTOP-ONLY, and alpha.2 of this
+# layer flipped it on for the web profile (see the note below, kept for the
+# record). It was the right patch for the wrong tab: the shipped one renders a
+# remote page in an `<iframe src=...>`, so a site's own framing policy decides
+# whether anything appears at all - google.com answers `X-Frame-Options:
+# SAMEORIGIN`, github.com answers `deny` plus `frame-ancestors 'none'`, and the
+# frame shows "www.google.com refused to connect" (all measured on this machine).
 #
-# Nothing else is needed for the tab to appear on the Start page, and nothing
-# about the row is restated beyond its `disabled` flag - it keeps the `name` and
-# the package the earlier layer declared it with.
+# The pack now ships its OWN Browser tab: dsh-browser renders the page on the
+# HOST, in a disposable engine behind an egress gate (https, port 443, validated
+# public destinations only), so the site's framing policy cannot decide anything
+# and no remote code runs in the user's browser. That package's own layer carries
+# `ui-sidebar-browser -> disabled: true`, exactly as dsh-rightbar carries the
+# disables for the bar rows it replaces.
 #
-# The browser package registers the tab TYPE and its own guide entry into the
-# `sidebarRightTabs` registry - the same service dsh-rightbar's generated fork
-# provides and dsh-editor / dsh-rightbar-files / dsh-gittree / dsh-pdf /
-# dsh-diagrams register their own types into ("Browser" / "Browse web pages" in
-# the shipped locales) - so the Start page lists it by itself. No pack code
-# draws that entry, and no pack row is involved: only the shipped row is
-# restated, which is exactly the work the master exists to do.
+# THE RE-ENABLE IS GONE ON PURPOSE. It used to live here:
 #
-# `disabled: false` OVERRIDES the earlier layer's `!!js` expression, because a
-# later layer wins per row. A desktop profile is not harmed: the expression it
-# overrides already resolved to `false` there.
-- id: ui-sidebar-browser
-  disabled: false
+#   - id: ui-sidebar-browser
+#     disabled: false
+#
+# This layer is installed LAST, so leaving it in would re-enable the shipped
+# iframe row over dsh-browser's disable and mount TWO Browser tabs - one of them
+# the thing this pack replaced. A layer that restates a row must not fight the
+# package that now owns it.
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Feedback is REMOVED on this deployment (alpha.3) - a pack-wide PRODUCT

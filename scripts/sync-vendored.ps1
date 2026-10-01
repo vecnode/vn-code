@@ -172,6 +172,107 @@ $vendored = @(
                 Label   = 'splice in DockTree (packages/dsh-rightbar/vendor/dock-tree.js) above intentsFor'
                 Find    = (T 2) + 'function intentsFor(sessionId, actions, openTab, closeTab, splitPane) {'
                 Replace = ($dockTreeSource + "`n" + (T 2) + 'function intentsFor(sessionId, actions, openTab, closeTab, splitPane) {')
+            },
+            # WHAT THE FLAT RENDERER'S TAB HOST GAVE THE DOCKED SURFACE - the second
+            # thing the renderer swap above took away with the 2x2, and the reason a
+            # fullscreen bar shows the conversation through it. Both of these hang off
+            # markup ONLY `DockLayout` emits:
+            #
+            #   ._tabHost_<hash>:not(._float_<hash>)   {background:var(--dsw-alias-bg-base)}
+            #   ._tabCell_<hash>[data-dockkit-host=dock][data-dockkit-column="0"]>._tabHost_<hash>
+            #     {border-left:.5px solid var(--dsw-alias-border-l4)}
+            #
+            # `DockSurface` draws a bare `_pane_` section with NO background and
+            # NEITHER attribute (the tab cell only exists on the `DockLayout` path), so
+            # a surface-rendered bar is TRANSPARENT and has no left boundary:
+            #
+            #   - the SEAM was the visible one in push mode. The bar and the centre
+            #     column are both `--dsw-alias-bg-base`, so with the selector matching
+            #     nothing the two ran together with no line between them.
+            #   - the FILL only shows in FULLSCREEN, because that is the one state
+            #     where the panel overlays something it is NOT the same colour as: the
+            #     conversation. Every pixel the active tab does not paint itself then
+            #     shows the chat through it, and WHICH tab is in front decides how bad
+            #     it looks - the editor and the PDF viewer paint their own background,
+            #     while the History tab (its rail, its commit list, its diff detail)
+            #     paints none, so it reads as "sometimes it does not cover".
+            #
+            # `DockTree` does re-emit `data-dockkit-host="dock"` on a real box (the
+            # bar's own stylesheet slides and hides the docked content through that
+            # selector), so BOTH go there: the fill the flat renderer's tab host had,
+            # and the seam, on the token the app's OWN column separators use -
+            # `border-right:.5px solid var(--dsw-alias-border-l3)` on the left sidebar
+            # column, and the same declaration on the centre column under
+            # `[data-platform=darwin]`. (The kit's cell rule asked for `-l4`, one step
+            # stronger; the bar is pinned to `-l3` so the two sides of the frame wear
+            # the same hairline, which is what a person compares.)
+            #
+            # Three facts keep this honest: the wrapper is `panelBody`'s FIRST child
+            # and the flat fallback renders no such box, so neither declaration can
+            # double the kit's own; both ride the `[data-sidebar-right-open]` gate the
+            # rule above puts on that box, so a COLLAPSED bar carries the fill and the
+            # seam off-screen with its content instead of painting a one-bar-wide
+            # rectangle over the conversation; and the box is what the tab bodies are
+            # MOUNTED IN, so the fill cannot be defeated by a tab that paints nothing -
+            # which is the actual bug this closes.
+            [pscustomobject]@{
+                Label   = 'give the DockTree wrapper what the flat tab host provided: the opaque bg-base fill and the bar own left seam'
+                Find    = '.P3OORG_panelBody{flex:auto;min-height:0;display:flex}'
+                Replace = '.P3OORG_panelBody{flex:auto;min-height:0;display:flex}.P3OORG_panelBody>[data-dockkit-host=dock]{background:var(--dsw-alias-bg-base);border-left:.5px solid var(--dsw-alias-border-l3)}'
+            },
+            # THE FULLSCREEN BAR'S LAYER - a third thing the renderer swap took away,
+            # and the reason a fullscreen bar showed the conversation THROUGH it even
+            # once it had an opaque fill. `.P3OORG_panel` is `position:absolute` and
+            # leaves `z-index` at `auto`, so it paints above the chat only because
+            # positioned boxes paint after in-flow ones. Every POSITIONED element in
+            # the app with a positive z-index therefore paints ABOVE it, and the
+            # pinned line has plenty that are not transient - measured from its own
+            # bundles:
+            #
+            #   - dsh-client-ui-layout: the column resize handles are 11, the
+            #     leading seat (the header's left controls) is 15, and the frame's
+            #     overlay layer is 20;
+            #   - dsh-client-ui-conversation: the composer seat is
+            #     `position:sticky; bottom:0; z-index:7` - 9 with a trigger menu
+            #     open - its width handle is 8 and its workspace row is 10, so the
+            #     INPUT BOX sat on top of the fullscreen bar, and its background is a
+            #     gradient that fades to transparent over its top 36px, which is how
+            #     chat text came through it;
+            #   - dsh-client-ui-sidebar: its fixed controls are 30 under
+            #     `[data-windows-titlebar]`;
+            #   - and this pack's OWN command dock (dsh-cmdbar) is
+            #     `position:fixed; bottom:0; z-index:21`, deliberately above the
+            #     columns - so it is covered by a fullscreen bar too, which is what
+            #     "on top of everything" means for a fullscreen surface. Should the
+            #     dock ever need to survive a fullscreen bar, it is THAT package's
+            #     number to raise above 40, not this one's to lower.
+            #
+            # The kit had already answered this for the FLAT renderer: the fullscreen
+            # panel sets `--dsh-dockkit-dock-layer:40` (against 10 when pushed), and
+            # that is the z-index of its tab CELLS. Because the panel itself does not
+            # create a stacking context, those cells were ordered in the ROOT
+            # stacking context - above the app's persistent chrome, below the kit's
+            # own tab menu (70) and everything the app opens over the interface
+            # (tooltips and hovercards 100, submenus 101, the modal root and its
+            # backdrops 1000, toasts and portals 1100). `DockSurface` draws no tab
+            # cell, so the surface path lost that layer too and the fullscreen bar
+            # sat UNDER the shell. The layer goes on the PANEL here, which restores
+            # the intent and covers what the cells never could: the bar's own fill,
+            # and the float layer - floats are children of the panel, so keeping them
+            # inside its stacking context (their inline z-indexes above the wrapper's
+            # `auto`) preserves the kit's own float-above-dock relation rather than
+            # stranding them underneath it.
+            #
+            # 40 is taken from that ladder, not invented: above everything persistent
+            # (a maximum of 30) and below every transient layer (a minimum of 70), so
+            # dropdowns, dialogs and toasts still win - which "the bar is on top" must
+            # not break. PUSH mode is deliberately left alone: upstream's pushed dock
+            # layer is 10, below the shell's own 11/15/20 chrome, and the two columns
+            # do not overlap there anyway.
+            [pscustomobject]@{
+                Label   = 'put the fullscreen bar on the dock layer above the shell chrome and below the app popovers'
+                Find    = '.P3OORG_panel[data-sidebar-right-panel=fullscreen]{--dsh-dockkit-dock-layer:40}'
+                Replace = '.P3OORG_panel[data-sidebar-right-panel=fullscreen]{--dsh-dockkit-dock-layer:40;z-index:40}'
             }
         )
     },

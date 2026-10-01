@@ -2470,12 +2470,93 @@ check(
   barSource.includes('"dock.splitPaneDisabled": "Four panes is the limit",') &&
     barSource.includes('"dock.splitPaneDisabled": "\u5df2\u8fbe\u56db\u683c\u4e0a\u9650",'),
 )
+// WHAT THE FLAT RENDERER'S TAB HOST GAVE THE DOCKED SURFACE, and the two things
+// the renderer swap above took away with the 2x2. Both hang off markup only the
+// FLAT renderer emits:
+//
+//   ._tabHost_<hash>:not(._float_<hash>)   {background:var(--dsw-alias-bg-base)}
+//   ._tabCell_<hash>[data-dockkit-host=dock][data-dockkit-column="0"]>._tabHost_<hash>
+//     {border-left:.5px solid var(--dsw-alias-border-l4)}
+//
+// `DockSurface` renders a bare `_pane_` with NO background and NEITHER attribute,
+// so a surface-rendered bar is TRANSPARENT and has no left boundary. The seam was
+// the visible one (two `--dsw-alias-bg-base` columns with no line between them);
+// the missing FILL is invisible in push mode and only shows in FULLSCREEN, because
+// that is the one state where the panel overlays something it is not the same
+// colour as - the conversation - so every pixel the active tab does not paint
+// itself shows the chat through it (the editor and the PDF viewer paint their own
+// background; the History tab paints none, which is why it looked like a tab that
+// "sometimes does not cover"). `DockTree` re-emits `data-dockkit-host="dock"` on a
+// real box, so both declarations are pinned to that box - in the fork's
+// stylesheet, and in the patch list a re-sync rebuilds it from.
 check(
-  'right bar cap lift and renderer are recorded patches',
+  'right bar draws its own left seam AND an opaque fill on the DockTree wrapper',
+  // panelBody's first child is that wrapper, and the flat fallback renders no
+  // such box - so neither declaration can double the kit's own.
+  barSource.includes('.P3OORG_panelBody>[data-dockkit-host=dock]{background:var(--dsw-alias-bg-base);border-left:.5px solid var(--dsw-alias-border-l3)}') &&
+    // ... and the OPEN gate is what keeps both off a COLLAPSED bar: closed, that
+    // same box is translated out of the frame and `visibility:hidden`, so the fill
+    // cannot paint a one-bar-wide rectangle over the conversation.
+    barSource.includes('.P3OORG_panel[data-sidebar-right-open] [data-dockkit-host=dock]'),
+)
+check(
+  'right bar cap lift, renderer, seam and fill are recorded patches',
   syncSource.includes('lift the two-pane cap') &&
     syncSource.includes('offer every drop band a pane has') &&
     syncSource.includes('draw the tree the kit plans, not the flat grid that refuses it') &&
-    syncSource.includes('vendor/dock-tree.js'),
+    syncSource.includes('vendor/dock-tree.js') &&
+    syncSource.includes('give the DockTree wrapper what the flat tab host provided'),
+)
+// THE FULLSCREEN BAR'S LAYER, and the third thing the renderer swap took away.
+// `.P3OORG_panel` is `position:absolute` with `z-index:auto`, so it paints above
+// the chat's in-flow content and UNDER every positioned element the app gives a
+// positive z-index - the composer seat (`position:sticky; bottom:0; z-index:7`,
+// 9 with a trigger menu open, on a gradient that fades to transparent over its
+// top 36px), the frame's overlay layer (20), its leading seat (15) and its column
+// resize handles (11), and the sidebar's fixed controls (30). The kit's own answer
+// was the fullscreen dock layer - `--dsh-dockkit-dock-layer:40`, the z-index of
+// its tab CELLS, ordered in the root stacking context because the panel does not
+// create one - and `DockSurface` draws no tab cell, so the surface path lost that
+// too. The layer is on the PANEL now: it covers the bar's own fill, and it keeps
+// the float layer inside the panel's stacking context.
+check(
+  'right bar fullscreen panel carries the dock layer',
+  /\[data-sidebar-right-panel=fullscreen\]\{--dsh-dockkit-dock-layer:40;z-index:40\}/.test(barSource),
+)
+// ... and 40 is not a taste: measured against the PINNED line, it is above every
+// layer the shell's own bundles declare for persistent chrome, so the composer and
+// the header seats can no longer sit on top of a fullscreen bar. The numbers are
+// read back rather than restated, so a harness bump that moves the ladder shows up
+// here instead of shipping a bar under the input box.
+{
+  const barLayer = /\[data-sidebar-right-panel=fullscreen\]\{[^}]*z-index:(\d+)/.exec(barSource)
+  const chromeFiles = [
+    ['layout', '@deepseek-ai/dsh-client-ui-layout/lib/client.js'],
+    ['sidebar', '@deepseek-ai/dsh-client-ui-sidebar/lib/client.js'],
+  ]
+  const found = chromeFiles.map(([label, relative]) => {
+    const file = findCoreFile(relative)
+    if (file === null) return null
+    const values = [...readFileSync(file, 'utf8').matchAll(/z-index:\s*(\d+)/g)].map((m) => Number(m[1]))
+    return { label, max: values.length === 0 ? 0 : Math.max(...values) }
+  })
+  if (barLayer === null || found.includes(null)) {
+    console.log('skip the fullscreen bar sits above the shell chrome (no pinned core bundle on this host)')
+  } else {
+    const highest = Math.max(...found.map((entry) => entry.max))
+    check(
+      'the fullscreen bar sits above the shell own chrome',
+      Number(barLayer[1]) > highest
+        ? 'bar ' + barLayer[1] + ' > ' + found.map((entry) => entry.label + ' ' + entry.max).join(', ')
+        : 'bar ' + barLayer[1] + ' <= ' + found.map((entry) => entry.label + ' ' + entry.max).join(', '),
+      'bar 40 > ' + found.map((entry) => entry.label + ' ' + entry.max).join(', '),
+    )
+  }
+}
+check(
+  'right bar fullscreen layer and wrapper fill are recorded patches',
+  syncSource.includes('put the fullscreen bar on the dock layer above the shell chrome') &&
+    syncSource.includes('give the DockTree wrapper what the flat tab host provided'),
 )
 // The generated fork's one hand-written component must BE the fragment beside the
 // patch list, byte for byte: a hand edit in either place would otherwise drift
@@ -2489,6 +2570,154 @@ check(
     'the renderer in the fork is byte-for-byte the vendor fragment',
     forkComponent === vendorComponent ? 'same' : String(forkComponent.length) + ' vs ' + String(vendorComponent.length),
     'same',
+  )
+}
+
+// -------------------------------------------------------------- dsh-browser
+// The Browser tab, and the REPLACEMENT for the shipped iframe one. This bundle
+// is hand-written (no generated fork), so these are source-level pins on the two
+// things that would quietly undo the package's whole point: a remote frame
+// reappearing, and the master layer re-enabling the row the package disabled.
+{
+  const browserSource = readFileSync(path.join(repo, 'packages/dsh-browser/lib/client.js'), 'utf8')
+  check(
+    'browser tab keeps the replaced package identity',
+    browserSource.includes("const TYPE_ID = '@deepseek-ai/dsh-client-ui-sidebar-browser'") &&
+      browserSource.includes("const KIND = 'browser'") &&
+      browserSource.includes("'sidebar://' + KIND"),
+  )
+  // The shipped tab's entire design was one <iframe src=the site>; this one must
+  // never CONSTRUCT a frame, so the site's own code can never run in this origin.
+  // (The prose in the file may name the tag; only construction is refused.)
+  check(
+    'browser tab builds no frame at all',
+    browserSource.includes("createElement('iframe')") === false &&
+      browserSource.includes("'<iframe") === false &&
+      browserSource.includes('"<iframe') === false &&
+      browserSource.includes('srcDoc') === false,
+  )
+  check(
+    'browser tab draws four views from one render',
+    ['visual', 'reader', 'metrics', 'policy'].every((view) => browserSource.includes("'" + view + "'")),
+  )
+  check(
+    'browser tab states the parked live mode and the untrusted-data rule',
+    browserSource.includes('LIVE_PARKED') && browserSource.includes('data, not instructions'),
+  )
+  check(
+    'browser tab registers a toolview card per tool',
+    browserSource.includes("const TOOL_NAMES = ['browser_render', 'browser_query', 'browser_text']") &&
+      browserSource.includes("const TOOLVIEW_SLOT = 'tool.call.toolview'"),
+  )
+  check(
+    'browser tab discards a render the reader moved past',
+    browserSource.includes('const mine = ++token.current') && browserSource.includes('if (mine !== token.current) return'),
+  )
+  check(
+    'browser tab is a module-table bundle with a pure half for the check',
+    browserSource.includes('window.__ModuleLoader__.load({') &&
+      browserSource.includes("id: 'dsh-browser'") &&
+      browserSource.includes('exports.__internals'),
+  )
+  // ... and the bundle is LOADED and RENDERED, not merely grepped: a tab that
+  // crashes on mount would otherwise ship, because the source pins above cannot
+  // see a bad prop, a missing import or a hook used outside a component.
+  const browserBundle = loadBundle('packages/dsh-browser/lib/client.js', {})
+  check('browser bundle id', browserBundle.id, 'dsh-browser')
+  check('browser bundle inject', JSON.stringify(browserBundle.exports.inject), '["slots","sidebarRightTabs"]')
+  const browserTypes = []
+  const browserSeats = {}
+  browserBundle.exports.apply({
+    slots: {
+      inject: (_name, fn) => fn(),
+      register(spec, component) {
+        browserSeats[spec.name + '#' + String(spec.key)] = { spec, component }
+        return () => {}
+      },
+    },
+    sidebarRightTabs: {
+      register(definition) {
+        browserTypes.push(definition)
+        return () => {}
+      },
+    },
+    get: () => undefined,
+    effect: (fn) => {
+      const off = fn()
+      return typeof off === 'function' ? off : () => {}
+    },
+    logger: { debug: () => {}, warn: () => {}, info: () => {} },
+  })
+  const TAB_KEY = 'sidebar.right.pane.tab#@deepseek-ai/dsh-client-ui-sidebar-browser'
+  check('browser registers exactly one tab type', browserTypes.length, 1)
+  check(
+    'browser tab type keeps the replaced identity and is multiple',
+    browserTypes[0].id + '/' + browserTypes[0].kind + '/' + String(browserTypes[0].multiple) + '/' + browserTypes[0].priority,
+    '@deepseek-ai/dsh-client-ui-sidebar-browser/browser/true/builtin',
+  )
+  check('browser guide entry keeps the Start page slot at 30', browserTypes[0].guide.map((entry) => entry.order).join(','), '30')
+  check(
+    'browser seats register: the body, the title and one card per tool',
+    Object.keys(browserSeats).sort().join(','),
+    [
+      'sidebar.right.pane.tab#@deepseek-ai/dsh-client-ui-sidebar-browser',
+      'sidebar.right.pane.tab.title#@deepseek-ai/dsh-client-ui-sidebar-browser',
+      'tool.call.toolview#browser_query',
+      'tool.call.toolview#browser_render',
+      'tool.call.toolview#browser_text',
+    ]
+      .sort()
+      .join(','),
+  )
+  const BrowserBody = browserSeats[TAB_KEY].component
+  const emptyMarkup = renderToStaticMarkup(h(BrowserBody, { sessionId: 'sess-1' }))
+  check('browser body mounts and draws the first-run state', emptyMarkup.includes('dsb-address') && emptyMarkup.includes('renders on the host'), true)
+  check('browser body builds no frame', emptyMarkup.includes('<iframe'), false)
+  const BrowserTitleSeat = browserSeats['sidebar.right.pane.tab.title#@deepseek-ai/dsh-client-ui-sidebar-browser'].component
+  check('browser title reads Browser before an address', renderToStaticMarkup(h(BrowserTitleSeat, { sessionId: 'sess-1' })).includes('Browser'), true)
+  // Every view, over one manufactured render result: the four code paths run.
+  const internals = browserBundle.exports.__internals
+  const tabState = internals.stateFor('tab-under-test')
+  tabState.url = 'https://example.com/'
+  tabState.report = {
+    ok: true,
+    request: { url: 'https://example.com/', width: 1440, height: 900, dpr: 1 },
+    finalUrl: 'https://example.com/',
+    title: 'Example Domain',
+    image: { id: 'b'.repeat(24), width: 1440, height: 900, bytes: 20000, clipped: false },
+    scroll: { width: 1440, height: 2600 },
+    counts: { elements: 12, links: 1, images: 0, forms: 0, fonts: 1 },
+    loadEvent: true,
+    timing: { totalMs: 1200, navigateMs: 700 },
+    pageHosts: ['example.com'],
+    pageRequests: 4,
+    text: 'This domain is for use in documentation examples.',
+    links: [{ text: 'More information', href: 'https://iana.org/domains/example' }],
+    engine: { kind: 'chrome', file: 'chrome.exe', source: 'install' },
+    gate: { port: 1234, tunnels: 3, challenges: 12, refused: 1, bytesDown: 12000, allowed: [{ host: 'example.com', address: '93.184.216.34' }], refusals: [{ host: 'tracker.example', code: 'DESTINATION_NOT_PUBLIC', reason: '' }] },
+  }
+  const views = {}
+  for (const view of ['visual', 'reader', 'metrics', 'policy']) {
+    tabState.view = view
+    views[view] = renderToStaticMarkup(h(BrowserBody, { tabId: 'tab-under-test' }))
+  }
+  check('browser draws every view without a frame', Object.values(views).every((markup) => markup.includes('dsb-') && markup.includes('<iframe') === false), true)
+  check('browser visual view draws the artifact through the image route', views.visual.includes('/api/dsh-browser/image?id=' + 'b'.repeat(24)), true)
+  check('browser reader view draws the rendered text and its links', views.reader.includes('documentation examples') && views.reader.includes('iana.org'), true)
+  check('browser metrics view draws the page numbers', views.metrics.includes('1440') && views.metrics.includes('2600'), true)
+  check('browser policy view names the gate, its refusals and the engine probe', views.policy.includes('Tunnels opened') && views.policy.includes('DESTINATION_NOT_PUBLIC'), true)
+  const card = browserSeats['tool.call.toolview#browser_render'].component
+  const cardMarkup = renderToStaticMarkup(h(card, { result: { view: internals.stateFor('tab-under-test').report && { ok: true, url: 'https://example.com/', title: 'Example Domain', imageId: 'c'.repeat(24), width: 1440, height: 900, tunnels: 3, refused: 0, viewport: { width: 1440, height: 900 } } } }))
+  check('a tool card draws the screenshot and the egress facts', cardMarkup.includes('/api/dsh-browser/image?id=' + 'c'.repeat(24)) && cardMarkup.includes('3 tunnel(s)') && cardMarkup.includes('Open the Browser tab'), true)
+  // The master-layer rule, kept beside the load test.
+  const masterPatch = readFileSync(path.join(repo, 'packages', 'dsh-vn-master', 'cordis.patch.yml'), 'utf8')
+  check('the master does not re-enable the browser row', /- id: ui-sidebar-browser\s*\n\s+disabled: false/.test(masterPatch), false)
+  const browserManifest = JSON.parse(readFileSync(path.join(repo, 'packages', 'dsh-browser', 'package.json'), 'utf8'))
+  check(
+    'the browser bundle declares its patch, its client half and its skills',
+    browserManifest.dsh?.bundle?.patch === './cordis.patch.yml' &&
+      browserManifest.dsh?.client?.platform === 'web' &&
+      browserManifest.files.includes('skills'),
   )
 }
 

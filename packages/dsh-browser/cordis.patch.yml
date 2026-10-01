@@ -1,0 +1,26 @@
+# dsh-browser bundle layer (alpha.1).
+#
+# This pack owns the Browser tab, so the SHIPPED one is hard-disabled here and the
+# pack's own row is inserted instead - the same shape dsh-rightbar uses for the bar
+# rows it replaces, which keeps the disable with the package that does the
+# replacing (a partial `-Plugin dsh-browser` install still leaves exactly one
+# Browser tab, the shipped one, rather than none).
+#
+# Why the shipped tab is replaced rather than kept beside ours: it renders a remote
+# page in an `<iframe src=...>` (its host half is `function apply() {}` - no
+# proxy, no route), so the site's own clickjacking policy decides whether anything
+# appears at all. google.com answers `X-Frame-Options: SAMEORIGIN`, github.com
+# answers `deny` plus `frame-ancestors 'none'`, and the frame shows
+# "www.google.com refused to connect" - measured on this machine. This package
+# renders the page on the HOST instead, behind an egress gate, so the page never
+# executes in the user's browser or in this session's origin at all.
+#
+# The row id `ui-sidebar-browser` and the tab id/kind the replaced package used are
+# deliberate: a profile that already has Browser tabs persisted resolves them to
+# THIS implementation, which is what "replace" has to mean.
+- id: ui-sidebar-browser
+  disabled: true
+
+- insert:
+    - id: browser
+      name: 'dsh-browser'
