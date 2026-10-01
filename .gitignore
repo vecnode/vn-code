@@ -51,6 +51,11 @@ dist/
 # Build output for exactly the same reasons as dist/ above.
 dist2/
 
+# The VENDORED RUNTIME built by scripts/dsh/vendor.ps1: runtime/<rid>/node plus
+# the whole pinned harness tree the shell launches instead of npx (~545 MB). It
+# is build output - resolved from the pin, reproducible by one command - and
+# committing it would put a 461 MB dependency tree in every clone and fork.
+/runtime/
 # The desktop shell's Rust build tree (app/). Cargo writes hundreds of
 # megabytes of objects and binaries under app/src-tauri/target/, and none of it
 # is content: `run-desktop.bat` rebuilds it, and a fresh clone builds it once.

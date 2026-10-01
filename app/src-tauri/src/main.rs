@@ -223,6 +223,93 @@ fn resolve_version(options: &Options) -> Result<String, String> {
         .ok_or_else(|| format!("{} has no \"dsh\" version pin", manifest.display()))
 }
 
+// ---------------------------------------------------------------------------
+// How the harness is started: the VENDORED runtime first, npx only as a fallback
+// ---------------------------------------------------------------------------
+//
+// This is the fix for the failure that made the app look like it needed
+// Administrator. `npx` writes into an npm cache, and on the machine this was
+// written on that cache is owned by `BUILTIN\Administradores` - an earlier
+// ELEVATED run created it - so starting the app produced
+//
+//     npm error code EPERM
+//     npm error path ...\npm-cache\_cacache\tmp\b143f96f
+//     npm error Log files were not written due to an error writing to the directory
+//
+// and npm's own message tells the reader to run as Administrator, which makes
+// the ownership problem worse rather than better. Nothing about that is a code
+// defect in this shell, and it cannot be repaired from inside it either: the fix
+// is to stop invoking npm to START an application. `scripts/dsh/vendor.ps1`
+// resolves the pinned harness once, at BUILD time, into
+//
+//     runtime/<rid>/node/node.exe
+//     runtime/<rid>/harness/node_modules/@deepseek-ai/dsh/lib/bin.js
+//
+// and the shell launches that pair directly. No npm, no registry, no network,
+// and no cache to be denied: the only path npm still appears on is the fallback
+// a source checkout takes when nobody has vendored the runtime yet.
+
+/// The runtime identifier directory name, matching `scripts/dsh/vendor.ps1`.
+fn host_rid() -> &'static str {
+    if cfg!(target_os = "windows") {
+        if cfg!(target_arch = "aarch64") {
+            "win-arm64"
+        } else if cfg!(target_arch = "x86") {
+            "win-ia32"
+        } else {
+            "win-x64"
+        }
+    } else if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") {
+            "mac-arm64"
+        } else {
+            "mac-x64"
+        }
+    } else if cfg!(target_arch = "aarch64") {
+        "linux-arm64"
+    } else {
+        "linux-x64"
+    }
+}
+
+/// How this launch will start the harness.
+enum Launch {
+    /// A vendored runtime: run this Node on this bin.js. No package manager.
+    Vendored { node: PathBuf, bin: PathBuf },
+    /// Nothing vendored, so fall back to `npx <spec> web`.
+    Npx,
+}
+
+/// Resolve the vendored runtime, if one is complete.
+///
+/// Complete means all THREE pieces exist - the Node, the harness entry point and
+/// the stamp. A half-copied runtime must not be chosen, because the shell would
+/// then fail to start the harness and report a broken install rather than
+/// falling back to the path that works. The stamp is what
+/// `scripts/dsh/vendor.ps1` writes LAST, after it has run the pair and watched
+/// it report a version, so its presence is a claim this shell can trust.
+fn vendored_runtime(root: &Path) -> Option<Launch> {
+    let runtime = root.join("runtime").join(host_rid());
+    let node_name = if cfg!(target_os = "windows") { "node.exe" } else { "node" };
+    let node = runtime.join("node").join(node_name);
+    let bin = runtime
+        .join("harness")
+        .join("node_modules")
+        .join("@deepseek-ai")
+        .join("dsh")
+        .join("lib")
+        .join("bin.js");
+    if !node.is_file() || !bin.is_file() || !runtime.join("VENDOR.json").is_file() {
+        return None;
+    }
+    Some(Launch::Vendored { node, bin })
+}
+
+/// Decide how to launch, preferring the vendored runtime.
+fn choose_launch(root: Option<&Path>) -> Launch {
+    root.and_then(vendored_runtime).unwrap_or(Launch::Npx)
+}
+
 /// Which of a chosen value and an inherited one wins.
 ///
 /// The pure core of [`explicit_home`], and the rule that matters is the `None`
@@ -731,44 +818,54 @@ fn supervise(app: AppHandle, options: Options, key_state: KeyState) {
     println!("  Keep this window open - the harness runs in the window that opens. Ctrl+C stops it.");
     println!();
 
+    // WHICH RUNTIME: a vendored one if `scripts/dsh/vendor.ps1` has produced it
+    // (the distribution path), else npx (the source-checkout fallback). The
+    // choice is made before anything is printed, so the console line names what
+    // actually ran rather than what was hoped for.
+    let launch = choose_launch(repo_root().as_deref());
     // `npx.cmd` on Windows, `npx` elsewhere. std runs a batch file through
     // cmd.exe itself, and the spec/flag values below are plain enough that
     // nothing in them can be read as a shell metacharacter.
     let npx = if cfg!(target_os = "windows") { "npx.cmd" } else { "npx" };
-    let mut command = Command::new(npx);
+    let mut command = match &launch {
+        Launch::Vendored { node, bin } => {
+            println!(
+                "[vncode] Starting the harness on 127.0.0.1:{port} (vendored runtime, no npx)"
+            );
+            let mut command = Command::new(node);
+            command
+                .arg(bin)
+                .args(["web", "--no-open", "--port", &port.to_string()]);
+            command
+        }
+        Launch::Npx => {
+            println!(
+                "[vncode] Starting the harness on 127.0.0.1:{port} (npx --yes @deepseek-ai/dsh@{version} web --no-open)"
+            );
+            let mut command = Command::new(npx);
+            command.args([
+                "--yes",
+                &format!("@deepseek-ai/dsh@{version}"),
+                "web",
+                "--no-open",
+                "--port",
+                &port.to_string(),
+            ]);
+            command
+        }
+    };
     command
-        .args([
-            "--yes",
-            &format!("@deepseek-ai/dsh@{version}"),
-            "web",
-            "--no-open",
-            "--port",
-            &port.to_string(),
-        ])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     // The npm cache, pointed at THIS application's own directory instead of the
-    // shared machine-wide one. This is the fix for a real, reported failure:
-    // after one run as Administrator the shared cache held files owned by
-    // BUILTIN\Administrators, and the next ordinary run died with
-    //
-    //     npm error code EPERM
-    //     npm error path ...\npm-cache\_cacache\tmp\7493d7c0
-    //
-    // whose message tells the reader to run as Administrator - advice that makes
-    // it worse by writing MORE of the cache as the elevated account.
-    //
-    // The ENVIRONMENT layer is used and not `--cache`, deliberately: npm
-    // documents `npm_config_cache` as applying to the whole process tree, while a
-    // config FLAG on an `npx <spec> <args...>` command line sits in the same
-    // argument list as the arguments being handed to the package - one npm major
-    // that stops consuming it there would pass `--cache <dir>` to the harness and
-    // turn a cache fix into a crash. `payload::npm_cache_dir` carries the whole
-    // argument; a cache that cannot be resolved leaves npm on its own default
-    // rather than refusing to start.
-    if let Some(data_root) = payload::data_root() {
-        command.env("npm_config_cache", payload::npm_cache_dir(&data_root));
+    // shared machine-wide one. Only the npx fallback uses npm, so this is set
+    // only there - a vendored launch never reads a cache at all, which is the
+    // point of vendoring it.
+    if matches!(launch, Launch::Npx) {
+        if let Some(data_root) = payload::data_root() {
+            command.env("npm_config_cache", payload::npm_cache_dir(&data_root));
+        }
     }
     // `-DshHome` / an inherited `DSH_HOME`, and NOTHING else: with neither, the
     // child is left to the harness's own `~/.dsh` default (see `explicit_home`).
@@ -779,10 +876,14 @@ fn supervise(app: AppHandle, options: Options, key_state: KeyState) {
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
+            let program = match &launch {
+                Launch::Vendored { node, .. } => node.display().to_string(),
+                Launch::Npx => npx.to_string(),
+            };
             return fail(
                 &app,
-                &format!("could not run {npx}: {error}. Install Node.js 22 or newer and make sure {npx} is on PATH."),
-            )
+                &format!("could not run {program}: {error}. Install Node.js 22 or newer, or build the vendored runtime with scripts\\dsh\\vendor.ps1."),
+            );
         }
     };
 
