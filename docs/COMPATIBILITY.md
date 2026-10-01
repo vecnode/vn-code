@@ -30,6 +30,13 @@ command line. On Windows the entry point is a batch wrapper and the work is in
 same pinned invocation the docs use -
 `npx --yes @deepseek-ai/dsh@<pin> web --no-open [--port <n>]` - and then:
 
+> **Known inconsistency, stated rather than hidden:** the DESKTOP shell
+> (`app/src-tauri/src/main.rs` `choose_launch()`) prefers a vendored runtime under
+> `runtime/<rid>/` and only falls back to npx; these two browser launchers still
+> call npx directly. So a machine with the runtime vendored gets the npm-free path
+> in the native window and the npx path in a Chrome tab. Teaching `run-web.ps1` and
+> `run-web.sh` the same resolver is open work - see `docs/STAGE2.md`, work item 5.
+
 - stream the app's own output to the terminal (nothing is filtered), watching for
   the ready line `dsh web: http://127.0.0.1:<port>/?token=<launch token>`;
 - open **that** URL, token included, in **Google Chrome** - found on `PATH`, in

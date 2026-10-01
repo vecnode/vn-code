@@ -65,22 +65,25 @@ A day-to-day release run is therefore `-SkipRuntime` and takes seconds.
 
 ## 2. DSH becomes a build input, not a runtime pull
 
-Today the shell runs `npx.cmd --yes @deepseek-ai/dsh@<pin> web --no-open`. That is
-a network dependency, a `PATH` dependency, and one extra process on every launch.
+The shell **used to** run `npx.cmd --yes @deepseek-ai/dsh@<pin> web --no-open` and
+no longer does when a runtime is vendored: that was a network dependency, a `PATH`
+dependency, one extra process on every launch, and - on this machine - the source
+of an `npm error code EPERM` in a cache owned by another account, whose own message
+advised running as Administrator.
 
-New: `scripts/dsh/vendor.ps1` (+ `scripts/dsh/vendor.sh`), driven from
-`package.json`.
-
-1. Read the pin from `.dsh-version.json` (**unchanged** - the shell still has no
-   fallback pin and still refuses to start without it).
-2. Download `@deepseek-ai/dsh@<pin>` **once** from the npm registry.
-3. Verify the tarball against a recorded sha512 integrity, and record the
-   resolved version.
-4. Resolve the **production** dependency tree at build time.
-5. Prune it (see §7) and write it to the runtime cache.
+`scripts/dsh/vendor.ps1` is **delivered** and works differently from the sketch
+below, in one deliberate way: it is **local-first**. It looks for the pinned tree
+the machine already has (the app-local and shared npm caches, `.upgrade/`,
+`.scratch/`) and copies it, so a first run needs no network at all - on this
+machine it copied the very tree the running session boots from. Only when no local
+tree carries the pin does it fall back to resolving the pin by name from the
+registry. What is left of this sketch is that fallback and a tracked lock file.
+It also stamps `runtime/<rid>/VENDOR.json` **only after** running the copied pair
+and watching it report a version, so a half-copy can never be resolved.
 
 ```jsonc
-// tools/dsh-vendor.lock.json  - tracked
+// tools/dsh-vendor.lock.json  - NOT YET WRITTEN; the pin in .dsh-version.json is
+// what today's vendor.ps1 reads, and VENDOR.json records what it actually copied.
 {
   "dsh": "0.2.0-rc.2",
   "resolved": "0.2.0-rc.2",
@@ -90,34 +93,39 @@ New: `scripts/dsh/vendor.ps1` (+ `scripts/dsh/vendor.sh`), driven from
 }
 ```
 
-Cache under `dist/runtime-cache/<pin>-<rid>/` (gitignored). A pin bump is the only
-thing that re-downloads; a rebuild with the same pin is offline and instant.
+It writes `runtime/<rid>/` (gitignored). A rebuild with the same pin re-copies the
+local tree rather than re-resolving it.
 
-**`vendor/` never enters the payload** - only the resolved, pruned tree does.
+**Nothing is pruned and nothing is deduplicated**: the payload ships the harness
+whole, by decision - see `STAGE2.md`. `vendor/` never enters the payload, but the
+full production closure does.
 
 ---
 
 ## 3. The shell runs the bundled Node
 
-`app/src-tauri/src/main.rs` currently resolves `npx.cmd` and fails with
-"Install Node.js 22 or newer and make sure npx.cmd is on PATH". In a distribution
-that sentence must not be reachable.
+`app/src-tauri/src/main.rs` **no longer resolves only `npx.cmd`** - that is
+delivered. `choose_launch()` prefers a complete vendored runtime and falls back to
+npx only when there is none, so the "make sure npx.cmd is on PATH" sentence is
+reachable only from a source checkout that has not vendored anything yet.
 
-The resolver order becomes explicit and testable:
+The resolver order, as shipped:
 
 ```text
--DshNode / VNCODE_NODE      an explicit override, for debugging
-> <root>/runtime/node.exe   the bundled runtime   <- the distribution path
-> node on PATH              the source-checkout fallback only
+> <root>/runtime/<rid>/{node/node.exe, harness/…/bin.js, VENDOR.json}   the vendored path
+> npx --yes @deepseek-ai/dsh@<pin> web                                  the source-checkout fallback
 ```
+
+All THREE vendored pieces must exist or the fallback is taken - a half-copied
+runtime that the shell resolved would report a broken install instead of starting.
 
 The launch becomes, in effect:
 
 ```text
-<root>/runtime/node.exe <root>/runtime/.../bin/dsh.js web --no-open --port <n>
+<root>/runtime/<rid>/node/node.exe <root>/runtime/<rid>/harness/…/@deepseek-ai/dsh/lib/bin.js web --no-open --port <n>
 ```
 
-One process fewer than `npx`, no registry lookup, no PowerShell. This is the main
+One process fewer than `npx`, no registry lookup, no npm cache, no PowerShell. This is the main
 cold-start win, and it should be **measured before and after** rather than
 asserted.
 
@@ -321,7 +329,7 @@ ships, and a `runtime/` tree it does not know about is a failing build.
 | `scripts/dist.ps1` | **DELIVERED (stage 1)** - build fingerprint (skip an unchanged copy, hashing and zip), `Assert-NoSecrets`, `-Sign` accepted. Still pending: signing itself, and the `runtime/` tree |
 | `scripts/dist-manifest.txt` | **DELIVERED (stage 1)** - `node_modules` / `.env` / `*.pem` / `*.key` skip rules |
 | `scripts/checks/check-dist-layout.mjs` | **DELIVERED (stage 1)** - the new entry point is held to the console contract and the worker rule; the forwarder is recognised |
-| `scripts/dsh/vendor.ps1`, `scripts/dsh/vendor.sh` | **new** - pin, verify, resolve, prune, cache |
+| `scripts/dsh/vendor.ps1` | **DELIVERED** - local-first: copies the pinned tree the machine already has into `runtime/<rid>/`, falls back to a registry resolve only when nothing local carries the pin, and stamps only after running the pair |
 | `tools/dsh-vendor.lock.json` | **new**, tracked |
 | `app/runtime/bootstrap.mjs` | **new** - install the pack from the bundled Node |
 | `app/src-tauri/src/main.rs` | Node resolver (bundled -> `PATH`), bootstrap call, launch with the local CLI |

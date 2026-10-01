@@ -25,11 +25,19 @@ other, and the Unix half never needs PowerShell).
 | **Native window** | `scripts\run-desktop.bat` | `cargo build --release` in `app/src-tauri` |
 | **Browser tab** | `scripts\run-web.bat` | `./scripts/run-web.sh` |
 
-Both start `npx @deepseek-ai/dsh@<pin> web` and open the URL it prints: the native
-window loads it in a WebView2 / WKWebView / WebKitGTK window, the other in Chrome,
-falling back to your default browser. The URL is opened only when it names a
-**loopback** address, and the launch token is never written to a file - both rules
-are in [SECURITY.md](SECURITY.md).
+Both start the pinned harness and open the URL it prints: the native window loads
+it in a WebView2 / WKWebView / WebKitGTK window, the other in Chrome, falling back
+to your default browser. The URL is opened only when it names a **loopback**
+address, and the launch token is never written to a file - both rules are in
+[SECURITY.md](SECURITY.md).
+
+**How the harness is started depends on whether the runtime is vendored.** When
+`runtime/<rid>/` exists - produced once by `scripts\dsh\vendor.ps1` - the shell
+launches `node <runtime>/harness/…/lib/bin.js web --no-open` **directly**, with no
+npm, no npx, no registry and no cache of any kind involved. Nothing is fetched to
+start the app, and the network is used only for the chat and search themselves.
+Without a vendored runtime the launcher falls back to
+`npx @deepseek-ai/dsh@<pin> web`, which is the source-checkout path.
 
 Flags: `-Port <n>` when 3080 is taken, `-NoBrowser` to start the server alone,
 `-DefaultBrowser` to skip Chrome, `-Help` anywhere.

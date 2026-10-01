@@ -127,10 +127,19 @@ that a launcher with NO arguments reaches the end of the console layer instead o
 aborting.
 
 **The run launcher.** `scripts\run-web.bat` / `scripts/run-web.sh` start the pinned
-`npx @deepseek-ai/dsh@<pin> web --no-open`, stream the app's own output to the
-terminal, read the ready line it prints once the server is listening
+harness, stream the app's own output to the terminal, read the ready line it prints
+once the server is listening
 (`dsh web: http://127.0.0.1:<port>/?token=<launch token>`) and open THAT url in
-Chrome, falling back to the default browser. Two rules are load-bearing and must
+Chrome, falling back to the default browser. **HOW it starts is
+`app/src-tauri/src/main.rs` `choose_launch()`**: a complete vendored runtime under
+`runtime/<rid>/` (see `scripts/dsh/vendor.ps1`) is launched as
+`node <runtime>/harness/…/lib/bin.js web --no-open --port N` with **no npm, no npx
+and no cache** - which is why the runtime is vendored at all, since `npx` writing
+into an npm cache it does not own produced
+`npm error code EPERM … _cacache\tmp\…` and then told the reader to run as
+Administrator. Only when no complete runtime exists does it fall back to
+`npx --yes @deepseek-ai/dsh@<pin> web`, and `npm_config_cache` is set on THAT
+branch alone. Two rules are load-bearing and must
 survive any edit: the launch token is a live credential, so it is read IN MEMORY
 and never written to a file, echoed by us, or handed to a shell (it reaches the
 browser as one argv element), and a URL that does not name a loopback address is

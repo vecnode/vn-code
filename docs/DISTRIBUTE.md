@@ -19,7 +19,14 @@ same story: the GitHub workflow calls the very scripts you run on your machine.
 
 1. the shell binary walks up from itself for `.dsh-version.json` and reads the
    pinned harness version from it (there is no built-in fallback pin);
-2. it runs `npx @deepseek-ai/dsh@<pin> web --no-open` on a free loopback port;
+2. it starts the harness on a free loopback port - **from the vendored runtime when
+   one is present** (`runtime/<rid>/`, built once by `scripts\dsh\vendor.ps1`),
+   which is `node <runtime>/harness/…/lib/bin.js web --no-open`: no npm, no npx and
+   no cache touched. With no vendored runtime it falls back to
+   `npx @deepseek-ai/dsh@<pin> web --no-open`. `choose_launch()` in
+   `app/src-tauri/src/main.rs` is the whole decision, and `app/README.md` records
+   why the vendored path exists (an `npm error code EPERM` in a cache this account
+   does not own, whose own advice was to run as Administrator);
 3. it reads the `dsh web:` ready line and shows **that** url in a WebView2 /
    WKWebView / WebKitGTK window, holding the launch token in memory only.
 

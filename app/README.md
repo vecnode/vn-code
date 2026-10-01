@@ -9,9 +9,38 @@ cargo build --release      :: macOS / Linux (from app/src-tauri), then run the b
 
 ## What it is, and what it is not
 
-It is a **launcher**, not a desktop edition. It starts the same pinned
-`npx @deepseek-ai/dsh@<pin> web --no-open` that `scripts\run-web.bat` / `./scripts/run-web.sh` start,
-and shows **that** URL in a WebView2 / WKWebView / WebKitGTK window:
+It is a **launcher**, not a desktop edition. It starts the same pinned harness that
+`scripts\run-web.bat` / `./scripts/run-web.sh` start, and shows **that** URL in a
+WebView2 / WKWebView / WebKitGTK window.
+
+**HOW it starts is the one thing worth knowing here, and it changed.** With a
+complete vendored runtime present - `runtime/<rid>/`, produced once by
+`scripts\dsh\vendor.ps1` - the shell launches
+
+```text
+<root>/runtime/<rid>/node/node.exe <root>/runtime/<rid>/harness/…/@deepseek-ai/dsh/lib/bin.js web --no-open --port N
+```
+
+**directly**: no npm, no npx, no registry, and not one byte written to an npm
+cache. That is not an optimisation, it is the fix for a real failure. `npx`
+writes into an npm cache, and when that cache is owned by another account - which
+an earlier ELEVATED run of anything will do - starting the app produced
+
+```text
+npm error code EPERM
+npm error path ...\npm-cache\_cacache\tmp\b143f96f
+npm error Log files were not written due to an error writing to the directory
+...or try running the command again as root/Administrator.
+```
+
+and npm's own advice made the ownership problem worse. Resolving the harness once,
+at BUILD time, removes npm from the start-up path entirely: the network is used
+for the chat and for search, and never to open the window.
+
+Without a vendored runtime the shell falls back to
+`npx @deepseek-ai/dsh@<pin> web --no-open` - the source-checkout path - and sets
+`npm_config_cache` to this application's own directory **on that branch alone**.
+`choose_launch()` in `src/main.rs` is the whole decision.
 
 - no TypeScript is bundled or rebuilt - the web profile installs every bundle as
   a **live link** into the repository, so the app in this window is the same app
@@ -24,8 +53,9 @@ and shows **that** URL in a WebView2 / WKWebView / WebKitGTK window:
   client state  -  and falls back to a free loopback port when something already has
   it, so it never collides with a `scripts\run-web.bat` server or the Web GUI.
 
-Requires the **Rust toolchain** ([rustup.rs](https://rustup.rs)) to build, and
-Node.js 22 or newer exactly as the browser launcher does.
+Requires the **Rust toolchain** ([rustup.rs](https://rustup.rs)) to build. Node.js
+22 or newer is needed to BUILD the vendored runtime and by the npx fallback;
+**a vendored runtime needs neither**, because it carries its own `node.exe`.
 
 ## What it does
 

@@ -96,14 +96,36 @@ as it does today.
 
 ## Work items
 
-| # | Work | Proof it is done |
+Status is recorded here rather than in a commit message, because the whole point
+of this file is that a reader can tell what is real from what is planned.
+
+| # | Work | Status |
 |---|---|---|
-| 1 | `scripts/dsh/vendor.ps1` + `.sh`: download the pinned Node and the closure, verify against `tools/dsh-vendor.lock.json`, cache under `dist/runtime-cache/<pin>-<rid>/` | a second run is offline and instant; a tampered tarball is refused by name |
-| 2 | `payload.rs`: assemble the `.exe` from shell + Node + closure + profile | the trailer's parts add up to the file's real length |
-| 3 | `payload.rs`: first-run bootstrap - copy the shipped profile when absent | boot from an empty `DSH_HOME` reaches the ready line with no npm/pnpm on PATH |
-| 4 | `main.rs`: resolve Node as `<root>/runtime/node.exe` → `PATH`; launch `bin.js` directly, **no `npx`** | the launch path contains no `npx`; the EPERM-on-npm-cache failure is unreachable |
-| 5 | Manifest + `check-dist-layout.mjs`: carry `runtime/`, keep it out of the source tree | the check passes; the shipped tree carries `runtime/node.exe` |
-| 6 | Zip at `CompressionLevel Optimal`, built from the folder that ships | one-file build is ~176 MB and its parts agree |
+| 1 | `scripts/dsh/vendor.ps1`: materialise the pinned Node and the harness closure into `runtime/<rid>/{node,harness}` + `VENDOR.json` | **DELIVERED.** Local-first (it found and copied the tree this machine already had, so no download and no network), and it stamps ONLY after running the pair and watching it report a version |
+| 2 | `main.rs`: `choose_launch()` / `vendored_runtime()` - launch `node <bin.js> web`, **no npx**; npx only as the source-checkout fallback | **DELIVERED in source; `cargo check` passes.** Not yet LINKED: cargo cannot replace `vncode-desktop.exe` while the running app holds it open, so it takes effect on the first rebuild after the window is closed |
+| 3 | `payload.rs`: assemble the one-file `.exe` from shell + Node + closure + profile | **NOT STARTED.** This is what remains |
+| 4 | `payload.rs`: first-run bootstrap - copy the shipped profile when absent | **NOT STARTED.** The behaviour is proven (an empty `DSH_HOME` bootstraps itself, see below) but the packaging is not written |
+| 5 | Manifest + `check-dist-layout.mjs`: carry `runtime/` into the distribution | **NOT STARTED.** `dist/` was deleted as stale precisely because it does not carry the runtime yet |
+| 6 | Zip at `CompressionLevel Optimal`, one-file build ~176 MB | **NOT STARTED** (depends on 3) |
+
+### Delivered so far, and verified
+
+```text
+vendored pair reports        0.2.0-rc.2   (exit 0)
+boots to a ready line        http://127.0.0.1:54872/
+occurrences in transcript    npm 0   npx 0   pnpm 0   EPERM 0
+runtime                      26,645 files, 544.2 MB
+```
+
+The runtime is accepted only when **all three** pieces exist - the Node, the
+harness entry point and the stamp - because a half-copied runtime that the shell
+resolved would report a broken install instead of falling back to the path that
+works.
+
+One measurement worth carrying forward: `Copy-Item -Recurse` over 26 644 files
+returned in ~18 s with the tree complete, but a run was caught failing its own
+verification against a **216 MB partial copy**. `vendor.ps1` therefore waits for
+the destination's file count to stop changing before it checks anything.
 
 ### What is NOT in stage 2
 
@@ -117,8 +139,9 @@ as it does today.
 
 - the `.exe` is ~176 MB instead of 15.4 MB;
 - building it resolves 26 646 files and compresses ~545 MB, so a build is minutes,
-  not the 9 s a folder-only build takes today - which is why `dist/runtime-cache`
-  exists and why a rebuild with the same pin must not re-resolve;
+  not the 9 s a folder-only build takes today - which is why the runtime lives at
+  `runtime/<rid>/` **outside** `dist/` (a clean build wipes `dist/`, and a 545 MB
+  cache inside it would be re-resolved on every rebuild);
 - the unpacked folder on disk is ~545 MB, the same as today's `npx` cache.
 
 ## Reproducing the numbers
