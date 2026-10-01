@@ -100,19 +100,40 @@ skipdir dist
 skippath docs/diagrams
 skipfile *.log
 
+# --- nothing that is about THIS machine or its credentials -------------------
+# Neither is in the tree today, and that is the point: `include packages` and
+# `include scripts` walk whatever is there, so a stray `node_modules` or a
+# `.env` dropped beside a package would otherwise be copied into the folder that
+# gets handed to somebody. The output is checked for credential-shaped names
+# too (scripts/dist.ps1 Assert-NoSecrets), but the cheapest place to stop a file
+# is here, where it is never read at all.
+skipdir node_modules
+skipfile .env
+skipfile .env.*
+skipfile *.pem
+skipfile *.key
+skipfile .credentials.yaml
+skipfile *.credentials.yaml
+
 # --- the DISTRIBUTER is not part of a distribution ---------------------------
-# The folder is the PRODUCT; these four are the factory that makes it - the two
-# entry points a maintainer double-clicks and the two workers they call. A
-# recipient gets START-HERE.bat and does not need the tool that assembled the
-# folder - and docs/DISTRIBUTE.md says so out loud ("re-run the distributer in
-# the source repository to change it"). They are named here rather than simply
-# left out because all four DO exist under scripts/ and `include scripts` would
-# otherwise sweep them in by accident; a build tool inside the thing it builds
-# invites a nested dist/ inside a distribution.
-skippath scripts/distribute.bat
-skippath scripts/distribute.sh
+# The folder is the PRODUCT; these are the factory that makes it. A recipient
+# gets START-HERE.bat and does not need the tool that assembled the folder - and
+# docs/DISTRIBUTE.md says so out loud ("re-run the distributer in the source
+# repository to change it"). They are named here rather than simply left out
+# because all of them DO exist under scripts/ and `include scripts` would
+# otherwise sweep them in; a build tool inside the thing it builds invites a
+# nested dist/ inside a distribution.
+#
+# One entry point per host, plus the worker each one calls - three files, and
+# no forwarders: `run-dist.bat` is the Windows entry point the maintainer
+# double-clicks, `run-dist.ps1` is its worker, and `dist.sh` is the POSIX half
+# doing the same work itself. Excluding the workers but shipping the entry point
+# would be worse than shipping all of it: a recipient could double-click
+# scripts\run-dist.bat and get a missing-worker error rather than the app.
 skippath scripts/dist.ps1
 skippath scripts/dist.sh
+skippath scripts/run-dist.bat
+skippath scripts/run-dist.ps1
 
 # --- maintainer tooling is not part of a distribution ------------------------
 # `include scripts` sweeps the whole folder in, and three things under it are

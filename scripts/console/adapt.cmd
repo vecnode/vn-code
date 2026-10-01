@@ -6,7 +6,7 @@ rem
 rem  WHY THIS FILE EXISTS
 rem  --------------------
 rem  scripts\install.bat, scripts\uninstall.bat, scripts\run-web.bat,
-rem  scripts\run-desktop.bat and scripts\distribute.bat all have to answer the
+rem  scripts\run-desktop.bat and scripts\run-dist.bat all have to answer the
 rem  same five questions before they do any work: which
 rem  window am I in, which PowerShell do I have, can this console show colour,
 rem  should I hold the window open at the end, and what were my real arguments?

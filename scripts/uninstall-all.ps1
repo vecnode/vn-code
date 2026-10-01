@@ -16,7 +16,7 @@
     supported by this pack.
 
     Runs on Windows PowerShell 5.1 and on PowerShell 7+ (pwsh); the launchers are
-    uninstall-all.bat and scripts\uninstall.bat. Every path, executable name and
+    scripts\uninstall.bat. Every path, executable name and
     the PATH separator is resolved per platform.
 
     pnpm handling: the harness profile stores its pnpm layout in

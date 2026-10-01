@@ -22,14 +22,14 @@
         .github/workflows/distribute.yml calls exactly this script on
         windows-latest and scripts/dist.sh on the macOS/Linux runners, so a local
         run and a CI run cannot drift: one implementation, the same flags, the
-        same layout. `distribute.bat -Verify` runs the same end-to-end check the
+        same layout. `run-dist.bat -Verify` runs the same end-to-end check the
         workflow runs after assembling, so a green local run means the CI step
         has nothing new to discover.
 
     WHAT SHIPS is not decided here: it is scripts/dist-manifest.txt, read by both
     halves of this feature (and pinned by scripts/checks/check-dist-layout.mjs).
 
-    FLAGS (distribute.sh takes the same ones)
+    FLAGS (dist.sh takes the same ones)
         -Version <v>      override the pack version used in the names
                           (default: package.json's version)
         -SkipBuild        reuse the binary under app/src-tauri/target/release
@@ -57,6 +57,10 @@ param(
     [switch]$Run,
     [switch]$Verify,
     [switch]$KeepVerifyHome,
+    # Signing is OFF by default so a local build stays fast: see docs/BUILD.md
+    # for the sequencing rule (the shell and the FINAL one-file build are two
+    # separate signatures) and for what a certificate does and does not fix.
+    [switch]$Sign,
     [string]$OutDir,
     [switch]$Clean,
     [switch]$NoPause,
@@ -127,7 +131,7 @@ function Get-ToolNames {
 
 function Show-Usage {
     Write-Host ''
-    Write-Host 'Usage: scripts\distribute.bat [flags]'
+    Write-Host 'Usage: scripts\run-dist.bat [flags]'
     Write-Host ''
     Write-Host '  -Version <v>      override the pack version used in the names'
     Write-Host '  -SkipBuild        reuse the binary already under app/src-tauri/target/release'
@@ -144,7 +148,7 @@ function Show-Usage {
     Write-Host ''
     Write-Host 'Builds dist/vncode-<version>-<rid>/ from scripts/dist-manifest.txt plus the'
     Write-Host 'built shell, and zips it beside itself. dist/ is never committed.'
-    Write-Host 'macOS/Linux: ./scripts/distribute.sh is the same thing in POSIX shell.'
+    Write-Host 'macOS/Linux: ./scripts/dist.sh is the same thing in POSIX shell.'
     Write-Host 'Run it from anywhere: it lives in scripts/ and resolves the repository root'
     Write-Host 'as the folder above.'
     Write-Host ''
@@ -330,7 +334,12 @@ function Assert-Sentinels {
         'packages/dsh-cmdbar/lib/client.js',
         'packages/dsh-diagrams/lib/vendor/mermaid.min.js',
         'packages/dsh-pdf/lib/vendor/pdf.min.mjs',
-        'packages/dsh-pdf/skills/pdf-analysis/SKILL.md'
+        'packages/dsh-pdf/skills/pdf-analysis/SKILL.md',
+        # The build fingerprint. Its presence is what tells a later run that this
+        # folder was assembled from inputs it can vouch for - a folder missing it
+        # is a folder this build did not produce, and is reassembled rather than
+        # trusted.
+        '.vncode-fingerprint.json'
     )
     $missing = New-Object System.Collections.ArrayList
     foreach ($sentinel in $sentinels) {
@@ -630,7 +639,7 @@ function New-DistReadme {
         '  not a loopback address.',
         '',
         'BUILDING ANOTHER COPY',
-        '  This folder is the product, not the workshop: distribute.bat is',
+        '  This folder is the product, not the workshop: run-dist.bat is',
         '  deliberately NOT here. A distribution is assembled in the repository it',
         '  came from (scripts/dist-manifest.txt lists exactly what ships).',
         '',
@@ -1021,6 +1030,182 @@ function Invoke-Verify {
     }
 }
 
+# ---------------------------------------------------------------------------
+# The build fingerprint - the cache that makes a second run cheap
+# ---------------------------------------------------------------------------
+<#
+    WHY THIS EXISTS
+    ---------------
+    Assembling a distribution copies roughly a hundred megabytes, hashes every
+    file and zips the result. Doing that when NOTHING changed is the difference
+    between a distributer the maintainer runs on every edit and one they avoid -
+    and `scripts\run-dist.bat` is the entry point that is meant to be run on
+    every edit, precisely so the app is exercised the way a recipient gets it.
+
+    WHAT IT IS KEYED ON, AND WHY THAT IS THE WHOLE LIST
+    ---------------------------------------------------
+    A fingerprint is compared ONLY when every input that decides what the folder
+    would contain is identical:
+
+      version, rid, platform       the names and the paths inside it
+      dshPin                       written into START-HERE and DIST-README
+      shellSha256                  an input directory, not build output
+      manifestSha256               the ship list, byte for byte
+      commit, dirty                recorded in BUILD-INFO.json
+      files                        the tree the PREVIOUS run hashed, each with
+                                   its own sha256 and byte length
+
+    That last line is what makes this a cache rather than a guess. The
+    fingerprint does not merely assert "I built something once"; it carries the
+    listing - path, hash and size for every shipped file - and it is trusted
+    only when the tree ON DISK still matches that listing exactly, in both
+    directions: nothing listed has been changed, and nothing exists that is not
+    listed. A rebuilt or edited plugin has a different sha256, so the whole
+    fingerprint misses. A stray file is not in the listing, so it misses too.
+
+    So the cached answer and the slower answer are computed from the same bytes.
+    When they disagree the copy happens, which is the safe direction.
+
+    The generated files - START-HERE, DIST-README.txt, BUILD-INFO.json,
+    SHA256SUMS.txt - are deliberately NOT part of the listing: they are written
+    on every run from the fingerprint's own facts, so they are always current,
+    and the zip beside the folder is rebuilt from them.
+#>
+function Get-DistFingerprint {
+    param([string]$DistDir)
+    $file = Join-Path $DistDir '.vncode-fingerprint.json'
+    if (-not (Test-Path -LiteralPath $file)) { return $null }
+    try {
+        $text = Get-Content -LiteralPath $file -Raw
+        if (-not $text) { return $null }
+        return ($text | ConvertFrom-Json)
+    }
+    catch {
+        # An unreadable or unparsable fingerprint is exactly the "cannot vouch
+        # for it" case: discard it and do the work.
+        return $null
+    }
+}
+
+function Test-FingerprintMatches {
+    param([object]$Previous, [string]$Version, [string]$Rid, [string]$DshPin, [string]$ShellSha,
+          [string]$ManifestSha, [string]$Commit, [bool]$Dirty, [string]$DistDir)
+    if ($null -eq $Previous) { return $false }
+    if ($Previous.version -ne $Version) { return $false }
+    if ($Previous.rid -ne $Rid) { return $false }
+    if ($Previous.platform -ne $script:Platform) { return $false }
+    if ($Previous.dshPin -ne $DshPin) { return $false }
+    if ($Previous.shellSha256 -ne $ShellSha) { return $false }
+    if ($Previous.manifestSha256 -ne $ManifestSha) { return $false }
+    if ($Previous.commit -ne $Commit) { return $false }
+    if ([bool]$Previous.dirty -ne $Dirty) { return $false }
+
+    # The listing, checked against the tree as it stands. `recorded` is what the
+    # last run hashed; `onDisk` is what is there now. Both directions matter.
+    $recorded = @{}
+    foreach ($entry in @($Previous.files)) {
+        if (-not $entry -or -not $entry.path) { return $false }
+        $recorded[[string]$entry.path] = $entry
+    }
+    if ($recorded.Count -eq 0) { return $false }
+
+    $onDisk = @{}
+    foreach ($item in (Get-ChildItem -LiteralPath $DistDir -Recurse -File -Force)) {
+        $rel = $item.FullName.Substring($DistDir.Length).TrimStart('\', '/').Replace('\', '/')
+        # Generated per run, so they are never part of the listing.
+        if ($rel -eq '.vncode-fingerprint.json') { continue }
+        if ($rel -eq 'SHA256SUMS.txt') { continue }
+        if ($rel -eq 'BUILD-INFO.json') { continue }
+        if ($rel -eq 'DIST-README.txt') { continue }
+        if ($rel -eq 'START-HERE.bat') { continue }
+        if ($rel -eq 'START-HERE.sh') { continue }
+        $onDisk[$rel] = $item
+    }
+
+    if ($onDisk.Count -ne $recorded.Count) { return $false }
+    foreach ($rel in $onDisk.Keys) {
+        if (-not $recorded.ContainsKey($rel)) { return $false }
+        $entry = $recorded[$rel]
+        if ([int64]$entry.bytes -ne [int64]$onDisk[$rel].Length) { return $false }
+        if ((Get-Sha256 -Path $onDisk[$rel].FullName) -ne [string]$entry.sha256) { return $false }
+    }
+    return $true
+}
+
+# One flat JSON object with an explicit key order, for the same reason
+# BUILD-INFO.json is written that way: the Windows and the POSIX half have to
+# produce the same document for the same facts.
+function New-DistFingerprint {
+    param([string]$DistDir, [string]$Version, [string]$Rid, [string]$DshPin, [string]$ShellSha,
+          [string]$ManifestSha, [string]$Commit, [bool]$Dirty, [int]$PayloadFiles, [long]$PayloadBytes)
+    $lines = New-Object System.Collections.ArrayList
+    [void]$lines.Add('{')
+    [void]$lines.Add("  `"version`": `"$Version`",")
+    [void]$lines.Add("  `"rid`": `"$Rid`",")
+    [void]$lines.Add("  `"platform`": `"$script:Platform`",")
+    [void]$lines.Add("  `"dshPin`": `"$DshPin`",")
+    [void]$lines.Add("  `"shellSha256`": `"$ShellSha`",")
+    [void]$lines.Add("  `"manifestSha256`": `"$ManifestSha`",")
+    [void]$lines.Add("  `"commit`": `"$Commit`",")
+    [void]$lines.Add("  `"dirty`": $(if ($Dirty) { 'true' } else { 'false' }),")
+    # The measured size of the payload, carried so a reused folder does not have
+    # to be walked again just to report a number that cannot have changed.
+    [void]$lines.Add("  `"payloadFiles`": $PayloadFiles,")
+    [void]$lines.Add("  `"payloadBytes`": $PayloadBytes,")
+    [void]$lines.Add('  "files": [')
+    $items = @(Get-ChildItem -LiteralPath $DistDir -Recurse -File -Force |
+        Where-Object { $_.Name -ne '.vncode-fingerprint.json' -and $_.Name -ne 'SHA256SUMS.txt' -and
+                       $_.Name -ne 'BUILD-INFO.json' -and $_.Name -ne 'DIST-README.txt' -and
+                       $_.Name -ne 'START-HERE.bat' -and $_.Name -ne 'START-HERE.sh' } |
+        Sort-Object FullName)
+    for ($i = 0; $i -lt $items.Count; $i++) {
+        $item = $items[$i]
+        $rel = $item.FullName.Substring($DistDir.Length).TrimStart('\', '/').Replace('\', '/')
+        $comma = ','
+        if ($i -eq $items.Count - 1) { $comma = '' }
+        [void]$lines.Add("    { `"path`": `"$rel`", `"bytes`": $($item.Length), `"sha256`": `"$(Get-Sha256 -Path $item.FullName)`" }$comma")
+    }
+    [void]$lines.Add('  ]')
+    [void]$lines.Add('}')
+    Write-TextFile -Path (Join-Path $DistDir '.vncode-fingerprint.json') -Lines ([string[]]$lines) -Newline "`n"
+    return $items.Count
+}
+
+# ---------------------------------------------------------------------------
+# The secret-shaped names a distribution must never contain
+# ---------------------------------------------------------------------------
+<#
+    check-no-secrets.mjs already scans the SOURCE tree and is run as a gate
+    before assembly (see scripts/run-dist.ps1). This is the second half, and it
+    exists because the two see different things: the check reads what `git add
+    -A` would stage and SKIPS binaries, while this reads the ASSEMBLED folder -
+    which is what actually ships, and which a future manifest rule could pull a
+    credential-shaped file into by accident.
+
+    It is filename-shaped on purpose. Scanning 100 MB of text here would make
+    every build slower to catch what the source check already catches earlier;
+    what this catches is the file that should never have been copied at all.
+#>
+function Assert-NoSecrets {
+    param([string]$DistDir)
+    $banned = @(
+        '.env', '.credentials.yaml', 'credentials.json', 'credentials.yaml',
+        'id_rsa', 'id_ed25519', '.netrc', '.npmrc', '.git-credentials'
+    )
+    $bannedSuffix = @('.pem', '.key', '.pfx', '.p12', '.keystore', '.jks')
+    $hits = New-Object System.Collections.ArrayList
+    foreach ($item in (Get-ChildItem -LiteralPath $DistDir -Recurse -File -Force)) {
+        $name = $item.Name.ToLowerInvariant()
+        if ($banned -contains $name) { [void]$hits.Add($item.FullName.Substring($DistDir.Length).TrimStart('\', '/')) ; continue }
+        foreach ($suffix in $bannedSuffix) {
+            if ($name.EndsWith($suffix)) { [void]$hits.Add($item.FullName.Substring($DistDir.Length).TrimStart('\', '/')) ; break }
+        }
+    }
+    if ($hits.Count -gt 0) {
+        throw "The assembled distribution contains credential-shaped file(s): $($hits -join ', '). Nothing is being shipped; fix scripts/dist-manifest.txt."
+    }
+}
+
 # ===========================================================================
 # main
 # ===========================================================================
@@ -1090,17 +1275,11 @@ $shellSha = Get-Sha256 -Path $binary
 Write-Step "Shell binary: $binary ($([math]::Round((Get-Item -LiteralPath $binary).Length / 1MB, 1)) MB)"
 
 # --- 2. the payload --------------------------------------------------------
+# The facts that decide what the folder WOULD contain are all known before
+# anything is copied, which is what lets the copy be skipped entirely.
 $rules = Get-ManifestRules
-if (Test-Path -LiteralPath $distDir) { Remove-Item -LiteralPath $distDir -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-Write-Step "Assembling $distDir from scripts/dist-manifest.txt ..."
-$included = Copy-Payload -Destination $distDir -Rules $rules
-Copy-Item -LiteralPath $binary -Destination (Join-Path $distDir $script:BinaryName) -Force
-if (-not $script:IsWindowsHost) { try { & chmod 755 (Join-Path $distDir $script:BinaryName) | Out-Null } catch { } }
-Write-Note "$included include rules applied; the shell binary copied in as $($script:BinaryName)."
-Assert-Sentinels -DistDir $distDir
-
-$payload = Measure-Tree -Root $distDir
+$rulesPath = Join-Path $script:RepoRoot 'scripts/dist-manifest.txt'
+$manifestSha = Get-Sha256 -Path $rulesPath
 $node = (Invoke-Quiet -File 'node' -Arguments @('--version'))
 $rustc = (Invoke-Quiet -File 'rustc' -Arguments @('--version'))
 $commit = (Invoke-Quiet -File 'git' -Arguments @('-C', $script:RepoRoot, 'rev-parse', '--short', 'HEAD'))
@@ -1109,21 +1288,123 @@ $status = (Invoke-Quiet -File 'git' -Arguments @('-C', $script:RepoRoot, 'status
 $dirty = [bool]$status
 $builtAt = Get-UtcStamp
 
+# Was there a previous build at these paths, and was it assembled from exactly
+# these inputs? scripts\run-dist.ps1 reads this file too: it NAMES no path, so
+# this run is also how a source-checkout user gets the reuse.
+$previousFprint = Get-DistFingerprint -DistDir $distDir
+$reuse = $false
+if (-not $Clean) {
+    $reuse = Test-FingerprintMatches -Previous $previousFprint -Version $packVersion -Rid $rid `
+        -DshPin $pin -ShellSha $shellSha -ManifestSha $manifestSha -Commit $commit -Dirty $dirty -DistDir $distDir
+}
+
+if ($reuse) {
+    # Nothing to copy: prove the folder is still the one the last run vouched
+    # for, then reuse its own measured size rather than walking it again.
+    Assert-Sentinels -DistDir $distDir
+    $payload = [pscustomobject]@{ Files = [int]$previousFprint.payloadFiles; Bytes = [long]$previousFprint.payloadBytes }
+    Write-Step 'The payload is unchanged since the last build - reusing the assembled folder.'
+}
+else {
+    if ($Clean -and (Test-Path -LiteralPath $distDir)) {
+        Write-Note 'Rebuilding everything (-Clean).'
+    }
+    elseif ($null -eq $previousFprint) {
+        Write-Note 'No usable fingerprint from a previous build - assembling in full.'
+    }
+    else {
+        Write-Note 'An input changed since the last build - assembling in full.'
+    }
+    if (Test-Path -LiteralPath $distDir) { Remove-Item -LiteralPath $distDir -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+    Write-Step "Assembling $distDir from scripts/dist-manifest.txt ..."
+    $included = Copy-Payload -Destination $distDir -Rules $rules
+    Copy-Item -LiteralPath $binary -Destination (Join-Path $distDir $script:BinaryName) -Force
+    if (-not $script:IsWindowsHost) { try { & chmod 755 (Join-Path $distDir $script:BinaryName) | Out-Null } catch { } }
+    Write-Note "$included include rules applied; the shell binary copied in as $($script:BinaryName)."
+    # Written FIRST, and rewritten at the end with the measured payload facts.
+    # Assert-Sentinels below asserts the fingerprint is present, and that is the
+    # right order: the sentinel list is what proves the assembly copied what it
+    # promised, so it must run against the assembled folder rather than after the
+    # assembly has been decorated with its own metadata.
+    $null = New-DistFingerprint -DistDir $distDir -Version $packVersion -Rid $rid -DshPin $pin `
+        -ShellSha $shellSha -ManifestSha $manifestSha -Commit $commit -Dirty $dirty `
+        -PayloadFiles 0 -PayloadBytes 0
+    Assert-Sentinels -DistDir $distDir
+    # A credential-shaped file that reached the folder is not shipped. The
+    # source-side scan is the gate; this is the second half, on what actually
+    # ships (see Assert-NoSecrets).
+    Assert-NoSecrets -DistDir $distDir
+    $payload = Measure-Tree -Root $distDir
+}
+
 # --- 3. the files it generates for itself ----------------------------------
+# Written on EVERY run, reused folder or not: they are derived from the
+# fingerprint's own facts, so they are always current by construction.
 New-StartHere -DistDir $distDir -DshPin $pin
 New-DistReadme -DistDir $distDir -Version $packVersion -DshPin $pin -Rid $rid -BuiltAt $builtAt -Commit $commit
-New-BuildInfo -DistDir $distDir -Version $packVersion -DshPin $pin -Rid $rid -Artifact $artifact `
-    -Commit $commit -Dirty $dirty -BuiltAt $builtAt -Builder 'scripts/dist.ps1' `
-    -Rustc $rustc -Node $node -PayloadFiles $payload.Files -PayloadBytes $payload.Bytes -ShellSha $shellSha
+$buildInfoArgs = @{
+    DistDir      = $distDir
+    Version      = $packVersion
+    DshPin       = $pin
+    Rid          = $rid
+    Artifact     = $artifact
+    Commit       = $commit
+    Dirty        = $dirty
+    BuiltAt      = $builtAt
+    Builder      = 'scripts/dist.ps1'
+    Rustc        = $rustc
+    Node         = $node
+    PayloadFiles = $payload.Files
+    PayloadBytes = $payload.Bytes
+    ShellSha     = $shellSha
+}
+New-BuildInfo @buildInfoArgs
+# The fingerprint is written BEFORE the sums, so the sums cover it - and it is
+# read back on the next run to decide whether any of this work is needed.
+$fingerprinted = New-DistFingerprint -DistDir $distDir -Version $packVersion -Rid $rid -DshPin $pin `
+    -ShellSha $shellSha -ManifestSha $manifestSha -Commit $commit -Dirty $dirty `
+    -PayloadFiles $payload.Files -PayloadBytes $payload.Bytes
 $summed = New-Sums -DistDir $distDir
-Write-Note "Generated START-HERE, DIST-README.txt, BUILD-INFO.json and SHA256SUMS.txt ($summed files hashed)."
+Write-Note "Generated START-HERE, DIST-README.txt, BUILD-INFO.json, the build fingerprint and SHA256SUMS.txt ($summed files hashed)."
 
 $total = Measure-Tree -Root $distDir
 Write-Step ("Distribution: {0} files, {1:N1} MB" -f $total.Files, ($total.Bytes / 1MB))
 
 # --- 4. the zip, and the single file built from it -------------------------
+# A CHANGED folder invalidates both, whichever route produced it. A file that
+# changed under a reused folder is a file the zip no longer describes, so it is
+# dropped rather than shipped stale - the fingerprint is what notices.
+if (-not $NoZip -and -not $reuse) {
+    $previousArtifacts = @($zipPath, $oneFilePath) | Where-Object { Test-Path -LiteralPath $_ }
+    if ($previousArtifacts.Count -gt 0) {
+        Write-Note 'The folder changed, so the previous zip and single file were dropped rather than shipped stale.'
+        foreach ($path in $previousArtifacts) {
+            try { Remove-Item -LiteralPath $path -Force }
+            catch { throw "Could not remove the stale artifact $path ($($_.Exception.Message)). Close any running copy and run this again." }
+        }
+    }
+}
+
 if ($NoZip) {
     Write-Step 'Skipping the zip and the single-file build (-NoZip).'
+}
+elseif ($reuse -and (Test-Path -LiteralPath $zipPath) -and (Test-Path -LiteralPath $oneFilePath)) {
+    $zipStamp = (Get-Item -LiteralPath $zipPath).LastWriteTimeUtc
+    if ($zipStamp -ge (Get-Item -LiteralPath $distDir).LastWriteTimeUtc) {
+        Write-Step 'The zip and the single file are up to date - not rebuilding them.'
+        Write-Note ("Zip: {0} ({1:N1} MB)" -f $zipPath, ((Get-Item -LiteralPath $zipPath).Length / 1MB))
+        Write-Note ("One file: {0} ({1:N1} MB)" -f $oneFilePath, ((Get-Item -LiteralPath $oneFilePath).Length / 1MB))
+    }
+    else {
+        # The folder's own generated files were rewritten, so "the zip exists"
+        # is not enough - rebuild both from the folder that is there now.
+        Write-Step "Refreshing the zip and the single-file build ..."
+        New-ZipArchive -SourceDir $distDir -ZipPath $zipPath -RootName $artifact
+        New-StandaloneExecutable -Binary $binary -ZipPath $zipPath -OutPath $oneFilePath -Version $packVersion -Rid $rid
+        Write-Step ("Zip: {0} ({1:N1} MB)" -f $zipPath, ((Get-Item -LiteralPath $zipPath).Length / 1MB))
+        Write-Step ("One file: {0} ({1:N1} MB)" -f $oneFilePath, ((Get-Item -LiteralPath $oneFilePath).Length / 1MB))
+    }
 }
 else {
     Write-Step "Zipping into $zipPath ..."

@@ -8,7 +8,7 @@
 #      vn_step "Installing the pack"
 #
 #  It is the mirror of scripts/console/theme.ps1 and exists for the same reason:
-#  install.sh, uninstall.sh, run-web.sh and distribute.sh all have to answer the
+#  install.sh, uninstall.sh, run-web.sh and dist.sh all have to answer the
 #  same question - may I colour this output? - and four files answering it
 #  themselves is four chances to disagree.
 #

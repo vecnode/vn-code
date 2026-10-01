@@ -9,7 +9,7 @@
 #
 #  POSIX shell only: this script needs Node.js (>= 22), npm and npx - never
 #  PowerShell; the Windows half is scripts/uninstall-all.ps1, driven by
-#  uninstall-all.bat / uninstall.bat.
+#  uninstall.bat.
 #
 #  Usage:
 #    sh scripts/uninstall-all.sh [-Plugin <substring>] [-DshHome <dir>]

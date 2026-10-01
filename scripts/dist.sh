@@ -22,7 +22,7 @@
 #  WHAT SHIPS is not decided here: scripts/dist-manifest.txt is the one list,
 #  read by both halves and pinned by scripts/checks/check-dist-layout.mjs.
 #
-#  FLAGS (scripts/distribute.bat / scripts/dist.ps1 take the same ones)
+#  FLAGS (scripts/run-dist.bat / scripts/dist.ps1 take the same ones)
 #      -Version <v>      override the pack version used in the names
 #      -SkipBuild        reuse the binary under app/src-tauri/target/release
 #      -NoZip            assemble the folder only (no .zip, no single file)
@@ -63,7 +63,7 @@ show_help=0
 
 usage() {
   printf '%s\n' \
-    'Usage: ./scripts/distribute.sh [flags]' \
+    'Usage: sh scripts/dist.sh [flags]' \
     '' \
     '  -Version <v>      override the pack version used in the names' \
     '  -SkipBuild        reuse the binary already under app/src-tauri/target/release' \
@@ -566,7 +566,7 @@ chmod 755 "$start_here"
   printf '%s\n' '  not a loopback address.'
   printf '\n'
   printf '%s\n' 'BUILDING ANOTHER COPY'
-  printf '%s\n' '  This folder is the product, not the workshop: distribute.sh is'
+  printf '%s\n' '  This folder is the product, not the workshop: dist.sh is'
   printf '%s\n' '  deliberately NOT here. A distribution is assembled in the repository it'
   printf '%s\n' '  came from (scripts/dist-manifest.txt lists exactly what ships).'
   printf '\n'

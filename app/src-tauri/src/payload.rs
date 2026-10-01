@@ -234,6 +234,40 @@ pub fn payload_dir(data_root: &Path, trailer: &Trailer) -> PathBuf {
     data_root.join("vncode").join(trailer.identity())
 }
 
+/// The npm cache THIS application uses, deliberately not the machine's shared one.
+///
+/// WHY THIS EXISTS, because it is not tidiness. `npx` writes to
+/// `%LOCALAPPDATA%\npm-cache` by default, and that directory is a shared,
+/// machine-wide resource that other tooling - and an ELEVATED run of anything,
+/// this shell included - also writes to. Measured on the machine this was
+/// written on: after one run "as Administrator", twelve files inside that cache
+/// were owned by `BUILTIN\Administrators` rather than the signed-in user, and the
+/// next ordinary (non-elevated) run failed with
+///
+///     npm error code EPERM
+///     npm error path ...\npm-cache\_cacache\tmp\7493d7c0
+///     npm error Log files were not written due to an error writing to the
+///     directory: ...\npm-cache\_logs
+///
+/// which is a permission failure the reader is told to fix by running as
+/// Administrator - the wrong lesson twice over: this shell never needs elevation,
+/// and taking that advice makes the problem worse by writing MORE files as the
+/// elevated account.
+///
+/// Pointing the cache at this application's own directory removes the shared
+/// resource from the equation: the bytes are written under the application's own
+/// root, by the account actually running it, and a cache left behind by an
+/// elevated run somewhere else cannot poison an ordinary one. It also keeps the
+/// cache prunable with the rest of the application's data.
+///
+/// It lives BESIDE the unpacked payload rather than inside it, because the
+/// unpack directory is keyed on the payload's identity: a new version unpacks
+/// into a new directory, and a cache inside the old one would be abandoned on
+/// every update.
+pub fn npm_cache_dir(data_root: &Path) -> PathBuf {
+    data_root.join("vncode").join("npm-cache")
+}
+
 // ---------------------------------------------------------------------------
 // Unpacking
 // ---------------------------------------------------------------------------

@@ -37,10 +37,32 @@ the `Get-ToolPath` / `Get-ToolNames` helpers instead of hardcoding `npx.cmd`,
 run POSIX shell (`scripts/*.sh`) and must NEVER require PowerShell - they need
 Node.js with npm/npx and nothing else. Both halves do the same work with the same
 flags, and entry points come in pairs: `scripts\install.bat` / `scripts/install.sh`,
-`scripts\uninstall.bat` / `scripts/uninstall.sh`, plus the console twins `scripts/*.bat` /
-`scripts/*.sh`. **EVERY launcher lives in `scripts/` - the repository root carries
+`scripts\uninstall.bat` / `scripts/uninstall.sh`. On Windows each entry point calls
+the PowerShell WORKER beside it (`install.bat` -> `install-all.ps1`,
+`uninstall.bat` -> `uninstall-all.ps1`, `run-web.bat` -> `run-web.ps1`,
+`run-dist.bat` -> `run-dist.ps1`); the POSIX `.sh` files do the work themselves and
+have no worker. The `-all` in the installer workers is not a second name for the
+entry point - it says the worker installs EVERY bundle this pack carries, where
+`-Plugin` narrows it to one. **EVERY launcher lives in `scripts/` - the repository root carries
 no `.bat` and no `.sh` at all** - so one folder holds the entry points, the
-workers and the shared console layer. The run launcher is a pair per host:
+workers and the shared console layer. **The distributer is the one family that is
+NOT shipped**, and it is four files: `scripts/run-dist.bat` is the Windows entry
+point the maintainer double-clicks, `scripts/run-dist.ps1` is its worker,
+`scripts/dist.ps1` is the engine that does the assembling on both hosts, and
+`scripts/dist.sh` is the POSIX half doing the same work itself. All four are
+named in `scripts/dist-manifest.txt`'s skip rules rather than simply left out,
+because `include scripts` would otherwise sweep them in - a build tool inside the
+thing it builds invites a nested `dist/` inside a distribution.
+**There are no forwarders anywhere in this folder**, and that is a rule rather
+than an accident: `install-all.bat`, `uninstall-all.bat`, `distribute.bat` and
+`distribute.sh` used to exist as a name that only re-ran another name - five
+files whose whole job was to call a sibling one directory away. Each cost a
+second place for the console contract to drift, and `install-all.bat` /
+`uninstall-all.bat` actually skipped the shared console layer by calling the
+PowerShell worker directly, so they were a second and worse way to do what
+`install.bat` already did. One entry point per action per host, and the worker it
+calls, is the whole shape.
+The run launcher is a pair per host:
 `scripts\run-web.bat` + `scripts/run-web.sh` are the two ENTRY POINTS (one
 double-click each, and `scripts\run-web.bat` is batch so no execution policy is
 involved), and only the Windows half is split further -
@@ -55,7 +77,7 @@ maintainer tooling for moving the forks forward, and it wants `pwsh` on
 macOS/Linux.
 
 **The console layer.** Every Windows entry point - `scripts\install.bat`,
-`scripts\uninstall.bat`, `scripts\run-web.bat`, `scripts\run-desktop.bat`, `scripts\distribute.bat` and the
+`scripts\uninstall.bat`, `scripts\run-web.bat`, `scripts\run-desktop.bat`, `scripts\run-dist.bat` and the
 generated `START-HERE.bat` - gets its console behaviour from ONE file,
 `scripts/console/adapt.cmd`, reached with exactly these lines (a launcher in
 `scripts\` says `%~dp0console\adapt.cmd`; the generated `START-HERE.bat` at a
@@ -66,6 +88,12 @@ distribution root says `%~dp0scripts\console\adapt.cmd`):
     if errorlevel 10 exit /b 0         :: a Windows Terminal window owns the run
     if errorlevel 2  goto :nopowershell :: no PowerShell on this machine
 
+`scripts\run-dist.bat` is held to the SAME contract as every other entry point -
+it is not an exception, and there is no forwarder left anywhere in this folder to
+be one. It consults the shared layer, carries the console contract and calls
+`scripts\run-dist.ps1`; `check-dist-layout.mjs` asserts all three, and asserts
+that `scripts/dist.sh` does the POSIX half itself rather than handing off to a
+second name.
 `adapt.cmd` decides which window (relaunching into Windows Terminal with
 `wt.exe -w new` when it exists, nothing is already inside one, and neither
 `-NoTerminal` nor `VNCODE_NO_WT` says otherwise), which PowerShell (`pwsh` 7
@@ -353,11 +381,11 @@ set VNCODE_CONSOLE=
 cmd /c "scripts\install.bat -Help -NoPause"                     # usage, exit 0
 cmd /c "scripts\install.bat /? -NoPause"                        # the other spelling, exit 0
 cmd /c "scripts\uninstall.bat -Help -NoPause"
-cmd /c "scripts\distribute.bat -Help -NoPause"
+cmd /c "scripts\run-dist.bat -Help -NoPause"
 cmd /c "scripts\run-web.bat -Help -NoPause"                     # usage, exit 0
 cmd /c "scripts\run-web.bat -BadFlag -NoPause"                  # ...and a bad flag exits 1
 cmd /c "scripts\run-desktop.bat -Help -NoPause"                 # desktop entry point, exit 0
-sh -n scripts/install.sh; sh -n scripts/uninstall.sh; sh -n scripts/run-web.sh; sh -n scripts/distribute.sh
+sh -n scripts/install.sh; sh -n scripts/uninstall.sh; sh -n scripts/run-web.sh; sh -n scripts/dist.sh
 cargo test --manifest-path app/src-tauri/Cargo.toml     # the desktop shell's
                                                         # launch-token rules
 

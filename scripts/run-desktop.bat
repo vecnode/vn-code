@@ -94,7 +94,7 @@ set "VN_MANIFEST=%~dp0..\app\src-tauri\Cargo.toml"
 if not exist "%VN_MANIFEST%" (
   echo [vncode] Neither vncode.exe nor app\src-tauri\Cargo.toml is in the
   echo   folder above this one. Run scripts\run-desktop.bat from a repository
-  echo   checkout, or from a distribution folder assembled by scripts\distribute.bat.
+  echo   checkout, or from a distribution folder assembled by scripts\run-dist.bat.
   goto :failed
 )
 

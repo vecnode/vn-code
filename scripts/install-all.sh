@@ -8,7 +8,7 @@
 #
 #  POSIX shell only. This script needs Node.js (>= 22), npm and npx - never
 #  PowerShell; the Windows half is scripts/install-all.ps1, driven by
-#  install-all.bat / install.bat.
+#  install.bat.
 #
 #  Usage:
 #    sh scripts/install-all.sh [-Force] [-Plugin <substring>]

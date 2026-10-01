@@ -36,7 +36,7 @@ id_ed25519*
 # zero npm dependencies); if you ever need a committed one, force-add it.
 .npmrc
 
-# The DISTRIBUTION folder built by distribute.bat / distribute.sh. It is a COPY
+# The DISTRIBUTION folder built by run-dist.bat / dist.sh. It is a COPY
 # of this repository (minus the trees listed in scripts/dist-manifest.txt) plus
 # the built shell binary, and it is a build OUTPUT like any other: it is rebuilt
 # by one command, it is regenerated per platform in CI, and nothing in it is
@@ -44,7 +44,7 @@ id_ed25519*
 # every plugin edit show up twice in a diff.
 dist/
 
-# The SECOND output folder. `distribute.bat -OutDir dist2` (or any other path)
+# The SECOND output folder. `run-dist.bat -OutDir dist2` (or any other path)
 # exists because a distribution that is RUNNING holds its own vncode.exe
 # open, and Windows refuses to overwrite or delete a file in use - so a new cut
 # has to be assembled somewhere else and swapped in once the window is closed.

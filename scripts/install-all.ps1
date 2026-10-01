@@ -17,7 +17,7 @@
     generation snapshot and is no longer installed into.
 
     Runs on Windows PowerShell 5.1 and on PowerShell 7+ (pwsh). The launchers are
-    install-all.bat and scripts\install.bat; every path, executable name and the
+    scripts\install.bat; every path, executable name and the
     PATH separator is resolved per platform, so nothing here assumes a particular
     Windows layout.
 

@@ -1570,7 +1570,7 @@ is **maintainer tooling**, not an installer, and is the one script here that wan
 ### The console layer every launcher shares
 
 Five Windows entry points (`scripts\install.bat`, `scripts\uninstall.bat`, `scripts\run-web.bat`,
-`scripts\run-desktop.bat`, `scripts\distribute.bat`) plus the generated `START-HERE.bat` all have
+`scripts\run-desktop.bat`, `scripts\run-dist.bat`) plus the generated `START-HERE.bat` all have
 to answer the same questions before doing any work, so they answer them in ONE
 place - `scripts/console/adapt.cmd`, which they reach with `call` (batch has no
 `include`) - a launcher in `scripts\` as `%~dp0console\adapt.cmd`, the generated

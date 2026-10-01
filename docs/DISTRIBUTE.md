@@ -6,9 +6,9 @@ same story: the GitHub workflow calls the very scripts you run on your machine.
 
 | | Windows | macOS / Linux |
 |---|---|---|
-| **Build it** | double-click `scripts\distribute.bat` | `./scripts/distribute.sh` |
+| **Build it** | double-click `scripts\run-dist.bat` | `./scripts/dist.sh` |
 | **The work** | `scripts/dist.ps1` | `scripts/dist.sh` |
-| **Logs / flags** | `scripts\distribute.bat -Help` | `./scripts/distribute.sh -Help` |
+| **Logs / flags** | `scripts\run-dist.bat -Help` | `./scripts/dist.sh -Help` |
 | **CI equivalent** | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Verify` | `sh scripts/dist.sh -Verify` |
 
 ---
@@ -75,7 +75,7 @@ dist/
 `linux-arm64` - derived from the host, never passed in. `<version>` is
 `package.json`'s version unless `-Version` overrides it.
 
-**The distributer is not in the folder.** `scripts/distribute.bat` / `scripts/dist.ps1`
+**The distributer is not in the folder.** `scripts/run-dist.bat` / `scripts/run-dist.ps1`
 and their `.sh` twins are the FACTORY, not the product: a recipient gets
 `START-HERE.bat` and never needs the tool that assembled the folder. Both are
 named explicitly in `scripts/dist-manifest.txt`'s skip rules rather than merely
@@ -130,38 +130,82 @@ distributer.
 
 ```bat
 :: Windows - the whole thing: build the shell, assemble, zip
-scripts\distribute.bat
+scripts\run-dist.bat
 
 :: skip the cargo build (reuse app\src-tauri\target\release as it is)
-scripts\distribute.bat -SkipBuild
+scripts\run-dist.bat -SkipBuild
 
 :: assemble and RUN the distribution, in the foreground
-scripts\distribute.bat -Run
+scripts\run-dist.bat -Run
 
 :: assemble, then install into a throwaway DSH_HOME and boot the pinned
 :: harness from a copy of the folder - the end-to-end check
-scripts\distribute.bat -Verify
+scripts\run-dist.bat -Verify
 
 :: start over; name the version something else
-scripts\distribute.bat -Clean
-scripts\distribute.bat -Version 0.2.0
+scripts\run-dist.bat -Clean
+scripts\run-dist.bat -Version 0.2.0
 
 :: assemble somewhere else, leaving dist/ alone - the case that NEEDS it is a
 :: distribution that is still RUNNING: Windows will not let a live
 :: vncode.exe be overwritten, so the new cut is built beside it and swapped
 :: in after the window is closed
-scripts\distribute.bat -OutDir dist2
+scripts\run-dist.bat -OutDir dist2
 ```
 
 ```sh
 # macOS / Linux - the same flags, one file
-./scripts/distribute.sh -SkipBuild
-./scripts/distribute.sh -Verify
-./scripts/distribute.sh -OutDir dist2      # assemble beside dist/, leaving it alone
-sh ./scripts/distribute.sh -Help          # if the executable bit was lost
+./scripts/dist.sh -SkipBuild
+./scripts/dist.sh -Verify
+./scripts/dist.sh -OutDir dist2      # assemble beside dist/, leaving it alone
+sh ./scripts/dist.sh -Help          # if the executable bit was lost
 ```
 
-Every run prints the folder and the archive to click. `-OutDir` exists for the
+Every run prints the folder and the archive to click.
+
+### Why the second run is fast, and when it is not
+
+`scripts\run-dist.bat` is the entry point to use on every edit, so it refuses to
+redo work whose inputs did not change:
+
+- **the shell**: if nothing under `app\src-tauri`, `app\ui` or the icon generator
+  is newer than the built binary, cargo is never invoked (`-ForceBuild` overrides,
+  `-SkipBuild` skips the decision entirely);
+- **the payload, the zip and the single file**: `scripts/dist.ps1` writes a build
+  fingerprint into the folder recording the shell hash, the version, the ship
+  list, the last commit **and a sha256 plus byte length for every shipped file**.
+  The next run reuses the assembled folder only when all of those still match -
+  including the tree on disk, in both directions, so a changed file and a stray
+  file both count as a change.
+
+Measured on this machine: a full assemble is 8.8 s (377 files, 20.5 MB), and a run
+with nothing changed is 2.1 s. An edit to one shipped file is detected even when
+its size and timestamp are unchanged - the hash is what decides - and the stale
+zip and single file are **dropped and rebuilt** rather than shipped.
+
+`-Clean` throws all of that away and rebuilds from scratch, which is also what
+happens automatically when there is no usable fingerprint.
+
+Two guards run before anything is copied: `scripts/checks/check-no-secrets.mjs`
+and `scripts/checks/check-dist-layout.mjs`. A distribution is the artifact
+somebody installs, so a folder the repository's own checks reject is not
+assembled at all. `-SkipChecks` builds anyway and says out loud that the result is
+unverified. After assembly, `Assert-NoSecrets` in `scripts/dist.ps1` scans what
+actually shipped for credential-shaped names, which is the half a source scan
+cannot see.
+
+### The other two verbs
+
+- `-Run` assembles and then runs the produced folder's **`START-HERE.bat`** - the
+  whole new-user path, installing the pack into your profile and then opening the
+  window. That is how you test the distribution as a recipient receives it.
+- `-RunApp` assembles and runs just the packed `vncode.exe`, skipping the install
+  check - faster, and it tests the window rather than the first-run experience.
+
+`scripts\run-dist.bat` still works and is still documented everywhere, because
+it now **forwards to `scripts\run-dist.bat`**: one implementation, two doors.
+
+`-OutDir` exists for the
 one case that cannot be worked around: a distribution that is **running** holds
 its own `vncode.exe` open, and Windows refuses to overwrite or delete a file
 in use - so a new cut is assembled beside it and swapped in once the window is
@@ -198,8 +242,8 @@ The throwaway home is deleted afterwards; `-KeepVerifyHome` keeps it.
 > `git log --diff-filter=D --name-only -- .github/workflows/distribute.yml` names
 > the deleting commit, and `git checkout <sha>^ -- .github/workflows/distribute.yml`
 > brings it back - with every assertion in §4 and §7 below applying again. Until
-> then, run the same work locally: `scripts\distribute.bat -Verify` (or
-> `./scripts/distribute.sh -Verify`), which is what the build legs call.
+> then, run the same work locally: `scripts\run-dist.bat -Verify` (or
+> `./scripts/dist.sh -Verify`), which is what the build legs call.
 
 `.github/workflows/distribute.yml` has five jobs, and which of them run depends on
 the event, because a push and a release want different things:
@@ -299,12 +343,12 @@ do - and what this feature is built around - is make the local run and the CI ru
 | `checks` job | `node scripts/checks/check-dist-layout.mjs`, `check-no-secrets.mjs`, `check-splash.mjs` |
 | `rust-tests` job | `cargo test --manifest-path app/src-tauri/Cargo.toml` |
 | Linux webview deps | nothing on Windows; on Linux, the `apt-get` line in the workflow |
-| build + assemble + `-Verify` | `scripts\distribute.bat -Verify` / `./scripts/distribute.sh -Verify` |
+| build + assemble + `-Verify` | `scripts\run-dist.bat -Verify` / `./scripts/dist.sh -Verify` |
 | tag/version guard | `node -p "require('./package.json').version"` vs your tag |
 | `upload-artifact` | the zip in `dist/` |
 | `release` job | `gh release create <tag> --generate-notes`, then attach the zips |
 
-So: run `scripts\distribute.bat -Verify` locally, and a green run means the CI step has
+So: run `scripts\run-dist.bat -Verify` locally, and a green run means the CI step has
 nothing new left to discover. What CI adds on top is only the *other* operating
 systems and the artifact plumbing.
 

@@ -1,6 +1,6 @@
 # Deploying vncode
 
-What stands between today's `scripts\distribute.bat` and a distribution somebody can run
+What stands between today's `scripts\run-dist.bat` and a distribution somebody can run
 on a machine that has never seen Node, plus the launcher contract, the state map
 and the CI plan for the three operating systems.
 
@@ -20,7 +20,7 @@ Keep all four; every change below has to preserve them.
 | | |
 |---|---|
 | **One ship list** | `scripts/dist-manifest.txt`, read by both halves, with a tracked check that fails when a bundle appears under `packages/` that the list does not carry |
-| **One implementation per host, no drift** | `scripts\distribute.bat` → `scripts/dist.ps1` is literally the file `windows-latest` runs with `-Verify` |
+| **One implementation per host, no drift** | `scripts\run-dist.bat` → `scripts/dist.ps1` is literally the file `windows-latest` runs with `-Verify` |
 | **`-Verify` is a real proof** | copies the folder elsewhere, installs from the copy into a throwaway home, asserts the profile lists every bundle the folder carries, boots the pinned harness, waits for the ready line, proves the port is free again |
 | **The launch token rules** | read in memory, never written, echoed or shelled; a non-loopback ready line refused rather than opened (`Test-LoopbackUrl`, `readyline.rs`) |
 
@@ -123,7 +123,7 @@ leg installs a 223 MB closure that no cache currently holds.
 ### G8 — release hygiene
 
 The whole distribution feature is **untracked** (`git status`: `.github/`,
-`scripts\distribute.bat`, `scripts/distribute.sh`, `docs/DISTRIBUTE.md`, `scripts/dist.ps1`,
+`scripts\run-dist.bat`, `scripts/dist.sh`, `docs/DISTRIBUTE.md`, `scripts/dist.ps1`,
 `scripts/dist.sh`, `scripts/dist-manifest.txt`,
 `scripts/checks/check-dist-layout.mjs`), on `main` at `origin`
 `https://github.com/vecnode/vncode.git`. Nothing CI-related has ever run.
@@ -234,7 +234,7 @@ of machinery in this plan:
 
 ```sh
 sh scripts/dist.sh -Verify -Offline          # macOS / Linux
-scripts\distribute.bat -Verify -Offline              # Windows
+scripts\run-dist.bat -Verify -Offline              # Windows
 ```
 
 `-Offline` runs the whole existing verify — copy the folder, install from the
@@ -271,7 +271,7 @@ The POSIX halves (`*.sh`) mirror the behaviour, never the mechanism: plain
 | `scripts\uninstall.bat` / `scripts/uninstall.sh` | both | remove only what this pack added |
 | `scripts\run-web.bat` / `scripts/run-web.sh` | both | start the pinned harness and open it in Chrome (default browser as fallback) |
 | `scripts\run-desktop.bat` | Windows | the same harness in the native window (`vncode.exe`) |
-| `scripts\distribute.bat` / `scripts/distribute.sh` | both | maintainer only — build/assemble/verify a distribution; not shipped |
+| `scripts\run-dist.bat` / `scripts/dist.sh` | both | maintainer only — build/assemble/verify a distribution; not shipped |
 | `START-HERE.bat` / `START-HERE.sh` | generated | install, then run — the one file a recipient double-clicks |
 
 > **Naming — DECIDED, and done.** The browser launcher is now `scripts\run-web.bat` /
@@ -451,7 +451,7 @@ is byte-for-byte what it is today:
   links, so an edit to a `client.js` is already "installed";
 - `scripts\install.bat` / `scripts\run-web.bat` / `scripts\run-desktop.bat` behave as they do now, including
   `-Force`, the `-SkipBuild` fast path and the cargo freshness cache;
-- `scripts\distribute.bat -Verify` remains the one command that proves a change end to end;
+- `scripts\run-dist.bat -Verify` remains the one command that proves a change end to end;
 - optional host engines (TeX, poppler/mutool/Ghostscript, tesseract) stay optional
   and keep degrading in a sentence;
 - nothing in `packages/` learns that a distribution exists.
@@ -470,7 +470,7 @@ decision; step 3 is the big one.
 |---|---|---|
 | 1 | **Fix the matrix** (`macos-13` → `macos-15-intel`, `macos-14` → `macos-15`), add `scripts\run-desktop.bat` to the `paths:` filter, raise the timeout, teach `check-dist-layout.mjs` to validate runner labels | `node scripts/checks/check-dist-layout.mjs`; a `workflow_dispatch` run that goes green on four legs |
 | 2 | **The launcher contract** (§5): `scripts/console/adapt.cmd` + `theme.ps1`, rewrite the five entry points, ship `scripts\run-desktop.bat`, add `-Quiet` / `-NoPause`, unify help and exit codes, keep the POSIX halves PowerShell-free | a new tracked check for parity + flag coverage; a manual double-click pass on Windows (Terminal present and absent) |
-| 3 | **L1 — vendor the harness**: `runtime/dsh` built per OS in CI, launchers resolve it first, manifest carries it, `-Verify -Offline` gate added | `scripts\distribute.bat -Verify -Offline` green, and `profiles/node_modules` junctions visibly pointing inside the folder |
+| 3 | **L1 — vendor the harness**: `runtime/dsh` built per OS in CI, launchers resolve it first, manifest carries it, `-Verify -Offline` gate added | `scripts\run-dist.bat -Verify -Offline` green, and `profiles/node_modules` junctions visibly pointing inside the folder |
 | 4 | **L2 — vendor the Node runtime** per RID, checksum-verified against the official `SHASUMS256.txt`, npm/npx/corepack trimmed, `BUILD-INFO.json` records version + hash | `-Verify -Offline` green with `node` removed from `PATH` |
 | 5 | **L3 — vendor pnpm**, point the installer at it, pin the store inside `$DSH_HOME`, run the profile install `--offline` | `-Verify -Offline` green from a cold scratch home with the registry pointed at a dead address |
 | 6 | **Shrink the closure** — measure, prune one package at a time (telemetry first), keep only what `-Verify` still passes with | size reported per run; the verify is the only acceptance test |

@@ -54,22 +54,34 @@ Overrides if the profile lives somewhere else:
 
 ## The launchers
 
-| Platform | Entry points (`scripts/`) | Console twins |
+One entry point per action per host, plus the worker each one calls. There are
+deliberately no `install-all.bat` / `uninstall-all.bat` twins: those called the
+PowerShell worker **directly**, which meant skipping the shared console layer
+(`scripts/console/adapt.cmd` - the Windows Terminal relaunch, the pause rule and
+the real-argument handling), so they were a second, worse way to do what
+`install.bat` already does. `install.bat` and `uninstall.bat` ARE that path.
+
+| Platform | Entry point (double-click / run) | The worker it calls |
 |---|---|---|
-| Windows | `scripts\install.bat` / `scripts\uninstall.bat` / `scripts\run-web.bat` (all double-click) | `scripts\install-all.bat` / `uninstall-all.bat` |
-| macOS / Linux | `./scripts/install.sh` / `./scripts/uninstall.sh` / `./scripts/run-web.sh` | `./scripts/install-all.sh` / `uninstall-all.sh` |
+| Windows | `scripts\install.bat` / `scripts\uninstall.bat` / `scripts\run-web.bat` / `scripts\run-desktop.bat` | `scripts\install-all.ps1` / `uninstall-all.ps1` / `run-web.ps1` |
+| macOS / Linux | `./scripts/install.sh` / `./scripts/uninstall.sh` / `./scripts/run-web.sh` | `./scripts/install-all.sh` / `uninstall-all.sh` (the `.sh` entry points do the work themselves) |
 | Windows (direct) | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install-all.ps1 -Force` | same with `uninstall-all.ps1`, and `-File scripts\run-web.ps1` for the app |
 | macOS / Linux (direct) | `sh scripts/install-all.sh -Force` | `sh scripts/uninstall-all.sh`, and `sh scripts/run-web.sh` for the app |
 
+The `-all` in the worker names is not a duplicate of the entry point: it says the
+worker installs **every bundle this pack carries**, as opposed to one (`-Plugin`
+narrows it). The entry point and its worker are one chain, not two names for one
+thing.
+
 The install and uninstall launchers pass the force flag unless you already did,
-so running them again always installs the latest edits. The console twins behave
-like plain script runs: they skip bundles that are already installed at the same
-version. Both halves accept the same flags (`-Force`, `-Plugin`, `-DshHome`,
-`-ProfileName`, `-DshVersion`, `-Target web|cli`), plus `-NoPause` (never hold the
-window open) and `-NoTerminal` on the Windows side; `-Help`, `-h`, `--help` and
-`/?` all print them. The run launcher is `scripts\run-web.bat` (which drives
-`scripts\run-web.ps1`, the worker beside it) plus `./scripts/run-web.sh`. Both take their own flags (see
-**Running it** below).
+so running them again always installs the latest edits. Running the worker
+directly behaves like a plain script run: it skips bundles that are already
+installed at the same version. Both halves accept the same flags (`-Force`,
+`-Plugin`, `-DshHome`, `-ProfileName`, `-DshVersion`, `-Target web|cli`), plus
+`-NoPause` (never hold the window open) and `-NoTerminal` on the Windows side;
+`-Help`, `-h`, `--help` and `/?` all print them. The run launcher is
+`scripts\run-web.bat` (which drives `scripts\run-web.ps1`, the worker beside it)
+plus `./scripts/run-web.sh`. Both take their own flags (see **Running it** below).
 
 **How the Windows entry points present themselves.** They all share ONE console
 layer, `scripts\console\`:

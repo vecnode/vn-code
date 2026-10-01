@@ -51,8 +51,6 @@ function read(relative) {
 const manifest = read('scripts/dist-manifest.txt')
 const ps = read('scripts/dist.ps1')
 const sh = read('scripts/dist.sh')
-const bat = read('scripts/distribute.bat')
-const distributeSh = read('scripts/distribute.sh')
 const gitignore = read('.gitignore')
 
 /** The manifest's rules, as { kind, path }. */
@@ -199,16 +197,41 @@ if (ps && sh) {
 // Every launcher lives in scripts/ - the repository root carries no .bat and no
 // .sh at all - so each one reaches its worker through `%~dp0` (cmd) or its own
 // directory (POSIX) and a run works from any current directory. That is what is
-// asserted here: the two distributer entry points must call the worker BESIDE
-// them, as a FILE, never an inline command.
-if (bat) {
-  // Batch only, so Windows asks no execution-policy question before starting,
-  // and it must forward to the same worker the workflow calls.
-  if (!/%~dp0dist\.ps1/.test(bat)) fail('scripts/distribute.bat does not call the dist.ps1 beside it (%~dp0dist.ps1).')
-  if (/^\s*(pwsh|powershell)\s+-Command/m.test(bat)) fail('scripts/distribute.bat runs PowerShell inline instead of a file.')
-}
-if (distributeSh && !/"\$script_dir\/dist\.sh"/.test(distributeSh)) {
-  fail('scripts/distribute.sh does not call the dist.sh beside it ($script_dir/dist.sh).')
+// asserted here: the distributer's entry point must reach its worker, as a FILE,
+// never an inline command.
+//
+// The distributer is ONE entry point per host plus the worker it calls, and no
+// forwarders: `run-dist.bat` (Windows, the file the maintainer double-clicks)
+// hands off to `run-dist.ps1` beside it, and `dist.sh` does the POSIX half
+// itself. A forwarding launcher is therefore NOT allowed any more - a name that
+// only re-runs another name is a second thing to keep in step, which is exactly
+// what `install-all.bat` / `distribute.bat` used to be. Each rule below is
+// asserted on the file that must carry it.
+{
+  const runDistBat = read('scripts/run-dist.bat')
+  if (runDistBat === null) {
+    fail('scripts/run-dist.bat is missing - it is the Windows distributer entry point.')
+  } else {
+    if (!/%~dp0run-dist\.ps1/.test(runDistBat)) {
+      fail('scripts/run-dist.bat does not call the run-dist.ps1 beside it (%~dp0run-dist.ps1).')
+    }
+    if (/^\s*(pwsh|powershell)\s+-Command/m.test(runDistBat)) {
+      fail('scripts/run-dist.bat runs PowerShell inline instead of a file.')
+    }
+  }
+  const runDistPs = read('scripts/run-dist.ps1')
+  if (runDistPs === null) {
+    fail('scripts/run-dist.ps1 is missing - scripts/run-dist.bat calls it.')
+  } else if (!/dist\.ps1/.test(runDistPs)) {
+    fail('scripts/run-dist.ps1 never reaches scripts/dist.ps1, the worker that owns the ship list.')
+  }
+  // The POSIX half IS the worker: it must not forward to a second name either.
+  const distSh = read('scripts/dist.sh')
+  if (distSh === null) {
+    fail('scripts/dist.sh is missing - it is the POSIX distributer entry point.')
+  } else if (/^\s*(exec\s+)?sh\s+"\$[A-Za-z_]*script_dir[^"]*"\s+"\$@"/m.test(distSh)) {
+    fail('scripts/dist.sh forwards its arguments to another script instead of doing the work - the distributer keeps one implementation per host and no forwarders.')
+  }
 }
 
 if (gitignore && !/^dist\/?$/m.test(gitignore)) {
@@ -338,8 +361,15 @@ for (const [key, file] of Object.entries(consoleFiles)) {
   if (consoleText[key] !== null && consoleText[key].trim().length === 0) fail(`${file} is empty.`)
 }
 
-const windowsEntries = ['scripts/install.bat', 'scripts/uninstall.bat', 'scripts/run-web.bat', 'scripts/run-desktop.bat', 'scripts/distribute.bat']
-const posixEntries = ['scripts/install.sh', 'scripts/uninstall.sh', 'scripts/run-web.sh', 'scripts/distribute.sh']
+// The console entry points - the files a person double-clicks that run the
+// shared layer themselves. There are five on Windows and four on POSIX, and the
+// list is exactly the files that ship: a launcher this list does not name is a
+// launcher whose console behaviour nothing checks. `dist.sh` is the POSIX
+// distributer and DOES consult the shared layer (console/theme.sh), so it is
+// here; there is no `distribute.bat` entry any more - a name that only forwards
+// to another name is the drift this file exists to prevent.
+const windowsEntries = ['scripts/install.bat', 'scripts/uninstall.bat', 'scripts/run-web.bat', 'scripts/run-desktop.bat', 'scripts/run-dist.bat']
+const posixEntries = ['scripts/install.sh', 'scripts/uninstall.sh', 'scripts/run-web.sh', 'scripts/dist.sh']
 
 for (const entry of windowsEntries) {
   const text = read(entry)
@@ -559,6 +589,23 @@ if (manifest) {
   const shipped = rules.filter((rule) => rule.kind === 'include').map((rule) => rule.path)
   const skippedPaths = rules.filter((rule) => rule.kind === 'skippath').map((rule) => rule.path)
 
+  // THE DISTRIBUTER IS THE ONE FAMILY THAT IS NOT SHIPPED - one list, used by
+  // BOTH assertions below, so "which files are the workshop" cannot drift between
+  // the rule that lets them be missing from the archive and the rule that
+  // requires their exclusion to be explicit. It is four files - one entry point
+  // per host plus the worker each one calls: `run-dist.bat` (Windows, the file
+  // the maintainer double-clicks) and its worker `run-dist.ps1`, `dist.sh` for
+  // POSIX (which does the work itself), and `dist.ps1`, the engine both hosts
+  // run. Excluding the workers while shipping the entry point would be worse
+  // than shipping all of it: a recipient could double-click it and get a
+  // missing-worker error.
+  const notShipped = [
+    'scripts/run-dist.bat',
+    'scripts/run-dist.ps1',
+    'scripts/dist.ps1',
+    'scripts/dist.sh',
+  ]
+
   // Every launcher now lives under scripts/, so `include scripts` is what ships
   // it - and losing that one include would take the whole console layer, every
   // worker AND every entry point out of the archive at once.
@@ -569,16 +616,15 @@ if (manifest) {
     }
     // The distributer is deliberately NOT shipped: it builds distributions, and
     // a distribution is the product, not the workshop.
-    if (entry === 'scripts/distribute.bat' || entry === 'scripts/distribute.sh') continue
+    if (notShipped.includes(entry)) continue
     if (!shipped.includes('scripts')) {
       fail(`dist-manifest.txt does not ship 'scripts' - the folder would have no ${entry}.`)
     }
   }
 
   // ...and the exclusions must be explicit, because `include scripts` would
-  // otherwise sweep the whole workshop into every archive: the two distributer
-  // workers and the two distributer entry points.
-  for (const tool of ['scripts/dist.ps1', 'scripts/dist.sh', 'scripts/distribute.bat', 'scripts/distribute.sh']) {
+  // otherwise sweep the whole workshop into every archive.
+  for (const tool of notShipped) {
     if (!skippedPaths.includes(tool)) {
       fail(`dist-manifest.txt does not exclude '${tool}' - the distributer would ship inside its own output.`)
     }

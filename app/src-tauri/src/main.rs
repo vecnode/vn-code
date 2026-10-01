@@ -748,6 +748,28 @@ fn supervise(app: AppHandle, options: Options, key_state: KeyState) {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // The npm cache, pointed at THIS application's own directory instead of the
+    // shared machine-wide one. This is the fix for a real, reported failure:
+    // after one run as Administrator the shared cache held files owned by
+    // BUILTIN\Administrators, and the next ordinary run died with
+    //
+    //     npm error code EPERM
+    //     npm error path ...\npm-cache\_cacache\tmp\7493d7c0
+    //
+    // whose message tells the reader to run as Administrator - advice that makes
+    // it worse by writing MORE of the cache as the elevated account.
+    //
+    // The ENVIRONMENT layer is used and not `--cache`, deliberately: npm
+    // documents `npm_config_cache` as applying to the whole process tree, while a
+    // config FLAG on an `npx <spec> <args...>` command line sits in the same
+    // argument list as the arguments being handed to the package - one npm major
+    // that stops consuming it there would pass `--cache <dir>` to the harness and
+    // turn a cache fix into a crash. `payload::npm_cache_dir` carries the whole
+    // argument; a cache that cannot be resolved leaves npm on its own default
+    // rather than refusing to start.
+    if let Some(data_root) = payload::data_root() {
+        command.env("npm_config_cache", payload::npm_cache_dir(&data_root));
+    }
     // `-DshHome` / an inherited `DSH_HOME`, and NOTHING else: with neither, the
     // child is left to the harness's own `~/.dsh` default (see `explicit_home`).
     if let Some(home) = explicit_home(&options) {
