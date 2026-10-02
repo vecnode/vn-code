@@ -873,7 +873,7 @@ for (const pack of STYLE_LIST) {
   // once: a BOM is invisible and poisonous (JSON.parse refuses a data file that
   // starts with one, and a check that pins bytes would report drift that is not
   // there), and a UTF-8 -> cp1252 -> UTF-8 round trip through a text editor turns
-  // an ellipsis into `â€¦` - which is still VALID source, so nothing fails until a
+  // an ellipsis into `…` - which is still VALID source, so nothing fails until a
   // string comparison against a correct literal does. The signature below is the
   // mojibake of the punctuation this package actually uses.
   const bomFiles = []
