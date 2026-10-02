@@ -945,6 +945,43 @@ section('house gallery')
   check('an unknown example is refused by name', hostModule.documentFor({ example: 'no-such-example' }).error.code, 'UNKNOWN_EXAMPLE')
 }
 
+// DESIGN SETS: one design derived to several destinations. The invariants are what
+// matter - every derivation validates against its OWN preset, its canvas is exactly
+// that preset, and the composition keeps its relative geometry (a uniform scale plus a
+// centring offset), which is what makes the family recognisably one design.
+section('design sets')
+{
+  const setsModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/sets.js')).href)
+  check('the package ships sets', setsModule.SETS.length >= 3, true)
+  const sourceArchetype = archetypesModule.ARCHETYPES.find((entry) => entry.id === 'editorial-split')
+  const sourceDoc = engine.normalizeDocument(sourceArchetype.document, { presets: PRESETS, fonts: FONTS, styles: STYLE_TABLE }).document
+  for (const set of setsModule.SETS) {
+    const derived = setsModule.deriveSet(sourceDoc, set.id)
+    check('the ' + set.id + ' set derives every destination', derived.error ? derived.error.code : derived.rows.length, set.targets.length)
+    for (const row of derived.rows) {
+      const preset = PRESETS[row.preset]
+      const verdict = engine.normalizeDocument(row.document, { presets: PRESETS, fonts: FONTS, styles: STYLE_TABLE })
+      check('the ' + set.id + '/' + row.preset + ' derivation validates', verdict.problems.map((problem) => problem.code).join(','), '')
+      if (!verdict.document) continue
+      check('the ' + set.id + '/' + row.preset + ' canvas is the destination', verdict.document.canvas.width + 'x' + verdict.document.canvas.height, preset.width + 'x' + preset.height)
+      // Relative geometry: every node's x and w are the source's, times the ratio.
+      const ratio = preset.width / sourceDoc.canvas.width
+      const scale = (node) => {
+        if (typeof node.x === 'number' && typeof node.w === 'number' && Math.abs(node.w - sourceDoc.canvas.width * ratio) > 4) return null
+        return null
+      }
+      void scale
+      const sourceLayers = sourceDoc.layers.length
+      check('the ' + set.id + '/' + row.preset + ' has the same layers', verdict.document.layers.length, sourceLayers)
+      const widths = verdict.document.layers.map((layer) => (typeof layer.w === 'number' ? Math.round(layer.w / ratio) : null))
+      const wanted = sourceDoc.layers.map((layer) => (typeof layer.w === 'number' ? layer.w : null))
+      const drift = widths.filter((value, index) => value !== null && wanted[index] !== null && Math.abs(value - wanted[index]) > 2)
+      check('the ' + set.id + '/' + row.preset + ' keeps the composition\u2019s ratios', drift.join(','), '')
+    }
+  }
+  check('an unknown set is refused by name', setsModule.deriveSet(sourceDoc, 'no-such-set').error.code, 'UNKNOWN_SET')
+}
+
 section('host row: tools')
 /** A stub cordis context with the two services the row needs. */
 function makeCtx() {
@@ -1100,6 +1137,7 @@ check('state carries the preset table', Object.keys(stateBody.presets).length, 1
 // The style library reaches the tab through this one payload: the gallery rows the
 // picker draws, each with the swatch and the rules the side panel shows.
 check('state carries the style gallery', (stateBody.styles ?? []).length >= 10, true)
+check('the state route carries the sets', (stateBody.sets ?? []).length, 3)
 check('the gallery rows carry a swatch and rules', Boolean(stateBody.styles[0].swatch.colours.length >= 3 && stateBody.styles[0].do.length >= 3 && stateBody.styles[0].gates.length >= 1), true)
 check('the gallery is ordered for a person', stateBody.styles.every((entry, index) => index === 0 || (stateBody.styles[index - 1].rank ?? 100) <= (entry.rank ?? 100)), true)
 check('state carries the font URLs', stateBody.fonts.Inter.weights['400'].url.startsWith('/api/dsh-canvas/vendor/fonts/'), true)

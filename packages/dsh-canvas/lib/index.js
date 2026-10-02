@@ -47,6 +47,7 @@ import { FONT_ROUTE_PREFIX, fontFileFor, fontStatus, fontTable } from './fonts.j
 import { ARCHETYPES, archetypeById } from './archetypes/index.js'
 import { applyStyle, styleById, styleGallery, styleIds, styleTable } from './styles/index.js'
 import { EXAMPLE_LIST, exampleById, exampleGallery, exampleIds, exampleLines } from './examples/index.js'
+import { SETS, deriveFor, deriveSet, setById, setGallery } from './sets.js'
 import { AssetStore, CanvasStore, ID_PATTERN, SCOPES, MAX_ASSET_BYTES, MAX_DOCUMENT_BYTES, renderPath, resolveHome, summarize, verificationOf } from './store.js'
 import { desktopDirectory, humanBytes, resolveNewInside, sanitizeName, writeCreateExclusive } from './export.js'
 import { hostRenderStatus, renderOnHost } from './host-render.js'
@@ -90,7 +91,7 @@ const SKILL_FILES = [
 ]
 
 /** Every tool name, in the order the conversation cards register. */
-export const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
+export const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_set', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
 // The unattended renderer is part of the row's interface, not an implementation
 // detail: a check, the health route and a person all need to ask this machine whether
 // a render can happen with no page open.
@@ -533,6 +534,13 @@ function styleLines() {
 /** The house gallery as text, for the index a model reads first. */
 function exampleLinesForIndex() {
   return exampleLines()
+}
+
+/** The sets as text: what each one derives, and to which sizes. */
+function setLines() {
+  return setGallery()
+    .map((entry) => '  - ' + entry.id + '  ' + entry.title + '  ' + entry.source + ' -> ' + entry.targets.join(', ') + '  (' + entry.sizes.join(', ') + ')')
+    .join('\n')
 }
 
 /**
@@ -992,6 +1000,116 @@ export function buildTools(row, ctx) {
   }
 
   // -------------------------------------------------------------------------
+  // canvas_set
+  // -------------------------------------------------------------------------
+  const designSet = {
+    name: 'canvas_set',
+    description: [
+      'Derive ONE design to the several sizes a launch actually needs - the repository card, the square post, the link preview - and optionally write every file in one call.',
+      'A set is a source preset and a list of destinations. Each derived design is the source with EVERY number multiplied by the width ratio (positions, sizes, radii, padding, gaps, borders, letter spacing, shadows and the type scale), full-bleed layers widened to the new canvas, and the composition centred in a taller one. So the family cannot drift: one headline, one palette, one composition, at three sizes.',
+      'It does NOT re-compose. A derived design is the same design with more room; if a destination needs a different ARRANGEMENT, that is a different archetype and a different design. The lints on each derived design say what the new destination wants adjusted (a margin, an edge, a keep-out area) - read them and fix the family, not just one card.',
+      'Each derived design is stored as a design of its own (id + the destination), so it can be rendered, patched and exported like any other.',
+    ].join('\n'),
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id'],
+      properties: {
+        id: ID_SCHEMA,
+        set: { type: 'string', description: 'A set id: launch, social or repository; canvas_read lists them with their destinations.' },
+        targets: { type: 'array', items: { type: 'string' }, description: 'Explicit destination preset ids instead of a set.' },
+        export: { type: 'boolean', description: 'Write every derived file in one call (uses the host renderer, so no app page is needed).' },
+        target: { type: 'string', enum: ['desktop', 'workspace'], description: 'Where the files go when exporting (default desktop).' },
+        scale: { type: 'number', enum: [1, 2], description: 'Export scale (2 for an @2x file).' },
+        scope: SCOPE_SCHEMA,
+        note: { type: 'string', description: 'One line on what changed, kept in each design\u2019s history.' },
+      },
+    },
+    output: {
+      schema: { type: 'object', properties: { text: { type: 'string' }, problems: PROBLEMS_SCHEMA }, required: ['text'] },
+      render: (_args, value) => [{ type: 'text', text: value.text }],
+      presentationMeta: () => ({}),
+    },
+    presentCall: (args) => callView(args, 'Set'),
+    presentResult: resultView,
+    async execute(args, exec) {
+      const sessionId = sessionOf(exec)
+      const found = requireDesign(sessionId, args.id, args.scope)
+      const targets = Array.isArray(args.targets) && args.targets.length > 0 ? args.targets : null
+      if (!targets && typeof args.set !== 'string') {
+        return { text: 'Name a set or a list of destinations. The sets are:\n' + setLines() }
+      }
+      if (targets) {
+        for (const id of targets) {
+          if (!presetById(id)) return { text: 'Unknown destination ' + JSON.stringify(id) + '. The presets are:\n' + presetLines() }
+        }
+      }
+      const chosen = targets ?? setById(args.set).targets
+      const lines = []
+      const written = []
+      for (const target of chosen) {
+        const derived = deriveFor(found.entry.document, target)
+        if (derived.error) return { text: 'Could not derive for ' + target + ': ' + derived.error.message }
+        const verdict = validateDocument(row, derived.document)
+        if (!verdict.document) return { text: 'The derived design for ' + target + ' did NOT validate (nothing was stored):\n' + problemLines(verdict.problems) }
+        const preset = presetById(target)
+        const stored = putDesign(row.storeFor(found.scopeKey), {
+          id: found.entry.id + '-' + target,
+          title: (found.entry.title ?? found.entry.id) + ' \u00b7 ' + preset.label,
+          preset: target,
+          document: verdict.document,
+          by: 'model',
+          note: args.note ?? ('derived from ' + found.entry.id),
+        })
+        if (!stored.entry) return { text: stored.text }
+        lines.push(
+          '- ' + stored.entry.id + '  ' + preset.width + '\u00d7' + preset.height + '  revision ' + stored.entry.revision +
+            (derived.notes.length > 0 ? '  (' + derived.notes[0] + ')' : ''),
+        )
+        // There is no local linting here on purpose: a lint needs a LAYOUT, a layout
+        // needs real text metrics, and this host has none - it is the browser that
+        // measures. The lints for a derived design therefore arrive with its render.
+        if (args.export === true) {
+          const status = hostRenderStatus()
+          if (!status.available) {
+            lines.push('    NOT written: ' + status.reason)
+            continue
+          }
+          const rendered = await renderOnHost({
+            document: stored.entry.document,
+            preset,
+            scale: args.scale === 2 ? 2 : 1,
+            assets: await assetPayload(row, stored.entry.document),
+            timeoutMs: 90000,
+          })
+          if (!rendered.ok) {
+            lines.push('    export FAILED: ' + rendered.error)
+            continue
+          }
+          const directory = args.target === 'workspace' ? sessionRoot(sessionId) : desktopDirectory()
+          if (!directory) {
+            lines.push('    no folder to write into on this host')
+            continue
+          }
+          const suffix = args.scale === 2 ? '@2x' : ''
+          const file = await writeCreateExclusive({ directory, baseName: sanitizeName(stored.entry.id) + suffix, ext: 'png', bytes: rendered.png })
+          written.push(file.path)
+          lines.push('    wrote ' + file.path + ' (' + humanBytes(file.bytes) + ', ' + rendered.width + '\u00d7' + rendered.height + ')')
+          const flags = (rendered.lints ?? []).filter((lint) => lint.level !== 'info')
+          if (flags.length > 0) lines.push('    this destination wants: ' + flags.map((lint) => lint.code).join(', '))
+        }
+      }
+      const head = [
+        'Derived "' + found.entry.id + '" into ' + chosen.length + ' size(s)' + (args.set ? ' (the ' + args.set + ' set)' : '') + '.',
+        'One design, several destinations: the composition is scaled, the words and the palette are the same.',
+      ]
+      if (written.length > 0) head.push(written.length + ' file(s) written.')
+      head.push('Tab addresses: ' + (found.scopeKey ? '' : ''))
+      return { text: head.join('\n') + '\n' + lines.join('\n') }
+    },
+  }
+
+  // -------------------------------------------------------------------------
   // canvas_read
   // -------------------------------------------------------------------------
   const read = {
@@ -1396,7 +1514,7 @@ export function buildTools(row, ctx) {
     },
   }
 
-  return [newDesign, write, patch, read, restyle, publish, remove, render, exportTool, assets]
+  return [newDesign, write, patch, read, restyle, designSet, publish, remove, render, exportTool, assets]
 }
 
 /**
@@ -1497,6 +1615,9 @@ function indexText(row, sessionId) {
   lines.push('')
   lines.push('Examples (a proven preset + archetype + style, with the copy to write - start here):')
   lines.push(exampleLinesForIndex())
+  lines.push('')
+  lines.push('Sets (one design derived to several destinations, then written in one call):')
+  lines.push(setLines())
   lines.push('')
   lines.push('Styles (a look to apply to any composition):')
   lines.push(styleLines())
@@ -1669,6 +1790,7 @@ export function registerRoutes(ctx, row) {
         designs: own,
         styles: styleGallery(),
         examples: exampleGallery(),
+        sets: setGallery(),
         library,
         assets: row.assets.table(),
         assetList: row.assets.list(),

@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
     /** The version marker shown in the toolbar, so a fresh bundle is easy to spot. */
-    const PLUGIN_VERSION = '0.1.0-alpha.3'
+    const PLUGIN_VERSION = '0.1.0-alpha.5'
     /** The conversation view this package adds to the chat panel's ring. */
     const VIEW_ID = 'canvas'
     /** Keep in sync with lib/index.js. */
@@ -58,7 +58,7 @@ window.__ModuleLoader__.load({
     const WORKSPACE_ASSET_ROUTE = API_ROOT + '/workspace-asset'
     const ENGINE_ROUTE = API_ROOT + '/vendor/engine.js'
     /** The tool names whose conversation cards this package draws. */
-    const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
+    const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_set', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
     /** The zoom ladder. `fit` is resolved from the stage size at paint time. */
     const ZOOM_STEPS = ['fit', 0.25, 0.5, 1, 2]
     /** The feed-size factor a report carries, so the model can judge a phone feed. */

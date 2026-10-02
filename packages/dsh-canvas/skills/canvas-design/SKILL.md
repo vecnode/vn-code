@@ -97,6 +97,29 @@ Practically: pick the style from the brief when the person names one ("make it
 brutalist"), otherwise the one whose `bestFor` names your preset. Apply ONE, then
 render. Two styles in one design is not a look, it is an accident.
 
+## Sets: one design, several destinations
+
+A launch needs a repository card, a square post and a link preview. They are the SAME
+design, and `canvas_set` is how you keep them one:
+
+```
+canvas_set { id: "night-launch", set: "launch", export: true }
+```
+
+Every destination is the source with **every number multiplied by the width ratio** -
+positions, sizes, radii, padding, borders, letter spacing, shadows and the type scale -
+with full-bleed layers widened to the new canvas and the composition centred in a taller
+one. Each derived design is stored as a design of its own (`<id>-<destination>`), so it
+can be rendered, patched and exported like any other, and `export: true` writes every
+file in one call **through the host renderer, so no app page is needed**.
+
+It does NOT re-compose. A derived design is the same design with more room; if a
+destination wants a different ARRANGEMENT that is a different archetype, not a
+derivation. Each destination judges the derivation by its own rules, so read the lints
+that come back with the export - a margin, an edge or a keep-out area is that
+destination asking for an adjustment, and the fix belongs in the FAMILY (the source),
+not in the one card you happened to render.
+
 ## The house gallery: start from a proven answer
 
 Twelve examples ship with the package (`canvas_read` lists them; the tab's "+ New"
