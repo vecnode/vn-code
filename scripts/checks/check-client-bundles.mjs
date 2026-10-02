@@ -5858,6 +5858,57 @@ check('the raw measurement table is not furniture', canvasCss.includes('.dsc-met
 check('the prose gesture helper is gone', canvasSource.includes('Drag a layer to move it, or a handle'), false)
 check('the style card keeps one rule per heading', canvasSource.includes('(currentStyle.do || []).slice(0, 1)') && canvasSource.includes('(currentStyle.gates || []).slice(0, 1)'), true)
 check('the canvas tool list carries canvas_style', canvasInternals.TOOL_NAMES.includes('canvas_style'), true)
+
+// --- the vendored Excalidraw surface (alpha.10)
+//
+// TWO things are pinned here and neither is about the artifact's bytes (that is
+// `check-canvas-excalidraw.mjs`, which serves the committed bundle to a real
+// browser): the bridge that turns a laid-out DESIGN into an Excalidraw scene, and
+// the wiring that makes Excalidraw the tab's surface. Every branch of the bridge
+// is a decision worth pinning, because it is what a person sees when the tab
+// opens: a shape becomes the nearest thing Excalidraw has, text keeps the string
+// and the size the design measured, and the kinds with no counterpart are SKIPPED
+// AND COUNTED rather than drawn as a rectangle pretending to be art.
+check('the Excalidraw surface is the tab\u2019s default', canvasSource.includes("const [surface, setSurface] = useState('excalidraw')"))
+check(
+  '...reached from one bar control',
+  canvasSource.includes("'data-canvas-action': 'surface'") && canvasSource.includes("surface === 'excalidraw' ? 'Design' : 'Excalidraw'"),
+)
+check('...and seeded from the design the tab selected', canvasSource.includes('h(ExcalidrawSurface, { sessionId, design: selected, preset, fonts:'))
+const sceneSkeletonsFor = canvasInternals.sceneSkeletonsFor
+const bridged = sceneSkeletonsFor({
+  boxes: [
+    { path: 'a', kind: 'shape', shape: 'rect', box: { x: 10.4, y: 20.6, w: 100, h: 50 } },
+    { path: 'b', kind: 'shape', shape: 'ellipse', box: { x: 0, y: 0, w: 40, h: 40 } },
+    { path: 'c', kind: 'shape', shape: 'path', box: { x: 5, y: 5, w: 20, h: 20 } },
+    { path: 'd', kind: 'text', box: { x: 1, y: 2, w: 30, h: 12 }, text: 'Ship plugins', font: { size: 21.6 } },
+    { path: 'e', kind: 'frame', box: { x: 0, y: 0, w: 1280, h: 640 } },
+    { path: 'f', kind: 'image', box: { x: 0, y: 0, w: 10, h: 10 } },
+    { path: 'g', kind: 'art', box: { x: 0, y: 0, w: 10, h: 10 } },
+    { path: 'h', kind: 'shape', shape: 'rect', box: { x: 0, y: 0, w: 0, h: 10 } },
+  ],
+})
+check('the bridge maps a design box to the nearest Excalidraw shape', bridged.skeletons.length, 4)
+check('...in DESIGN pixels, rounded', JSON.stringify(bridged.skeletons[0]), JSON.stringify({ x: 10, y: 21, width: 100, height: 50, type: 'rectangle' }))
+check('...an ellipse stays an ellipse', bridged.skeletons[1].type, 'ellipse')
+check('...a path becomes a rectangle, which the note counts', bridged.skeletons[2].type, 'rectangle')
+check(
+  '...text keeps the string and the size the design measured',
+  JSON.stringify(bridged.skeletons[3]),
+  JSON.stringify({ x: 1, y: 2, width: 30, height: 12, type: 'text', text: 'Ship plugins', fontSize: 22 }),
+)
+// The zero-width box produced no skeleton either (four arcs in, four out), and the
+// count is the four kinds this editor has no shape for: the path approximation,
+// plus the frame, the image and the art node.
+check('...a zero-width box is dropped, not drawn', bridged.skeletons.length, 4)
+check('...and every kind without a counterpart is counted', bridged.skipped, 4)
+// The loader is a CLASSIC script and the design is re-seeded ONCE PER REVISION,
+// which is what keeps a person's own drawing on screen instead of being stomped
+// by a re-render.
+check(
+  'the surface re-seeds only when the design\u2019s revision moves',
+  canvasSource.includes("const key = String(design.id ?? '') + '@' + String(design.revision ?? 0)") && canvasSource.includes('if (syncedRef.current === key) return undefined'),
+)
 // Unload the row: the renderer's own effect returned a stopper, which is what the
 // shell calls when the plugin goes away (and what lets this process exit).
 for (const dispose of canvasDisposers) dispose()

@@ -446,7 +446,17 @@ window.__ModuleLoader__.load({
             resolve(surface)
           })
           script.addEventListener('error', () => {
-            reject(new Error('the Excalidraw surface could not be loaded (' + EXCALIDRAW_JS_ROUTE + ')'))
+            // The one failure that has nothing to do with the network: this package's
+            // ROUTES are composed at boot, so a profile that added them since it
+            // started answers 404 for them until it is restarted. A person seeing
+            // "it does not appear" deserves that sentence instead of a guess.
+            reject(
+              new Error(
+                'the Excalidraw surface could not be loaded (' +
+                  EXCALIDRAW_JS_ROUTE +
+                  ') \u2014 if this package was updated while the harness was running, restart it once: these routes are composed at boot',
+              ),
+            )
           })
           document.head.appendChild(script)
         })
@@ -458,42 +468,95 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The Excalidraw preview: the vendored editor, mounted in the pane.
+     * One laid-out design as an Excalidraw scene skeleton.
      *
-     * It is a PREVIEW and the surface says so in one line rather than pretending
-     * to be the finished tab: the design document is not the scene yet, the agent
-     * tools still write the pack's own language, and the assets Excalidraw reaches
-     * for at runtime (fonts, locales) are not vendored. What it proves is the part
-     * that cannot be proved by reading: that the artifact loads from this
-     * package's route, that it mounts in the real pane, and that its imperative
-     * API answers.
+     * THE BRIDGE, and it is deliberately one-directional and lossy, because the
+     * alternative - an empty whiteboard next to designs nobody can see - is worse
+     * than an honest approximation. The engine has already laid the document out
+     * (boxes in DESIGN pixels, which is the same space Excalidraw works in), so
+     * every box becomes the nearest thing Excalidraw has:
+     *
+     *   - `shape` + `rect`    -> rectangle (the fill and stroke it was painted with)
+     *   - `shape` + `ellipse` -> ellipse
+     *   - any other shape     -> rectangle, because a hand-drawn polyline has no
+     *     exact counterpart and a box keeps the design's proportions readable
+     *   - `text`              -> a text element at the size the design asked for
+     *     (the engine hands over the string it measured, capped at 120 characters)
+     *   - `frame` / `art` / `svg` / `image` -> SKIPPED, and the note counts them:
+     *     those are containers, rasterized art and pictures, and pretending a
+     *     rectangle is a gradient would be a lie the person cannot see through.
+     *
+     * @returns `{ skeletons, skipped }`.
+     */
+    function sceneSkeletonsFor(prepared) {
+      const skeletons = []
+      let skipped = 0
+      for (const entry of (prepared && prepared.boxes) || []) {
+        const box = entry.box
+        if (!box || !(box.w > 0) || !(box.h > 0)) continue
+        const common = { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.w), height: Math.round(box.h) }
+        if (entry.kind === 'text') {
+          const size = entry.font && Number.isFinite(entry.font.size) ? Math.max(8, Math.round(entry.font.size)) : 16
+          skeletons.push({ ...common, type: 'text', text: String(entry.text ?? ''), fontSize: size })
+          continue
+        }
+        if (entry.kind === 'shape') {
+          if (entry.shape === 'ellipse') skeletons.push({ ...common, type: 'ellipse' })
+          else if (entry.shape === 'rect') skeletons.push({ ...common, type: 'rectangle' })
+          else {
+            skeletons.push({ ...common, type: 'rectangle' })
+            skipped += 1
+          }
+          continue
+        }
+        skipped += 1
+      }
+      return { skeletons, skipped }
+    }
+
+    /**
+     * The Excalidraw surface: the vendored editor, mounted in the pane and seeded
+     * with the design the agent wrote.
+     *
+     * It is a PREVIEW in exactly one respect and the note says so: the sync runs
+     * ONE WAY (a design becomes a scene) and it re-runs only when the design's
+     * REVISION moves, so a person's own drawing is never stomped by a re-render -
+     * but nothing they draw travels back to the design document yet, and the
+     * skipped element kinds are counted rather than quietly dropped.
      */
     function ExcalidrawSurface(props) {
       const hostRef = useRef(null)
+      const apiRef = useRef(null)
+      const syncedRef = useRef(null)
       const [note, setNote] = useState('Loading the Excalidraw surface\u2026')
       const [ready, setReady] = useState(false)
+      const design = props.design ?? null
+      const sessionId = props.sessionId ?? null
+      const fonts = props.fonts ?? {}
+      const preset = props.preset ?? null
+
       useEffect(() => {
         let live = true
         let mounted = null
         loadExcalidraw()
           .then((surface) => {
             if (!live || hostRef.current === null) return
-            const host = hostRef.current
-            mounted = surface.mount(host, {
+            mounted = surface.mount(hostRef.current, {
               theme: 'light',
               excalidrawAPI: (api) => {
+                apiRef.current = api
                 if (!live) return
-                const elements = typeof api.getSceneElements === 'function' ? api.getSceneElements().length : 0
-                setNote('Excalidraw ' + String(surface.version) + ' is live \u00b7 ' + String(elements) + ' element(s) \u00b7 ' + (typeof api.updateScene === 'function' ? 'the scene API answers' : 'no scene API'))
+                setReady(true)
+                setNote('Excalidraw ' + String(surface.version) + ' is live')
               },
             })
-            setReady(true)
           })
           .catch((err) => {
             if (live) setNote(err && err.message ? err.message : 'the Excalidraw surface could not be loaded')
           })
         return () => {
           live = false
+          apiRef.current = null
           if (mounted !== null && mounted.root && typeof mounted.root.unmount === 'function') {
             try {
               mounted.root.unmount()
@@ -504,6 +567,49 @@ window.__ModuleLoader__.load({
           }
         }
       }, [])
+
+      /**
+       * Seed the scene from the design, ONCE PER REVISION. The design's revision
+       * is the agent's own write counter, so a design that has not changed never
+       * re-seeds - which is what keeps a person's edits on screen.
+       */
+      useEffect(() => {
+        if (!ready || design === null) return undefined
+        const key = String(design.id ?? '') + '@' + String(design.revision ?? 0)
+        if (syncedRef.current === key) return undefined
+        let live = true
+        ;(async () => {
+          try {
+            const surface = await loadExcalidraw()
+            const engine = await loadEngine()
+            const prepared = await prepareRender(engine, design.document, preset, sessionId, fonts)
+            if (!live) return
+            const api = apiRef.current
+            if (api === null) return
+            const { skeletons, skipped } = sceneSkeletonsFor(prepared)
+            const elements = surface.convertToExcalidrawElements(skeletons)
+            api.updateScene({ elements })
+            syncedRef.current = key
+            setNote(
+              'Synced ' +
+                String(design.name ?? design.id) +
+                ' rev ' +
+                String(design.revision ?? 0) +
+                ' \u00b7 ' +
+                String(skeletons.length) +
+                ' element(s)' +
+                (skipped > 0 ? ' \u00b7 ' + String(skipped) + ' box(es) this editor has no shape for' : '') +
+                ' \u00b7 one way: your drawing is not written back yet',
+            )
+          } catch (err) {
+            if (live) setNote('the design could not be laid out for this editor: ' + (err && err.message ? err.message : 'unknown error'))
+          }
+        })()
+        return () => {
+          live = false
+        }
+      }, [ready, design, preset, sessionId, fonts])
+
       return h(
         'div',
         { className: 'dsc-excalidraw', 'data-canvas-excalidraw': ready ? 'ready' : 'loading' },
@@ -1844,13 +1950,13 @@ window.__ModuleLoader__.load({
       /** Which job the right bar is doing: shaping the design, or auditing it. */
       const [sideTab, setSideTab] = useState('design')
       /**
-       * Which SURFACE the pane is showing: the pack's own design surface, or the
-       * vendored Excalidraw editor. The second is a preview - the document is not
-       * the scene yet and the agent tools still speak this package's language - so
-       * it is a mode in the same tab and not a second tab type, and the note under
-       * it says exactly that.
+       * Which SURFACE the pane is showing. EXCALIDRAW IS THE DEFAULT: the vendored
+       * editor is the Canvas tab's surface now, and the pack's own design surface
+       * is a switch away for as long as the agent tools still write the design
+       * document. The editor is seeded from that document once per revision (see
+       * `sceneSkeletonsFor`), so what the agent wrote is what a person opens.
        */
-      const [surface, setSurface] = useState('design')
+      const [surface, setSurface] = useState('excalidraw')
       /**
        * The design the rail is asking about right now, as a two-step DELETE: the
        * first click arms the row, the second removes it. A design is somebody's
@@ -2364,18 +2470,17 @@ window.__ModuleLoader__.load({
           h(Btn, { active: overlays.safe, onClick: () => setOverlays((value) => ({ ...value, safe: !value.safe })), title: 'Show the preset\u2019s safe and keep-out areas' }, 'Safe areas'),
           h(Btn, { active: overlays.boxes, onClick: () => setOverlays((value) => ({ ...value, boxes: !value.boxes })), title: 'Show every node\u2019s box' }, 'Boxes'),
         ),
-        // THE SURFACE SWITCH, and the whole point of this increment: the vendored
-        // Excalidraw editor, loaded from this package's own route on first use.
-        // Its label says PREVIEW because that is what it is until the document,
-        // the tools and the assets are re-pointed at the scene.
+        // THE SURFACE SWITCH. Excalidraw is the Canvas tab's surface; this is how a
+        // person reaches the pack's own design surface for as long as the agent
+        // tools still write the design document.
         h('button', {
           type: 'button',
           className: 'dsc-btn',
           'data-canvas-action': 'surface',
           'data-active': surface === 'excalidraw' ? 'true' : 'false',
-          title: 'Show the vendored Excalidraw editor in place of the design surface',
+          title: 'Switch between the Excalidraw editor and the design surface',
           onClick: () => setSurface((value) => (value === 'excalidraw' ? 'design' : 'excalidraw')),
-        }, surface === 'excalidraw' ? 'Design \u25be' : 'Excalidraw preview \u25be'),
+        }, surface === 'excalidraw' ? 'Design' : 'Excalidraw'),
         // ONE EXPORT CONTROL, not four buttons. Format and destination are two axes
         // of ONE decision, and four buttons for it was the first thing to wrap out of
         // the bar when the pane got narrow - so what is left in the bar is the
@@ -2773,11 +2878,12 @@ window.__ModuleLoader__.load({
           : null,
         note ? h('div', { className: 'dsc-note', 'data-kind': note.kind }, note.text) : null,
         engineNote ? h('div', { className: 'dsc-note', 'data-kind': 'info' }, engineNote) : null,
-        // The Excalidraw preview replaces the DESIGN surface visually while
+        // The Excalidraw surface replaces the DESIGN surface visually while
         // leaving it mounted: the overlay is a sibling, so switching back is a
         // state change, the design keeps its zoom/selection/exports, and the
-        // editor never sees a half-torn-down tree.
-        surface === 'excalidraw' ? h(ExcalidrawSurface, {}) : null,
+        // editor never sees a half-torn-down tree. It is seeded from the design
+        // the tab already selected, so the agent's work is what opens.
+        surface === 'excalidraw' ? h(ExcalidrawSurface, { sessionId, design: selected, preset, fonts: (state && state.fonts) || {} }) : null,
       )
     }
 
@@ -3064,6 +3170,9 @@ window.__ModuleLoader__.load({
     exports.__internals = {
       VIEW_ID,
       PLUGIN_VERSION,
+      /** The bridge's mapping, so the check can drive it without a browser. */
+      sceneSkeletonsFor,
+      /** The vendored surface's route, so the check can hold both halves to it. */
       ROUTES: { STATE_ROUTE, DOCUMENT_ROUTE, DELETE_ROUTE, PUBLISH_ROUTE, ASSET_ROUTE, QUEUE_ROUTE, REPORT_ROUTE, WORKSPACE_ASSET_ROUTE, ENGINE_ROUTE, EXCALIDRAW_JS_ROUTE, EXCALIDRAW_CSS_ROUTE },
       TOOL_NAMES,
       ZOOM_STEPS,
