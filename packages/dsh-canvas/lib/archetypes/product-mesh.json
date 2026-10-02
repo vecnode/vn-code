@@ -1,0 +1,142 @@
+{
+  "id": "product-mesh",
+  "title": "Product mesh",
+  "description": "A procedural mesh panel on the right reserves the product screenshot (the `image` node names assets/product.png, so that asset must be imported before export), with the headline and subhead low-left.",
+  "presets": ["github-social", "og", "linkedin-post"],
+  "document": {
+    "title": "Product mesh",
+    "preset": "github-social",
+    "canvas": {
+      "background": "surface"
+    },
+    "tokens": {
+      "color": {
+        "ink": "#F8FAFC",
+        "muted": "#94A3B8",
+        "accent": "#4D6BFE",
+        "surface": "#0B0E14"
+      },
+      "font": {
+        "display": "Space Grotesk",
+        "text": "Inter",
+        "mono": "system"
+      },
+      "scale": {
+        "display": 70,
+        "title": 40,
+        "body": 24,
+        "caption": 15
+      },
+      "space": 8,
+      "radius": {
+        "card": 20,
+        "chip": 8,
+        "pill": 999
+      }
+    },
+    "layers": [
+      {
+        "kind": "shape",
+        "id": "backdrop",
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 640,
+        "shape": "rect",
+        "fill": "surface"
+      },
+      {
+        "kind": "art",
+        "id": "mesh",
+        "style": "mesh",
+        "x": 632,
+        "y": 104,
+        "w": 560,
+        "h": 400,
+        "radius": "card",
+        "seed": 8842,
+        "density": 0.7,
+        "scale": 1.2,
+        "colors": ["accent", "surface", "ink"]
+      },
+      {
+        "kind": "text",
+        "id": "eyebrow",
+        "x": 64,
+        "y": 160,
+        "w": 300,
+        "text": "the plugin pack",
+        "style": "caption",
+        "family": "text",
+        "weight": 600,
+        "color": "muted",
+        "transform": "upper",
+        "letterSpacing": 2
+      },
+      {
+        "kind": "text",
+        "id": "headline",
+        "x": 64,
+        "y": 200,
+        "w": 520,
+        "text": "Every surface, one install.",
+        "style": "display",
+        "family": "display",
+        "weight": 700,
+        "color": "ink"
+      },
+      {
+        "kind": "text",
+        "id": "subhead",
+        "x": 64,
+        "y": 400,
+        "w": 520,
+        "text": "Tools your agent can drive.",
+        "style": "body",
+        "family": "text",
+        "color": "muted"
+      },
+      {
+        "kind": "shape",
+        "id": "rule",
+        "x": 64,
+        "y": 468,
+        "w": 72,
+        "h": 4,
+        "shape": "rect",
+        "fill": "accent",
+        "radius": 2
+      },
+      {
+        "kind": "frame",
+        "id": "shot",
+        "x": 664,
+        "y": 144,
+        "w": 496,
+        "h": 320,
+        "radius": "chip",
+        "border": {
+          "width": 1,
+          "color": "muted"
+        },
+        "shadow": {
+          "x": 0,
+          "y": 18,
+          "blur": 48,
+          "color": "#00000080"
+        },
+        "children": [
+          {
+            "kind": "image",
+            "id": "screenshot",
+            "src": "assets/product.png",
+            "w": "fill",
+            "h": "fill",
+            "fit": "cover",
+            "focus": { "x": 0.5, "y": 0.2 }
+          }
+        ]
+      }
+    ]
+  }
+}

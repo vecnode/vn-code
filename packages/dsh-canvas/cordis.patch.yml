@@ -1,0 +1,28 @@
+# dsh-canvas bundle layer (alpha).
+#
+# One extra row ('canvas') owns the whole plugin: its Node half registers the
+# canvas tools (canvas_new / canvas_write / canvas_patch / canvas_read /
+# canvas_publish / canvas_delete / canvas_render / canvas_export / canvas_assets),
+# the per-conversation + library document store, the asset store, the export
+# writers, the two bundled skills and the authenticated /api/dsh-canvas/* routes -
+# and therefore ships its browser half (dsh.client) with the Loader entry.
+#
+# Nothing shipped is patched and no core row is disabled. This package adds
+# surface in two places:
+#
+#   - the chat panel's own VIEW RING: one `conversation.view` entry with the id
+#     `canvas` at `order: 20`, which puts the tab to the right of Trajectory
+#     (Chat is 0, Trajectory is 10) and leaves Trajectory's own developer-tools
+#     gate untouched. The view is registered by the BROWSER half; the ring's
+#     order is that entry's `order`, not a layer here;
+#   - one keyed `tool.call.toolview` entry per tool, which draws the design inline
+#     in the conversation with an Open-tab link.
+#
+# There is therefore no `disabled: true` here, and nothing for
+# scripts/sync-vendored.ps1 to keep in sync: the only vendored bytes are the two
+# OFL font families, which are pinned by this package's own `vendor/build.mjs`
+# (upstream URL + SHA-256 per file, checked offline) and are not a fork of
+# anything.
+- insert:
+    - id: canvas
+      name: 'dsh-canvas'

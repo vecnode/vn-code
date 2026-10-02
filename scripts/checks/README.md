@@ -306,7 +306,45 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
 - `check-skill-examples.mjs` extracts every fenced example from `skills/**/*.md`
   and parses or compiles it with the plugin's own engines, so a copy-pasteable
   source that no longer works fails the run instead of misleading the next
-  agent.
+  agent. Since dsh-canvas it also walks `packages/dsh-canvas/skills/**`: every
+  ` ```canvas ` block is run through the REAL validator with the real preset and
+  font tables and then laid out with the synthetic measurer (so a skill can never
+  teach a document the plugin would refuse, or one whose headline overflows the
+  canvas it names), and every ` ```json ` block in those skills must be
+  well-formed, because the recipes are made of them.
+- `check-canvas-node.mjs` drives `dsh-canvas`'s whole host half with no browser and
+  no network, and is the check that makes a browser-only surface verifiable at
+  all. In order: the **engine** (a full document through `normalizeDocument`, then
+  22 refusal cases by code; the pure layout with an INJECTED measurer, so
+  wrapping, hugging, filling, absolute children, `maxLines` with an ellipsis,
+  image crops and a row frame's hug axis are all arithmetic on this host - the
+  row-frame case is a regression guard for a real bug an instrumented read
+  found); the **two painters** (the canvas painter asserted through a RECORDER -
+  every call it makes, including the save/restore balance, the drawImage crop and
+  the clip - and the SVG serializer asserted to emit every op kind from a
+  hand-built op list, so "both painters consume the IR" is a fact and not a
+  coincidence); the **lints** (safe area, margin, small type, contrast sampled at
+  the text's own position); **patches** (set/remove/insert, both insert spellings,
+  and the refusals, including a `__proto__` path); the **preset table** (ten
+  destinations, each complete and inside its own canvas); the **vendored fonts**
+  (five files hashed against `VERSION.json`, the licences present, the face-name
+  lookup refusing anything that is not a recorded file); the **store and asset
+  store** (revisions, the verdict transitions pending/drawn/stale, the caps, the
+  content-addressed dedupe, PNG/JPEG/GIF/WebP header reads); the **archetypes and
+  skills** (every starter document validates, lays out clean and has no
+  unexpected missing asset; both skills carry front matter matching their folder);
+  the **tools** (all nine driven through `execute()` exactly as the agent loop
+  calls them, including the refusals and the cap sentence); the **routes** (real
+  `Request`s against the captured handlers: state, document create/patch from the
+  panel, assets up and down, the workspace-asset policy, the engine route's ETag
+  and 304, every font route's bytes hashed, health); the **render round trip**
+  (the tool enqueues, `session=*` long-poll hands the request out, a synthetic
+  browser posts a REAL PNG back, and the tool resolves with a path whose own IHDR
+  is then read); the **exports** (Desktop and workspace, create-exclusive naming,
+  a format the preset refuses, the workspace containment refusal); and finally
+  that the whole sandbox is deleted. `DSH_HOME`, `USERPROFILE`, `HOME` and
+  `XDG_CONFIG_HOME` all point into one temp tree, so no run can touch the real
+  profile.
 - `check-media-examples.mjs` is the same idea for the two families whose examples
   are TOOL CALLS rather than source: it walks both media skills **and their
   reference files** plus `pdf-analysis`, and holds them to two tiers. **Shape**

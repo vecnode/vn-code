@@ -1,0 +1,160 @@
+{
+  "id": "code-card",
+  "title": "Code card",
+  "description": "A bordered terminal panel of short mono lines on the right, the message and one action on the left - reaches for a developer-facing announcement where the command is the proof.",
+  "presets": ["github-social", "og", "linkedin-post"],
+  "document": {
+    "title": "Code card",
+    "preset": "github-social",
+    "canvas": {
+      "background": "surface"
+    },
+    "tokens": {
+      "color": {
+        "ink": "#F8FAFC",
+        "muted": "#94A3B8",
+        "accent": "#4D6BFE",
+        "surface": "#0B0E14"
+      },
+      "font": {
+        "display": "Space Grotesk",
+        "text": "Inter",
+        "mono": "system"
+      },
+      "scale": {
+        "display": 44,
+        "title": 40,
+        "body": 22,
+        "caption": 14
+      },
+      "space": 8,
+      "radius": {
+        "card": 20,
+        "chip": 8,
+        "pill": 999
+      }
+    },
+    "layers": [
+      {
+        "kind": "shape",
+        "id": "backdrop",
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 640,
+        "shape": "rect",
+        "fill": "surface"
+      },
+      {
+        "kind": "text",
+        "id": "headline",
+        "x": 64,
+        "y": 152,
+        "w": 552,
+        "text": "Ship a plugin in an afternoon.",
+        "style": "display",
+        "family": "mono",
+        "weight": 700,
+        "color": "ink"
+      },
+      {
+        "kind": "text",
+        "id": "subhead",
+        "x": 64,
+        "y": 264,
+        "w": 552,
+        "text": "One row, one bundle, no forks.",
+        "style": "body",
+        "family": "text",
+        "color": "muted"
+      },
+      {
+        "kind": "frame",
+        "id": "cta",
+        "x": 64,
+        "y": 340,
+        "w": 168,
+        "h": 44,
+        "direction": "row",
+        "justify": "center",
+        "align": "center",
+        "background": "ink",
+        "radius": "pill",
+        "children": [
+          {
+            "kind": "text",
+            "id": "cta-label",
+            "w": "hug",
+            "text": "Read the guide",
+            "size": 18,
+            "family": "text",
+            "weight": 600,
+            "color": "#0B0E14"
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "id": "panel",
+        "x": 648,
+        "y": 144,
+        "w": 568,
+        "h": 352,
+        "direction": "column",
+        "gap": 18,
+        "padding": 40,
+        "background": "#0F1420",
+        "radius": "card",
+        "border": { "width": 1, "color": "#94A3B840" },
+        "children": [
+          {
+            "kind": "shape",
+            "id": "chrome-dot",
+            "x": 0,
+            "y": 0,
+            "w": 12,
+            "h": 12,
+            "shape": "ellipse",
+            "fill": "accent"
+          },
+          {
+            "kind": "text",
+            "id": "line-1",
+            "w": "fill",
+            "text": "$ dsh plugin add canvas",
+            "family": "mono",
+            "size": 15,
+            "color": "#9FB2FF"
+          },
+          {
+            "kind": "text",
+            "id": "line-2",
+            "w": "fill",
+            "text": "installed canvas -> web profile",
+            "family": "mono",
+            "size": 15,
+            "color": "muted"
+          },
+          {
+            "kind": "text",
+            "id": "line-3",
+            "w": "fill",
+            "text": "restart the harness to compose",
+            "family": "mono",
+            "size": 15,
+            "color": "muted"
+          },
+          {
+            "kind": "text",
+            "id": "line-4",
+            "w": "fill",
+            "text": "canvas_new { preset: 'og' }",
+            "family": "mono",
+            "size": 15,
+            "color": "ink"
+          }
+        ]
+      }
+    ]
+  }
+}

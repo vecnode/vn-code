@@ -5152,6 +5152,141 @@ if (coreThemeBundle === null) {
   }
 }
 
+// ---------------------------------------------------------------- dsh-canvas
+// The canvas bundle registers the conversation VIEW RING's third entry (to the
+// right of Trajectory), one conversation card per canvas tool, and the
+// page-level renderer that answers the host's render requests. These checks load
+// it with the real React runtime, activate it against a stub ctx, and render the
+// seat the shell would render.
+const canvas = loadBundle('packages/dsh-canvas/lib/client.js', {})
+check('canvas bundle id', canvas.id, 'dsh-canvas')
+check('canvas inject', JSON.stringify(canvas.exports.inject), '["slots"]')
+const canvasSeats = {}
+const canvasEffects = []
+const canvasDisposers = []
+canvas.exports.apply({
+  slots: {
+    inject: (name, fn) => fn(),
+    register(spec, component) {
+      canvasSeats[spec.name + (spec.key ? '#' + spec.key : '')] = { spec, component }
+      return () => {}
+    },
+  },
+  effect: (fn) => {
+    // The shell runs an effect on activation, so the stub does too - a stub that
+    // only recorded the function would hide every registration behind it. The
+    // disposer is KEPT and called at the end of this section: the canvas
+    // renderer's effect starts a long-poll loop, and a loop left running would
+    // keep this process alive (and a fetch to a relative URL retrying forever).
+    canvasEffects.push(fn)
+    const dispose = fn()
+    const stop = typeof dispose === 'function' ? dispose : () => {}
+    canvasDisposers.push(stop)
+    return stop
+  },
+  logger: { debug() {}, warn() {} },
+})
+const canvasView = canvasSeats['conversation.view']
+check('canvas registers one conversation view', canvasView !== undefined, true)
+check('the view is keyed by its id, not a slot key', canvasView.spec.id, 'canvas')
+// The ring is ordered: Chat 0, Trajectory 10 - so 20 is literally to the right.
+check('the view sits to the right of Trajectory', canvasView.spec.order, 20)
+check('the view labels itself', canvasView.spec.label(), 'Canvas')
+check('the view takes no own child seats', canvasView.spec.children === undefined, true)
+// A conversation view gets no `sessionId` prop: its own inject face is where the
+// session comes from (the shape the shipped Trajectory view uses too).
+check('the view learns its session through inject', canvasView.spec.inject('session-abc').canvasSession, 'session-abc')
+check(
+  'one card per canvas tool',
+  Object.keys(canvasSeats)
+    .filter((key) => key.startsWith('tool.call.toolview#'))
+    .map((key) => key.split('#')[1])
+    .sort()
+    .join(','),
+  canvas.exports.__internals.TOOL_NAMES.slice().sort().join(','),
+)
+const canvasCssTag = canvas.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-canvas/canvas.css').pop()
+const canvasCss = canvasCssTag ? canvasCssTag.textContent : ''
+check('canvas stylesheet injected', canvasCss.includes('.dsc-root{') && canvasCss.includes('.dsc-art{'), true)
+// The full-height view asks the shell to float the composer over it, which is the
+// same contract the shipped Trajectory view uses.
+check(
+  'the canvas root asks for the composer overlay',
+  renderToStaticMarkup(h(canvasView.component, { canvasSession: null })).includes('data-conversation-composer-overlay'),
+  true,
+)
+const emptyMarkup = renderToStaticMarkup(h(canvasView.component, { canvasSession: null }))
+check('a session-less view says what to do', emptyMarkup.includes('Open a conversation'), true)
+check('the empty view is still a canvas view', emptyMarkup.includes('data-dsh-canvas-view'), true)
+// A running tool call and a settled one both render a card, from the block alone.
+const runningCard = renderToStaticMarkup(
+  h(canvasSeats['tool.call.toolview#canvas_render'].component, {
+    toolName: 'canvas_render',
+    sessionId: 'session-abc',
+    block: { argsRaw: '{"id":"launch-banner"}' },
+  }),
+)
+check('a running render call draws a card', runningCard.includes('Rendering in the browser'), true)
+const settledCard = renderToStaticMarkup(
+  h(canvasSeats['tool.call.toolview#canvas_export'].component, {
+    toolName: 'canvas_export',
+    sessionId: 'session-abc',
+    block: {
+      kind: 'tool-result',
+      call: { name: 'canvas_export', argsRaw: '{"id":"launch-banner"}' },
+      content: [{ type: 'text', text: 'Wrote /tmp/launch-banner.png (412 KB).' }],
+      meta: { id: 'launch-banner', title: 'Launch banner', scope: 'conversation', state: 'drawn', revision: 3, tab: 'dsh-resource://canvas/session/session-abc/launch-banner' },
+    },
+  }),
+)
+check('a settled export call draws its card', settledCard.includes('launch-banner'), true)
+check('the settled card shows the verdict pill', settledCard.includes('data-state="drawn"'), true)
+check('the settled card shows the host text', settledCard.includes('Wrote /tmp/launch-banner.png'), true)
+// The page-level renderer is started by an effect (so a page that never opens the
+// tab still answers a render request).
+check('the renderer is started by the plugin, not the tab', canvasEffects.length >= 11, true)
+const canvasSource = readFileSync(path.join(repo, 'packages/dsh-canvas/lib/client.js'), 'utf8')
+check('the bundle has no build-time eval', /new Function\(|eval\(/.test(canvasSource.replace(/\/\/.*$/gm, '')) === false, true)
+check('the bundle polls the queue for ANY session', canvasSource.includes("QUEUE_ROUTE + '?session=*&wait='"), true)
+check('the bundle fetches the engine from the host route', canvasSource.includes('ENGINE_ROUTE'), true)
+check('the bundle imports the engine from a blob URL', canvasSource.includes('URL.createObjectURL(new Blob([source]'), true)
+check(
+  'the bundle never fetches a remote design resource',
+  !/https?:\/\/[^'"\s]+/.test(canvasSource.replace(/https?:\/\/www\.w3\.org[^'"\s]*/g, '')),
+  true,
+)
+// The route names the browser hard-codes must be the ones the host registers.
+// The host declares them as `API_ROOT + '<suffix>'`, so both sides are compared
+// as full paths.
+const canvasHostSource = readFileSync(path.join(repo, 'packages/dsh-canvas/lib/index.js'), 'utf8')
+const hostRoutes = [...canvasHostSource.matchAll(/const ([A-Z_]+_ROUTE) = API_ROOT \+ '([^']+)'/g)].map((match) => '/api/dsh-canvas' + match[2])
+const clientRoutes = Object.values(canvas.exports.__internals.ROUTES)
+const unknownRoutes = clientRoutes.filter((route) => !hostRoutes.includes(route))
+check('every client route exists on the host', unknownRoutes.join(', '), '')
+// `/health` is the one host route the browser does not need: it is the status
+// snapshot a person or a check reads, not something a tab fetches.
+const missedRoutes = hostRoutes.filter((route) => route !== '/api/dsh-canvas/health' && !clientRoutes.includes(route))
+check('the client knows every host route it reads', missedRoutes.join(', '), '')
+const canvasInternals = canvas.exports.__internals
+check('a stored-asset name is recognised', canvasInternals.ASSET_NAME.test('0123456789abcdef.png'), true)
+check('a content hash is not mistaken for a filename', canvasInternals.ASSET_NAME.test('logo.png'), false)
+check('a workspace path is recognised', canvasInternals.isWorkspacePath('docs/header.png'), true)
+check('an asset name is not called a workspace path', canvasInternals.isWorkspacePath('0123456789abcdef.png'), false)
+check('a running block is not settled', canvasInternals.isSettled({ argsRaw: '{}' }), false)
+check('a tool-result block is settled', canvasInternals.isSettled({ kind: 'tool-result' }), true)
+check('the card reads the host meta', canvasInternals.viewOfBlock({ meta: { id: 'x' } }).id, 'x')
+check('the card parses settled arguments', canvasInternals.argsOf({ kind: 'tool-result', call: { argsRaw: '{"id":"x"}' } }).id, 'x')
+check('the card flattens tool content', canvasInternals.flattenContent([{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }]), 'a\nb')
+check('the metrics summary is a table', canvasInternals.metricsText({ ops: 12, boxes: 6, textNodes: 3, lines: 4, smallestType: 15, families: ['Inter'], ms: 2 }).includes('ops      12'), true)
+check('a long path is shortened for the side panel', canvasInternals.shortPath('/a/b/c/d/e.png'), '…/c/d/e.png')
+check('base64 survives a round trip', canvasInternals.toBase64(new TextEncoder().encode('canvas').buffer), 'Y2FudmFz')
+check('the feed scale is a quarter', canvasInternals.FEED_SCALE, 0.25)
+check('the zoom ladder starts at fit', canvasInternals.ZOOM_STEPS[0], 'fit')
+// Unload the row: the renderer's own effect returned a stopper, which is what the
+// shell calls when the plugin goes away (and what lets this process exit).
+for (const dispose of canvasDisposers) dispose()
+check('the renderer stopped with its row', canvasEffects.length >= 11, true)
+
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')
 process.exitCode = failures === 0 ? 0 : 1
