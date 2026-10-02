@@ -1456,13 +1456,15 @@ window.__ModuleLoader__.load({
 
       /** Start a new design from a preset + archetype. */
       const createDesign = useCallback(
-        async (presetId, archetypeId, styleId) => {
+        async (presetId, archetypeId, styleId, exampleId) => {
           if (!sessionId) return
           setBusy(true)
           setNote(null)
           setNewOpen(false)
           try {
-            const body = { session: sessionId, document: null, preset: presetId, archetype: archetypeId, style: styleId ?? null }
+            const body = exampleId
+              ? { session: sessionId, document: null, example: exampleId, style: styleId ?? null }
+              : { session: sessionId, document: null, preset: presetId, archetype: archetypeId, style: styleId ?? null }
             // The host's own starter (and archetype) live behind the tools, so the
             // tab asks for the same thing a model asks for: a document, validated.
             const answer = await api(DOCUMENT_ROUTE, {
@@ -1756,6 +1758,30 @@ window.__ModuleLoader__.load({
             )
           : null,
         chosenStyle ? h('p', { className: 'dsc-rowMeta', style: { margin: '6px 0' } }, chosenStyle.intent) : null,
+        // THE HOUSE GALLERY: the fastest start there is, because the preset, the
+        // composition AND the look have already been chosen well. It sits above the
+        // presets crossed with archetypes, which is the manual way to the same place.
+        (state && Array.isArray(state.examples) && state.examples.length > 0)
+          ? h('div', { 'data-canvas-examples': 'true' },
+              h('p', { className: 'dsc-rowMeta', style: { margin: '2px 0 4px' } }, 'Start from a house example (' + state.examples.length + '):'),
+              h('div', { className: 'dsc-gallery' },
+                state.examples.map((entry) =>
+                  h('button', {
+                    key: entry.id,
+                    type: 'button',
+                    className: 'dsc-galleryItem',
+                    disabled: busy,
+                    'data-example': entry.id,
+                    title: entry.intent,
+                    onClick: () => onCreate(null, null, null, entry.id),
+                  },
+                    h('span', { className: 'dsc-galleryTitle' }, entry.title),
+                    h('span', { className: 'dsc-galleryMeta' }, entry.preset + ' \u00b7 ' + entry.style),
+                  ),
+                ),
+              ),
+            )
+          : null,
         h('div', { className: 'dsc-gallery' },
           h('button', { type: 'button', className: 'dsc-galleryItem', disabled: busy, onClick: () => onCreate(presetId, null, styleId) },
             h('span', { className: 'dsc-galleryTitle' }, 'Blank starter'),

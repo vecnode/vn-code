@@ -46,7 +46,7 @@ and it validates the result identically.
 
 | Tool | Use it for |
 |---|---|
-| `canvas_new` | instantiate a starter document from `{ preset, archetype, style }` - the first call of almost every design |
+| `canvas_new` | instantiate a starter document from `{ preset, archetype, style }` - or from `{ example }`, a gallery row that has already chosen all three - the first call of almost every design |
 | `canvas_write` | write a whole document (a new design, or a rewrite you actually intend) |
 | `canvas_patch` | the edit; 1-64 pointer operations on the stored document |
 | `canvas_read` | re-read the canonical document and the last render verdict - after a compaction, or before building on a design you did not just write |
@@ -96,6 +96,25 @@ colours:
 Practically: pick the style from the brief when the person names one ("make it
 brutalist"), otherwise the one whose `bestFor` names your preset. Apply ONE, then
 render. Two styles in one design is not a look, it is an accident.
+
+## The house gallery: start from a proven answer
+
+Twelve examples ship with the package (`canvas_read` lists them; the tab's "+ New"
+shows them as rows). An example is a **preset + archetype + style that have already
+been chosen well**, plus the copy that belongs in it and the sentence saying when to
+reach for it:
+
+```
+canvas_new { example: "night-launch" }        # neon, github-social, editorial-split
+canvas_new { example: "developer-card" }      # terminal, og, code-card
+```
+
+Reach for one when the brief is a KIND of design rather than a specific one - "a
+launch card", "a README header", "a release note". Read the row's `intent`, take its
+`copy` as the shape of what to write, then make it yours: replace the words, keep the
+composition and the look unless the render says otherwise. Starting from a blank
+canvas when a proven answer exists wastes the one thing you cannot get back, which is
+a turn.
 
 ## Patching
 

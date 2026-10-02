@@ -1695,6 +1695,13 @@ export function registerRoutes(ctx, row) {
         if (patched.problems.length > 0) return json(400, { ok: false, error: { code: patched.problems[0].code, message: patched.problems[0].message }, problems: patched.problems })
         candidate = patched.document
       }
+      if (!candidate && typeof body.example === 'string' && body.example.length > 0) {
+        // A gallery row: the preset, archetype and style are already chosen well, so a
+        // request only has to name which example.
+        const built = documentFor({ example: body.example, title: body.title, style: body.style })
+        if (built.error) return json(400, { ok: false, error: { code: built.error.code, message: built.error.message } })
+        candidate = built.document
+      }
       if (!candidate && typeof body.preset === 'string' && body.preset.length > 0) {
         // The tab's "+ New" asks for the same thing the model's `canvas_new`
         // does: a starter (or an archetype's document) for a destination preset,
