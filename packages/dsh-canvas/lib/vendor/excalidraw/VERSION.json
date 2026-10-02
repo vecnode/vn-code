@@ -1,0 +1,45 @@
+{
+  "generatedBy": "packages/dsh-canvas/vendor/excalidraw/build.mjs",
+  "note": "The vendored Excalidraw surface for the Canvas tab: ONE classic script plus the stylesheet it cannot live without. Built from the pinned versions below, with the trims named in `trims` and any repository patches named in `patches`. `node build.mjs --check` re-hashes every file here OFFLINE, so the committed artifact cannot drift from this record. React is bundled (Excalidraw takes it as a peer and a script tag cannot reach the shell’s module table), which means the page carries a SECOND React: nothing may pass a component across that boundary. The .js/.css files are TEXT and are pinned to LF in .gitattributes, because these hashes would otherwise report phantom drift on a Windows checkout.",
+  "pins": {
+    "@excalidraw/excalidraw": "0.18.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "esbuild": "0.25.0"
+  },
+  "trims": [
+    "locales-stubbed",
+    "mermaid-dialog-stubbed"
+  ],
+  "patches": [],
+  "unshipped": {
+    "locales": "the 55 locale modules are stubbed; Excalidraw fetches them at runtime from EXCALIDRAW_ASSET_PATH and falls back to English",
+    "fonts": "Excalidraw ships 234 font files (12.5 MB) fetched at runtime from EXCALIDRAW_ASSET_PATH; none is vendored yet, so text falls back to the faces the bundle already carries"
+  },
+  "digest": "679670335272f6348bda495dbad81a9854b31379a4891a5354c302537844c569",
+  "files": {
+    "excalidraw.min.js": {
+      "bytes": 3218185,
+      "sha256": "22c3470439f4b68edd315ad6bd6dd56e5a039db0125722c86777d872a3a835db"
+    },
+    "excalidraw.css": {
+      "bytes": 144689,
+      "sha256": "e72092760bae272ebe075bdadaff7f82909d318c5d819313185b19e99be31e49"
+    },
+    "LICENSE-excalidraw.txt": {
+      "bytes": 1067,
+      "sha256": "1352d204fdb90d5e482c13139d848bc2c9300a9a7de358a0a558a23e72d0d8be",
+      "url": "https://raw.githubusercontent.com/excalidraw/excalidraw/v0.18.1/LICENSE"
+    },
+    "LICENSE-react.txt": {
+      "bytes": 1086,
+      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+      "from": "react"
+    },
+    "LICENSE-react-dom.txt": {
+      "bytes": 1086,
+      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+      "from": "react-dom"
+    }
+  }
+}

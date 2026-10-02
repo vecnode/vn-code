@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
     /** The version marker shown in the toolbar, so a fresh bundle is easy to spot. */
-    const PLUGIN_VERSION = '0.1.0-alpha.9'
+    const PLUGIN_VERSION = '0.1.0-alpha.10'
     /** The conversation view this package adds to the chat panel's ring. */
     const VIEW_ID = 'canvas'
     /** Keep in sync with lib/index.js. */
@@ -259,9 +259,29 @@ window.__ModuleLoader__.load({
 .dsc-cardTitle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dsw-alias-label-primary)}
 .dsc-cardBody{font-size:11.5px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;max-height:132px;overflow:hidden}
 .dsc-hidden{display:none}
+/* The Excalidraw surface (the preview mode). It is an OVERLAY on purpose: the
+   design surface underneath stays mounted and untouched, so switching back is a
+   state change and not a reload of anything, and this file never has to
+   restructure the tab's own tree for a surface that is still being proved. */
+.dsc-excalidraw{position:absolute;inset:38px 0 0 0;z-index:5;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff)}
+.dsc-excalidrawHost{flex:1;min-height:0;position:relative}
+.dsc-excalidrawNote{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:.5px solid var(--dsw-alias-border-l2);font-size:11.5px;color:var(--dsw-alias-label-secondary)}
 `
     const CSS_TAG = 'dsh-canvas/canvas.css'
     const FONT_CSS_TAG = 'dsh-canvas/fonts.css'
+    /** The vendored Excalidraw surface's two artifacts, and where its assets come from. */
+    const EXCALIDRAW_JS_ROUTE = '/api/dsh-canvas/vendor/excalidraw.js'
+    const EXCALIDRAW_CSS_ROUTE = '/api/dsh-canvas/vendor/excalidraw.css'
+    /**
+     * Excalidraw builds its own runtime asset URLs as `<base> + 'fonts/…'` and
+     * `<base> + 'locales/…'`, and reads the global below ONCE. Those routes do not
+     * exist yet (VERSION.json's `unshipped` says so), so the fetches 404 and the
+     * editor falls back to the faces its bundle already carries - which is
+     * measured, not hoped for: the spike rendered text before any font was served.
+     * The prefix is still set, because the day those routes exist this line is the
+     * only thing that has to be true.
+     */
+    const EXCALIDRAW_ASSET_PATH = '/api/dsh-canvas/vendor/'
 
     // -----------------------------------------------------------------------
     // Small utilities
@@ -376,6 +396,120 @@ window.__ModuleLoader__.load({
         if (setNote) setNote(err && err.message ? err.message : 'the canvas engine is unavailable')
         return null
       }
+    }
+
+    // -----------------------------------------------------------------------
+    // The vendored Excalidraw surface
+    // -----------------------------------------------------------------------
+    let excalidrawPromise = null
+
+    /**
+     * The vendored Excalidraw surface, fetched once and left on the page.
+     *
+     * A CLASSIC SCRIPT, not a module: the artifact is one iife bundle that leaves
+     * `globalThis.DSHExcalidraw` behind (it carries its own React, because
+     * Excalidraw takes React as a peer and a script tag cannot reach the shell's
+     * module table), so a `<script>` element is exactly the loader it wants - no
+     * blob URL, no import map, no bare specifiers. The stylesheet goes in first:
+     * Excalidraw is unusable without it (`--color-primary` and every layout rule
+     * live there), and a flash of unstyled editor is what loading it second looks
+     * like.
+     *
+     * A failed load is NOT cached: the promise is dropped so the next attempt can
+     * succeed, the same bargain `loadEngine` makes.
+     */
+    function loadExcalidraw() {
+      if (excalidrawPromise === null) {
+        excalidrawPromise = new Promise((resolve, reject) => {
+          if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+            reject(new Error('this surface needs a document'))
+            return
+          }
+          if (findStyleTag('dsh-canvas/excalidraw.css') === null) {
+            const link = document.createElement('link')
+            link.setAttribute('rel', 'stylesheet')
+            link.setAttribute('data-plugin-css', 'dsh-canvas/excalidraw.css')
+            link.setAttribute('href', EXCALIDRAW_CSS_ROUTE + '?v=' + PLUGIN_VERSION)
+            document.head.appendChild(link)
+          }
+          const script = document.createElement('script')
+          script.setAttribute('src', EXCALIDRAW_JS_ROUTE + '?v=' + PLUGIN_VERSION)
+          script.setAttribute('data-plugin-script', 'dsh-canvas/excalidraw.js')
+          script.addEventListener('load', () => {
+            const surface = window.DSHExcalidraw
+            if (surface === undefined || surface === null || typeof surface.mount !== 'function') {
+              reject(new Error('the Excalidraw route answered, but nothing registered a surface'))
+              return
+            }
+            // Read by Excalidraw once, before the first mount.
+            window.EXCALIDRAW_ASSET_PATH = EXCALIDRAW_ASSET_PATH
+            resolve(surface)
+          })
+          script.addEventListener('error', () => {
+            reject(new Error('the Excalidraw surface could not be loaded (' + EXCALIDRAW_JS_ROUTE + ')'))
+          })
+          document.head.appendChild(script)
+        })
+        excalidrawPromise.catch(() => {
+          excalidrawPromise = null
+        })
+      }
+      return excalidrawPromise
+    }
+
+    /**
+     * The Excalidraw preview: the vendored editor, mounted in the pane.
+     *
+     * It is a PREVIEW and the surface says so in one line rather than pretending
+     * to be the finished tab: the design document is not the scene yet, the agent
+     * tools still write the pack's own language, and the assets Excalidraw reaches
+     * for at runtime (fonts, locales) are not vendored. What it proves is the part
+     * that cannot be proved by reading: that the artifact loads from this
+     * package's route, that it mounts in the real pane, and that its imperative
+     * API answers.
+     */
+    function ExcalidrawSurface(props) {
+      const hostRef = useRef(null)
+      const [note, setNote] = useState('Loading the Excalidraw surface\u2026')
+      const [ready, setReady] = useState(false)
+      useEffect(() => {
+        let live = true
+        let mounted = null
+        loadExcalidraw()
+          .then((surface) => {
+            if (!live || hostRef.current === null) return
+            const host = hostRef.current
+            mounted = surface.mount(host, {
+              theme: 'light',
+              excalidrawAPI: (api) => {
+                if (!live) return
+                const elements = typeof api.getSceneElements === 'function' ? api.getSceneElements().length : 0
+                setNote('Excalidraw ' + String(surface.version) + ' is live \u00b7 ' + String(elements) + ' element(s) \u00b7 ' + (typeof api.updateScene === 'function' ? 'the scene API answers' : 'no scene API'))
+              },
+            })
+            setReady(true)
+          })
+          .catch((err) => {
+            if (live) setNote(err && err.message ? err.message : 'the Excalidraw surface could not be loaded')
+          })
+        return () => {
+          live = false
+          if (mounted !== null && mounted.root && typeof mounted.root.unmount === 'function') {
+            try {
+              mounted.root.unmount()
+            } catch (err) {
+              /* already gone */
+            }
+            if (hostRef.current !== null) hostRef.current.innerHTML = ''
+          }
+        }
+      }, [])
+      return h(
+        'div',
+        { className: 'dsc-excalidraw', 'data-canvas-excalidraw': ready ? 'ready' : 'loading' },
+        h('div', { className: 'dsc-excalidrawHost', 'data-canvas-excalidraw-host': 'true', ref: hostRef }),
+        h('div', { className: 'dsc-excalidrawNote' }, h('span', { 'data-canvas-excalidraw-note': 'true' }, note)),
+      )
     }
 
     // -----------------------------------------------------------------------
@@ -1710,6 +1844,14 @@ window.__ModuleLoader__.load({
       /** Which job the right bar is doing: shaping the design, or auditing it. */
       const [sideTab, setSideTab] = useState('design')
       /**
+       * Which SURFACE the pane is showing: the pack's own design surface, or the
+       * vendored Excalidraw editor. The second is a preview - the document is not
+       * the scene yet and the agent tools still speak this package's language - so
+       * it is a mode in the same tab and not a second tab type, and the note under
+       * it says exactly that.
+       */
+      const [surface, setSurface] = useState('design')
+      /**
        * The design the rail is asking about right now, as a two-step DELETE: the
        * first click arms the row, the second removes it. A design is somebody's
        * work, and one stray click in a list should never destroy it - and because
@@ -2222,6 +2364,18 @@ window.__ModuleLoader__.load({
           h(Btn, { active: overlays.safe, onClick: () => setOverlays((value) => ({ ...value, safe: !value.safe })), title: 'Show the preset\u2019s safe and keep-out areas' }, 'Safe areas'),
           h(Btn, { active: overlays.boxes, onClick: () => setOverlays((value) => ({ ...value, boxes: !value.boxes })), title: 'Show every node\u2019s box' }, 'Boxes'),
         ),
+        // THE SURFACE SWITCH, and the whole point of this increment: the vendored
+        // Excalidraw editor, loaded from this package's own route on first use.
+        // Its label says PREVIEW because that is what it is until the document,
+        // the tools and the assets are re-pointed at the scene.
+        h('button', {
+          type: 'button',
+          className: 'dsc-btn',
+          'data-canvas-action': 'surface',
+          'data-active': surface === 'excalidraw' ? 'true' : 'false',
+          title: 'Show the vendored Excalidraw editor in place of the design surface',
+          onClick: () => setSurface((value) => (value === 'excalidraw' ? 'design' : 'excalidraw')),
+        }, surface === 'excalidraw' ? 'Design \u25be' : 'Excalidraw preview \u25be'),
         // ONE EXPORT CONTROL, not four buttons. Format and destination are two axes
         // of ONE decision, and four buttons for it was the first thing to wrap out of
         // the bar when the pane got narrow - so what is left in the bar is the
@@ -2619,6 +2773,11 @@ window.__ModuleLoader__.load({
           : null,
         note ? h('div', { className: 'dsc-note', 'data-kind': note.kind }, note.text) : null,
         engineNote ? h('div', { className: 'dsc-note', 'data-kind': 'info' }, engineNote) : null,
+        // The Excalidraw preview replaces the DESIGN surface visually while
+        // leaving it mounted: the overlay is a sibling, so switching back is a
+        // state change, the design keeps its zoom/selection/exports, and the
+        // editor never sees a half-torn-down tree.
+        surface === 'excalidraw' ? h(ExcalidrawSurface, {}) : null,
       )
     }
 
@@ -2905,7 +3064,7 @@ window.__ModuleLoader__.load({
     exports.__internals = {
       VIEW_ID,
       PLUGIN_VERSION,
-      ROUTES: { STATE_ROUTE, DOCUMENT_ROUTE, DELETE_ROUTE, PUBLISH_ROUTE, ASSET_ROUTE, QUEUE_ROUTE, REPORT_ROUTE, WORKSPACE_ASSET_ROUTE, ENGINE_ROUTE },
+      ROUTES: { STATE_ROUTE, DOCUMENT_ROUTE, DELETE_ROUTE, PUBLISH_ROUTE, ASSET_ROUTE, QUEUE_ROUTE, REPORT_ROUTE, WORKSPACE_ASSET_ROUTE, ENGINE_ROUTE, EXCALIDRAW_JS_ROUTE, EXCALIDRAW_CSS_ROUTE },
       TOOL_NAMES,
       ZOOM_STEPS,
       FEED_SCALE,

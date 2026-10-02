@@ -380,6 +380,28 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
   paragraph ("noforks"). Both now have Node-side regression assertions too. With no
   Chromium-family browser installed it SKIPS LOUDLY and exits 0; `DSH_CANVAS_BROWSER`
   points it at a binary.
+- `check-canvas-excalidraw.mjs` covers the one thing in `dsh-canvas` whose bytes are
+  NOT written in this repository: the vendored **Excalidraw** surface (alpha.10,
+  preview). It checks it from both sides, because either half alone can be fooled -
+  `vendor/excalidraw/build.mjs --check` re-hashes the committed artifact against
+  `VERSION.json` **offline** (the pins, the trims, a sha256 per file, a digest and
+  the licence hash), and then a throwaway headless Chromium is served those very
+  bytes over loopback and loads them **exactly the way the client loader does** - a
+  stylesheet `link` and a classic `script` with a cache-busting query - so a loader
+  that only worked because of how the check fetched it would fail here. What it
+  asserts is what only a browser can see: the artifact leaves
+  `globalThis.DSHExcalidraw` behind, it MOUNTS in a pane, Excalidraw's own canvases
+  and UI are there, **its stylesheet applied** (`--color-primary` resolves to
+  `#6965db`, which is the difference between an editor and a broken grid), the
+  imperative API answers, a skeleton scene becomes four real elements of the kinds
+  asked for, it serializes as an `.excalidraw` document, and `exportToSvg` answers.
+  It also pins the contract across the halves - that the two route paths the client
+  asks for are the two the host registers (a typo on either side is a 404 nobody
+  sees until the surface is opened). Two of its own assertions failed on the first
+  run and were fixed rather than loosened: `exportToSvg` is ASYNC in this line of
+  Excalidraw, and the element ORDER is Excalidraw's (containers first, then the
+  bound text), so the kinds are asserted as a SET. With no Chromium-family browser
+  it SKIPS LOUDLY and exits 0; `DSH_CANVAS_BROWSER` points it at a binary.
 - `check-audio-browser.mjs` is the audio console's other half, and it exists for the
   same reason: `check-client-bundles.mjs` drives the console's numbers with
   hand-built fixtures and renders its markup from hand-built state, which is what

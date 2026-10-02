@@ -353,12 +353,72 @@ skills/social-banners/  SKILL.md + reference/checklist.md + reference/print.md
 vendor/build.mjs        the font vendorer/pinner (maintainer tooling, not shipped)
 ```
 
+## The Excalidraw surface (alpha.10, preview)
+
+Excalidraw is vendored as this tab's **second surface**. It is reached from the bar
+(`Excalidraw preview`) and it renders **over** the design surface rather than
+replacing the tab: the design keeps its zoom, its selection and its exports while
+the editor is up, and switching back is a state change, not a reload. The note
+under the editor says what it is, because what it is *today* is a preview.
+
+**What it proves.** That the artifact loads from this package's own route the way
+the client loader loads it, mounts in the real pane, that its stylesheet is what
+makes it usable, and that the imperative API an agent tool will drive answers:
+`skeleton → convertToExcalidrawElements → updateScene → getSceneElements →
+serializeAsJSON` (an `.excalidraw` document) and `exportToSvg`/`exportToBlob`.
+
+**What it does not do yet, stated rather than discovered later:**
+
+| | |
+|---|---|
+| the agent tools | still speak this package's document language; nothing is re-pointed yet |
+| the document | a design is not a scene; there is no `canvas_write → scene` bridge yet |
+| presets, styles, lints, sets | unchanged, and still the design surface's |
+| runtime assets | fonts (234 files, 12.5 MB) and the 55 locales have **no route**; Excalidraw falls back to the faces its bundle carries, which the check measures rather than assumes |
+
+**The vendor tree** (`lib/vendor/excalidraw/`, committed, and the only place the
+bytes live):
+
+| file | size | what it is |
+|---|---|---|
+| `excalidraw.min.js` | 3.07 MiB | one classic script, iife, `globalThis.DSHExcalidraw`; React 18.3.1 inlined |
+| `excalidraw.css` | 141 KiB | Excalidraw's own stylesheet — not optional: `--color-primary` and every layout rule live here |
+| `LICENSE-*.txt` | 1–2 KiB | Excalidraw's (fetched from the pinned tag, hash-pinned in the build) and React's |
+| `VERSION.json` | — | the pins, the trims, the patches, a sha256 per file and a digest |
+
+**Two routes**, because the connection's registry matches exact paths:
+`GET /api/dsh-canvas/vendor/excalidraw.js` and `…/excalidraw.css` — both
+`cache-control: no-cache` with the recorded sha256 as their ETag (a 3 MiB artifact
+must never be served stale), both answering `304` and `HEAD`, and a missing
+artifact is a `503` that names the rebuild command.
+
+**Rebuilding it** (a build root the distribution skips, like the CodeMirror,
+pdf.js and mermaid trees):
+
+```sh
+cd packages/dsh-canvas/vendor/excalidraw
+npm install
+node build.mjs           # build + rewrite lib/vendor/excalidraw/VERSION.json
+node build.mjs --check   # re-hash the committed artifact OFFLINE
+```
+
+`build.mjs` does three things to upstream, and `VERSION.json` names all three:
+it **stubs the 55 locale modules** (dynamic imports, which esbuild's iife format
+would otherwise inline: measured at 1.59 MiB), it **stubs the Mermaid-to-Excalidraw
+dialog** (`@excalidraw/mermaid-to-excalidraw` drags mermaid in behind it: measured
+at 3.37 MiB), and it applies any **patches** in `patches/index.mjs` — esbuild
+plugins, because the artifact IS the build and a text diff against a minified
+3 MiB file would rot on the next version bump. The two trims are why this ships at
+3.07 MiB instead of 8.02 MiB. **No submodule**: the pack's rule is a pinned build
+root plus a committed artifact, and the install flow is "clone, run the installer".
+
 ## Check
 
 ```sh
-node scripts/checks/check-canvas-node.mjs      # the host half, hermetically
-node scripts/checks/check-client-bundles.mjs   # the browser half, with real React
-node scripts/checks/check-skill-examples.mjs   # every ```canvas block in the skills
+node scripts/checks/check-canvas-node.mjs       # the host half, hermetically
+node scripts/checks/check-canvas-excalidraw.mjs # the vendored surface, in a real browser
+node scripts/checks/check-client-bundles.mjs    # the browser half, with real React
+node scripts/checks/check-skill-examples.mjs    # every ```canvas block in the skills
 ```
 
 `check-canvas-node.mjs` is the one to read first: it drives the engine, the two
@@ -368,14 +428,32 @@ request out, a synthetic browser posts a real PNG back, and the tool resolves wi
 a path whose own IHDR is then read. Everything it writes goes into one temp tree
 (`DSH_HOME`, `USERPROFILE`, `HOME`), so no run can touch the real profile.
 
+`check-canvas-excalidraw.mjs` needs a Chromium-family browser (it skips loudly
+without one) and is the only check that can see a third-party editor: it serves the
+**committed** artifact over loopback the way the client loader does, mounts it,
+and asserts the shell, Excalidraw's own canvases and UI, that its **stylesheet
+applied** (`--color-primary` resolves), that the imperative API answers, that a
+skeleton scene becomes four elements with the kinds asked for, that it serializes
+as an `.excalidraw` document, and that the SVG export answers. It also runs
+`vendor/excalidraw/build.mjs --check`, so the artifact can never drift from its
+record.
+
 ## Alpha
 
-- **alpha.1 (this one)** — the tab at `order: 20`, the document language and
+- **alpha.1** — the tab at `order: 20`, the document language and
   validator, the store + library + assets, the engine with both painters, the
   vendored fonts, the nine tools, the routes, the tab (rail, artboard with a zoom
   ladder and panning, safe-area and node-box overlays, live lints, the source
   drawer, the export menu), the **render-verify loop** with the feed thumbnail and
   `read_image`, the presets and archetypes, and the two skills.
-- Next: direct manipulation, several artboards per design (a set), imports from
-  `dsh-diagrams` / `dsh-pdf` / a browser render, and a host-side renderer for the
-  page-closed case.
+- **alpha.9** — the panel: direct manipulation on the artboard (rulers, eight
+  handles on a box and two side handles on a text layer, the gesture decided once
+  on pointer down), the inspect pane (nudge pad, typed size, rotate, opacity,
+  colours per layer kind), the layers pane, and the one-row bar.
+- **alpha.10 (this branch)** — the vendored **Excalidraw surface**: the build root,
+  the pinned + trimmed + hashed artifact, its two routes, the client loader, the
+  preview toggle, and the browser check above. Nothing is re-pointed yet.
+- Next: the asset routes (fonts/locales), then the agent tools on the scene
+  (`canvas_write` → skeletons, `canvas_read` → the scene JSON), then the question
+  this preview exists to answer — whether the design surface, its presets, styles
+  and lints move onto Excalidraw or stay beside it.
