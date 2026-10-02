@@ -1,7 +1,29 @@
 # Line endings the tooling depends on.
 #
+# EVERYTHING IS LF UNLESS A LATER RULE SAYS OTHERWISE. This file used to name
+# only the trees whose bytes are hashed, which left every other text file at the
+# mercy of the checker-out's core.autocrlf - and that is not a cosmetic
+# difference here, for three reasons:
+#
+#   1. A DISTRIBUTION ships text files that are compared by hash. The
+#      distributer records a sha256 per shipped file and the release publishes
+#      SHA256SUMS.txt, so "the zip you downloaded" and "the commit it came from"
+#      have to agree byte for byte. With autocrlf=true a fresh Windows checkout
+#      materialised 177 of these files as CRLF, so a recipient verifying a file
+#      against the repository would see a difference that is not a difference.
+#   2. Every pinned tree below is pinned for exactly this reason already, and
+#      those local rules cannot help a file nobody named.
+#   3. LF is what the repository STORES either way - git normalises on commit -
+#      so this rule only stops the checkout from disagreeing with the commit.
+#
+# The batch and cmd files are the deliberate exception, and because the LAST
+# matching rule wins, their `eol=crlf` lines sit BELOW this one on purpose.
+* text=auto eol=lf
+
 # A CRLF shebang breaks `./install.sh` on macOS/Linux, so shell scripts are
-# pinned to LF no matter which OS checks the repo out.
+# pinned to LF no matter which OS checks the repo out. (Kept explicit even
+# though the catch-all above already covers it: it is the rule that must not be
+# lost if the catch-all is ever narrowed.)
 *.sh text eol=lf
 
 # Batch files are the Windows launchers; CRLF is what cmd.exe expects. *.cmd is
