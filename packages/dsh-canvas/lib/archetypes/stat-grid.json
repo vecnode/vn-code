@@ -1,0 +1,184 @@
+{
+  "id": "stat-grid",
+  "title": "Stat grid",
+  "description": "A row of framed cells with one big number and one caption each, sharing a single baseline - reaches for a release note or a summary where the numbers are the argument.",
+  "presets": ["github-social", "og", "linkedin-post"],
+  "document": {
+    "title": "Stat grid",
+    "preset": "github-social",
+    "canvas": {
+      "background": "surface"
+    },
+    "tokens": {
+      "color": {
+        "ink": "#F8FAFC",
+        "muted": "#94A3B8",
+        "accent": "#4D6BFE",
+        "surface": "#0B0E14"
+      },
+      "font": {
+        "display": "Space Grotesk",
+        "text": "Inter",
+        "mono": "system"
+      },
+      "scale": {
+        "display": 76,
+        "title": 40,
+        "body": 24,
+        "caption": 15
+      },
+      "space": 8,
+      "radius": {
+        "card": 20,
+        "chip": 8,
+        "pill": 999
+      }
+    },
+    "layers": [
+      {
+        "kind": "shape",
+        "id": "backdrop",
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 640,
+        "shape": "rect",
+        "fill": "surface"
+      },
+      {
+        "kind": "text",
+        "id": "title",
+        "x": 64,
+        "y": 120,
+        "w": 800,
+        "text": "Built for the whole loop.",
+        "style": "title",
+        "family": "display",
+        "weight": 700,
+        "color": "ink"
+      },
+      {
+        "kind": "shape",
+        "id": "rule",
+        "x": 64,
+        "y": 200,
+        "w": 72,
+        "h": 4,
+        "shape": "rect",
+        "fill": "accent",
+        "radius": 2
+      },
+      {
+        "kind": "frame",
+        "id": "row",
+        "x": 64,
+        "y": 280,
+        "w": 1152,
+        "h": 240,
+        "direction": "row",
+        "gap": 24,
+        "children": [
+          {
+            "kind": "frame",
+            "id": "cell-a",
+            "w": 368,
+            "h": 240,
+            "direction": "column",
+            "gap": 12,
+            "padding": 28,
+            "background": "#111725",
+            "radius": "card",
+            "border": { "width": 1, "color": "#94A3B833" },
+            "children": [
+              {
+                "kind": "text",
+                "id": "num-a",
+                "w": "fill",
+                "text": "40+",
+                "style": "display",
+                "family": "display",
+                "weight": 700,
+                "color": "ink"
+              },
+              {
+                "kind": "text",
+                "id": "cap-a",
+                "w": "fill",
+                "text": "Surfaces the pack can take over",
+                "style": "caption",
+                "family": "text",
+                "color": "muted"
+              }
+            ]
+          },
+          {
+            "kind": "frame",
+            "id": "cell-b",
+            "w": 368,
+            "h": 240,
+            "direction": "column",
+            "gap": 12,
+            "padding": 28,
+            "background": "#111725",
+            "radius": "card",
+            "border": { "width": 1, "color": "#94A3B833" },
+            "children": [
+              {
+                "kind": "text",
+                "id": "num-b",
+                "w": "fill",
+                "text": "1.0",
+                "style": "display",
+                "family": "display",
+                "weight": 700,
+                "color": "accent"
+              },
+              {
+                "kind": "text",
+                "id": "cap-b",
+                "w": "fill",
+                "text": "One install for the whole set",
+                "style": "caption",
+                "family": "text",
+                "color": "muted"
+              }
+            ]
+          },
+          {
+            "kind": "frame",
+            "id": "cell-c",
+            "w": 368,
+            "h": 240,
+            "direction": "column",
+            "gap": 12,
+            "padding": 28,
+            "background": "#111725",
+            "radius": "card",
+            "border": { "width": 1, "color": "#94A3B833" },
+            "children": [
+              {
+                "kind": "text",
+                "id": "num-c",
+                "w": "fill",
+                "text": "0",
+                "style": "display",
+                "family": "display",
+                "weight": 700,
+                "color": "ink"
+              },
+              {
+                "kind": "text",
+                "id": "cap-c",
+                "w": "fill",
+                "text": "Core files patched by this pack",
+                "style": "caption",
+                "family": "text",
+                "color": "muted"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

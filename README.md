@@ -8,6 +8,8 @@
 
 Agent IDE with core [DSH](https://www.deepseek.com/harness/en/).
 
+![vncode-social](./assets/vncode-banner.png)
+
 A native cross-platform app plus a pack of standard **dsh bundles**. The plugins
 are plain JavaScript with **zero npm dependencies**; the launchers run on
 **Windows, macOS and Linux** (PowerShell on one side, plain POSIX shell on the
@@ -15,7 +17,7 @@ other, and the Unix half never needs PowerShell).
 
 
 <p align="left">
-  <img src="assets/vncode-29092026-120650.png" alt="The vncode window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
+  <img src="assets/img1.png" alt="The vncode window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
 </p>
 
 ## Run
@@ -31,23 +33,6 @@ to your default browser. The URL is opened only when it names a **loopback**
 address, and the launch token is never written to a file - both rules are in
 [SECURITY.md](SECURITY.md).
 
-**How the harness is started depends on whether the runtime is vendored.** When
-`runtime/<rid>/` exists - produced once by `scripts\dsh\vendor.ps1` - the shell
-launches `node <runtime>/harness/…/lib/bin.js web --no-open` **directly**, with no
-npm, no npx, no registry and no cache of any kind involved. Nothing is fetched to
-start the app, and the network is used only for the chat and search themselves.
-Without a vendored runtime the launcher falls back to
-`npx @deepseek-ai/dsh@<pin> web`, which is the source-checkout path.
-
-Flags: `-Port <n>` when 3080 is taken, `-NoBrowser` to start the server alone,
-`-DefaultBrowser` to skip Chrome, `-Help` anywhere.
-
-The desktop shell answers the two questions worth asking while it starts: whether
-a **DeepSeek key** was found and which layer supplied it (the environment,
-`$DSH_HOME/.credentials.yaml`, or a `.env`), and which **harness home** this run
-will use. That is why installing a newer release over an older one is a non-event:
-sessions, settings and the key live in `~/.dsh`, not in the folder you replaced.
-The key's value never leaves the shell. Details: [app/README.md](app/README.md).
 
 ## Plugins
 
@@ -68,6 +53,7 @@ way and what it touches. The exact versions are in
 | [`dsh-video`](packages/dsh-video/README.md) | a player tab that streams and seeks any video container, with an ffprobe facts panel, chapter jumps and a one-click remux when the browser cannot decode it |
 | [`dsh-diagrams`](packages/dsh-diagrams/README.md) | Mermaid and TikZ as tabs *and* six agent tools, every write validated before it is stored |
 | [`dsh-pdf`](packages/dsh-pdf/README.md) | PDF as a surface the agent can read and **scan**, plus a reader tab with thumbnails and bookmarks |
+| [`dsh-canvas`](packages/dsh-canvas/README.md) | the **Canvas** tab, in the chat panel's own view ring to the right of Trajectory: a design page the agent drives with nine tools, for GitHub and LinkedIn banners and posters. The browser is the rasterizer, so the model renders a design, reads its own PNG back with `read_image` and fixes it; presets fix each destination's pixels and safe areas, and two bundled skills carry the craft and the per-network delivery rules. Ships the two OFL font families it renders with, pinned by SHA-256 |
 | [`dsh-browser`](packages/dsh-browser/README.md) | the **Browser** tab, replacing the shipped iframe one: the page is rendered on the host in a disposable engine behind an https-only egress gate (screenshot, post-script text, measured styles) for the tab and for `browser_render` / `browser_query` / `browser_text` — **built and shipped, but turned OFF**: the master layer disables the row, so a profile loads no tab, no routes, no tools and no client bundle |
 | [`dsh-skills`](packages/dsh-skills/README.md) | the **Skills browser**: a header button left of the zoom control opens every skill this conversation loads, with its markdown and inline editing |
 | [`dsh-cmdbar`](packages/dsh-cmdbar/README.md) | the **command bar**: the agent's own commands in a bottom dock (a read-only transcript of the conversation's log — the terminals were removed in alpha.12; the panel follows whichever conversation is on screen) |

@@ -1,0 +1,62 @@
+{
+  "generatedBy": "packages/dsh-canvas/vendor/build.mjs",
+  "note": "Fetched from Google Fonts’ own CSS endpoint (latin subsets) and pinned by SHA-256; both families are SIL Open Font License 1.1 and their licence texts sit beside them. Licence texts are normalised to LF before hashing, because .gitattributes stores text as LF (`* text=auto eol=lf`) and a CRLF-hashed file would report phantom drift on every clean checkout.",
+  "digest": "59e4c2442a520d1876e04d7fc8e985c85909bd5da3074d0b311f2056b9fbf95d",
+  "families": {
+    "Inter": {
+      "family": "Inter",
+      "designer": "Rasmus Andersson",
+      "homepage": "https://fonts.google.com/specimen/Inter",
+      "licence": "OFL-Inter.txt",
+      "licenceUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt",
+      "licenceSha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57",
+      "files": {
+        "400": {
+          "file": "inter-latin-400.woff2",
+          "sha256": "8909904ab6c872eb994093482a88a28eca2cd95912d7b6fecd72103b0dc07edc",
+          "bytes": 23664,
+          "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hiA.woff2",
+          "subset": "latin"
+        },
+        "600": {
+          "file": "inter-latin-600.woff2",
+          "sha256": "f9a06e79cd3a2a20951c0f0e28f66dd0e6d3fda73911d640a2125c8fcb78f21a",
+          "bytes": 24452,
+          "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+          "subset": "latin"
+        },
+        "700": {
+          "file": "inter-latin-700.woff2",
+          "sha256": "6f56409fd3d64bb85f7d070bce20749db2d66b6d63cec586cc22d1c761be2491",
+          "bytes": 24356,
+          "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYAZ9hiA.woff2",
+          "subset": "latin"
+        }
+      }
+    },
+    "Space Grotesk": {
+      "family": "Space Grotesk",
+      "designer": "Florian Karsten",
+      "homepage": "https://fonts.google.com/specimen/Space+Grotesk",
+      "licence": "OFL-SpaceGrotesk.txt",
+      "licenceUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/spacegrotesk/OFL.txt",
+      "licenceSha256": "c6dec685825f73b18c20926fddc65e8315642e12986f15db0699170940a09efc",
+      "files": {
+        "500": {
+          "file": "space-grotesk-latin-500.woff2",
+          "sha256": "1b1a8131d9edf975d9decee81e2f2bf504812f7a4f498e5500f28a613e22e64c",
+          "bytes": 13312,
+          "url": "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7aUXskPMA.woff2",
+          "subset": "latin"
+        },
+        "700": {
+          "file": "space-grotesk-latin-700.woff2",
+          "sha256": "35f8aec56cfd5cbfdb03cc68733a54a0b05bb3617ffcd5fd332badc0b045ca55",
+          "bytes": 12840,
+          "url": "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj4PVnskPMA.woff2",
+          "subset": "latin"
+        }
+      }
+    }
+  }
+}

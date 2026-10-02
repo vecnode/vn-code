@@ -1,0 +1,86 @@
+{
+  "id": "neon",
+  "name": "Neon",
+  "rank": 40,
+  "intent": "Night-city signage: a near-black surface, one electric accent that glows, display type set tight and loud, and a procedural light source behind the composition rather than a photograph.",
+  "bestFor": [
+    "github-social",
+    "x-post",
+    "linkedin-square",
+    "poster-a3"
+  ],
+  "color": {
+    "surface": "#05060A",
+    "panel": "#0D1020",
+    "ink": "#EAF2FF",
+    "muted": "#9BB0D0",
+    "accent": "#39FF88",
+    "accent-ink": "#04120A",
+    "line": "#1B2240",
+    "warm": "#FF2E88"
+  },
+  "font": {
+    "display": "Space Grotesk",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1.1,
+    "displayWeight": 700,
+    "displayTracking": -1,
+    "lineHeight": 1.05
+  },
+  "space": 8,
+  "radius": {
+    "card": 14,
+    "chip": 10,
+    "pill": 999
+  },
+  "border": {
+    "weight": 1,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "glow",
+    "blur": 64,
+    "color": "accent",
+    "alpha": 0.45
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "image": {
+    "radius": "card",
+    "scrim": "full",
+    "scrimColor": "accent",
+    "scrimStrength": 0.22,
+    "blend": "screen",
+    "fit": "cover"
+  },
+  "art": {
+    "preferred": [
+      "glow",
+      "stars"
+    ],
+    "opacity": 0.5
+  },
+  "rules": {
+    "do": [
+      "Put the glow BEHIND the composition - one light source, low opacity, never on top of the words.",
+      "Use pure accents for small areas only: a rule, a chip, one word of the headline.",
+      "Keep the muted ink blue-shifted so it reads as shadowed light rather than grey.",
+      "Let the art layer be the photograph this design does not have, and keep it in the accent's hue."
+    ],
+    "dont": [
+      "Do not glow the body copy, and never outline type - legibility dies first.",
+      "Do not use two accents at full strength in the same composition.",
+      "Do not put a light glow on a light panel; this style is night."
+    ]
+  },
+  "gates": [
+    "Body contrast is at least 4.5:1 against the panel it sits on.",
+    "The glow is behind every text node, never over one.",
+    "No more than two accent hues on the canvas."
+  ]
+}

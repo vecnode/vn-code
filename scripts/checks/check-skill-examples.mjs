@@ -1,21 +1,27 @@
 // check-skill-examples.mjs - every fenced example a bundled skill ships must RUN.
 //
-// Why this exists: the diagram skills (mermaid-diagrams, tikz-diagrams) are not
-// prose, they are load-bearing - the agent is told to read them before writing a
-// complex diagram, and a copy-pasteable example that does not parse, or a TeX
-// fragment that does not compile, sends it straight into a failure the skill was
-// supposed to prevent. The two checks beside this one drive the plugin's code;
-// this one drives its DOCUMENTATION through exactly the same engines the plugin
-// uses, so a doc and the engine cannot drift apart.
+// Why this exists: the skills are not prose, they are load-bearing - the agent is
+// told to read them before writing a complex diagram or a poster, and a
+// copy-pasteable example that does not parse, or a TeX fragment that does not
+// compile, or a ```canvas document the validator refuses, sends it straight into
+// a failure the skill was supposed to prevent. The checks beside this one drive
+// the plugins' code; this one drives their DOCUMENTATION through exactly the same
+// engines the plugins use, so a doc and its engine cannot drift apart.
 //
 // Every ```mermaid block is parsed by the vendored engine (the same child
 // validator `diagram_write` shells out to) and must come back `ok: true`. Every
 // ```tex / ```latex block is compiled by the host's TeX engine through the same
 // normalize + compile path a TikZ diagram takes, and must come back with no
-// diagnostics. A block that is deliberately broken is marked by putting
-// `no-check` in its info string (```mermaid no-check) or on the line above it;
-// it is then reported as skipped rather than checked, so an example that exists
-// to show a parse error stays honest without failing the run.
+// diagnostics. Every ```canvas block under `packages/dsh-canvas/skills/` is run
+// through the REAL validator with the real preset and font tables - so a skill
+// can never teach a document the plugin would refuse - and every ```json block in
+// those skills must at least be well-formed JSON (they are the fragments the
+// recipes are made of).
+//
+// A block that is deliberately broken is marked by putting `no-check` in its info
+// string (```mermaid no-check) or on the line above it; it is then reported as
+// skipped rather than checked, so an example that exists to show a parse error
+// stays honest without failing the run.
 //
 // TeX is optional: with no engine on PATH the TikZ blocks are skipped with a
 // notice (the plugin degrades the same way).
@@ -31,6 +37,7 @@ const { pathToFileURL, fileURLToPath } = await import('node:url')
 
 const repo = path.resolve(fileURLToPath(new URL('../../', import.meta.url)))
 const skillsRoot = path.join(repo, 'packages/dsh-diagrams/skills')
+const canvasSkillsRoot = path.join(repo, 'packages/dsh-canvas/skills')
 const checker = path.join(repo, 'packages/dsh-diagrams/lib/mermaid-check.mjs')
 
 let failures = 0
@@ -58,6 +65,21 @@ async function skillDocs() {
     }
     await walk(path.join(skillsRoot, skill.name))
   }
+  return found.sort()
+}
+
+/** Every markdown file under one skills root (the canvas skills). */
+async function docsUnder(root) {
+  const found = []
+  if (!existsSync(root)) return found
+  const walk = async (dir) => {
+    for (const entry of await fsp.readdir(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) await walk(full)
+      else if (entry.name.endsWith('.md')) found.push(full)
+    }
+  }
+  await walk(root)
   return found.sort()
 }
 
@@ -176,6 +198,63 @@ if (texBlocks.length > 0 && !engines.available) {
     const diagnostics = result.diagnostics ?? []
     check(where, diagnostics.length === 0 && result.unavailable !== true)
     for (const diagnostic of diagnostics.slice(0, 3)) console.log('     ' + diagnostic.text)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Canvas design documents (packages/dsh-canvas/skills/**)
+// ---------------------------------------------------------------------------
+const canvasDocs = await docsUnder(canvasSkillsRoot)
+const canvasBlocks = []
+const canvasJson = []
+for (const doc of canvasDocs) {
+  for (const block of fences(await fsp.readFile(doc, 'utf8'))) {
+    if (block.lang === 'canvas') canvasBlocks.push({ doc, block })
+    if (block.lang === 'json') canvasJson.push({ doc, block })
+  }
+}
+console.log('')
+console.log('--- canvas: ' + canvasBlocks.length + ' document(s), ' + canvasJson.length + ' fragment(s)')
+const canvasEngine = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/engine.js')).href)
+const canvasPresets = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/presets.js')).href)
+const canvasFonts = (await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/fonts.js')).href)).fontTable()
+/** The synthetic measurer the canvas check uses: half the font size per character. */
+const syntheticMeasure = (text, font) => text.length * (font.size ?? 16) * 0.5
+for (const { doc, block } of canvasBlocks) {
+  const where = path.relative(repo, doc) + ':' + block.line
+  if (block.skip) {
+    skipped += 1
+    console.log('skip ' + where.padEnd(52) + ' (marked no-check)')
+    continue
+  }
+  let parsed = null
+  try {
+    parsed = JSON.parse(block.body.join('\n'))
+  } catch (err) {
+    check(where + ' is JSON', false)
+    console.log('     ' + err.message)
+    continue
+  }
+  const verdict = canvasEngine.normalizeDocument(parsed, { presets: canvasPresets.PRESETS, fonts: canvasFonts })
+  check(where + ' validates', verdict.problems.length === 0)
+  for (const problem of verdict.problems.slice(0, 5)) console.log('     ' + (problem.path ? problem.path + ': ' : '') + problem.message)
+  if (!verdict.document) continue
+  // A document that validates can still be a BROKEN EXAMPLE: text that overflows,
+  // is truncated, or runs off the canvas teaches exactly the wrong habit.
+  const laid = canvasEngine.layout(verdict.document, { measure: syntheticMeasure, assets: {}, fonts: canvasFonts })
+  const bad = laid.warnings.filter((entry) => ['TEXT_OVERFLOW', 'TEXT_TRUNCATED', 'TEXT_UNWRAPPED'].includes(entry.code))
+  check(where + ' lays out cleanly', bad.length === 0)
+  for (const warning of bad.slice(0, 3)) console.log('     ' + warning.message)
+}
+for (const { doc, block } of canvasJson) {
+  const where = path.relative(repo, doc) + ':' + block.line
+  try {
+    JSON.parse(block.body.join('\n'))
+    checked += 1
+    console.log('ok   ' + where.padEnd(52) + ' json fragment parses')
+  } catch (err) {
+    failures += 1
+    console.log('FAIL ' + where.padEnd(52) + ' not JSON: ' + err.message)
   }
 }
 

@@ -1,0 +1,87 @@
+{
+  "id": "minimal",
+  "name": "Minimal",
+  "rank": 30,
+  "intent": "One idea, a great deal of air, and hairlines instead of boxes: the surface is almost empty, the type is one step smaller than you expect, and nothing decorative is allowed to compete with the words.",
+  "bestFor": [
+    "og",
+    "linkedin-post",
+    "github-readme",
+    "linkedin-carousel-page"
+  ],
+  "color": {
+    "surface": "#FFFFFF",
+    "panel": "#FAFAFA",
+    "ink": "#111318",
+    "muted": "#5B6270",
+    "accent": "#111318",
+    "accent-ink": "#FFFFFF",
+    "line": "#E6E8EC",
+    "warm": "#F1F3F6"
+  },
+  "font": {
+    "display": "Inter",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 0.95,
+    "displayWeight": 600,
+    "displayTracking": -1,
+    "lineHeight": 1.2
+  },
+  "space": 12,
+  "radius": {
+    "card": 8,
+    "chip": 6,
+    "pill": 999
+  },
+  "border": {
+    "weight": 1,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "soft",
+    "y": 10,
+    "blur": 30,
+    "color": "ink",
+    "alpha": 0.06
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "image": {
+    "radius": "chip",
+    "scrim": "none",
+    "scrimColor": "surface",
+    "scrimStrength": 0,
+    "blend": "normal",
+    "fit": "cover"
+  },
+  "art": {
+    "preferred": [
+      "grain",
+      "grid"
+    ],
+    "opacity": 0.1
+  },
+  "rules": {
+    "do": [
+      "Leave at least a third of the canvas empty, and put the emptiness where the eye lands last.",
+      "Separate with a hairline rather than a box: one 1px line does the work of a panel.",
+      "Keep the type to two sizes plus one caption, and trust the size contrast to carry the hierarchy.",
+      "Use the accent as ink - this style has one colour and it is black."
+    ],
+    "dont": [
+      "Do not fill a panel with colour to make something important; remove what is around it instead.",
+      "Do not use more than one accent, and do not use it for decoration.",
+      "Do not add a shadow that reads as a shadow - at most a hint of one."
+    ]
+  },
+  "gates": [
+    "At least 30% of the canvas is empty surface.",
+    "Ink on surface is at least 12:1.",
+    "No element is decorated without doing a job."
+  ]
+}

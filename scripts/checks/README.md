@@ -306,7 +306,79 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
 - `check-skill-examples.mjs` extracts every fenced example from `skills/**/*.md`
   and parses or compiles it with the plugin's own engines, so a copy-pasteable
   source that no longer works fails the run instead of misleading the next
-  agent.
+  agent. Since dsh-canvas it also walks `packages/dsh-canvas/skills/**`: every
+  ` ```canvas ` block is run through the REAL validator with the real preset and
+  font tables and then laid out with the synthetic measurer (so a skill can never
+  teach a document the plugin would refuse, or one whose headline overflows the
+  canvas it names), and every ` ```json ` block in those skills must be
+  well-formed, because the recipes are made of them.
+- `check-canvas-node.mjs` drives `dsh-canvas`'s whole host half with no browser and
+  no network, and is the check that makes a browser-only surface verifiable at
+  all. It also holds the **style library** to its promises over the whole cross
+  product - every style pack x every archetype: the styled document still
+  validates, NOTHING moved (every node's box is compared before and after),
+  applying the same style twice is a no-op, switching to another style and back
+  restores the type scale exactly, and the styled design stays legible against its
+  own preset - plus each pack's own completeness (roles, shipped families, real art
+  generators, rules, gates) and `vendor/styles-doc.mjs --check`, which fails when
+  the generated catalogue the skill ships is not what the packs would produce. In
+  order: the **engine** (a full document through `normalizeDocument`, then
+  22 refusal cases by code; the pure layout with an INJECTED measurer, so
+  wrapping, hugging, filling, absolute children, `maxLines` with an ellipsis,
+  image crops and a row frame's hug axis are all arithmetic on this host - the
+  row-frame case is a regression guard for a real bug an instrumented read
+  found); the **two painters** (the canvas painter asserted through a RECORDER -
+  every call it makes, including the save/restore balance, the drawImage crop and
+  the clip - and the SVG serializer asserted to emit every op kind from a
+  hand-built op list, so "both painters consume the IR" is a fact and not a
+  coincidence); the **lints** (safe area, margin, small type, contrast sampled at
+  the text's own position); **patches** (set/remove/insert, both insert spellings,
+  and the refusals, including a `__proto__` path); the **preset table** (ten
+  destinations, each complete and inside its own canvas); the **vendored fonts**
+  (five files hashed against `VERSION.json`, the licences present, the face-name
+  lookup refusing anything that is not a recorded file); the **store and asset
+  store** (revisions, the verdict transitions pending/drawn/stale, the caps, the
+  content-addressed dedupe, PNG/JPEG/GIF/WebP header reads); the **archetypes and
+  skills** (every starter document validates, lays out clean and has no
+  unexpected missing asset; both skills carry front matter matching their folder);
+  the **tools** (all nine driven through `execute()` exactly as the agent loop
+  calls them, including the refusals and the cap sentence); the **routes** (real
+  `Request`s against the captured handlers: state, document create/patch from the
+  panel, assets up and down, the workspace-asset policy, the engine route's ETag
+  and 304, every font route's bytes hashed, health); the **render round trip**
+  (the tool enqueues, `session=*` long-poll hands the request out, a synthetic
+  browser posts a REAL PNG back, and the tool resolves with a path whose own IHDR
+  is then read); the **exports** (Desktop and workspace, create-exclusive naming,
+  a format the preset refuses, the workspace containment refusal); and finally
+  that the whole sandbox is deleted. `DSH_HOME`, `USERPROFILE`, `HOME` and
+  `XDG_CONFIG_HOME` all point into one temp tree, so no run can touch the real
+  profile.
+- `check-canvas-browser.mjs` is the other half of the canvas checks, and the only
+  one that needs a browser: `check-canvas-node.mjs` drives the engine with a
+  SYNTHETIC measurer (which is what makes the layout arithmetic verifiable
+  anywhere), so it deliberately proves nothing about real font metrics, about
+  `createImageBitmap` or about what a canvas encoder emits. This file serves the
+  plugin's own `lib/engine.js` and its vendored WOFF2 subsets over loopback, loads
+  them in a throwaway headless Chromium (a temp profile under a temp directory,
+  `--headless=new`, no network beyond that server), and runs one archetype
+  document end to end: the engine is fetched and imported **from a blob URL**
+  (exactly how the client loads it), the faces are awaited before anything is
+  measured, the document is validated and laid out with REAL metrics, the op list
+  is painted onto a real canvas, and the PNG is encoded. What it asserts is what
+  only a browser can answer: the two families load, the bundled face measures
+  DIFFERENTLY from a bare `sans-serif` stack (three widths are printed - bundled,
+  fallback, synthetic - so a face that silently did not load cannot pass), the
+  painted canvas has ink and more than one colour, **the PNG's own IHDR is exactly
+  the preset size** (1280x640) and the feed thumbnail is exactly 25% (320x160), the
+  SVG export parses as XML, and a clean archetype produces no text warnings. It
+  also POSTs the rendered design back, so the check leaves behind the REAL picture
+  it verified (`--keep` writes it to `.scratch/canvas-browser.png`) - and that
+  picture is what found two bugs the Node half could not: whitespace at a `runs`
+  boundary was dropped ("Shipplugins"), and `wrapText` joined each word with the
+  NEXT word's trailing space, which ate the space before the last word of every
+  paragraph ("noforks"). Both now have Node-side regression assertions too. With no
+  Chromium-family browser installed it SKIPS LOUDLY and exits 0; `DSH_CANVAS_BROWSER`
+  points it at a binary.
 - `check-media-examples.mjs` is the same idea for the two families whose examples
   are TOOL CALLS rather than source: it walks both media skills **and their
   reference files** plus `pdf-analysis`, and holds them to two tiers. **Shape**

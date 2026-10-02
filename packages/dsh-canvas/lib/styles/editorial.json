@@ -1,0 +1,83 @@
+{
+  "id": "editorial",
+  "name": "Editorial",
+  "rank": 10,
+  "intent": "The authority of a printed magazine: one large, tightly tracked display line, a warm accent used once, generous margins and a great deal of quiet space around the words.",
+  "bestFor": [
+    "github-social",
+    "og",
+    "linkedin-post",
+    "poster-a3"
+  ],
+  "color": {
+    "surface": "#0B0E14",
+    "panel": "#141A24",
+    "ink": "#F8FAFC",
+    "muted": "#9AA6B8",
+    "accent": "#E3B25A",
+    "accent-ink": "#1A1206",
+    "line": "#242C38",
+    "warm": "#F2E3C6"
+  },
+  "font": {
+    "display": "Space Grotesk",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1,
+    "displayWeight": 700,
+    "displayTracking": -1.5,
+    "lineHeight": 1.08
+  },
+  "space": 8,
+  "radius": {
+    "card": 4,
+    "chip": 4,
+    "pill": 999
+  },
+  "border": {
+    "weight": 0,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "none"
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "image": {
+    "radius": "card",
+    "scrim": "bottom",
+    "scrimColor": "surface",
+    "scrimStrength": 0.42,
+    "blend": "normal",
+    "fit": "cover"
+  },
+  "art": {
+    "preferred": [
+      "grain",
+      "grid"
+    ],
+    "opacity": 0.28
+  },
+  "rules": {
+    "do": [
+      "Let the headline own the canvas: one display line, at most two, and nothing competing beside it.",
+      "Use the warm accent exactly once - a rule, a single word, or an eyebrow - never as a background for a large block.",
+      "Keep margins at least twice the preset's minimum; white space is the style's main material.",
+      "Set body copy in a muted ink one step off the background, never pure white."
+    ],
+    "dont": [
+      "Do not stack more than three text sizes.",
+      "Do not use the accent for body copy or for a large fill.",
+      "Do not add rounded cards or heavy shadows; the shape language is square and flat."
+    ]
+  },
+  "gates": [
+    "Headline is at least 3x the body size.",
+    "Body contrast is at least 4.5:1 against the surface.",
+    "The accent covers less than 10% of the canvas."
+  ]
+}

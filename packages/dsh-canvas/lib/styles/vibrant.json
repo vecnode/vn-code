@@ -1,0 +1,87 @@
+{
+  "id": "vibrant",
+  "name": "Vibrant",
+  "rank": 110,
+  "intent": "Loud, playful and generous with colour: a deep plum ground, two saturated accents that can share the canvas, pill shapes everywhere, and a full-bleed ring pattern behind the words.",
+  "bestFor": [
+    "linkedin-square",
+    "github-social",
+    "x-post",
+    "linkedin-carousel-page"
+  ],
+  "color": {
+    "surface": "#150B2E",
+    "panel": "#241247",
+    "ink": "#FFFFFF",
+    "muted": "#C6B6E8",
+    "accent": "#FF4D6D",
+    "accent-ink": "#2A0011",
+    "line": "#3A1F6B",
+    "warm": "#FFC93C"
+  },
+  "font": {
+    "display": "Space Grotesk",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1.12,
+    "displayWeight": 700,
+    "displayTracking": -1,
+    "lineHeight": 1.1
+  },
+  "space": 8,
+  "radius": {
+    "card": 24,
+    "chip": 999,
+    "pill": 999
+  },
+  "border": {
+    "weight": 0,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "soft",
+    "y": 20,
+    "blur": 48,
+    "color": "accent",
+    "alpha": 0.35
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "image": {
+    "radius": "card",
+    "scrim": "bottom",
+    "scrimColor": "accent",
+    "scrimStrength": 0.3,
+    "blend": "overlay",
+    "fit": "cover"
+  },
+  "art": {
+    "preferred": [
+      "rings",
+      "mesh"
+    ],
+    "opacity": 0.5
+  },
+  "rules": {
+    "do": [
+      "Let one accent lead and the second one punctuate - a chip, a rule, a single glyph.",
+      "Make every interactive-looking shape a pill; hard corners kill the energy.",
+      "Set the headline large and slightly tight, and break it where the rhythm wants.",
+      "Give the art layer real presence, then keep the accents off the type."
+    ],
+    "dont": [
+      "Do not use three accents; two is the ceiling.",
+      "Do not set body copy in an accent colour - it belongs in the muted ink.",
+      "Do not mix a pill and a square corner in the same composition."
+    ]
+  },
+  "gates": [
+    "Body contrast is at least 4.5:1 on the plum ground.",
+    "At most two accent hues are present.",
+    "Every chip and card corner is a pill or a large radius."
+  ]
+}

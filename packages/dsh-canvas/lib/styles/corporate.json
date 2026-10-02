@@ -1,0 +1,87 @@
+{
+  "id": "corporate",
+  "name": "Corporate",
+  "rank": 100,
+  "intent": "The safe, competent look a serious announcement wants: white ground, a confident blue, a cool grey for the second voice, blueprint texture at the edge, and nothing that could date.",
+  "bestFor": [
+    "linkedin-company-banner",
+    "linkedin-post",
+    "og",
+    "github-readme"
+  ],
+  "color": {
+    "surface": "#FFFFFF",
+    "panel": "#F4F7FB",
+    "ink": "#0F1B2D",
+    "muted": "#4A5A73",
+    "accent": "#1F5FD0",
+    "accent-ink": "#FFFFFF",
+    "line": "#D8E0EA",
+    "warm": "#F2A93B"
+  },
+  "font": {
+    "display": "Inter",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1,
+    "displayWeight": 600,
+    "displayTracking": -0.5,
+    "lineHeight": 1.22
+  },
+  "space": 8,
+  "radius": {
+    "card": 10,
+    "chip": 8,
+    "pill": 999
+  },
+  "border": {
+    "weight": 1,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "soft",
+    "y": 12,
+    "blur": 32,
+    "color": "ink",
+    "alpha": 0.1
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "image": {
+    "radius": "chip",
+    "scrim": "none",
+    "scrimColor": "surface",
+    "scrimStrength": 0,
+    "blend": "normal",
+    "fit": "cover"
+  },
+  "art": {
+    "preferred": [
+      "blueprint",
+      "grid"
+    ],
+    "opacity": 0.22
+  },
+  "rules": {
+    "do": [
+      "Say one thing in the headline and let a supporting line name the audience or the date.",
+      "Use the blue for structure - a rule, a chip, the CTA - and the warm tone at most once.",
+      "Keep the second voice in the cool grey; it is the 'less important' colour by design.",
+      "Align everything to one left edge and one baseline grid."
+    ],
+    "dont": [
+      "Do not use a saturated second hue beside the blue.",
+      "Do not set the headline lower than 3x the body size.",
+      "Do not decorate an empty area - the blueprint texture is the only ornament allowed."
+    ]
+  },
+  "gates": [
+    "Body contrast is at least 4.5:1 on white.",
+    "The headline is at least 3x the body size.",
+    "At most two colours plus the neutrals."
+  ]
+}

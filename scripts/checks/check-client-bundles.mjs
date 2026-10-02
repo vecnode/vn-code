@@ -5152,6 +5152,186 @@ if (coreThemeBundle === null) {
   }
 }
 
+// ---------------------------------------------------------------- dsh-canvas
+// The canvas bundle registers the conversation VIEW RING's third entry (to the
+// right of Trajectory), one conversation card per canvas tool, and the
+// page-level renderer that answers the host's render requests. These checks load
+// it with the real React runtime, activate it against a stub ctx, and render the
+// seat the shell would render.
+const canvas = loadBundle('packages/dsh-canvas/lib/client.js', {})
+check('canvas bundle id', canvas.id, 'dsh-canvas')
+check('canvas inject', JSON.stringify(canvas.exports.inject), '["slots"]')
+const canvasSeats = {}
+const canvasEffects = []
+const canvasDisposers = []
+canvas.exports.apply({
+  slots: {
+    inject: (name, fn) => fn(),
+    register(spec, component) {
+      canvasSeats[spec.name + (spec.key ? '#' + spec.key : '')] = { spec, component }
+      return () => {}
+    },
+  },
+  effect: (fn) => {
+    // The shell runs an effect on activation, so the stub does too - a stub that
+    // only recorded the function would hide every registration behind it. The
+    // disposer is KEPT and called at the end of this section: the canvas
+    // renderer's effect starts a long-poll loop, and a loop left running would
+    // keep this process alive (and a fetch to a relative URL retrying forever).
+    canvasEffects.push(fn)
+    const dispose = fn()
+    const stop = typeof dispose === 'function' ? dispose : () => {}
+    canvasDisposers.push(stop)
+    return stop
+  },
+  logger: { debug() {}, warn() {} },
+})
+const canvasView = canvasSeats['conversation.view']
+check('canvas registers one conversation view', canvasView !== undefined, true)
+check('the view is keyed by its id, not a slot key', canvasView.spec.id, 'canvas')
+// The ring is ordered: Chat 0, Trajectory 10 - so 20 is literally to the right.
+check('the view sits to the right of Trajectory', canvasView.spec.order, 20)
+check('the view labels itself', canvasView.spec.label(), 'Canvas')
+check('the view takes no own child seats', canvasView.spec.children === undefined, true)
+// A conversation view gets no `sessionId` prop: its own inject face is where the
+// session comes from (the shape the shipped Trajectory view uses too).
+check('the view learns its session through inject', canvasView.spec.inject('session-abc').canvasSession, 'session-abc')
+check(
+  'one card per canvas tool',
+  Object.keys(canvasSeats)
+    .filter((key) => key.startsWith('tool.call.toolview#'))
+    .map((key) => key.split('#')[1])
+    .sort()
+    .join(','),
+  canvas.exports.__internals.TOOL_NAMES.slice().sort().join(','),
+)
+const canvasCssTag = canvas.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-canvas/canvas.css').pop()
+const canvasCss = canvasCssTag ? canvasCssTag.textContent : ''
+check('canvas stylesheet injected', canvasCss.includes('.dsc-root{') && canvasCss.includes('.dsc-art{'), true)
+// The full-height view asks the shell to float the composer over it, which is the
+// same contract the shipped Trajectory view uses.
+check(
+  'the canvas root asks for the composer overlay',
+  renderToStaticMarkup(h(canvasView.component, { canvasSession: null })).includes('data-conversation-composer-overlay'),
+  true,
+)
+const emptyMarkup = renderToStaticMarkup(h(canvasView.component, { canvasSession: null }))
+check('a session-less view says what to do', emptyMarkup.includes('Open a conversation'), true)
+check('the empty view is still a canvas view', emptyMarkup.includes('data-dsh-canvas-view'), true)
+// A running tool call and a settled one both render a card, from the block alone.
+const runningCard = renderToStaticMarkup(
+  h(canvasSeats['tool.call.toolview#canvas_render'].component, {
+    toolName: 'canvas_render',
+    sessionId: 'session-abc',
+    block: { argsRaw: '{"id":"launch-banner"}' },
+  }),
+)
+check('a running render call draws a card', runningCard.includes('Rendering in the browser'), true)
+const settledCard = renderToStaticMarkup(
+  h(canvasSeats['tool.call.toolview#canvas_export'].component, {
+    toolName: 'canvas_export',
+    sessionId: 'session-abc',
+    block: {
+      kind: 'tool-result',
+      call: { name: 'canvas_export', argsRaw: '{"id":"launch-banner"}' },
+      content: [{ type: 'text', text: 'Wrote /tmp/launch-banner.png (412 KB).' }],
+      meta: { id: 'launch-banner', title: 'Launch banner', scope: 'conversation', state: 'drawn', revision: 3, tab: 'dsh-resource://canvas/session/session-abc/launch-banner' },
+    },
+  }),
+)
+check('a settled export call draws its card', settledCard.includes('launch-banner'), true)
+check('the settled card shows the verdict pill', settledCard.includes('data-state="drawn"'), true)
+check('the settled card shows the host text', settledCard.includes('Wrote /tmp/launch-banner.png'), true)
+// The page-level renderer is started by an effect (so a page that never opens the
+// tab still answers a render request).
+check('the renderer is started by the plugin, not the tab', canvasEffects.length >= 11, true)
+const canvasSource = readFileSync(path.join(repo, 'packages/dsh-canvas/lib/client.js'), 'utf8')
+check('the bundle has no build-time eval', /new Function\(|eval\(/.test(canvasSource.replace(/\/\/.*$/gm, '')) === false, true)
+check('the bundle polls the queue for ANY session', canvasSource.includes("QUEUE_ROUTE + '?session=*&wait='"), true)
+check('the bundle fetches the engine from the host route', canvasSource.includes('ENGINE_ROUTE'), true)
+check('the bundle imports the engine from a blob URL', canvasSource.includes('URL.createObjectURL(new Blob([source]'), true)
+check(
+  'the bundle never fetches a remote design resource',
+  !/https?:\/\/[^'"\s]+/.test(canvasSource.replace(/https?:\/\/www\.w3\.org[^'"\s]*/g, '')),
+  true,
+)
+// The route names the browser hard-codes must be the ones the host registers.
+// The host declares them as `API_ROOT + '<suffix>'`, so both sides are compared
+// as full paths.
+const canvasHostSource = readFileSync(path.join(repo, 'packages/dsh-canvas/lib/index.js'), 'utf8')
+const hostRoutes = [...canvasHostSource.matchAll(/const ([A-Z_]+_ROUTE) = API_ROOT \+ '([^']+)'/g)].map((match) => '/api/dsh-canvas' + match[2])
+const clientRoutes = Object.values(canvas.exports.__internals.ROUTES)
+const unknownRoutes = clientRoutes.filter((route) => !hostRoutes.includes(route))
+check('every client route exists on the host', unknownRoutes.join(', '), '')
+// `/health` is the one host route the browser does not need: it is the status
+// snapshot a person or a check reads, not something a tab fetches.
+const missedRoutes = hostRoutes.filter((route) => route !== '/api/dsh-canvas/health' && !clientRoutes.includes(route))
+check('the client knows every host route it reads', missedRoutes.join(', '), '')
+const canvasInternals = canvas.exports.__internals
+check('a stored-asset name is recognised', canvasInternals.ASSET_NAME.test('0123456789abcdef.png'), true)
+check('a content hash is not mistaken for a filename', canvasInternals.ASSET_NAME.test('logo.png'), false)
+check('a workspace path is recognised', canvasInternals.isWorkspacePath('docs/header.png'), true)
+check('an asset name is not called a workspace path', canvasInternals.isWorkspacePath('0123456789abcdef.png'), false)
+check('a running block is not settled', canvasInternals.isSettled({ argsRaw: '{}' }), false)
+check('a tool-result block is settled', canvasInternals.isSettled({ kind: 'tool-result' }), true)
+check('the card reads the host meta', canvasInternals.viewOfBlock({ meta: { id: 'x' } }).id, 'x')
+check('the card parses settled arguments', canvasInternals.argsOf({ kind: 'tool-result', call: { argsRaw: '{"id":"x"}' } }).id, 'x')
+check('the card flattens tool content', canvasInternals.flattenContent([{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }]), 'a\nb')
+check('the metrics summary is a table', canvasInternals.metricsText({ ops: 12, boxes: 6, textNodes: 3, lines: 4, smallestType: 15, families: ['Inter'], ms: 2 }).includes('ops      12'), true)
+check('a long path is shortened for the side panel', canvasInternals.shortPath('/a/b/c/d/e.png'), '…/c/d/e.png')
+check('base64 survives a round trip', canvasInternals.toBase64(new TextEncoder().encode('canvas').buffer), 'Y2FudmFz')
+check('the feed scale is a quarter', canvasInternals.FEED_SCALE, 0.25)
+check('the zoom ladder starts at fit', canvasInternals.ZOOM_STEPS[0], 'fit')
+// THE LAYER MODEL: a design's nodes as a flat, nested, selectable list, and the
+// path arithmetic the drag and the layer rows both address.
+const layerDoc = { layers: [{ kind: 'art', id: 'backdrop' }, { kind: 'frame', id: 'stack', children: [{ kind: 'text', text: 'Ship plugins' }, { kind: 'shape', id: 'rule', x: 4, y: 8, w: 10, h: 2 }] }] }
+const canvasLayerTree = canvasInternals.layerTree(layerDoc)
+check('the layer tree walks every node in paint order', canvasLayerTree.map((row) => row.path).join(','), 'layers.0,layers.1,layers.1.children.0,layers.1.children.1')
+check('the layer tree carries depth for the indent', canvasLayerTree.map((row) => row.depth).join(','), '0,0,1,1')
+check('a node resolves by its path', canvasInternals.nodeAtPath(layerDoc, 'layers.1.children.1').id, 'rule')
+check('a missing path answers null', canvasInternals.nodeAtPath(layerDoc, 'layers.9.children.0'), null)
+check('a node with x/y is absolute', canvasInternals.isAbsolutePath(layerDoc, 'layers.1.children.1'), true)
+check('a flow child is not', canvasInternals.isAbsolutePath(layerDoc, 'layers.1.children.0'), false)
+check('a layer is named by its id', canvasInternals.layerLabel({ kind: 'shape', id: 'rule' }, 'layers.0'), 'rule')
+check('a text layer is named by its words', canvasInternals.layerLabel({ kind: 'text', text: 'Ship plugins' }, 'layers.0'), '"Ship plugins"')
+check('a run layer is named by its runs', canvasInternals.layerLabel({ kind: 'text', runs: [{ text: 'a' }, { text: 'b' }] }, 'layers.0'), '"ab"')
+check('a bare layer falls back to its own style', canvasInternals.layerLabel({ kind: 'art', style: 'mesh' }, 'layers.0'), 'mesh')
+// The composer seam and the layer dress live in the stylesheet, not inline: a tab
+// the composer floats over has to draw the hairline at the composer's own edge.
+check('the composer seam is drawn at the composer height', canvasCss.includes('bottom:var(--dsh-composer-height,152px)') && canvasCss.includes('.dsc-root:after{'), true)
+check('the artboard reserves the composer clearance', canvasCss.includes('padding-bottom:var(--dsc-composer-clearance'), true)
+check('the layer list is styled', canvasCss.includes('.dsc-layers{') && canvasCss.includes('.dsc-layer[data-selected=true]'), true)
+check('the layer rows indent by depth', canvasSource.includes('paddingLeft: 6 + row.depth * 10'), true)
+check('a selection draws a box and handles', canvasSource.includes("'data-canvas-selection'") && canvasSource.includes('handle-'), true)
+// RESIZE, the other half of direct manipulation: eight handles, a handle that wins
+// over the node under it, and a stretch written as width/height pointer ops.
+check('the selection draws eight named handles', ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].every((key) => canvasSource.includes("['" + key + "'")), true)
+check('a handle is grabbed within a screen-pixel tolerance', canvasSource.includes('const HANDLE_HIT = 9') && canvasSource.includes('HANDLE_HIT / Math.max(1, rect.width)'), true)
+check('a handle wins over the node under it', canvasSource.includes('handle ? selectedEntry :'), true)
+check('a stretch writes width and height ops', canvasSource.includes("path + '.w'") && canvasSource.includes("path + '.h'"), true)
+check('a text layer stretches in width only', canvasSource.includes("node.kind === 'text' ? 40 : 8") && canvasSource.includes("node.kind !== 'text' && (edges.top || edges.bottom)"), true)
+check('a drag reports which gesture it is', canvasSource.includes("handle ? 'resize' : 'move'"), true)
+check('the cursor names the edge pair', canvasSource.includes("'ew-resize'") && canvasSource.includes("'ns-resize'"), true)
+check('the resize dress is styled', canvasCss.includes('.dsc-art[data-dragging=resize]'), true)
+check('a drag sends x and y as pointer ops', canvasSource.includes("path + '.x'") && canvasSource.includes("path + '.y'"), true)
+check('a reorder is a remove plus an insert', canvasSource.includes('Reordered the layers') && canvasSource.includes("{ op: 'remove', at: path }"), true)
+check('dragging is a pointer gesture', canvasSource.includes('pointermove') && canvasSource.includes("element.setAttribute('data-dragging'"), true)
+// THE STYLE LIBRARY in the tab: a style is picked when starting a design and changed
+// on a finished one, and both go through the same document route the model uses.
+check('the new-design gallery offers the style library', canvasSource.includes("'data-canvas-styles'") && canvasSource.includes('dsc-styleChip'), true)
+check('a style chip carries its own swatch', canvasSource.includes('entry.swatch.colours'), true)
+check('starting a design sends the chosen style', canvasSource.includes('preset: presetId, archetype: archetypeId, style: styleId'), true)
+check('a finished design can be re-styled from the toolbar', canvasSource.includes("'data-canvas-style-picker'") && canvasSource.includes('onChange: (event) => restyle(event.target.value)'), true)
+check('restyling posts the style, not a document', canvasSource.includes('scope: selected.scope, style: styleId'), true)
+check('the tab says nothing moved', canvasSource.includes('nothing moved'), true)
+check('the side panel carries the current style card', canvasSource.includes("'data-canvas-style-card'") && canvasSource.includes('currentStyle.gates'), true)
+check('the style dress is styled', canvasCss.includes('.dsc-styleChip[data-selected=true]') && canvasCss.includes('.dsc-styleCard{'), true)
+check('the canvas tool list carries canvas_style', canvasInternals.TOOL_NAMES.includes('canvas_style'), true)
+// Unload the row: the renderer's own effect returned a stopper, which is what the
+// shell calls when the plugin goes away (and what lets this process exit).
+for (const dispose of canvasDisposers) dispose()
+check('the renderer stopped with its row', canvasEffects.length >= 11, true)
+
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')
 process.exitCode = failures === 0 ? 0 : 1

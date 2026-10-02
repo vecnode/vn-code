@@ -54,3 +54,11 @@ packages/dsh-pdf/lib/vendor/cmaps/LICENSE text eol=lf
 packages/dsh-pdf/lib/vendor/standard_fonts/LICENSE_* text eol=lf
 packages/dsh-pdf/lib/vendor/wasm/LICENSE_* text eol=lf
 packages/dsh-pdf/lib/vendor/wasm/*.js text eol=lf
+
+# dsh-canvas's vendored font tree is the same contract: VERSION.json records a
+# sha256 per file and per licence text, and vendor/build.mjs --check re-reads them
+# offline - so its TEXT files (the two OFL licence texts and the record itself)
+# are pinned to LF here as well as by the catch-all above. The .woff2 subsets are
+# binary and are never touched.
+packages/dsh-canvas/lib/vendor/fonts/*.txt text eol=lf
+packages/dsh-canvas/lib/vendor/fonts/VERSION.json text eol=lf
