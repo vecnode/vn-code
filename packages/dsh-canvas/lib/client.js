@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
     /** The version marker shown in the toolbar, so a fresh bundle is easy to spot. */
-    const PLUGIN_VERSION = '0.1.0-alpha.5'
+    const PLUGIN_VERSION = '0.1.0-alpha.9'
     /** The conversation view this package adds to the chat panel's ring. */
     const VIEW_ID = 'canvas'
     /** Keep in sync with lib/index.js. */
@@ -78,14 +78,50 @@ window.__ModuleLoader__.load({
    keeps the artboard's controls off the input box. */
 .dsc-root{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:13px/1.45 var(--dsw-font-family,inherit);--dsc-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)}
 .dsc-root:after{content:"";position:absolute;left:0;right:0;bottom:var(--dsh-composer-height,152px);height:1px;background:var(--dsw-alias-border-l3);pointer-events:none;z-index:2}
-.dsc-bar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l3);min-height:38px}
-.dsc-barGroup{display:flex;align-items:center;gap:4px}
+.dsc-bar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l3);min-height:38px;flex-wrap:nowrap;overflow:hidden}
+.dsc-barGroup{display:flex;align-items:center;gap:4px;flex:none}
+/* THE EXPORT MENU. A native <details> so the open/closed state, the click anywhere
+   else and Escape are the browser's, not a listener this file has to own - and so a
+   row that starts an async export can keep the menu open until the write lands. */
+.dsc-menu{position:relative;flex:none}
+.dsc-menu>summary{list-style:none;cursor:pointer;user-select:none;white-space:nowrap}
+.dsc-menu>summary::-webkit-details-marker{display:none}
+.dsc-menu[open]>summary{background:var(--dsw-alias-interactive-bg-active)}
+/* The panel has to clear every column of the app's own furniture - the composer seat
+   is 7 (9 with a menu open), the frame's overlay layer 20, the sidebar's fixed
+   controls 30 - because the canvas view is a box INSIDE that layout. 1000 is the
+   app's own modal-root layer: a menu belongs above the layout it drops out of, and
+   still below the toasts and portals that are meant to interrupt anything. */
+.dsc-menuPanel{position:absolute;right:0;top:calc(100% + 6px);z-index:1000;min-width:236px;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:2px;padding:5px;border:.5px solid var(--dsw-alias-border-l3);border-radius:10px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 32px rgba(0,0,0,.28)}
+.dsc-menuItem{display:flex;flex-direction:column;gap:1px;align-items:flex-start;width:100%;text-align:left;padding:6px 8px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer}
+.dsc-menuItem:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.dsc-menuItem:disabled{opacity:.5;cursor:default}
+.dsc-menuItem[data-active=true]{background:var(--dsw-alias-interactive-bg-active)}
+.dsc-menuLabel{font-size:12px}
+.dsc-menuHint{font-size:10.5px;color:var(--dsw-alias-label-tertiary)}
+/* THE TRANSFORM CONTROLS. A nudge pad is a cross of four arrows because that is the
+   gesture a person already knows, and every control here writes through the same
+   document route the drag does - so a button press and a drag cannot disagree. */
+.dsc-nudgeRow{display:flex;align-items:center;gap:4px}
+.dsc-nudgeRow button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:26px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer;padding:0}
+.dsc-nudgeRow button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsc-nudgeRow button:disabled{opacity:.4;cursor:default}
+.dsc-row2{display:flex;align-items:center;gap:6px;min-width:0}
+.dsc-row2>*{min-width:0}
+.dsc-fieldLabel{flex:none;width:52px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dsc-num{width:66px;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:11.5px;padding:0 6px}
+.dsc-slider{flex:1;min-width:0;accent-color:var(--dsw-alias-brand-primary,#4D6BFE)}
+.dsc-swatches{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.dsc-swatch{width:20px;height:20px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l3);cursor:pointer;padding:0}
+.dsc-swatch[data-active=true]{outline:1.5px solid var(--dsw-alias-brand-primary,#4D6BFE);outline-offset:1px}
+.dsc-colorInput{width:26px;height:24px;padding:0;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:transparent;cursor:pointer}
 .dsc-spacer{flex:1}
 .dsc-btn{box-sizing:border-box;height:26px;padding:0 9px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
 .dsc-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsc-btn:disabled{opacity:.5;cursor:default}
 .dsc-btn[data-active=true]{background:var(--dsw-alias-interactive-bg-active);color:var(--dsw-alias-label-primary)}
 .dsc-btn[data-kind=primary]{background:var(--dsw-alias-brand-primary,#4D6BFE);color:#fff;border-color:transparent}
+.dsc-btn[data-kind=primary][aria-disabled=true]{opacity:.5;cursor:default}
 .dsc-select{height:26px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:0 6px}
 .dsc-chip{display:inline-flex;align-items:center;gap:5px;height:19px;padding:0 7px;border-radius:6px;font-size:11px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary)}
 .dsc-pill{display:inline-flex;align-items:center;height:17px;padding:0 6px;border-radius:5px;font-size:10px;font-weight:650;letter-spacing:.02em}
@@ -93,28 +129,67 @@ window.__ModuleLoader__.load({
 .dsc-pill[data-state=failed]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 18%,transparent);color:var(--dsw-alias-state-error-primary)}
 .dsc-pill[data-state=stale]{background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-tertiary)}
 .dsc-pill[data-state=pending]{background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-tertiary)}
-.dsc-body{flex:1;display:flex;min-height:0}
+.dsc-body{flex:1;display:flex;min-height:0;overflow:hidden}
 .dsc-rail{flex:none;width:216px;border-right:.5px solid var(--dsw-alias-border-l3);overflow:auto;padding:8px}
 .dsc-railHead{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
 .dsc-row{display:flex;flex-direction:column;gap:3px;padding:7px 8px;border-radius:9px;cursor:pointer;border:.5px solid transparent}
 .dsc-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dsc-row[data-selected=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3)}
 .dsc-rowTitle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dsw-alias-label-primary);min-width:0}
-.dsc-rowName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsc-rowName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* The delete control is quiet until the row is worth acting on, and the armed row is
+   marked as a question rather than as a selection. */
+.dsc-rowDelete{flex:none;opacity:0;width:20px;height:20px;font-size:14px}
+.dsc-row:hover .dsc-rowDelete,.dsc-row[data-selected=true] .dsc-rowDelete{opacity:1}
+.dsc-rowDelete:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 16%,transparent);color:var(--dsw-alias-state-error-primary)}
+.dsc-rowConfirm{flex:none;display:inline-flex;gap:4px;align-items:center}
+.dsc-rowConfirm .dsc-mini{width:auto;padding:0 7px;height:20px;font-size:11px;border:.5px solid var(--dsw-alias-border-l3)}
+.dsc-danger{color:var(--dsw-alias-state-error-primary)}
+.dsc-row[data-armed=true]{border-color:var(--dsw-alias-state-error-primary)}
 .dsc-rowMeta{font-size:10.5px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsc-stage{flex:1;min-width:0;min-height:0;overflow:auto;position:relative;background:repeating-conic-gradient(from 0deg,var(--dsw-alias-bg-layer-1) 0% 25%,transparent 0% 50%) 0 0/16px 16px}
 .dsc-stage[data-panning=true]{cursor:grabbing}
-.dsc-pad{min-width:100%;min-height:100%;display:flex;align-items:center;justify-content:center;padding:28px;padding-bottom:var(--dsc-composer-clearance,168px)}
-.dsc-art{position:relative;flex:none;box-shadow:0 18px 44px rgba(0,0,0,.28);border-radius:2px;overflow:hidden;cursor:grab;touch-action:none}
+/* THE PAGE: a 22px RULER gutter on the top and the left, the artboard in the corner
+   they meet at. The gutter is a grid track rather than padding so the rig is one box
+   the stage can centre and scroll - and because the gutter is the ONLY horizontal
+   inset on the left, design x=0 lands on the artboard's own left edge, which is what
+   makes the origin marker the origin. */
+/* THE BOTTOM INSET IS THE CLEARANCE PLUS A GAP. The clearance is measured TO the
+   composer's top edge, so reserving exactly it leaves the artboard touching the input
+   box - which is what "glued together" means. The page adds its own 10px on top, and
+   the same 10px inset on the other three sides keeps the ruler gutters off the frame. */
+.dsc-pad{min-width:100%;min-height:100%;display:grid;grid-template-columns:22px 1fr;grid-template-rows:22px 1fr;align-items:stretch;justify-items:stretch;gap:0;padding:10px 10px calc(var(--dsc-composer-clearance,168px) + 10px) 10px}
+.dsc-rig{grid-column:2;grid-row:2;position:relative;justify-self:center;align-self:center}
+.dsc-padEmpty{grid-column:1/-1;grid-row:1/-1;display:flex;align-items:center;justify-content:center}
+/* THE RULERS. They live in the stage, not the rig, so they stay on screen while a
+   zoomed design is panned - and they are LABELLED in DESIGN pixels, which is the one
+   coordinate system the document and the transform controls both speak. */
+.dsc-axis{position:absolute;background:var(--dsw-alias-bg-layer-1);z-index:3;pointer-events:auto}
+.dsc-axisTop{top:0;height:22px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.dsc-axisLeft{left:0;width:22px;border-right:.5px solid var(--dsw-alias-border-l3)}
+.dsc-axisTick{position:absolute;background:var(--dsw-alias-border-l3);pointer-events:none}
+.dsc-axisTop .dsc-axisTick{bottom:0;width:1px;height:6px}
+.dsc-axisLeft .dsc-axisTick{right:0;height:1px;width:6px}
+.dsc-axisLabel{position:absolute;font:9px/1 var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);pointer-events:none;white-space:nowrap}
+.dsc-axisTop .dsc-axisLabel{top:3px;transform:translateX(-50%)}
+.dsc-axisLeft .dsc-axisLabel{left:3px;transform:translateY(-50%)}
+.dsc-axisCorner{position:absolute;left:0;top:0;width:22px;height:22px;background:var(--dsw-alias-bg-layer-1);border-right:.5px solid var(--dsw-alias-border-l3);border-bottom:.5px solid var(--dsw-alias-border-l3);z-index:4}
+.dsc-art{position:relative;box-shadow:0 18px 44px rgba(0,0,0,.28);border-radius:2px;overflow:hidden;cursor:grab;touch-action:none}
 .dsc-art canvas{display:block;width:100%;height:100%}
 .dsc-art[data-dragging=move]{cursor:grabbing}
 .dsc-art[data-dragging=resize]{cursor:nwse-resize}
 .dsc-art[data-empty=true]{box-shadow:none}
+/* The ORIGIN MARKER: the design's own (0, 0), drawn on the artboard's top-left corner
+   so a layer's x/y means the same thing on screen as it does in the document. */
+.dsc-origin{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:2}
+.dsc-originX{position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--dsw-alias-brand-primary,#4D6BFE);opacity:.5}
+.dsc-originY{position:absolute;top:0;left:0;right:0;height:1px;background:var(--dsw-alias-brand-primary,#4D6BFE);opacity:.5}
+.dsc-originDot{position:absolute;left:-3px;top:-3px;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-brand-primary,#4D6BFE);box-shadow:0 0 0 1.5px var(--dsw-alias-bg-base)}
 .dsc-layers{display:flex;flex-direction:column;gap:2px;margin:0 0 10px;padding:0;list-style:none}
 .dsc-layer{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;cursor:pointer;font-size:11.5px;color:var(--dsw-alias-label-secondary);border:.5px solid transparent}
 .dsc-layer:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsc-layer[data-selected=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3);color:var(--dsw-alias-label-primary)}
-.dsc-layerKind{flex:none;font:10px/16px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);text-transform:uppercase;min-width:42px}
+.dsc-layerKind{flex:none;font:9.5px/16px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);text-transform:uppercase;width:30px;overflow:hidden}
 .dsc-layerName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsc-layerTools{flex:none;display:flex;gap:2px;opacity:0}
 .dsc-layer:hover .dsc-layerTools,.dsc-layer[data-selected=true] .dsc-layerTools{opacity:1}
@@ -142,16 +217,37 @@ window.__ModuleLoader__.load({
 .dsc-styleRule{font-size:10.5px;color:var(--dsw-alias-label-secondary);line-height:1.45}
 .dsc-styleRule b{color:var(--dsw-alias-label-tertiary);font-weight:600}
 .dsc-side{flex:none;width:296px;border-left:.5px solid var(--dsw-alias-border-l3);display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-layer-1)}
-.dsc-sideHead{flex:none;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary)}
-.dsc-sideBody{flex:1;min-height:0;overflow:auto;padding:8px 10px}
+.dsc-sideHead{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary)}
+/* THE PANE SWITCHER. The bar holds two jobs that have nothing to do with each
+   other - SHAPING the design (the look it carries, its layers, its lints) and
+   AUDITING it (the feed thumbnail, the last picture) - and one scroll column for
+   both meant a design with forty layers pushed the rest of the bar out of sight. */
+.dsc-sideTabs{flex:none;display:flex;gap:4px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2)}
+.dsc-sideTab{flex:1;height:24px;display:inline-flex;align-items:center;justify-content:center;border:.5px solid transparent;border-radius:7px;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11.5px;cursor:pointer}
+.dsc-sideTab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsc-sideTab[data-active=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3);color:var(--dsw-alias-label-primary)}
+/* One pane, one flex column, min-height:0 at every level: scroll always belongs to
+   a NAMED block (.dsc-paneScroll for the audit pane, .dsc-layersScroll for the
+   list inside the shaping pane), never to the pane, so a long list scrolls inside
+   its own section and the sections under it keep their place instead of being
+   pushed down the bar. */
+.dsc-pane{flex:1;min-height:0;display:flex;flex-direction:column}
+.dsc-paneScroll{flex:1;min-height:0;overflow:auto;padding:8px 10px;display:flex;flex-direction:column;gap:10px}
+.dsc-section{flex:none;display:flex;flex-direction:column;gap:6px;min-height:0}
+.dsc-sectionHead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary)}
+.dsc-section[data-grow=true]{flex:1;padding:8px 10px 0}
+.dsc-section[data-grow=true] .dsc-layersScroll{flex:1}
+.dsc-layersScroll{min-height:88px;max-height:52vh;overflow:auto;margin:0 -2px;padding:0 2px}
 .dsc-lints{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
 .dsc-lint{display:flex;gap:6px;align-items:flex-start;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary)}
 .dsc-lint[data-level=error]{color:var(--dsw-alias-state-error-primary)}
 .dsc-lintCode{flex:none;font:10px/16px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);text-transform:uppercase}
-.dsc-metrics{font:11px/1.6 var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);white-space:pre-wrap;margin:0 0 10px}
-.dsc-feed{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
-.dsc-feed canvas{border:.5px solid var(--dsw-alias-border-l3);border-radius:4px;background:#000}
-.dsc-drawer{flex:none;border-top:.5px solid var(--dsw-alias-border-l2);display:flex;flex-direction:column;max-height:46%;min-height:0}
+/* THE DRAWER IS AN OVERLAY, NOT A ROW. It used to be a flex sibling under the body,
+   which meant opening it SHRANK the body and re-centred the artboard - and it opened
+   at a height the composer sits on top of, so "Source" looked like a button that did
+   nothing. It now floats over the BOTTOM of the canvas column, between the artboard
+   and the composer, where it can be read while the design stays where it was. */
+.dsc-drawer{position:absolute;left:216px;right:296px;bottom:var(--dsh-composer-height,152px);height:min(42%,320px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l2);border-radius:10px 10px 0 0;z-index:6;box-shadow:0 -14px 34px rgba(0,0,0,.24)}
 .dsc-drawerHead{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;letter-spacing:.06em}
 .dsc-drawer textarea{flex:1;min-height:160px;resize:none;margin:0 10px 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:11.5px/1.5 var(--ds-font-family-code,monospace);padding:8px}
 .dsc-note{padding:6px 10px;font-size:11.5px;color:var(--dsw-alias-state-error-primary);border-top:.5px solid var(--dsw-alias-border-l2)}
@@ -543,24 +639,38 @@ window.__ModuleLoader__.load({
       return canvas
     }
 
-    /** One canvas as a PNG (or JPEG) blob. */
+    /** A data URL's bytes, as a Blob. The second encoder, used when the first balks. */
+    function blobFromDataUrl(dataUrl, mime) {
+      const base64 = String(dataUrl).replace(/^data:[^,]*,/, '')
+      const binary = atob(base64)
+      const bytes = new Uint8Array(binary.length)
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+      return new Blob([bytes], { type: mime })
+    }
+
+    /**
+     * One canvas as a PNG (or JPEG) blob.
+     *
+     * TWO ENCODERS, because the first one can decline: `toBlob` is asynchronous and a
+     * browser may answer `null` for it - measured in headless Chrome at 1600x900 with
+     * 200 nodes on the canvas, while `toDataURL` on the very same canvas encodes
+     * fine. An export that died on "the canvas produced no image" when a synchronous
+     * encoder was sitting right there is the kind of failure the person cannot act
+     * on, so `toBlob` is tried, and its REFUSAL (not only its absence) falls through
+     * to the data URL.
+     */
     function canvasBlob(canvas, mime, quality) {
-      return new Promise((resolve, reject) => {
-        if (typeof canvas.toBlob === 'function') {
-          canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('the canvas produced no image'))), mime, quality)
-          return
-        }
+      const viaDataUrl = () => {
         try {
-          const dataUrl = canvas.toDataURL(mime, quality)
-          const base64 = dataUrl.replace(/^data:[^,]*,/, '')
-          const binary = atob(base64)
-          const bytes = new Uint8Array(binary.length)
-          for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
-          resolve(new Blob([bytes], { type: mime }))
+          return Promise.resolve(blobFromDataUrl(canvas.toDataURL(mime, quality), mime))
         } catch (err) {
-          reject(err)
+          return Promise.reject(err)
         }
-      })
+      }
+      if (typeof canvas.toBlob !== 'function') return viaDataUrl()
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), mime, quality)
+      }).then((blob) => (blob ? blob : viaDataUrl()))
     }
 
     /** Render a prepared design into a fresh canvas at a scale, returning the canvas. */
@@ -649,6 +759,12 @@ window.__ModuleLoader__.load({
       if (index >= 0) designs[index] = design
       else designs.push(design)
       store.state = { ...store.state, designs }
+      notify(store)
+    }
+    /** Drop one design from a conversation's payload, without a round trip. */
+    function removeDesign(store, designId) {
+      if (!store.state || !Array.isArray(store.state.designs)) return
+      store.state = { ...store.state, designs: store.state.designs.filter((entry) => entry.id !== designId) }
       notify(store)
     }
     /** A React hook over one conversation's payload. */
@@ -858,13 +974,16 @@ window.__ModuleLoader__.load({
      * zoomed design stays scrollable to its edge (this pack's rule from the image,
      * audio, video, PDF and diagram surfaces).
      */
-    function Artboard({ engine, document_, preset, sessionId, fonts, zoom, overlays, onLints, onMetrics, onPrepared, selectedPath, onSelect, onMove, onResize, feedRef }) {
+    function Artboard({ engine, document_, preset, sessionId, fonts, zoom, overlays, onLints, onMetrics, onPrepared, selectedPath, onSelect, onDeselect, onMove, onResize, triggerSelect }) {
       const canvasRef = useRef(null)
       const preparedRef = useRef(null)
       const [preparedVersion, setPreparedVersion] = useState(0)
       const [fit, setFit] = useState(1)
       const [note, setNote] = useState('')
       const wrapRef = useRef(null)
+      const rigRef = useRef(null)
+      /** True from pointer down to pointer up: a hover must not repaint the cursor mid-drag. */
+      const draggingRef = useRef(false)
 
       // A "fit" zoom is measured from the stage, and re-measured when it resizes.
       useEffect(() => {
@@ -912,14 +1031,16 @@ window.__ModuleLoader__.load({
         }
       }, [engine, document_, preset, sessionId, fonts, onLints, onMetrics, onPrepared])
 
-      // Paint at the current zoom (and into the feed thumbnail) whenever either
-      // the prepared design or the zoom changes.
+      // Paint at the current zoom whenever either the prepared design or the zoom
+      // changes. There is no second canvas any more: the quarter-scale feed thumbnail
+      // that used to live in the side panel showed nothing the artboard was not
+      // already showing, and the model's own 25% feed is produced by the RENDERER,
+      // not by this component.
       useEffect(() => {
         const prepared = preparedRef.current
         if (!prepared) return
         if (canvasRef.current) paintInto(engine, canvasRef.current, prepared, zoom === 'fit' ? fit : zoom)
-        if (feedRef && feedRef.current) paintInto(engine, feedRef.current, prepared, FEED_SCALE)
-      }, [engine, preparedVersion, zoom, fit, feedRef])
+      }, [engine, preparedVersion, zoom, fit])
 
       // Safety areas, node boxes and THE SELECTION are drawn as an SVG overlay in
       // DESIGN pixels scaled by the same factor, so they line up at any zoom.
@@ -927,44 +1048,40 @@ window.__ModuleLoader__.load({
       const prepared = preparedRef.current
 
       /**
-       * Which edge of the selection is under a point, in DESIGN pixels.
-       *
-       * A handle is grabbed within `HANDLE_HIT` screen pixels of an edge of the
-       * selected box, which is the same box the overlay draws its squares on - so the
-       * person grabs what they can see, at any zoom. Corners win over edges, because
-       * a corner is the more useful gesture and the two overlap there.
+       * Which edge of the selection is under a point: the box the overlay drew, the
+       * point the pointer is at, the HANDLE_HIT tolerance in design pixels, and the
+       * handles that box actually carries. All four are read here, in the same units,
+       * for the drag AND for the hover cursor - so the gesture a person gets is
+       * always the gesture the cursor promised.
        */
-      const edgesAt = (entry, pointX, pointY, rect) => {
-        const box = entry.box
-        const tolX = (HANDLE_HIT / Math.max(1, rect.width)) * document_.canvas.width
-        const tolY = (HANDLE_HIT / Math.max(1, rect.height)) * document_.canvas.height
-        const near = {
-          left: Math.abs(pointX - box.x) <= tolX,
-          right: Math.abs(pointX - (box.x + box.w)) <= tolX,
-          top: Math.abs(pointY - box.y) <= tolY,
-          bottom: Math.abs(pointY - (box.y + box.h)) <= tolY,
+      const edgesFor = (entry, pointX, pointY, tolerance) => (entry ? edgesAt(entry.box, pointX, pointY, tolerance, handlesFor(entry)) : null)
+
+      /** An element's rect, and the HANDLE_HIT tolerance in design pixels for it. */
+      const toleranceFor = (element) => {
+        const rect = element.getBoundingClientRect()
+        return {
+          rect,
+          tolerance: { x: (HANDLE_HIT / Math.max(1, rect.width)) * document_.canvas.width, y: (HANDLE_HIT / Math.max(1, rect.height)) * document_.canvas.height },
         }
-        const insideX = pointX >= box.x - tolX && pointX <= box.x + box.w + tolX
-        const insideY = pointY >= box.y - tolY && pointY <= box.y + box.h + tolY
-        if (!insideX || !insideY) return null
-        const edges = { left: near.left, right: near.right, top: near.top, bottom: near.bottom }
-        if (!edges.left && !edges.right && !edges.top && !edges.bottom) return null
-        return edges
       }
 
-      /** The cursor an edge pair deserves. */
-      const cursorFor = (edges) => {
-        if (!edges) return null
-        if ((edges.left || edges.right) && (edges.top || edges.bottom)) return (edges.left ? 'nesw' : 'nwse') + '-resize'
-        if (edges.left || edges.right) return 'ew-resize'
-        return 'ns-resize'
-      }
+      /** A pointer event, in the design's own pixels. */
+      const pointIn = (event, rect) => ({
+        x: ((event.clientX - rect.left) / Math.max(1, rect.width)) * document_.canvas.width,
+        y: ((event.clientY - rect.top) / Math.max(1, rect.height)) * document_.canvas.height,
+      })
 
       /**
        * Pointer down on the artboard. A HANDLE of the current selection wins over
        * everything: dragging it RESIZES that node. Anywhere else, the topmost movable
        * node under the cursor is picked and dragging it MOVES the node, and the delta
        * is handed back in DESIGN pixels.
+       *
+       * THE GESTURE IS DECIDED ONCE, ON POINTER DOWN, and it stays that gesture for
+       * the whole drag: a drag that began on a handle can never become a move, and a
+       * drag that began on a layer can never become a resize. The pointer is CAPTURED
+       * for the length of the drag, so releasing it outside the artboard - or outside
+       * the window - still ends the gesture exactly once.
        *
        * Hit testing uses the boxes the layout already produced, so what the person
        * clicks is what they can see. A node is movable when it (or its parent chain)
@@ -977,26 +1094,34 @@ window.__ModuleLoader__.load({
       const onArtPointerDown = (event) => {
         const current = preparedRef.current
         if (!current || event.button !== 0) return
-        const rect = event.currentTarget.getBoundingClientRect()
-        const pointX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * document_.canvas.width
-        const pointY = ((event.clientY - rect.top) / Math.max(1, rect.height)) * document_.canvas.height
+        const element = event.currentTarget
+        const { rect, tolerance } = toleranceFor(element)
+        const point = pointIn(event, rect)
         const layers = new Set((document_.layers ?? []).map((node, index) => 'layers.' + index))
         // THE SELECTION'S OWN HANDLES FIRST.
         const selectedEntry = selectedPath ? current.boxes.find((entry) => entry.path === selectedPath) : null
-        const handle = selectedEntry ? edgesAt(selectedEntry, pointX, pointY, rect) : null
+        const handle = edgesFor(selectedEntry, point.x, point.y, tolerance)
         const candidates = current.boxes.filter((entry) => {
           const box = entry.box
-          return pointX >= box.x && pointX <= box.x + box.w && pointY >= box.y && pointY <= box.y + box.h
+          return point.x >= box.x && point.x <= box.x + box.w && point.y >= box.y && point.y <= box.y + box.h
         })
         // Topmost first: the last painted box that contains the point, preferring a
         // node that is already absolute (a top-level layer, or a child with x/y).
         const chosen = handle ? selectedEntry : [...candidates].reverse().find((entry) => layers.has(entry.path) || isAbsolutePath(document_, entry.path)) ?? [...candidates].reverse()[0]
-        if (!chosen) return
+        // A CLICK ON NOTHING DE-SELECTS. The artboard is a finite rectangle inside a
+        // larger stage, so "outside the selection" is a place a person can aim at
+        // deliberately, and a selection that can only be replaced by another layer is
+        // a selection with no way out.
+        if (!chosen) {
+          if (!handle && onDeselect) onDeselect()
+          return
+        }
+        // A handle drag never changes what is selected: the selection is what its
+        // handles belong to.
         if (!handle && onSelect) onSelect(chosen.path)
         const startX = event.clientX
         const startY = event.clientY
         let moved = false
-        const element = event.currentTarget
         const move = (moveEvent) => {
           const dx = ((moveEvent.clientX - startX) / Math.max(1, rect.width)) * document_.canvas.width
           const dy = ((moveEvent.clientY - startY) / Math.max(1, rect.height)) * document_.canvas.height
@@ -1005,9 +1130,19 @@ window.__ModuleLoader__.load({
           element.setAttribute('data-dragging', handle ? 'resize' : 'move')
           moveEvent.preventDefault()
         }
-        const up = (upEvent) => {
+        const finish = (upEvent) => {
           window.removeEventListener('pointermove', move)
-          window.removeEventListener('pointerup', up)
+          window.removeEventListener('pointerup', finish)
+          window.removeEventListener('pointercancel', finish)
+          draggingRef.current = false
+          // A DRAG MOVES THE GROUND UNDER THE CURSOR. The box the pointer was over was
+          // the box BEFORE the edit, so whatever this handler painted last no longer
+          // describes anything - it is cleared, and the next real hover paints the
+          // truth. A stale `ew-resize` on a layer that is no longer there is the same
+          // lie as a cursor set mid-drag.
+          element.style.cursor = ''
+          triggerSelect.current = false
+          if (element.hasPointerCapture && element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId)
           element.removeAttribute('data-dragging')
           if (!moved) return
           const dx = ((upEvent.clientX - startX) / Math.max(1, rect.width)) * document_.canvas.width
@@ -1016,52 +1151,140 @@ window.__ModuleLoader__.load({
           else if (onMove) onMove(chosen.path, Math.round(dx), Math.round(dy))
         }
         window.addEventListener('pointermove', move)
-        window.addEventListener('pointerup', up)
+        window.addEventListener('pointerup', finish)
+        window.addEventListener('pointercancel', finish)
+        draggingRef.current = true
+        if (element.setPointerCapture) {
+          try {
+            element.setPointerCapture(event.pointerId)
+          } catch (err) {
+            // A capture the browser refuses is not a reason to lose the gesture: the
+            // window listeners above already carry it.
+          }
+        }
       }
 
-      /** Hover feedback: the cursor names the gesture the pointer would start. */
+      /**
+       * Hover feedback: the cursor names the gesture the pointer would start.
+       *
+       * A CURSOR SET WHILE THE BUTTON IS DOWN IS A LIE. A drag mutates the document and
+       * the artboard re-renders, so the pointer that was over the old box is suddenly
+       * over a different one - and whatever this handler last painted stays on screen
+       * until the mouse moves again. `triggerSelect` is cleared by the first hover
+       * after a press, and until then the cursor belongs to the drag, not to the hover.
+       */
       const onArtPointerMove = (event) => {
+        if (draggingRef.current) return
+        // ONE hover is skipped after a selection changes: it is the move that carries
+        // the pointer from wherever it was onto the new box, and the cursor it would
+        // paint describes the selection BEFORE the click.
+        if (triggerSelect.current) {
+          triggerSelect.current = false
+          return
+        }
         const current = preparedRef.current
         const element = event.currentTarget
         if (!current || !selectedPath) {
           element.style.cursor = ''
           return
         }
-        const rect = element.getBoundingClientRect()
-        const pointX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * document_.canvas.width
-        const pointY = ((event.clientY - rect.top) / Math.max(1, rect.height)) * document_.canvas.height
+        const { rect, tolerance } = toleranceFor(element)
+        const point = pointIn(event, rect)
         const entry = current.boxes.find((candidate) => candidate.path === selectedPath)
-        const edges = entry ? edgesAt(entry, pointX, pointY, rect) : null
+        const edges = edgesFor(entry, point.x, point.y, tolerance)
         element.style.cursor = cursorFor(edges) ?? ''
       }
+
+      // THE RULERS READ THE PAGE'S OWN GEOMETRY, measured from the stage: where the
+      // artboard's top-left corner sits in the scroller (which is the design's origin)
+      // and how many screen pixels one design pixel takes. Both change with the zoom
+      // and with panning, so they are re-measured when either does.
+      const [rigBox, setRigBox] = useState({ originX: 0, originY: 0, length: 0, breadth: 0 })
+      useEffect(() => {
+        const stage = wrapRef.current
+        const rig = rigRef.current
+        if (!stage || !rig) return undefined
+        const measure = () => {
+          const stageBox = stage.getBoundingClientRect()
+          const artBox = rig.getBoundingClientRect()
+          setRigBox({
+            originX: artBox.left - stageBox.left + stage.scrollLeft,
+            originY: artBox.top - stageBox.top + stage.scrollTop,
+            length: stage.scrollWidth,
+            breadth: stage.scrollHeight,
+          })
+        }
+        measure()
+        stage.addEventListener('scroll', measure, { passive: true })
+        const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null
+        if (observer) observer.observe(stage)
+        return () => {
+          stage.removeEventListener('scroll', measure)
+          if (observer) observer.disconnect()
+        }
+      }, [scale, preparedVersion, zoom, document_.canvas.width, document_.canvas.height])
+
+      // THE DESIGN'S OWN ORIGIN, reported on the artboard for the same reason the
+      // version marker is: it is a fact about the layout that a person (or a check)
+      // should be able to read without re-running the layout. `min` is the top-left
+      // corner of everything the layout produced, in DESIGN pixels - a starter that
+      // began at an arbitrary offset would make every number in the panel a fiction.
+      const designOrigin = (() => {
+        const preparedNow = preparedRef.current
+        if (!preparedNow || !Array.isArray(preparedNow.boxes) || preparedNow.boxes.length === 0) return null
+        let minX = Infinity
+        let minY = Infinity
+        for (const entry of preparedNow.boxes) {
+          if (entry.box.x < minX) minX = entry.box.x
+          if (entry.box.y < minY) minY = entry.box.y
+        }
+        return { x: Math.round(minX), y: Math.round(minY) }
+      })()
 
       return h(
         'div',
         { className: 'dsc-pad', ref: wrapRef, 'data-canvas-stage': 'true' },
+        h(Ruler, { axis: 'top', origin: rigBox.originX, scale, length: rigBox.length, thickness: 22 }),
+        h(Ruler, { axis: 'left', origin: rigBox.originY, scale, length: rigBox.breadth, thickness: 22 }),
+        h('div', { className: 'dsc-axisCorner', 'data-canvas-ruler-corner': 'true' }),
         h(
           'div',
-          {
-            className: 'dsc-art',
-            'data-canvas-artboard': document_.preset ?? 'freeform',
-            onPointerDown: onArtPointerDown,
-            onPointerMove: onArtPointerMove,
-            style: { width: Math.max(1, Math.round(document_.canvas.width * scale)) + 'px', height: Math.max(1, Math.round(document_.canvas.height * scale)) + 'px' },
-          },
-          h('canvas', { ref: canvasRef, 'data-canvas-art': 'true' }),
-          (overlay || selectedPath) && prepared
-            ? h(Overlay, {
-                prepared,
-                preset,
-                width: document_.canvas.width,
-                height: document_.canvas.height,
-                scale,
-                showSafe: Boolean(overlays && overlays.safe),
-                showBoxes: Boolean(overlays && overlays.boxes),
-                selectedPath: selectedPath ?? null,
-              })
-            : null,
+          { className: 'dsc-rig', ref: rigRef, 'data-canvas-rig': 'true' },
+          h(
+            'div',
+            {
+              className: 'dsc-art',
+              'data-canvas-artboard': document_.preset ?? 'freeform',
+              'data-canvas-origin': '0,0',
+              'data-canvas-layout-origin': designOrigin ? designOrigin.x + ',' + designOrigin.y : '',
+              onPointerDown: onArtPointerDown,
+              onPointerMove: onArtPointerMove,
+              style: { width: Math.max(1, Math.round(document_.canvas.width * scale)) + 'px', height: Math.max(1, Math.round(document_.canvas.height * scale)) + 'px' },
+            },
+            h('canvas', { ref: canvasRef, 'data-canvas-art': 'true' }),
+            // THE ORIGIN MARKER, on the artboard's own top-left corner: the design's
+            // (0, 0), so a layer's x and y mean the same thing on screen and in the
+            // document.
+            h('div', { className: 'dsc-origin', 'data-canvas-origin-marker': 'true' },
+              h('span', { className: 'dsc-originX' }),
+              h('span', { className: 'dsc-originY' }),
+              h('span', { className: 'dsc-originDot' }),
+            ),
+            (overlay || selectedPath) && prepared
+              ? h(Overlay, {
+                  prepared,
+                  preset,
+                  width: document_.canvas.width,
+                  height: document_.canvas.height,
+                  scale,
+                  showSafe: Boolean(overlays && overlays.safe),
+                  showBoxes: Boolean(overlays && overlays.boxes),
+                  selectedPath: selectedPath ?? null,
+                })
+              : null,
+          ),
+          note ? h('div', { className: 'dsc-note' }, note) : null,
         ),
-        note ? h('div', { className: 'dsc-note' }, note) : null,
       )
     }
 
@@ -1103,6 +1326,285 @@ window.__ModuleLoader__.load({
       const layers = document_ && Array.isArray(document_.layers) ? document_.layers : []
       for (let index = 0; index < layers.length; index += 1) walk(layers[index], 'layers.' + index, 0)
       return rows
+    }
+
+    /**
+     * A RULER along one edge of the stage, LABELLED IN DESIGN PIXELS.
+     *
+     * The tick spacing is chosen so labels never collide (the same choice the audio
+     * surface's time ruler makes), and every number is a position in the DESIGN's own
+     * coordinate system - so the `x` a transform control shows is the same number the
+     * ruler shows, and a design's (0, 0) is the artboard's top-left corner. The ruler
+     * lives in the STAGE rather than on the artboard, so panning a zoomed design
+     * scrolls the numbers past a fixed gutter instead of carrying them away.
+     */
+    function Ruler({ axis, origin, scale, length, thickness }) {
+      const step = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000].find((candidate) => candidate * Math.abs(scale) >= 64) ?? 10000
+      const ticks = []
+      const first = Math.ceil((-origin / scale) / step) * step
+      const count = Math.floor((length - origin) / scale / step) + 1
+      for (let index = 0; index < Math.max(0, count); index += 1) {
+        const value = first + index * step
+        const at = origin + value * scale
+        if (at < thickness || at > length) continue
+        ticks.push({ value, at })
+      }
+      const horizontal = axis === 'top'
+      return h(
+        axis === 'top' ? 'div' : 'div',
+        {
+          className: 'dsc-axis ' + (horizontal ? 'dsc-axisTop' : 'dsc-axisLeft'),
+          'data-canvas-ruler': axis,
+          style: horizontal ? { left: thickness, right: 0 } : { top: thickness, bottom: 0 },
+        },
+        ticks.map((tick) =>
+          h('span', {
+            key: 'tick-' + tick.value,
+            className: 'dsc-axisTick',
+            style: horizontal ? { left: Math.round(tick.at - thickness) + 'px' } : { top: Math.round(tick.at - thickness) + 'px' },
+          }),
+        ),
+        ticks.map((tick) =>
+          h('span', {
+            key: 'label-' + tick.value,
+            className: 'dsc-axisLabel',
+            style: horizontal ? { left: Math.round(tick.at - thickness) + 'px' } : { top: Math.round(tick.at - thickness) + 'px' },
+          }, String(tick.value)),
+        ),
+      )
+    }
+
+    /**
+     * The handles ONE node kind can honour, which is not the same list for all of
+     * them.
+     *
+     * A TEXT node's height is what its words measure: it is stretched in WIDTH, and
+     * the only handles that can do that are the two SIDE MIDPOINTS. It used to carry
+     * the four corners too, and that was the dead gesture this alpha fixes - a corner
+     * is a vertical resize as much as a horizontal one, so a drag that began on the
+     * top-left square of a text layer wrote a width, dropped the height it could not
+     * honour, and left a selection that looked like it refused to move. With only the
+     * side handles drawn and hit-tested, the cursor and the gesture agree: the sides
+     * stretch, everything else moves.
+     */
+    function handlesFor(rect) {
+      if (!rect || rect.kind === 'text') return ['w', 'e']
+      return ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
+    }
+
+    /** The centre of every handle of a box, in design pixels, in draw order. */
+    function handlePoints(box, keys) {
+      const midX = box.x + box.w / 2
+      const midY = box.y + box.h / 2
+      const at = {
+        nw: [box.x, box.y],
+        n: [midX, box.y],
+        ne: [box.x + box.w, box.y],
+        e: [box.x + box.w, midY],
+        se: [box.x + box.w, box.y + box.h],
+        s: [midX, box.y + box.h],
+        sw: [box.x, box.y + box.h],
+        w: [box.x, midY],
+      }
+      return keys.map((key) => ({ key, x: at[key][0], y: at[key][1] }))
+    }
+
+    /** The cursor an edge pair deserves. */
+    function cursorFor(edges) {
+      if (!edges) return null
+      if ((edges.left || edges.right) && (edges.top || edges.bottom)) return (edges.left ? 'nesw' : 'nwse') + '-resize'
+      if (edges.left || edges.right) return 'ew-resize'
+      return 'ns-resize'
+    }
+
+    /**
+     * Which edge of a box is under a point, in DESIGN pixels.
+     *
+     * A handle is grabbed within `tolerance` design pixels of an edge of the box the
+     * overlay draws its squares on, so the person grabs what they can see at any
+     * zoom. The tolerance arrives already converted from SCREEN pixels against the
+     * rect the overlay was drawn with.
+     *
+     * `allowed` is the handle set that box actually carries (see `handlesFor`), and it
+     * is not decoration: an edge that is NOT drawn must not be hit-tested either, or
+     * the gesture contradicts the picture - a text layer, whose height is what its
+     * words measure, was grabbed as a VERTICAL RESIZE a design pixel inside its own
+     * top border, so the drag stretched nothing (the height op was dropped) and the
+     * selection looked like it refused to move. Pure data in, pure data out.
+     */
+    function edgesAt(box, pointX, pointY, tolerance, allowed) {
+      if (!box) return null
+      const keys = Array.isArray(allowed) && allowed.length > 0 ? allowed : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
+      // A corner handle belongs to two edges, so the edges this box carries are
+      // UNIONED from the handles: the top edge exists when a top-row square does.
+      // Testing the corner KEYS themselves would be wrong - 'nw' is not the north
+      // edge, and a text node carries the corner without carrying the edge.
+      const boxKeys = new Set(keys)
+      const canLeft = boxKeys.has('w') || boxKeys.has('nw') || boxKeys.has('sw')
+      const canRight = boxKeys.has('e') || boxKeys.has('ne') || boxKeys.has('se')
+      const canTop = boxKeys.has('n') || boxKeys.has('nw') || boxKeys.has('ne')
+      const canBottom = boxKeys.has('s') || boxKeys.has('sw') || boxKeys.has('se')
+      const tolX = tolerance.x
+      const tolY = tolerance.y
+      const near = {
+        left: canLeft && Math.abs(pointX - box.x) <= tolX,
+        right: canRight && Math.abs(pointX - (box.x + box.w)) <= tolX,
+        top: canTop && Math.abs(pointY - box.y) <= tolY,
+        bottom: canBottom && Math.abs(pointY - (box.y + box.h)) <= tolY,
+      }
+      const insideX = pointX >= box.x - tolX && pointX <= box.x + box.w + tolX
+      const insideY = pointY >= box.y - tolY && pointY <= box.y + box.h + tolY
+      if (!insideX || !insideY) return null
+      const edges = { left: near.left, right: near.right, top: near.top, bottom: near.bottom }
+      if (!edges.left && !edges.right && !edges.top && !edges.bottom) return null
+      return edges
+    }
+
+    /**
+     * The pointer operations a resize gesture writes, as data.
+     *
+     * The same route, validator and store as a move and as the agent's patch, so
+     * stretching a layer cannot produce a document the validator would refuse. Two
+     * rules are worth stating:
+     *
+     *   - A node that was `hug` gets a NUMBER, taken from the box it already had.
+     *     Dragging is how you take a label off its content and give it a width.
+     *   - A TEXT node is stretched in WIDTH only: its height is what the words
+     *     measure, and setting it would be a lie the layout then ignores.
+     */
+    function resizeOps(path, node, entry, edges, dx, dy) {
+      if (!node || typeof node !== 'object' || !edges) return []
+      const baseX = typeof node.x === 'number' ? node.x : entry ? Math.round(entry.box.x) : 0
+      const baseY = typeof node.y === 'number' ? node.y : entry ? Math.round(entry.box.y) : 0
+      const baseW = typeof node.w === 'number' ? node.w : entry ? Math.round(entry.box.w) : 0
+      const baseH = typeof node.h === 'number' ? node.h : entry ? Math.round(entry.box.h) : 0
+      const minW = node.kind === 'text' ? 40 : 8
+      const minH = 8
+      const ops = []
+      if (edges.left || edges.right) {
+        const want = Math.max(minW, Math.round(edges.left ? baseW - dx : baseW + dx))
+        ops.push({ op: 'set', at: path + '.w', value: want })
+        if (edges.left) ops.push({ op: 'set', at: path + '.x', value: Math.max(0, Math.round(baseX + (baseW - want))) })
+      }
+      if (node.kind !== 'text' && (edges.top || edges.bottom)) {
+        const want = Math.max(minH, Math.round(edges.top ? baseH - dy : baseH + dy))
+        ops.push({ op: 'set', at: path + '.h', value: want })
+        if (edges.top) ops.push({ op: 'set', at: path + '.y', value: Math.max(0, Math.round(baseY + (baseH - want))) })
+      }
+      return ops
+    }
+
+    /**
+     * The operations a NUDGE writes: the four directions a person reaches for without
+     * aiming, at a step they choose (1px for placing, 10 for moving).
+     *
+     * A node positioned by x/y keeps its own values. One that is in a frame's flow has
+     * none, so the box the layout produced is the position it already has - which is
+     * exactly what takes it out of the flow, the documented rule the drag uses too.
+     */
+    function nudgeOps(path, node, entry, dx, dy) {
+      if (!node || typeof node !== 'object' || (!dx && !dy)) return []
+      const baseX = typeof node.x === 'number' ? node.x : entry ? Math.round(entry.box.x) : 0
+      const baseY = typeof node.y === 'number' ? node.y : entry ? Math.round(entry.box.y) : 0
+      const ops = []
+      if (dx) ops.push({ op: 'set', at: path + '.x', value: Math.max(0, Math.round(baseX + dx)) })
+      if (dy) ops.push({ op: 'set', at: path + '.y', value: Math.max(0, Math.round(baseY + dy)) })
+      return ops
+    }
+
+    /**
+     * The operation a SIZE field writes: a width or a height in design pixels.
+     *
+     * The same two rules the handles follow, in one place: a text node has no height it
+     * can be given (its words measure it), so that field is refused rather than written
+     * and ignored - and a `hug` node, which has no number at all, takes the box the
+     * layout produced the moment a person types over it.
+     */
+    function sizeOps(path, node, entry, axis, value) {
+      if (!node || typeof node !== 'object' || (axis !== 'w' && axis !== 'h')) return []
+      if (axis === 'h' && node.kind === 'text') return []
+      const min = axis === 'w' ? (node.kind === 'text' ? 40 : 8) : 8
+      const current = typeof node[axis] === 'number' ? node[axis] : entry ? Math.round(entry.box[axis]) : min
+      const want = Math.max(min, Math.round(Number.isFinite(value) ? value : current))
+      if (want === current && typeof node[axis] === 'number') return []
+      return [{ op: 'set', at: path + '.' + axis, value: want }]
+    }
+
+    /** The op a ROTATION writes: degrees, which the language bounds to -360..360. */
+    function rotateOps(path, node, degrees) {
+      if (!node || typeof node !== 'object' || !Number.isFinite(degrees)) return []
+      const want = Math.max(-360, Math.min(360, Math.round(degrees)))
+      if (want === (typeof node.rotate === 'number' ? Math.round(node.rotate) : 0)) return []
+      return [{ op: 'set', at: path + '.rotate', value: want }]
+    }
+
+    /** The op an OPACITY writes: 0..1, rounded to two places so a slider is not noise. */
+    /**
+     * The op an OPACITY writes: 0..1, rounded to two places so a slider is not noise.
+     *
+     * THE COMPARISON IS AGAINST WHAT IS WRITTEN, NOT AGAINST A DEFAULT. "1 is the
+     * default, so leave it out" is only sound when the document actually carries that
+     * representation: a node whose opacity is 0.5 and whose slider is dragged back to
+     * 100% must WRITE 1, or the reset is silently dropped and the layer stays faint.
+     * The rule is uniform instead - a value equal to the field already written is not
+     * rewritten, and anything else is.
+     */
+    function opacityOps(path, node, value) {
+      if (!node || typeof node !== 'object' || !Number.isFinite(value)) return []
+      const want = Math.max(0, Math.min(1, Math.round(value * 100) / 100))
+      const current = typeof node.opacity === 'number' ? node.opacity : null
+      if (current === want) return []
+      return [{ op: 'set', at: path + '.opacity', value: want }]
+    }
+
+    /**
+     * What a node's COLOUR control may edit, as a list of paint targets.
+     *
+     * The language gives each kind its own colour field - a text node paints its glyphs
+     * with `color`, a shape with `fill` and `stroke`, a frame with `background`, and an
+     * `art` node with a `colors` array - and a kind that paints nothing (an image, an
+     * SVG document) has NO targets, which is why this answers a list rather than a
+     * field name: the control draws one row per entry, and an empty list is what makes
+     * it say there is nothing to recolour instead of writing a property nothing reads.
+     */
+    function paintTargets(node) {
+      if (!node || typeof node !== 'object') return []
+      const targets = []
+      if (node.kind === 'text') targets.push({ key: 'color', label: 'Text', paint: node.color })
+      if (node.kind === 'shape') {
+        targets.push({ key: 'fill', label: 'Fill', paint: node.fill })
+        if (node.stroke !== undefined) targets.push({ key: 'stroke', label: 'Stroke', paint: node.stroke })
+      }
+      if (node.kind === 'frame') targets.push({ key: 'background', label: 'Background', paint: node.background })
+      if (node.kind === 'svg' && node.fill !== undefined) targets.push({ key: 'fill', label: 'Fill', paint: node.fill })
+      if (node.kind === 'art') {
+        const colors = Array.isArray(node.colors) && node.colors.length > 0 ? node.colors : [null, null, null]
+        colors.slice(0, 4).forEach((color, index) => targets.push({ key: 'colors.' + index, label: 'Colour ' + (index + 1), paint: color }))
+      }
+      return targets
+    }
+
+    /**
+     * The current colour of one paint target, as a `#rrggbb` for an `<input type=color>`
+     * or null when the paint is not a flat colour (a gradient, an art fill, a missing
+     * value). A control that showed `#000000` for a gradient would be lying.
+     */
+    function paintColorOf(paint) {
+      if (typeof paint === 'string') return /^#[0-9a-fA-F]{6}$/.test(paint) ? paint.toLowerCase() : /^#[0-9a-fA-F]{3}$/.test(paint) ? '#' + paint[1] + paint[1] + paint[2] + paint[2] + paint[3] + paint[3] : null
+      if (paint && typeof paint === 'object' && paint.type === 'solid' && typeof paint.color === 'string') return paintColorOf(paint.color)
+      return null
+    }
+
+    /** The op that recolours one target. A solid paint is written as its own colour. */
+    function colorOps(path, target, color) {
+      if (!target || typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) return []
+      const canonical = color.toLowerCase()
+      const current = paintColorOf(target.paint)
+      if (current === canonical) return []
+      // A gradient or an art fill is replaced by a flat colour on purpose: the control
+      // offers one colour, and writing `{type:'solid'}` is the document's own canonical
+      // form for it - a person who wants the gradient back asks the model for it.
+      return [{ op: 'set', at: path + '.' + target.key, value: canonical }]
     }
 
     /** The safe-area, node-box and SELECTION overlay, in design pixels. */
@@ -1159,25 +1661,13 @@ window.__ModuleLoader__.load({
               strokeWidth: Math.max(1, Math.round(1.5 / Math.max(0.2, scale))),
             }),
           )
-          // EIGHT handles: four corners and four edge midpoints, which is the
-          // vocabulary a person already knows from every other design tool, and the
-          // ones the resize gesture grabs (in this order: corners first, so the
-          // middle of a short edge is still reachable on a small node).
-          const midX = entry.box.x + entry.box.w / 2
-          const midY = entry.box.y + entry.box.h / 2
-          const box = { x: entry.box.x, y: entry.box.y, w: entry.box.w, h: entry.box.h }
+          // EIGHT handles for a box, SIX for text: four corners and four edge
+          // midpoints, which is the vocabulary a person already knows from every
+          // other design tool, and the ones the resize gesture grabs. A text node has
+          // no vertical handles because it has no height it can be given.
           const size = Math.max(5, Math.round(7 / Math.max(0.2, scale)))
-          for (const [key, cx, cy] of [
-            ['nw', box.x, box.y],
-            ['n', midX, box.y],
-            ['ne', box.x + box.w, box.y],
-            ['e', box.x + box.w, midY],
-            ['se', box.x + box.w, box.y + box.h],
-            ['s', midX, box.y + box.h],
-            ['sw', box.x, box.y + box.h],
-            ['w', box.x, midY],
-          ]) {
-            children.push(h('rect', { key: 'handle-' + key, 'data-canvas-handle': key, x: cx - size / 2, y: cy - size / 2, width: size, height: size, fill: 'rgba(77,107,254,0.95)' }))
+          for (const point of handlePoints(entry.box, handlesFor(entry))) {
+            children.push(h('rect', { key: 'handle-' + point.key, 'data-canvas-handle': point.key, x: point.x - size / 2, y: point.y - size / 2, width: size, height: size, fill: 'rgba(77,107,254,0.95)' }))
           }
         }
       }
@@ -1217,9 +1707,50 @@ window.__ModuleLoader__.load({
       const [lints, setLints] = useState(null)
       const [metrics, setMetrics] = useState(null)
       const [newOpen, setNewOpen] = useState(false)
+      /** Which job the right bar is doing: shaping the design, or auditing it. */
+      const [sideTab, setSideTab] = useState('design')
+      /**
+       * The design the rail is asking about right now, as a two-step DELETE: the
+       * first click arms the row, the second removes it. A design is somebody's
+       * work, and one stray click in a list should never destroy it - and because
+       * the arming lives on the row itself, the question is asked where the answer
+       * is, not in a dialog over the whole surface.
+       */
+      const [confirmDelete, setConfirmDelete] = useState(null)
+      /**
+       * The export menu (a native `<details>`, so it closes on a click anywhere else
+       * and on Escape without this file owning either behaviour) and WHICH export is
+       * running, kept as a sentence rather than a flag so the row can say what it is
+       * doing instead of just going dead.
+       */
+      const exportMenuRef = useRef(null)
+      const [exporting, setExporting] = useState('')
+      /** The step a nudge moves: 1px for placing, 10px for moving. */
+      const [nudgeStep, setNudgeStep] = useState(1)
       /** The node the layer list and the drag both address, as a document path. */
       const [selectedPath, setSelectedPath] = useState(null)
-      const feedRef = useRef(null)
+      /**
+       * Whether the surface already knows what is selected at the moment a pointer
+       * lands.
+       *
+       * A hover cursor is painted by MUTATING the element's style, and the browser
+       * keeps it until something sets it again - so a cursor left over from a
+       * selection that has just been replaced promised a gesture the new selection
+       * cannot perform. The flag is written at POINTER DOWN (in the same event, before
+       * any state update React may batch) and consumed by the hover handler, which
+       * knows whether the pointer that painted the cursor was down or not.
+       */
+      const triggerSelect = useRef(false)
+      // A DESELECT CLEARS THE CURSOR TOO: the cursor that promised a resize belonged
+      // to a selection that no longer exists.
+      const deselectPath = useCallback(() => {
+        if (wrapRef.current) wrapRef.current.style.cursor = ''
+        setSelectedPath(null)
+      }, [])
+      const selectPath = useCallback((path) => {
+        triggerSelect.current = true
+        setSelectedPath(path)
+      }, [])
       const stageRef = useRef(null)
 
       useEffect(() => {
@@ -1254,9 +1785,13 @@ window.__ModuleLoader__.load({
         if (selectedDocument) setDraft(JSON.stringify(selectedDocument, null, 2))
       }, [drawer, selectedRevision, selectedDocument])
 
-      // The selection belongs to ONE design: switching designs clears it.
+      // The selection belongs to ONE design: switching designs clears it, and it also
+      // DISARMS any delete question the rail was asking - an armed row that survived a
+      // switch would be a control offering to delete something the person is no
+      // longer looking at.
       useEffect(() => {
         setSelectedPath(null)
+        setConfirmDelete(null)
       }, [selectedId])
 
       const preset = selected && state && state.presets ? state.presets[selected.preset] ?? null : null
@@ -1323,15 +1858,10 @@ window.__ModuleLoader__.load({
        * A drag on a selection handle: RESIZE one node, keeping the opposite edge
        * where it is.
        *
-       * The same route, validator and store as a move and as the agent's patch, so
-       * stretching a layer cannot produce a document the validator would refuse. Two
-       * rules are worth stating:
-       *
-       *   - A node that was `hug` gets a NUMBER, taken from the box it already had.
-       *     Dragging is how you take a label off its content and give it a width.
-       *   - A TEXT node is stretched in WIDTH only: its height is what the words
-       *     measure, and setting it would be a lie the layout then ignores. Every
-       *     other kind takes both.
+       * The gesture and the operations it writes are both decided ELSEWHERE and both
+       * are pure data: `edgesAt` says which edges the pointer grabbed, `resizeOps`
+       * says which pointer ops those edges produce. This function only names them and
+       * sends them through the same route the agent's `canvas_patch` uses.
        */
       const resizeLayer = useCallback(
         (path, edges, dx, dy) => {
@@ -1340,23 +1870,7 @@ window.__ModuleLoader__.load({
           if (!node || typeof node !== 'object') return
           const prepared = lastPreparedRef.current
           const entry = prepared ? prepared.boxes.find((box) => box.path === path) : null
-          const baseX = typeof node.x === 'number' ? node.x : entry ? Math.round(entry.box.x) : 0
-          const baseY = typeof node.y === 'number' ? node.y : entry ? Math.round(entry.box.y) : 0
-          const baseW = typeof node.w === 'number' ? node.w : entry ? Math.round(entry.box.w) : 0
-          const baseH = typeof node.h === 'number' ? node.h : entry ? Math.round(entry.box.h) : 0
-          const minW = node.kind === 'text' ? 40 : 8
-          const minH = 8
-          const ops = []
-          if (edges.left || edges.right) {
-            const want = Math.max(minW, Math.round(edges.left ? baseW - dx : baseW + dx))
-            ops.push({ op: 'set', at: path + '.w', value: want })
-            if (edges.left) ops.push({ op: 'set', at: path + '.x', value: Math.max(0, Math.round(baseX + (baseW - want))) })
-          }
-          if (node.kind !== 'text' && (edges.top || edges.bottom)) {
-            const want = Math.max(minH, Math.round(edges.top ? baseH - dy : baseH + dy))
-            ops.push({ op: 'set', at: path + '.h', value: want })
-            if (edges.top) ops.push({ op: 'set', at: path + '.y', value: Math.max(0, Math.round(baseY + (baseH - want))) })
-          }
+          const ops = resizeOps(path, node, entry, edges, dx, dy)
           if (ops.length === 0) return
           const corner = (edges.left || edges.right) && (edges.top || edges.bottom)
           applyOps(ops, (corner ? 'Resized ' : 'Stretched ') + layerLabel(node, path))
@@ -1431,28 +1945,73 @@ window.__ModuleLoader__.load({
         }
       }, [draft, selected, sessionId])
 
-      /** Apply a look to the selected design - the same transform `canvas_style` runs. */
-      const restyle = useCallback(
-        async (styleId) => {
-          if (!selected || !sessionId || !styleId) return
+      /**
+       * Delete one design, after the person has confirmed it on the row.
+       *
+       * The same route `canvas_delete` posts to, addressed by id AND scope, so a
+       * library design is removed from the library and a conversation one from the
+       * conversation - never the wrong one. The design is dropped from the local
+       * payload immediately afterwards, because the rail and the artboard read that
+       * payload and a deleted design must stop being drawn at once; the host's answer
+       * is what says whether the removal actually happened.
+       */
+      const deleteDesign = useCallback(
+        async (entry) => {
+          if (!entry || !sessionId) return
           setBusy(true)
           setNote(null)
           try {
-            const answer = await api(DOCUMENT_ROUTE, {
+            const answer = await api(DELETE_ROUTE, {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ session: sessionId, id: selected.id, scope: selected.scope, style: styleId, by: 'person' }),
+              body: JSON.stringify({ session: sessionId, id: entry.id, scope: entry.scope }),
             })
-            if (answer && answer.design) mergeDesign(storeFor(sessionId), answer.design)
-            setNote({ kind: 'info', text: 'Applied the ' + styleId + ' style (revision ' + (answer && answer.design ? answer.design.revision : '?') + ') - nothing moved.' })
+            if (answer && answer.removed) {
+              removeDesign(storeFor(sessionId), entry.id)
+              setSelectedId((current) => (current === entry.id ? null : current))
+              setSelectedPath(null)
+              setNote({ kind: 'info', text: 'Deleted ' + entry.title + '.' })
+            } else {
+              setNote({ kind: 'error', text: 'The host did not find ' + entry.id + ' to delete.' })
+            }
           } catch (err) {
-            setNote({ kind: 'error', text: err && err.message ? err.message : 'the style could not be applied' })
+            setNote({ kind: 'error', text: err && err.message ? err.message : 'the design could not be deleted' })
           } finally {
             setBusy(false)
+            setConfirmDelete(null)
           }
         },
-        [selected, sessionId],
+        [sessionId],
       )
+
+      /**
+       * SAVE: the design is already persisted by the host on every edit, so what this
+       * does is CONFIRM it - it re-reads the state and reports the revision the host
+       * holds, which is the one fact a person wants before they close the tab. It
+       * deliberately does not invent a second persistence path: two writers for one
+       * document is how a document forks.
+       */
+      const saveDesign = useCallback(async () => {
+        if (!selected || !sessionId) return
+        setBusy(true)
+        setNote(null)
+        try {
+          const payload = await api(STATE_ROUTE + '?session=' + encodeURIComponent(sessionId))
+          applyState(storeFor(sessionId), payload)
+          const designs = Array.isArray(payload && payload.designs) ? payload.designs : []
+          const saved = designs.find((entry) => entry.id === selected.id) ?? null
+          setNote({
+            kind: 'info',
+            text: saved
+              ? 'Saved: ' + saved.id + ' is on the host at revision ' + saved.revision + (saved.title ? ' (' + saved.title + ')' : '') + '.'
+              : selected.id + ' is no longer in this conversation.',
+          })
+        } catch (err) {
+          setNote({ kind: 'error', text: err && err.message ? err.message : 'the design could not be confirmed' })
+        } finally {
+          setBusy(false)
+        }
+      }, [selected, sessionId])
 
       /** Start a new design from a preset + archetype. */
       const createDesign = useCallback(
@@ -1487,9 +2046,10 @@ window.__ModuleLoader__.load({
 
       /** Export the selected design: the host writes the file. */
       const exportDesign = useCallback(
-        async (format, scale, target) => {
+        async (format, scale, target, label) => {
           if (!engine || !selected || !sessionId) return
           setBusy(true)
+          setExporting(label ?? format)
           setNote(null)
           try {
             const prepared = await prepareRender(engine, selected.document, preset, sessionId, (state && state.fonts) || {})
@@ -1504,11 +2064,16 @@ window.__ModuleLoader__.load({
             }
             const answer = await api(REPORT_ROUTE, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
             setNote({ kind: 'info', text: 'Wrote ' + (answer && answer.path ? answer.path : 'the file') })
+            // The menu closes on a WRITE, not on the gesture that started it: a failed
+            // export leaves it open, on the row the person is about to press again.
+            const menu = exportMenuRef.current
+            if (menu) menu.open = false
             refresh(sessionId, { force: true }).catch(() => {})
           } catch (err) {
             setNote({ kind: 'error', text: err && err.message ? err.message : 'the export failed' })
           } finally {
             setBusy(false)
+            setExporting('')
           }
         },
         [engine, selected, sessionId, preset, state],
@@ -1522,6 +2087,105 @@ window.__ModuleLoader__.load({
         lastPreparedRef.current = value
       }, [])
 
+      /**
+       * One decision from the transform controls: nudge, size, scale, rotate, opacity
+       * or colour. Everything it writes goes through `applyTransformOps`, which is the
+       * same validator the agent's patch and the drag use - so a control can offer a
+       * value the language refuses (too small, out of range) and be told so, rather
+       * than writing a document nothing validates.
+       */
+      const applyTransformOps = useCallback(
+        (ops, label) => {
+          if (!selectedPath || ops.length === 0) return
+          applyOps(ops, label)
+        },
+        [selectedPath, applyOps],
+      )
+
+      /** The selected node and the box it was laid out into, as the controls read them. */
+      const transformSubject = useCallback(() => {
+        if (!selected || !selectedPath) return null
+        const node = nodeAtPath(selected.document, selectedPath)
+        if (!node || typeof node !== 'object') return null
+        const prepared = lastPreparedRef.current
+        const entry = prepared ? prepared.boxes.find((row) => row.path === selectedPath) : null
+        return { node, entry: entry ? { box: entry.box, kind: entry.kind } : null, path: selectedPath }
+      }, [selected, selectedPath])
+
+      /** Eight-way placement, in design pixels, at the step the person chose. */
+      const nudgeLayer = useCallback(
+        (dx, dy) => {
+          const subject = transformSubject()
+          if (!subject) return
+          applyTransformOps(nudgeOps(subject.path, subject.node, subject.entry, dx, dy), 'Moved ' + layerLabel(subject.node, subject.path))
+        },
+        [transformSubject, applyTransformOps],
+      )
+
+      /** A typed width or height. */
+      const sizeLayer = useCallback(
+        (axis, raw) => {
+          const subject = transformSubject()
+          if (!subject) return
+          applyTransformOps(sizeOps(subject.path, subject.node, subject.entry, axis, Number(raw)), 'Sized ' + layerLabel(subject.node, subject.path))
+        },
+        [transformSubject, applyTransformOps],
+      )
+
+      /**
+       * A scale factor on the size the layer HAS - the box the layout produced when the
+       * node carries no number of its own, which is the difference between "make this
+       * 10% bigger" and "give it a number I invented".
+       */
+      const scaleLayer = useCallback(
+        (factor) => {
+          const subject = transformSubject()
+          if (!subject || !Number.isFinite(factor)) return
+          const box = subject.entry ? subject.entry.box : null
+          const w = typeof subject.node.w === 'number' ? subject.node.w : box ? box.w : null
+          const h = typeof subject.node.h === 'number' ? subject.node.h : box ? box.h : null
+          if (w === null) return
+          const ops = []
+          if (w !== null) ops.push(...sizeOps(subject.path, subject.node, subject.entry, 'w', w * factor))
+          if (h !== null) ops.push(...sizeOps(subject.path, subject.node, subject.entry, 'h', h * factor))
+          applyTransformOps(ops, 'Scaled ' + layerLabel(subject.node, subject.path) + ' \u00d7' + factor)
+        },
+        [transformSubject, applyTransformOps],
+      )
+
+      /** Rotation, in degrees, and the reset back to zero. */
+      const rotateLayer = useCallback(
+        (degrees) => {
+          const subject = transformSubject()
+          if (!subject) return
+          applyTransformOps(rotateOps(subject.path, subject.node, degrees), degrees === 0 ? 'Straightened ' + layerLabel(subject.node, subject.path) : 'Rotated ' + layerLabel(subject.node, subject.path) + ' to ' + Math.round(degrees) + '\u00b0')
+        },
+        [transformSubject, applyTransformOps],
+      )
+
+      /** The layer's own opacity. */
+      const opacityLayer = useCallback(
+        (value) => {
+          const subject = transformSubject()
+          if (!subject) return
+          applyTransformOps(opacityOps(subject.path, subject.node, value), 'Set the opacity of ' + layerLabel(subject.node, subject.path))
+        },
+        [transformSubject, applyTransformOps],
+      )
+
+      /** One paint target's colour, by the key `paintTargets` gave it. */
+      const colorLayer = useCallback(
+        (key, color) => {
+          const subject = transformSubject()
+          if (!subject) return
+          const target = paintTargets(subject.node).find((row) => row.key === key)
+          const ops = colorOps(subject.path, target, color)
+          if (ops.length === 0) return
+          applyTransformOps(ops, 'Recoloured ' + layerLabel(subject.node, subject.path))
+        },
+        [transformSubject, applyTransformOps],
+      )
+
       if (!sessionId) {
         return h('div', { className: 'dsc-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true' },
           h('div', { className: 'dsc-pad' }, h('div', { className: 'dsc-empty' }, h('h3', null, 'Canvas'), h('p', null, 'Open a conversation to design in it.'))),
@@ -1533,36 +2197,93 @@ window.__ModuleLoader__.load({
         { className: 'dsc-bar', 'data-canvas-bar': 'true' },
         h('span', { className: 'dsc-chip', title: 'dsh-canvas version' }, 'Canvas ' + PLUGIN_VERSION),
         selected ? h('span', { className: 'dsc-chip' }, selected.preset ?? 'free-form') : null,
-        (state && state.styles && state.styles.length > 0)
-          ? h('select', {
-              className: 'dsc-select',
-              'data-canvas-style-picker': 'true',
-              title: 'The look this design carries - applying one never moves anything',
-              value: (selected && selected.document && selected.document.style) || '',
-              disabled: busy || !selected,
-              onChange: (event) => restyle(event.target.value),
-            },
-              h('option', { value: '' }, 'No style'),
-              (state.styles || []).map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name)),
-            )
-          : null,
         selected ? h(Pill, { verification: selected.verification }) : null,
         h('span', { className: 'dsc-spacer' }),
-        h('div', { className: 'dsc-barGroup' },
-          h('span', { className: 'dsc-chip' }, 'Zoom'),
-          ...ZOOM_STEPS.map((step) => h(Btn, { key: 'zoom-' + step, active: zoom === step, onClick: () => setZoom(step), title: step === 'fit' ? 'Fit to the pane' : Math.round(step * 100) + '%' }, step === 'fit' ? 'Fit' : Math.round(step * 100) + '%')),
+        // ZOOM IS A MENU TOO: five rungs in the bar was a row of buttons for what is
+        // one choice, and the rungs are still all there - the summary simply says
+        // which one is in force.
+        h('details', { className: 'dsc-menu', 'data-canvas-zoom': 'true' },
+          h('summary', { className: 'dsc-btn', title: 'How much of the design the pane shows' }, 'Zoom: ' + (zoom === 'fit' ? 'Fit' : Math.round(zoom * 100) + '%') + ' \u25be'),
+          h('div', { className: 'dsc-menuPanel' },
+            ZOOM_STEPS.map((step) => h('button', {
+              key: 'zoom-' + step,
+              type: 'button',
+              className: 'dsc-menuItem',
+              'data-canvas-zoom-step': String(step),
+              'data-active': zoom === step ? 'true' : 'false',
+              onClick: (event) => { event.preventDefault(); setZoom(step); event.currentTarget.closest('details').open = false },
+            },
+              h('span', { className: 'dsc-menuLabel' }, step === 'fit' ? 'Fit' : Math.round(step * 100) + '%'),
+              h('span', { className: 'dsc-menuHint' }, step === 'fit' ? 'The whole design in the pane' : step === 1 ? 'Actual pixels' : step < 1 ? 'Smaller' : 'Twice the pixels'),
+            )),
+          ),
         ),
         h('div', { className: 'dsc-barGroup' },
           h(Btn, { active: overlays.safe, onClick: () => setOverlays((value) => ({ ...value, safe: !value.safe })), title: 'Show the preset\u2019s safe and keep-out areas' }, 'Safe areas'),
           h(Btn, { active: overlays.boxes, onClick: () => setOverlays((value) => ({ ...value, boxes: !value.boxes })), title: 'Show every node\u2019s box' }, 'Boxes'),
         ),
-        h('div', { className: 'dsc-barGroup' },
-          h(Btn, { onClick: () => exportDesign('png', 1, 'desktop'), disabled: busy || !selected, kind: 'primary' }, 'Export PNG'),
-          h(Btn, { onClick: () => exportDesign('png', 2, 'desktop'), disabled: busy || !selected, title: 'Twice the pixels, same composition' }, '2\u00d7'),
-          h(Btn, { onClick: () => exportDesign('svg', 1, 'desktop'), disabled: busy || !selected, title: 'Vector, with the bundled fonts embedded' }, 'SVG'),
-          h(Btn, { onClick: () => exportDesign('png', 1, 'workspace'), disabled: busy || !selected, title: 'Write into the conversation folder' }, 'To workspace'),
+        // ONE EXPORT CONTROL, not four buttons. Format and destination are two axes
+        // of ONE decision, and four buttons for it was the first thing to wrap out of
+        // the bar when the pane got narrow - so what is left in the bar is the
+        // decision, and the menu holds the axes.
+        h('details', { className: 'dsc-menu', 'data-canvas-export': 'true', ref: exportMenuRef },
+          h('summary', {
+            className: 'dsc-btn',
+            'data-kind': 'primary',
+            'data-active': exporting ? 'true' : 'false',
+            'aria-disabled': busy || !selected ? 'true' : 'false',
+            title: selected ? 'Write this design to a file' : 'Nothing to export yet',
+          }, exporting ? 'Exporting\u2026' : 'Export \u25be'),
+          h('div', { className: 'dsc-menuPanel' },
+            h('button', {
+              type: 'button',
+              className: 'dsc-menuItem',
+              'data-canvas-export-item': 'png-1',
+              disabled: busy || !selected,
+              onClick: (event) => { event.preventDefault(); exportDesign('png', 1, 'desktop', 'PNG') },
+            },
+              h('span', { className: 'dsc-menuLabel' }, 'PNG'),
+              h('span', { className: 'dsc-menuHint' }, 'The canvas at its own pixels \u2192 Desktop'),
+            ),
+            h('button', {
+              type: 'button',
+              className: 'dsc-menuItem',
+              'data-canvas-export-item': 'png-2',
+              disabled: busy || !selected,
+              onClick: (event) => { event.preventDefault(); exportDesign('png', 2, 'desktop', 'PNG 2\u00d7') },
+            },
+              h('span', { className: 'dsc-menuLabel' }, 'PNG \u00d7 2'),
+              h('span', { className: 'dsc-menuHint' }, 'Twice the pixels, same composition'),
+            ),
+            h('button', {
+              type: 'button',
+              className: 'dsc-menuItem',
+              'data-canvas-export-item': 'svg',
+              disabled: busy || !selected,
+              onClick: (event) => { event.preventDefault(); exportDesign('svg', 1, 'desktop', 'SVG') },
+            },
+              h('span', { className: 'dsc-menuLabel' }, 'SVG'),
+              h('span', { className: 'dsc-menuHint' }, 'Vector, with the bundled fonts embedded'),
+            ),
+            h('button', {
+              type: 'button',
+              className: 'dsc-menuItem',
+              'data-canvas-export-item': 'png-workspace',
+              disabled: busy || !selected,
+              onClick: (event) => { event.preventDefault(); exportDesign('png', 1, 'workspace', 'PNG \u2192 workspace') },
+            },
+              h('span', { className: 'dsc-menuLabel' }, 'PNG \u2192 workspace'),
+              h('span', { className: 'dsc-menuHint' }, 'Write into the conversation folder'),
+            ),
+          ),
         ),
         h(Btn, { active: drawer, onClick: () => setDrawer((value) => !value), title: 'Edit the document' }, 'Source'),
+        // SAVE: what it promises is that the design is on the host's disk at the
+        // revision on screen - which is the fact a person wants before closing the
+        // tab, and a fact only the HOST can answer. So it re-reads the design rather
+        // than pretending to write one: no optimistically-saved document can disagree
+        // with the file.
+        h(Btn, { onClick: saveDesign, disabled: busy || !selected, title: 'Confirm this revision is saved on the host' }, 'Save'),
         h(Btn, { onClick: () => refresh(sessionId, { force: true }) }, 'Reload'),
       )
 
@@ -1581,11 +2302,39 @@ window.__ModuleLoader__.load({
               key: entry.id,
               className: 'dsc-row',
               'data-selected': entry.id === (selected && selected.id) ? 'true' : 'false',
+              'data-armed': confirmDelete === entry.id ? 'true' : 'false',
+              'data-canvas-design': entry.id,
               onClick: () => setSelectedId(entry.id),
               title: entry.title,
             },
-            h('div', { className: 'dsc-rowTitle' }, h('span', { className: 'dsc-rowName' }, entry.title), h(Pill, { verification: entry.verification })),
-            h('div', { className: 'dsc-rowMeta' }, (entry.preset ?? 'free-form') + ' · rev ' + entry.revision + ' · ' + entry.warnings + ' warn'),
+            h('div', { className: 'dsc-rowTitle' },
+              h('span', { className: 'dsc-rowName' }, entry.title),
+              h(Pill, { verification: entry.verification }),
+              // THE DELETE CONTROL: one small × on the row, revealed on hover or on
+              // the selected row, which becomes the question on the first click and
+              // the commit on the second.
+              confirmDelete === entry.id
+                ? h('span', { className: 'dsc-rowConfirm' },
+                    h('button', {
+                      type: 'button',
+                      className: 'dsc-mini dsc-danger',
+                      'data-canvas-delete-confirm': entry.id,
+                      disabled: busy,
+                      title: 'Delete this design from ' + (entry.scope === 'library' ? 'the library' : 'this conversation'),
+                      onClick: (event) => { event.stopPropagation(); deleteDesign(entry) },
+                    }, 'Delete'),
+                    h('button', { type: 'button', className: 'dsc-mini', title: 'Keep it', onClick: (event) => { event.stopPropagation(); setConfirmDelete(null) } }, 'Keep'),
+                  )
+                : h('button', {
+                    type: 'button',
+                    className: 'dsc-mini dsc-rowDelete',
+                    'data-canvas-delete': entry.id,
+                    disabled: busy,
+                    title: 'Delete this design',
+                    onClick: (event) => { event.stopPropagation(); setConfirmDelete(entry.id) },
+                  }, '\u00d7'),
+            ),
+            h('div', { className: 'dsc-rowMeta' }, (entry.preset ?? 'free-form') + ' \u00b7 rev ' + entry.revision + ' \u00b7 ' + entry.warnings + ' warn'),
           ),
         ),
       )
@@ -1606,74 +2355,250 @@ window.__ModuleLoader__.load({
               onMetrics,
               onPrepared,
               selectedPath,
-              onSelect: setSelectedPath,
+              onSelect: selectPath,
+              onDeselect: deselectPath,
               onMove: moveLayer,
               onResize: resizeLayer,
-              feedRef,
+              triggerSelect,
             })
-          : h('div', { className: 'dsc-pad' }, h(EmptyState, { engineNote, error, state, onCreate: createDesign, onOpenNew: () => setNewOpen(true) })),
+          : h('div', { className: 'dsc-padEmpty' }, h(EmptyState, { engineNote, error, state, onCreate: createDesign, onOpenNew: () => setNewOpen(true) })),
       )
 
       const layers = selected ? layerTree(selected.document) : []
       const styleLibrary = (state && state.styles) || []
       const currentStyleId = selected && selected.document ? selected.document.style ?? null : null
       const currentStyle = styleLibrary.find((entry) => entry.id === currentStyleId) ?? null
+      // THE TWO PANES. `design` is what a person edits with; `inspect` is what they
+      // judge with. They are never shown together, which is the whole point: neither
+      // can push the other out of the bar.
+      const designPane = h(
+        'div',
+        { className: 'dsc-pane', 'data-canvas-pane': 'design' },
+        // THE STYLE this design carries: its name, what it is for, and the rules the
+        // person and the model are both held to. Coming from the same pack the
+        // transform reads, so the advice cannot drift from the look. ONE do, one
+        // don't and one gate - the style library holds the rest, and a card that
+        // lists six rules is a wall of text in a 296px bar.
+        currentStyle
+          ? h('div', { className: 'dsc-styleCard', 'data-canvas-style-card': currentStyle.id },
+              h('strong', null, currentStyle.name),
+              h('span', { className: 'dsc-styleIntent', title: currentStyle.intent }, currentStyle.intent),
+              ...(currentStyle.do || []).slice(0, 1).map((rule, index) => h('span', { key: 'do-' + index, className: 'dsc-styleRule' }, h('b', null, 'Do: '), rule)),
+              ...(currentStyle.dont || []).slice(0, 1).map((rule, index) => h('span', { key: 'dont-' + index, className: 'dsc-styleRule' }, h('b', null, 'Don\u2019t: '), rule)),
+              ...(currentStyle.gates || []).slice(0, 1).map((gate, index) => h('span', { key: 'gate-' + index, className: 'dsc-styleRule' }, h('b', null, 'Gate: '), gate)),
+            )
+          : styleLibrary.length > 0
+            ? h('p', { className: 'dsc-rowMeta' }, 'No style yet - pick one above, or ask the agent for a look.')
+            : null,
+        // THE LAYER LIST: every node of the design, in paint order, nested. A row
+        // selects the node the drag will move; the arrows reorder it inside its own
+        // array; the values are the design's own, in design pixels. The list owns its
+        // own scrollport, so two hundred layers cost the lints under it nothing.
+        h('div', { className: 'dsc-section', 'data-grow': 'true' },
+          h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Layers'), h('span', null, selected ? layers.length + ' node(s)' : '')),
+          h('div', { className: 'dsc-layersScroll' },
+            layers.length > 0
+              ? h('ul', { className: 'dsc-layers', 'data-canvas-layers': 'true' },
+                  layers.map((row) =>
+                    h('li', {
+                      key: row.path,
+                      className: 'dsc-layer',
+                      'data-selected': row.path === selectedPath ? 'true' : 'false',
+                      'data-layer-path': row.path,
+                      // The indent is CAPPED: a deeply nested node stops walking off
+                      // the right edge of a 296px bar, and the row's tooltip still
+                      // carries its kind and its full path.
+                      style: { paddingLeft: 6 + Math.min(row.depth, 6) * 8 + 'px' },
+                      onClick: () => setSelectedPath(row.path),
+                      title: row.node.kind + ' \u00b7 ' + row.path,
+                    },
+                      h('span', { className: 'dsc-layerKind' }, layerKindBadge(row.node.kind)),
+                      h('span', { className: 'dsc-layerName' }, layerLabel(row.node, row.path)),
+                      h('span', { className: 'dsc-layerTools' },
+                        h('button', { type: 'button', className: 'dsc-mini', title: 'Move up in this array', disabled: busy || row.path.endsWith('.0'), onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'up') } }, '\u2191'),
+                        h('button', { type: 'button', className: 'dsc-mini', title: 'Move down in this array', disabled: busy, onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'down') } }, '\u2193'),
+                      ),
+                    ),
+                  ),
+                )
+              : h('p', { className: 'dsc-rowMeta' }, selected ? 'This design has no layers yet.' : 'No design selected.'),
+          ),
+        ),
+        // THE LINTS: the same advisory list the model is handed, for the revision on
+        // screen. They live in the SHAPING pane rather than the auditing one because
+        // they are a to-do list - what a person acts on while editing.
+        h('div', { className: 'dsc-section' },
+          h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Lints'), h('span', null, lints ? lints.length + ' \u00b7 rev ' + (selected ? selected.revision : '?') : 'laying out\u2026')),
+          lints && lints.length > 0
+            ? h('ul', { className: 'dsc-lints' }, lints.map((lint, index) => h(LintLine, { key: lint.code + index, lint })))
+            : h('p', { className: 'dsc-rowMeta' }, lints ? 'None.' : 'Laying out\u2026'),
+        ),
+      )
+
+      // THE INSPECT PANE: the SELECTED LAYER, as controls rather than prose. A person
+      // shapes a design by dragging on the artboard and by typing here, and the two
+      // write through the SAME document route the agent's `canvas_patch` uses - so a
+      // button press and a drag cannot produce different documents. The black feed
+      // thumbnail that used to sit here is GONE: it duplicated the artboard at a
+      // quarter scale and showed nothing the canvas was not already showing.
+      const selectedNode = selected && selectedPath ? nodeAtPath(selected.document, selectedPath) : null
+      const selectedBox = (() => {
+        const prepared = lastPreparedRef.current
+        if (!prepared || !selectedPath) return null
+        const entry = prepared.boxes.find((row) => row.path === selectedPath)
+        return entry ? entry.box : null
+      })()
+      const targets = paintTargets(selectedNode)
+      const designColors = (() => {
+        const tokens = selected && selected.document && selected.document.tokens ? selected.document.tokens.color : null
+        return tokens && typeof tokens === 'object' ? Object.values(tokens).filter((value) => typeof value === 'string') : []
+      })()
+      const transformPane = !selectedNode
+        ? h('p', { className: 'dsc-rowMeta' }, 'Select a layer to transform it - click one in the layer list, or on the canvas.')
+        : h(
+            React.Fragment,
+            null,
+            h('div', { className: 'dsc-section', 'data-canvas-transform': 'true' },
+              h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Move'), h('span', null, nudgeStep + 'px')),
+              // THE FOUR DIRECTIONS IN ONE ROW. A cross is the gesture a gamepad has,
+              // not the one a toolbar has: four buttons side by side read as "move",
+              // and the row is one line in a 296px bar instead of a 3x3 block.
+              h('div', { className: 'dsc-nudgeRow', 'data-canvas-nudge': 'true' },
+                h('button', { type: 'button', 'data-canvas-nudge-dir': 'left', disabled: busy, title: 'Move left', onClick: () => nudgeLayer(-nudgeStep, 0) }, '\u2190'),
+                h('button', { type: 'button', 'data-canvas-nudge-dir': 'up', disabled: busy, title: 'Move up', onClick: () => nudgeLayer(0, -nudgeStep) }, '\u2191'),
+                h('button', { type: 'button', 'data-canvas-nudge-dir': 'down', disabled: busy, title: 'Move down', onClick: () => nudgeLayer(0, nudgeStep) }, '\u2193'),
+                h('button', { type: 'button', 'data-canvas-nudge-dir': 'right', disabled: busy, title: 'Move right', onClick: () => nudgeLayer(nudgeStep, 0) }, '\u2192'),
+                h('span', { className: 'dsc-spacer' }),
+                [1, 10].map((step) => h('button', {
+                  key: 'step-' + step,
+                  type: 'button',
+                  className: 'dsc-mini',
+                  'data-canvas-step': String(step),
+                  'data-on': nudgeStep === step ? 'true' : 'false',
+                  style: { width: 'auto', padding: '0 8px', height: '26px' },
+                  onClick: () => setNudgeStep(step),
+                }, step + 'px')),
+              ),
+            ),
+            h('div', { className: 'dsc-section', 'data-canvas-size': 'true' },
+              h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Size'), h('span', null, selectedBox ? Math.round(selectedBox.w) + ' \u00d7 ' + Math.round(selectedBox.h) + ' as laid out' : '')),
+              h('div', { className: 'dsc-row2' },
+                h('span', { className: 'dsc-fieldLabel' }, 'Width'),
+                h('input', {
+                  className: 'dsc-num',
+                  type: 'number',
+                  min: 8,
+                  'data-canvas-size-input': 'w',
+                  disabled: busy,
+                  value: Math.round(typeof selectedNode.w === 'number' ? selectedNode.w : selectedBox ? selectedBox.w : 0),
+                  onChange: (event) => sizeLayer('w', event.target.value),
+                  title: 'A number, or type over a hug to give it one',
+                }),
+                h('input', {
+                  className: 'dsc-num',
+                  type: 'number',
+                  min: 8,
+                  'data-canvas-size-input': 'h',
+                  disabled: busy || selectedNode.kind === 'text',
+                  value: Math.round(typeof selectedNode.h === 'number' ? selectedNode.h : selectedBox ? selectedBox.h : 0),
+                  onChange: (event) => sizeLayer('h', event.target.value),
+                  title: selectedNode.kind === 'text' ? 'A text layer\u2019s height is what its words measure' : 'Height in design pixels',
+                }),
+              ),
+              h('div', { className: 'dsc-row2' },
+                h('span', { className: 'dsc-fieldLabel' }, 'Scale'),
+                [0.5, 0.9, 1.1, 2].map((factor) => h('button', {
+                  key: 'scale-' + factor,
+                  type: 'button',
+                  className: 'dsc-mini',
+                  'data-canvas-scale': String(factor),
+                  disabled: busy,
+                  style: { width: 'auto', padding: '0 7px', height: '22px' },
+                  title: 'Multiply the size by ' + factor,
+                  onClick: () => scaleLayer(factor),
+                }, '\u00d7' + factor)),
+              ),
+            ),
+            h('div', { className: 'dsc-section', 'data-canvas-frame': 'true' },
+              h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Rotate') , h('span', null, (typeof selectedNode.rotate === 'number' ? selectedNode.rotate : 0) + '\u00b0')),
+              h('div', { className: 'dsc-row2' },
+                h('input', {
+                  className: 'dsc-slider',
+                  type: 'range',
+                  min: -180,
+                  max: 180,
+                  step: 1,
+                  'data-canvas-rotate': 'true',
+                  disabled: busy,
+                  value: typeof selectedNode.rotate === 'number' ? selectedNode.rotate : 0,
+                  onChange: (event) => rotateLayer(Number(event.target.value)),
+                }),
+                h('button', { type: 'button', className: 'dsc-mini', style: { width: 'auto', padding: '0 7px', height: '22px' }, disabled: busy, title: 'Back to 0\u00b0', 'data-canvas-rotate-reset': 'true', onClick: () => rotateLayer(0) }, '0\u00b0'),
+              ),
+              h('div', { className: 'dsc-row2' },
+                h('span', { className: 'dsc-fieldLabel' }, 'Opacity'),
+                h('input', {
+                  className: 'dsc-slider',
+                  type: 'range',
+                  min: 0,
+                  max: 1,
+                  step: 0.05,
+                  'data-canvas-opacity': 'true',
+                  disabled: busy,
+                  value: typeof selectedNode.opacity === 'number' ? selectedNode.opacity : 1,
+                  onChange: (event) => opacityLayer(Number(event.target.value)),
+                }),
+                h('span', { className: 'dsc-rowMeta', style: { width: '34px', textAlign: 'right' } }, Math.round((typeof selectedNode.opacity === 'number' ? selectedNode.opacity : 1) * 100) + '%'),
+              ),
+            ),
+            h('div', { className: 'dsc-section', 'data-canvas-colors': 'true' },
+              h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Colour'), h('span', null, targets.length > 0 ? targets.length + ' target(s)' : 'none')),
+              targets.length === 0
+                ? h('p', { className: 'dsc-rowMeta' }, 'This kind paints nothing it owns - an image or an SVG document keeps its own colours.')
+                : targets.map((target) =>
+                    h('div', { key: target.key, className: 'dsc-row2', 'data-canvas-color-row': target.key },
+                      h('span', { className: 'dsc-fieldLabel' }, target.label),
+                      h('input', {
+                        className: 'dsc-colorInput',
+                        type: 'color',
+                        'data-canvas-color': target.key,
+                        disabled: busy,
+                        value: paintColorOf(target.paint) ?? '#000000',
+                        onChange: (event) => colorLayer(target.key, event.target.value),
+                      }),
+                      h('div', { className: 'dsc-swatches' },
+                        designColors.slice(0, 8).map((color, index) => h('button', {
+                          key: 'swatch-' + index,
+                          type: 'button',
+                          className: 'dsc-swatch',
+                          'data-canvas-swatch': color,
+                          'data-active': paintColorOf(target.paint) === paintColorOf(color) ? 'true' : 'false',
+                          style: { background: color },
+                          title: color,
+                          disabled: busy,
+                          onClick: () => colorLayer(target.key, color),
+                        })),
+                      ),
+                    ),
+                  ),
+            ),
+          )
+
+      const inspectPane = h(
+        'div',
+        { className: 'dsc-pane', 'data-canvas-pane': 'inspect' },
+        h('div', { className: 'dsc-paneScroll' }, transformPane),
+      )
+
       const side = h(
         'aside',
         { className: 'dsc-side', 'data-canvas-side': 'true' },
-        h('div', { className: 'dsc-sideHead' }, h('span', null, 'Layers'), h('span', null, selected ? layers.length + ' · rev ' + selected.revision : '')),
-        h('div', { className: 'dsc-sideBody' },
-          // THE STYLE this design carries: its name, what it is for, and the rules
-          // the person and the model are both held to. Coming from the same pack the
-          // transform reads, so the advice cannot drift from the look.
-          currentStyle
-            ? h('div', { className: 'dsc-styleCard', 'data-canvas-style-card': currentStyle.id },
-                h('strong', null, currentStyle.name),
-                h('span', { className: 'dsc-styleIntent' }, currentStyle.intent),
-                ...(currentStyle.do || []).slice(0, 2).map((rule, index) => h('span', { key: 'do-' + index, className: 'dsc-styleRule' }, h('b', null, 'Do: '), rule)),
-                ...(currentStyle.dont || []).slice(0, 2).map((rule, index) => h('span', { key: 'dont-' + index, className: 'dsc-styleRule' }, h('b', null, 'Don\u2019t: '), rule)),
-                ...(currentStyle.gates || []).slice(0, 2).map((gate, index) => h('span', { key: 'gate-' + index, className: 'dsc-styleRule' }, h('b', null, 'Gate: '), gate)),
-              )
-            : styleLibrary.length > 0
-              ? h('p', { className: 'dsc-rowMeta' }, 'No style yet - pick one above, or ask the agent for a look.')
-              : null,
-          // THE LAYER LIST: every node of the design, in paint order, nested. A row
-          // selects the node the drag will move; the arrows reorder it inside its
-          // own array; the values are the design's own, in design pixels.
-          layers.length > 0
-            ? h('ul', { className: 'dsc-layers', 'data-canvas-layers': 'true' },
-                layers.map((row) =>
-                  h('li', {
-                    key: row.path,
-                    className: 'dsc-layer',
-                    'data-selected': row.path === selectedPath ? 'true' : 'false',
-                    'data-layer-path': row.path,
-                    style: { paddingLeft: 6 + row.depth * 10 + 'px' },
-                    onClick: () => setSelectedPath(row.path),
-                    title: row.path,
-                  },
-                    h('span', { className: 'dsc-layerKind' }, row.node.kind),
-                    h('span', { className: 'dsc-layerName' }, layerLabel(row.node, row.path)),
-                    h('span', { className: 'dsc-layerTools' },
-                      h('button', { type: 'button', className: 'dsc-mini', title: 'Move up in this array', disabled: busy || row.path.endsWith('.0'), onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'up') } }, '↑'),
-                      h('button', { type: 'button', className: 'dsc-mini', title: 'Move down in this array', disabled: busy, onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'down') } }, '↓'),
-                    ),
-                  ),
-                ),
-              )
-            : h('p', { className: 'dsc-rowMeta' }, selected ? 'This design has no layers yet.' : 'No design selected.'),
-          h('p', { className: 'dsc-rowMeta', style: { margin: '10px 0 6px' } }, 'Drag a layer to move it, or a handle of the selection to stretch it. A node inside a frame\u2019s flow is given the position it has (which takes it out of the flow), and a text layer stretches in width.'),
-          h('div', { className: 'dsc-sideHead', style: { borderTop: '.5px solid var(--dsw-alias-border-l2)', margin: '0 -10px', padding: '8px 10px' } }, h('span', null, 'Report'), h('span', null, metrics ? '' : 'laying out…')),
-          metrics ? h('pre', { className: 'dsc-metrics' }, metricsText(metrics)) : h('p', { className: 'dsc-rowMeta' }, 'No measurements yet.'),
-          selected && selected.verification && selected.verification.path
-            ? h('p', { className: 'dsc-rowMeta', title: selected.verification.path }, 'Last picture: ' + shortPath(selected.verification.path))
-            : null,
-          h('div', { className: 'dsc-feed' }, h('span', { className: 'dsc-rowMeta' }, 'Feed size (' + Math.round(FEED_SCALE * 100) + '%)'), h('canvas', { ref: feedRef, 'data-canvas-feed': 'true' })),
-          h('p', { className: 'dsc-rowMeta', style: { marginTop: '10px' } }, 'Lints for this revision:'),
-          lints && lints.length > 0
-            ? h('ul', { className: 'dsc-lints' }, lints.map((lint, index) => h(LintLine, { key: lint.code + index, lint })))
-            : h('p', { className: 'dsc-rowMeta' }, lints ? 'None.' : 'Laying out…'),
+        h('div', { className: 'dsc-sideHead' }, h('span', null, 'Canvas'), h('span', null, selected ? 'rev ' + selected.revision : '')),
+        h('div', { className: 'dsc-sideTabs', 'data-canvas-side-tabs': 'true' },
+          h('button', { type: 'button', className: 'dsc-sideTab', 'data-active': sideTab === 'design' ? 'true' : 'false', onClick: () => setSideTab('design') }, 'Design' + (lints && lints.length > 0 ? ' \u00b7 ' + lints.length : '')),
+          h('button', { type: 'button', className: 'dsc-sideTab', 'data-active': sideTab === 'inspect' ? 'true' : 'false', onClick: () => setSideTab('inspect') }, 'Inspect'),
         ),
+        sideTab === 'inspect' ? inspectPane : designPane,
       )
 
       return h(
@@ -1697,19 +2622,13 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** The feed thumbnail's canvas lives in the side panel and is painted by the
-     * artboard's paint effect, so the person sees exactly what the model is told
-     * to judge legibility on. */
-    function metricsText(metrics) {
-      const parts = []
-      if (typeof metrics.ops === 'number') parts.push('ops      ' + metrics.ops)
-      if (typeof metrics.boxes === 'number') parts.push('nodes    ' + metrics.boxes)
-      if (typeof metrics.textNodes === 'number') parts.push('text     ' + metrics.textNodes)
-      if (typeof metrics.lines === 'number') parts.push('lines    ' + metrics.lines)
-      if (typeof metrics.smallestType === 'number') parts.push('smallest ' + metrics.smallestType + 'px')
-      if (Array.isArray(metrics.families)) parts.push('families ' + metrics.families.join(', '))
-      if (typeof metrics.ms === 'number') parts.push('layout   ' + metrics.ms + 'ms')
-      return parts.join('\n')
+    /**
+     * A node kind as a badge: three letters. The layer row lives in a 296px bar, and
+     * the full kind is a `title` on the row, where a person who wants it can read it.
+     */
+    function layerKindBadge(kind) {
+      const text = String(kind ?? '')
+      return text.length > 3 ? text.slice(0, 3) : text
     }
 
     /** The tail of a long absolute path. */
@@ -1997,11 +2916,23 @@ window.__ModuleLoader__.load({
       viewOfBlock,
       argsOf,
       flattenContent,
-      metricsText,
       shortPath,
       nodeAtPath,
       layerTree,
       layerLabel,
+      layerKindBadge,
+      handlesFor,
+      handlePoints,
+      cursorFor,
+      edgesAt,
+      resizeOps,
+      nudgeOps,
+      sizeOps,
+      rotateOps,
+      opacityOps,
+      paintTargets,
+      paintColorOf,
+      colorOps,
       isAbsolutePath,
       toBase64,
       textToBase64,

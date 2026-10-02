@@ -5646,7 +5646,7 @@ check('a tool-result block is settled', canvasInternals.isSettled({ kind: 'tool-
 check('the card reads the host meta', canvasInternals.viewOfBlock({ meta: { id: 'x' } }).id, 'x')
 check('the card parses settled arguments', canvasInternals.argsOf({ kind: 'tool-result', call: { argsRaw: '{"id":"x"}' } }).id, 'x')
 check('the card flattens tool content', canvasInternals.flattenContent([{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }]), 'a\nb')
-check('the metrics summary is a table', canvasInternals.metricsText({ ops: 12, boxes: 6, textNodes: 3, lines: 4, smallestType: 15, families: ['Inter'], ms: 2 }).includes('ops      12'), true)
+check('a layer kind is badged in three letters', canvasInternals.layerKindBadge('frame') + '/' + canvasInternals.layerKindBadge('shape') + '/' + canvasInternals.layerKindBadge('text'), 'fra/sha/tex')
 check('a long path is shortened for the side panel', canvasInternals.shortPath('/a/b/c/d/e.png'), '…/c/d/e.png')
 check('base64 survives a round trip', canvasInternals.toBase64(new TextEncoder().encode('canvas').buffer), 'Y2FudmFz')
 check('the feed scale is a quarter', canvasInternals.FEED_SCALE, 0.25)
@@ -5668,19 +5668,65 @@ check('a bare layer falls back to its own style', canvasInternals.layerLabel({ k
 // The composer seam and the layer dress live in the stylesheet, not inline: a tab
 // the composer floats over has to draw the hairline at the composer's own edge.
 check('the composer seam is drawn at the composer height', canvasCss.includes('bottom:var(--dsh-composer-height,152px)') && canvasCss.includes('.dsc-root:after{'), true)
-check('the artboard reserves the composer clearance', canvasCss.includes('padding-bottom:var(--dsc-composer-clearance'), true)
+check('the page reserves the composer clearance', canvasCss.includes('--dsc-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)'), true)
 check('the layer list is styled', canvasCss.includes('.dsc-layers{') && canvasCss.includes('.dsc-layer[data-selected=true]'), true)
-check('the layer rows indent by depth', canvasSource.includes('paddingLeft: 6 + row.depth * 10'), true)
+check('the layer rows indent by depth', canvasSource.includes('paddingLeft: 6 + Math.min(row.depth, 6) * 8'), true)
 check('a selection draws a box and handles', canvasSource.includes("'data-canvas-selection'") && canvasSource.includes('handle-'), true)
-// RESIZE, the other half of direct manipulation: eight handles, a handle that wins
-// over the node under it, and a stretch written as width/height pointer ops.
-check('the selection draws eight named handles', ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].every((key) => canvasSource.includes("['" + key + "'")), true)
+// RESIZE, the other half of direct manipulation: the handles a node kind can
+// actually honour, a handle that wins over the node under it, and a stretch written
+// as width/height pointer ops. The GEOMETRY is asserted as DATA, not as a shape in
+// the source: `handlesFor`/`handlePoints` are what the overlay draws and `resizeOps`
+// is what the gesture writes, so a change to either is a change to the picture.
+check('a box carries eight handles', canvasInternals.handlesFor({ kind: 'frame' }).join(','), 'nw,n,ne,e,se,s,sw,w')
+// A text node's height is what its words measure: it is stretched in WIDTH, and the
+// only handles that can do that are the two SIDE midpoints. It used to carry all six
+// side-and-corner squares, and that was the dead gesture - a corner is a vertical
+// resize as much as a horizontal one, so a drag that began on a text layer's top-left
+// square wrote a width, dropped the height it could not honour, and left a selection
+// that looked like it refused to move.
+check('a text layer carries the two side handles only', canvasInternals.handlesFor({ kind: 'text' }).join(','), 'w,e')
+const handleBox = { x: 10, y: 20, w: 100, h: 40 }
+const pointAt = (keys) => canvasInternals.handlePoints(handleBox, keys)
+check('a handle sits on its corner', JSON.stringify(pointAt(['nw'])[0]), JSON.stringify({ key: 'nw', x: 10, y: 20 }))
+check('a handle sits on its edge midpoint', JSON.stringify(pointAt(['e'])[0]), JSON.stringify({ key: 'e', x: 110, y: 40 }))
+check('every handle of a box resolves', canvasInternals.handlePoints(handleBox, canvasInternals.handlesFor({ kind: 'shape' })).every((point) => Number.isFinite(point.x) && Number.isFinite(point.y)), true)
+// THE EDGE TEST HONOURS THE HANDLES. A point near the TOP of a text layer is not a
+// vertical resize, because no vertical handle is drawn there; the same point on a
+// frame is. This is asserted as arithmetic because it is the one decision that says
+// whether a border drag resizes or grabs.
+const tol = { x: 4, y: 4 }
+const textBox = { x: 10, y: 20, w: 100, h: 40 }
+check('the top edge of a text layer is not a resize', canvasInternals.edgesAt(textBox, 60, 20, tol, canvasInternals.handlesFor({ kind: 'text' })), null)
+check('the top edge of a frame is', JSON.stringify(canvasInternals.edgesAt(textBox, 60, 20, tol, canvasInternals.handlesFor({ kind: 'frame' }))), JSON.stringify({ left: false, right: false, top: true, bottom: false }))
+check('a text layer’s side is a resize', JSON.stringify(canvasInternals.edgesAt(textBox, 110, 40, tol, canvasInternals.handlesFor({ kind: 'text' }))), JSON.stringify({ left: false, right: true, top: false, bottom: false }))
+check('a point inside the box grabs', canvasInternals.edgesAt(textBox, 60, 40, tol, canvasInternals.handlesFor({ kind: 'frame' })), null)
+check('no handles means every edge is offered', canvasInternals.edgesAt(textBox, 60, 20, tol, []).top, true)
+// The ops a stretch writes, for the two cases that differ: a grabbed RIGHT edge
+// moves the width alone, a grabbed LEFT edge moves the width AND the x, and a text
+// node's vertical edge is dropped rather than written.
+const sizedNode = { kind: 'frame', x: 10, y: 20, w: 100, h: 40 }
+check('a right edge sets the width alone', JSON.stringify(canvasInternals.resizeOps('layers.0', sizedNode, null, { right: true }, 30, 0)), JSON.stringify([{ op: 'set', at: 'layers.0.w', value: 130 }]))
+const leftOps = canvasInternals.resizeOps('layers.0', sizedNode, null, { left: true }, 30, 0)
+check('a left edge moves the x with the width', leftOps.map((op) => op.at + '=' + op.value).join(','), 'layers.0.w=70,layers.0.x=40')
+const bottomOps = canvasInternals.resizeOps('layers.0', sizedNode, null, { bottom: true }, 0, 10)
+check('a bottom edge sets the height alone', bottomOps.map((op) => op.at + '=' + op.value).join(','), 'layers.0.h=50')
+check('a text node keeps its own height', canvasInternals.resizeOps('layers.0', { kind: 'text', x: 0, y: 0, w: 80, h: 20 }, null, { top: true }, 0, -10).length, 0)
+// A node that was `hug` has no numbers: the box the layout produced is the base.
+const hugOps = canvasInternals.resizeOps('layers.1', { kind: 'frame' }, { box: { x: 5, y: 6, w: 50, h: 60 } }, { right: true }, 5, 0)
+check('a hug node is measured from its laid-out box', hugOps.map((op) => op.at + '=' + op.value).join(','), 'layers.1.w=55')
 check('a handle is grabbed within a screen-pixel tolerance', canvasSource.includes('const HANDLE_HIT = 9') && canvasSource.includes('HANDLE_HIT / Math.max(1, rect.width)'), true)
 check('a handle wins over the node under it', canvasSource.includes('handle ? selectedEntry :'), true)
-check('a stretch writes width and height ops', canvasSource.includes("path + '.w'") && canvasSource.includes("path + '.h'"), true)
-check('a text layer stretches in width only', canvasSource.includes("node.kind === 'text' ? 40 : 8") && canvasSource.includes("node.kind !== 'text' && (edges.top || edges.bottom)"), true)
+check('a stretch writes width and height ops', canvasSource.includes('resizeOps(path, node, entry, edges, dx, dy)'), true)
 check('a drag reports which gesture it is', canvasSource.includes("handle ? 'resize' : 'move'"), true)
-check('the cursor names the edge pair', canvasSource.includes("'ew-resize'") && canvasSource.includes("'ns-resize'"), true)
+// THE GESTURE IS DECIDED ONCE, ON POINTER DOWN: the same `handle` decides the resize
+// on release, so a drag that began on a handle can never end as a move. The pointer
+// is captured for the drag's length, and the capture is released on the one listener
+// that also fires for a cancelled pointer.
+check('the gesture is decided once, on pointer down', canvasSource.includes('if (handle && onResize) onResize(chosen.path') && canvasSource.includes('else if (onMove) onMove(chosen.path'), true)
+check('the pointer is captured for the drag', canvasSource.includes('element.setPointerCapture(event.pointerId)') && canvasSource.includes('element.releasePointerCapture(event.pointerId)'), true)
+check('a cancelled pointer ends the gesture too', canvasSource.includes("window.addEventListener('pointercancel', finish)"), true)
+check('a handle drag never reselects', canvasSource.includes('if (!handle && onSelect) onSelect(chosen.path)'), true)
+check('the cursor names the edge pair', canvasInternals.cursorFor({ right: true }) === 'ew-resize' && canvasInternals.cursorFor({ bottom: true }) === 'ns-resize' && canvasInternals.cursorFor({ left: true, top: true }) === 'nesw-resize', true)
 check('the resize dress is styled', canvasCss.includes('.dsc-art[data-dragging=resize]'), true)
 // THE HOUSE GALLERY in the tab: the rows the state route carries, each starting a
 // design by example id rather than by preset + archetype + style.
@@ -5689,16 +5735,128 @@ check('an example row starts a design by id', canvasSource.includes('onCreate(nu
 check('a drag sends x and y as pointer ops', canvasSource.includes("path + '.x'") && canvasSource.includes("path + '.y'"), true)
 check('a reorder is a remove plus an insert', canvasSource.includes('Reordered the layers') && canvasSource.includes("{ op: 'remove', at: path }"), true)
 check('dragging is a pointer gesture', canvasSource.includes('pointermove') && canvasSource.includes("element.setAttribute('data-dragging'"), true)
-// THE STYLE LIBRARY in the tab: a style is picked when starting a design and changed
-// on a finished one, and both go through the same document route the model uses.
+// THE STYLE LIBRARY in the tab: a style is chosen when a design is STARTED, from the
+// + New gallery, and both go through the same document route the model uses. There is
+// deliberately NO style control in the top bar any more: a select there could only
+// either restyle or start a new design, and starting one is what "+ New" already does
+// - so the styling decision belongs to the New gallery alone.
 check('the new-design gallery offers the style library', canvasSource.includes("'data-canvas-styles'") && canvasSource.includes('dsc-styleChip'), true)
 check('a style chip carries its own swatch', canvasSource.includes('entry.swatch.colours'), true)
 check('starting a design sends the chosen style', canvasSource.includes('preset: presetId, archetype: archetypeId, style: styleId'), true)
-check('a finished design can be re-styled from the toolbar', canvasSource.includes("'data-canvas-style-picker'") && canvasSource.includes('onChange: (event) => restyle(event.target.value)'), true)
-check('restyling posts the style, not a document', canvasSource.includes('scope: selected.scope, style: styleId'), true)
-check('the tab says nothing moved', canvasSource.includes('nothing moved'), true)
+check('no style picker in the top bar', canvasSource.includes("'data-canvas-style-picker'") === false && canvasSource.includes('restyle(') === false, true)
 check('the side panel carries the current style card', canvasSource.includes("'data-canvas-style-card'") && canvasSource.includes('currentStyle.gates'), true)
 check('the style dress is styled', canvasCss.includes('.dsc-styleChip[data-selected=true]') && canvasCss.includes('.dsc-styleCard{'), true)
+// ZOOM IS A MENU TOO, for the same reason the export is: five rungs in the bar is a
+// row of buttons for one choice. Every rung survives as a row and the summary names
+// the one in force.
+check('zoom is a menu with every rung', canvasSource.includes("'data-canvas-zoom': 'true'") && canvasSource.includes("'data-canvas-zoom-step'"), true)
+check('the zoom summary names the current rung', canvasSource.includes("'Zoom: ' + (zoom === 'fit'"), true)
+// A MENU MUST CLEAR THE APP'S OWN LAYOUT. The canvas view is a box INSIDE the shell,
+// so a panel at the pack's old 40 sat under the composer seat and the frame's overlay
+// - which is exactly "the export dropdown is behind the bar". 1000 is the app's own
+// modal-root layer: above every column of furniture, below the toasts and portals that
+// are meant to interrupt anything.
+check('an open menu clears the app furniture', canvasCss.includes('.dsc-menuPanel{position:absolute;right:0;top:calc(100% + 6px);z-index:1000'), true)
+// THE TOP BAR HOLDS ONE EXPORT CONTROL, not four buttons: format and destination are
+// two axes of ONE decision, and four buttons for it was the first thing to wrap out
+// of the bar on a narrow pane. The menu is a native <details>, so the open state, the
+// click-anywhere-else and Escape are the browser's rather than listeners this bundle
+// has to own - and a row that starts an async export can keep it open until the write
+// lands. The four decisions survive as ROWS, destination included.
+check('the bar carries one export menu', canvasSource.includes("'data-canvas-export': 'true'") && canvasSource.includes('h(\'details\''), true)
+check('the export menu lists every decision', ['png-1', 'png-2', 'svg', 'png-workspace'].every((key) => canvasSource.includes("'data-canvas-export-item': '" + key + "'")), true)
+check('every export row names its destination', (canvasSource.match(/dsc-menuHint/g) || []).length >= 4 && canvasSource.includes('Write into the conversation folder'), true)
+check('the four old export buttons are gone', canvasSource.includes("'Export PNG'") === false && canvasSource.includes("'To workspace'") === false, true)
+check('the export menu is dressed', canvasCss.includes('.dsc-menuPanel{') && canvasCss.includes('.dsc-menuItem:disabled'), true)
+check('the bar cannot wrap', canvasCss.includes('flex-wrap:nowrap') && canvasCss.includes('.dsc-barGroup{display:flex;align-items:center;gap:4px;flex:none}'), true)
+check('the menu closes on the write, not the press', canvasSource.includes('menu.open = false') && canvasSource.includes('event.preventDefault()'), true)
+// THE EXPORT SURVIVES AN ENCODER THAT DECLINES. `toBlob` is asynchronous and a
+// browser may answer null for it on a big canvas; the synchronous data URL is the
+// fallback, so an export cannot die on a refusal the person can do nothing about.
+check('a refused toBlob falls back to the data URL', canvasSource.includes('blobFromDataUrl') && canvasSource.includes('blob ? blob : viaDataUrl()'), true)
+// THE RIGHT BAR'S TWO PANES. One scroll column for both jobs meant a design with
+// many layers pushed the rest of the bar out of sight, so shaping and auditing are
+// two panes and only one is mounted. The rule that makes that hold is in the
+// stylesheet: every scrolling block is NAMED (`.dsc-paneScroll` for the audit pane,
+// `.dsc-layersScroll` for the list inside the shaping pane), and no pane scrolls.
+check('the right bar holds two panes', canvasSource.includes("'data-canvas-pane': 'design'") && canvasSource.includes("'data-canvas-pane': 'inspect'"), true)
+check('only the chosen pane is mounted', canvasSource.includes("sideTab === 'inspect' ? inspectPane : designPane"), true)
+// THE INSPECT PANE IS THE CONTROLS. It used to hold a quarter-scale copy of the
+// artboard, which showed a person nothing the artboard was not already showing and
+// cost the panel a black rectangle; it now holds the transformation of the SELECTED
+// layer - nudge, size, scale, rotate, opacity and colour - and every one of them
+// writes through the same document route the drag and the agent's patch use.
+check('the inspect pane carries the transform controls', ["'data-canvas-transform'", "'data-canvas-size'", "'data-canvas-frame'", "'data-canvas-colors'"].every((marker) => canvasSource.includes(marker)), true)
+check('the panes no longer carry a feed thumbnail', canvasSource.includes('data-canvas-feed') === false && canvasCss.includes('.dsc-feed') === false, true)
+check('the nudge pads the four directions', ['up', 'down', 'left', 'right'].every((dir) => canvasSource.includes("'data-canvas-nudge-dir': '" + dir + "'")), true)
+// The arithmetic behind the controls, asserted as DATA: a nudge is a position, a size
+// is one field, a scale multiplies what the layer HAS, and the language's own two
+// refusals hold - a text node has no height to give, and rotate/opacity are bounded.
+check('a nudge writes the position', JSON.stringify(canvasInternals.nudgeOps('layers.0', { x: 10, y: 20 }, null, 5, 0)), JSON.stringify([{ op: 'set', at: 'layers.0.x', value: 15 }]))
+check('a nudge from a flow child reads its laid-out box', JSON.stringify(canvasInternals.nudgeOps('layers.1', {}, { box: { x: 7, y: 9, w: 4, h: 4 } }, 0, -9)), JSON.stringify([{ op: 'set', at: 'layers.1.y', value: 0 }]))
+check('a nudge never goes negative', JSON.stringify(canvasInternals.nudgeOps('layers.0', { x: 2, y: 2 }, null, -10, -10)), JSON.stringify([{ op: 'set', at: 'layers.0.x', value: 0 }, { op: 'set', at: 'layers.0.y', value: 0 }]))
+check('a typed size writes that field alone', JSON.stringify(canvasInternals.sizeOps('layers.0', { kind: 'frame', w: 100, h: 50 }, null, 'w', 140)), JSON.stringify([{ op: 'set', at: 'layers.0.w', value: 140 }]))
+check('a text layer refuses a height', canvasInternals.sizeOps('layers.0', { kind: 'text', w: 100 }, null, 'h', 40).length, 0)
+check('a size has a floor', JSON.stringify(canvasInternals.sizeOps('layers.0', { kind: 'text', w: 100 }, null, 'w', 2)), JSON.stringify([{ op: 'set', at: 'layers.0.w', value: 40 }]))
+check('a rotate is bounded to the language', JSON.stringify(canvasInternals.rotateOps('layers.0', {}, 400)), JSON.stringify([{ op: 'set', at: 'layers.0.rotate', value: 360 }]))
+check('a rotate back to zero is written even with no rotate', JSON.stringify(canvasInternals.rotateOps('layers.0', { rotate: 30 }, 0)), JSON.stringify([{ op: 'set', at: 'layers.0.rotate', value: 0 }]))
+check('an unchanged rotate writes nothing', canvasInternals.rotateOps('layers.0', { rotate: 30 }, 30).length, 0)
+check('opacity is clamped to the language\'s 0..1', JSON.stringify(canvasInternals.opacityOps('layers.0', {}, 1.5)), JSON.stringify([{ op: 'set', at: 'layers.0.opacity', value: 1 }]))
+check('an opacity below the current one is written', JSON.stringify(canvasInternals.opacityOps('layers.0', {}, 0.5)), JSON.stringify([{ op: 'set', at: 'layers.0.opacity', value: 0.5 }]))
+check('an unchanged opacity writes nothing', canvasInternals.opacityOps('layers.0', { opacity: 0.5 }, 0.5).length, 0)
+// THE RESET THAT WAS SILENTLY DROPPED: a faint layer dragged back to 100% must write
+// 1, because "1 is the default" is a fact about a document that does not carry a 0.5.
+check('opacity back to full is written', JSON.stringify(canvasInternals.opacityOps('layers.0', { opacity: 0.5 }, 1)), JSON.stringify([{ op: 'set', at: 'layers.0.opacity', value: 1 }]))
+check('opacity is rounded to two places', JSON.stringify(canvasInternals.opacityOps('layers.0', {}, 0.456)), JSON.stringify([{ op: 'set', at: 'layers.0.opacity', value: 0.46 }]))
+// WHAT A KIND CAN RECOLOUR: the language gives each kind its own paint field, and a
+// kind that paints nothing owns nothing - which is what makes the control say so
+// rather than write a property nothing reads.
+check('a text node recolours its glyphs', canvasInternals.paintTargets({ kind: 'text', color: '#111111' }).map((row) => row.key).join(','), 'color')
+check('a shape recolours its fill and stroke', canvasInternals.paintTargets({ kind: 'shape', fill: '#111111', stroke: '#222222' }).map((row) => row.key).join(','), 'fill,stroke')
+check('a frame recolours its background', canvasInternals.paintTargets({ kind: 'frame', background: '#111111' }).map((row) => row.key).join(','), 'background')
+check('an art node recolours its palette', canvasInternals.paintTargets({ kind: 'art', colors: ['#111111', '#222222'] }).map((row) => row.key).join(','), 'colors.0,colors.1')
+check('an image owns no colour', canvasInternals.paintTargets({ kind: 'image', src: 'x.png' }).length, 0)
+check('a colour is read off a solid paint', canvasInternals.paintColorOf({ type: 'solid', color: '#4D6BFE' }), '#4d6bfe')
+check('a gradient is not a flat colour', canvasInternals.paintColorOf({ type: 'linear', stops: [] }), null)
+check('a token name is not a colour', canvasInternals.paintColorOf('accent'), null)
+check('recolouring writes the literal', JSON.stringify(canvasInternals.colorOps('layers.0', { key: 'fill', paint: '#111111' }, '#4D6BFE')), JSON.stringify([{ op: 'set', at: 'layers.0.fill', value: '#4d6bfe' }]))
+check('recolouring to the same colour writes nothing', canvasInternals.colorOps('layers.0', { key: 'fill', paint: '#4d6bfe' }, '#4D6BFE').length, 0)
+check('a gradient is replaced by the chosen solid', JSON.stringify(canvasInternals.colorOps('layers.0', { key: 'fill', paint: { type: 'linear', stops: [] } }, '#4D6BFE')), JSON.stringify([{ op: 'set', at: 'layers.0.fill', value: '#4d6bfe' }]))
+check('the transform dress is styled', canvasCss.includes('.dsc-nudgeRow{') && canvasCss.includes('.dsc-swatch[data-active=true]'), true)
+// THE GAP OVER THE COMPOSER. The page's bottom inset used to be the composer clearance
+// with 6px subtracted, which still left the artboard touching its top edge because the
+// clearance is measured to the START of the composer, not past it. It is now a 10px
+// inset of its own, and the clearance variable is not what draws it.
+check('the artboard keeps a gap over the composer', canvasCss.includes('padding:10px 10px calc(var(--dsc-composer-clearance,168px) + 10px) 10px'), true)
+check('the page reserves the composer clearance', canvasCss.includes('--dsc-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)'), true)
+// THE RULERS AND THE ORIGIN: the page's coordinate system, drawn. The gutters are grid
+// tracks - the ONLY horizontal inset on the left - so design x=0 is the artboard's own
+// left edge, which is what makes the origin marker the origin.
+check('the page is a ruler gutter around the artboard', canvasCss.includes('.dsc-pad{min-width:100%;min-height:100%;display:grid;grid-template-columns:22px 1fr;grid-template-rows:22px 1fr'), true)
+check('both rulers exist', canvasCss.includes('.dsc-axisTop{') && canvasCss.includes('.dsc-axisLeft{'), true)
+check('the origin is marked on the artboard', canvasSource.includes("'data-canvas-origin': '0,0'") && canvasSource.includes("'data-canvas-origin-marker': 'true'"), true)
+check('the rulers are labelled in design pixels', canvasSource.includes('data-canvas-ruler') && canvasSource.includes('dsc-axisLabel'), true)
+check('the ruler spacing is chosen so labels do not collide', canvasSource.includes('candidate * Math.abs(scale) >= 64'), true)
+// SAVE confirms what the HOST holds rather than inventing a second writer: the design is
+// already persisted on every edit, so the button re-reads the state and reports the
+// revision - two writers for one document is how a document forks.
+check('the bar carries a Save that confirms the host revision', canvasSource.includes("}, 'Save')") && canvasSource.includes('is on the host at revision'), true)
+// A CLICK ON NOTHING DE-SELECTS, and the cursor does not outlive the selection it
+// promised: the hover that carries the pointer onto a NEW selection is skipped, and a
+// drag clears the cursor it painted.
+check('a click on empty canvas de-selects', canvasSource.includes('if (!chosen) {') && canvasSource.includes('if (!handle && onDeselect) onDeselect()'), true)
+check('a drag does not leave a stale cursor', canvasSource.includes('draggingRef.current = false') && canvasSource.includes('if (draggingRef.current) return'), true)
+check('the one hover after a selection is skipped', canvasSource.includes('if (triggerSelect.current) {'), true)
+check('the pane switcher is styled', canvasCss.includes('.dsc-sideTab[data-active=true]') && canvasCss.includes('.dsc-sideTabs{'), true)
+check('the layer list owns its own scrollport', canvasCss.includes('.dsc-layersScroll{') && canvasCss.includes('.dsc-section[data-grow=true] .dsc-layersScroll{flex:1}'), true)
+check('no pane scrolls as a whole', canvasCss.includes('.dsc-pane{flex:1;min-height:0;display:flex;flex-direction:column}') && canvasSource.includes('dsc-paneScroll'), true)
+// The widgets that earned no room: the raw measurement table (a diagnostic the
+// model's render report already carries), the six-line prose helper, and the
+// two-rule-per-heading style card. Their absence is the assertion, because a bar
+// that grows a wall of text back is the bug this alpha fixes.
+check('the raw measurement table is not furniture', canvasCss.includes('.dsc-metrics') === false && canvasSource.includes('metricsText') === false, true)
+check('the prose gesture helper is gone', canvasSource.includes('Drag a layer to move it, or a handle'), false)
+check('the style card keeps one rule per heading', canvasSource.includes('(currentStyle.do || []).slice(0, 1)') && canvasSource.includes('(currentStyle.gates || []).slice(0, 1)'), true)
 check('the canvas tool list carries canvas_style', canvasInternals.TOOL_NAMES.includes('canvas_style'), true)
 // Unload the row: the renderer's own effect returned a stopper, which is what the
 // shell calls when the plugin goes away (and what lets this process exit).
