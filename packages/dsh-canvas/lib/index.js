@@ -1,5 +1,5 @@
-/**
- * dsh-canvas — host half.
+﻿/**
+ * dsh-canvas â€” host half.
  *
  * One row owns the whole capability:
  *
@@ -368,7 +368,7 @@ function validateDocument(row, input) {
       problems.push({
         path: 'layers',
         code: 'MISSING_ASSET',
-        message: 'the image "' + src + '" is neither a stored asset nor a workspace-relative path. Import it first with canvas_assets { op: "import", path: "…" } (or paste it into the Canvas tab).',
+        message: 'the image "' + src + '" is neither a stored asset nor a workspace-relative path. Import it first with canvas_assets { op: "import", path: "â€¦" } (or paste it into the Canvas tab).',
       })
     }
   }
@@ -557,7 +557,7 @@ function problemLines(problems) {
 function lintLines(lints, limit = 12) {
   const shown = lints.slice(0, limit)
   const lines = shown.map((entry) => '  - [' + entry.level + '] ' + entry.code + ': ' + entry.message)
-  if (lints.length > shown.length) lines.push('  … and ' + (lints.length - shown.length) + ' more')
+  if (lints.length > shown.length) lines.push('  â€¦ and ' + (lints.length - shown.length) + ' more')
   return lines.join('\n')
 }
 
@@ -1361,12 +1361,36 @@ export function registerRoutes(ctx, row) {
   const engineFile = fileURLToPath(new URL('./engine.js', import.meta.url))
   let engineEtag = null
   let engineStat = null
-  const register = (routePath, fetch) => {
-    ctx.effect(() => connection.fetch.register({ path: routePath, fetch }), 'dsh-canvas: route ' + routePath)
-  } 
+  /**
+   * One route registration.
+   *
+   * The shape is the registry's own: `{ path, methods, requestBody, fetch }` - NOT
+   * `{ path, fetch }`. A missing `methods` array is a boot-time TypeError inside
+   * the registry ("Cannot read properties of undefined (reading 'length')"), which
+   * is how the contained boot test found this: the row loaded, the harness
+   * started, and the canvas routes were simply absent.
+   */
+  const register = (routePath, methods, handler) => {
+    ctx.effect(
+      () =>
+        connection.fetch.register({
+          path: routePath,
+          methods,
+          requestBody: 'buffered',
+          fetch: async (request) => {
+            try {
+              return await handler(request)
+            } catch (err) {
+              return errorToResponse(err)
+            }
+          },
+        }),
+      'dsh-canvas: route ' + routePath,
+    )
+  }
 
   // ---- health ------------------------------------------------------------
-  register(HEALTH_ROUTE, async () => {
+  register(HEALTH_ROUTE, ['GET', 'HEAD'], async () => {
     const fonts = fontStatus()
     return json(200, {
       ok: true,
@@ -1382,7 +1406,7 @@ export function registerRoutes(ctx, row) {
   })
 
   // ---- state -------------------------------------------------------------
-  register(STATE_ROUTE, async (request) => {
+  register(STATE_ROUTE, ['GET', 'HEAD'], async (request) => {
     try {
       const url = new URL(request.url)
       const sessionId = url.searchParams.get('session')
@@ -1411,7 +1435,7 @@ export function registerRoutes(ctx, row) {
   })
 
   // ---- document (create / replace / patch, from the drawer or the panel) --
-  register(DOCUMENT_ROUTE, async (request) => {
+  register(DOCUMENT_ROUTE, ['POST'], async (request) => {
     try {
       if (request.method !== 'POST') throw httpError(405, 'METHOD', 'use POST')
       const body = await readJsonBody(request, 4 * 1024 * 1024)
@@ -1454,7 +1478,7 @@ export function registerRoutes(ctx, row) {
   })
 
   // ---- delete ------------------------------------------------------------
-  register(DELETE_ROUTE, async (request) => {
+  register(DELETE_ROUTE, ['POST'], async (request) => {
     try {
       if (request.method !== 'POST') throw httpError(405, 'METHOD', 'use POST')
       const body = await readJsonBody(request, 64 * 1024)
@@ -1469,7 +1493,7 @@ export function registerRoutes(ctx, row) {
   })
 
   // ---- publish -----------------------------------------------------------
-  register(PUBLISH_ROUTE, async (request) => {
+  register(PUBLISH_ROUTE, ['POST'], async (request) => {
     try {
       if (request.method !== 'POST') throw httpError(405, 'METHOD', 'use POST')
       const body = await readJsonBody(request, 64 * 1024)
@@ -1492,7 +1516,7 @@ export function registerRoutes(ctx, row) {
   })
 
   // ---- assets ------------------------------------------------------------
-  register(ASSET_ROUTE, async (request) => {
+  register(ASSET_ROUTE, ['GET', 'HEAD', 'POST'], async (request) => {
     try {
       const url = new URL(request.url)
       if (request.method === 'GET' || request.method === 'HEAD') {
@@ -1518,7 +1542,7 @@ export function registerRoutes(ctx, row) {
   })
 
   // ---- the render queue (long poll) --------------------------------------
-  register(QUEUE_ROUTE, async (request) => {
+  register(QUEUE_ROUTE, ['GET', 'HEAD'], async (request) => {
     try {
       if (request.method !== 'GET') throw httpError(405, 'METHOD', 'use GET')
       const url = new URL(request.url)
@@ -1552,7 +1576,7 @@ export function registerRoutes(ctx, row) {
   })
 
   // ---- workspace assets (the tab's own read of a conversation-folder image) --
-  register(WORKSPACE_ASSET_ROUTE, async (request) => {
+  register(WORKSPACE_ASSET_ROUTE, ['GET', 'HEAD'], async (request) => {
     try {
       if (request.method !== 'GET' && request.method !== 'HEAD') throw httpError(405, 'METHOD', 'use GET')
       const url = new URL(request.url)
@@ -1573,7 +1597,7 @@ export function registerRoutes(ctx, row) {
   })
 
   // ---- the browser's answer ----------------------------------------------
-  register(REPORT_ROUTE, async (request) => {
+  register(REPORT_ROUTE, ['POST'], async (request) => {
     // The body is parsed ONCE and kept, so a failure later can still settle the
     // waiting tool call instead of leaving it to time out. (`request.clone()`
     // after the body was read would throw - the original is already consumed.)
@@ -1685,7 +1709,7 @@ export function registerRoutes(ctx, row) {
   })
 
   // ---- the engine module -------------------------------------------------
-  register(ENGINE_ROUTE, async (request) => {
+  register(ENGINE_ROUTE, ['GET', 'HEAD'], async (request) => {
     try {
       const info = statSync(engineFile)
       if (engineStat === null || engineStat.size !== info.size || engineStat.mtimeMs !== info.mtimeMs) {
@@ -1709,7 +1733,7 @@ export function registerRoutes(ctx, row) {
   for (const entry of Object.values(fontTable())) {
     for (const meta of Object.values(entry.weights)) {
       const routePath = FONT_ROUTE_PREFIX + meta.file
-      register(routePath, async (request) => {
+      register(routePath, ['GET', 'HEAD'], async (request) => {
         try {
           const name = routePath.slice(FONT_ROUTE_PREFIX.length)
           const file = fontFileFor(name)

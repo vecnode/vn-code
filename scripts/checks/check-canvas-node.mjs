@@ -686,6 +686,13 @@ check('both skills registered', registered.skills.length, 2)
 check('the view routes plus every font file registered', registered.routes.length > 8, true)
 check('the engine route is registered', registered.routes.some((route) => route.path === '/api/dsh-canvas/vendor/engine.js'), true)
 check('one route per font file', registered.routes.filter((route) => route.path.includes('/vendor/fonts/')).length, 5)
+// THE REGISTRATION SHAPE IS THE REGISTRY'S: a missing `methods` array is a
+// BOOT-TIME TypeError inside the registry, which the contained boot test found -
+// the row loaded, the harness started, and every canvas route was absent.
+const shapeless = registered.routes.filter((route) => !Array.isArray(route.methods) || route.methods.length === 0 || route.methods.some((method) => !['GET', 'HEAD', 'POST'].includes(method)))
+check('every route declares its methods', shapeless.map((route) => route.path).join(', '), '')
+check('every route answers through a fetch handler', registered.routes.every((route) => typeof route.fetch === 'function'), true)
+check('every write route is a POST', registered.routes.filter((route) => route.path.endsWith('/document') || route.path.endsWith('/delete') || route.path.endsWith('/publish') || route.path.endsWith('/render-report')).every((route) => route.methods.join(',') === 'POST'), true)
 
 const byName = new Map(registered.tools.map((tool) => [tool.name, tool]))
 const routeFor = new Map(registered.routes.map((route) => [route.path, route.fetch]))
