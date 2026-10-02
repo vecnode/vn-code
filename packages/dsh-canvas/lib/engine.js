@@ -2790,24 +2790,125 @@ export function lintLayout(layoutResult, document, preset, opts = {}) {
     out.push({ code: 'MANY_FAMILIES', level: 'warn', path: 'layers', message: families.size + ' font families are in play; two is the usual ceiling' })
   }
 
-  // 5. Anything the layout itself flagged.
+  // 9. ALIGNMENT, which is the difference between a designed page and a pile of
+  //    boxes. Three advisory checks, all of them stated as the measurement they
+  //    made so the fix is obvious.
+  //
+  //    (a) OFFGRID: the left and right edge of a top-level PANEL (a frame, a shape,
+  //        an art or an image layer - not the full-bleed backdrop, and not text,
+  //        which is placed by its own flow) must land on something: the preset's
+  //        margin, the canvas edge (a deliberate bleed), or the edge of another
+  //        panel. A panel starting at x=632 on a 1280 canvas with a 64px margin
+  //        lines up with nothing, which is what the eye reads as "not aligned".
+  if (preset && isNum(preset.margin) && layoutResult.width > 0) {
+    const margin = preset.margin
+    // Only TOP-LEVEL layers: a chip's label is inset inside its chip by the chip's own
+    // padding, and demanding that a child line up with the canvas would be nonsense.
+    const panels = boxes.filter(
+      (entry) => ['frame', 'shape', 'art', 'image'].includes(entry.kind) && entry.path.split('.').length === 2 && !coversCanvas(entry.box, layoutResult),
+    )
+    const edges = new Set([0, margin, layoutResult.width, layoutResult.width - margin].map((value) => Math.round(value)))
+    for (const entry of panels) {
+      edges.add(Math.round(entry.box.x))
+      edges.add(Math.round(entry.box.x + entry.box.w))
+    }
+    const near = (value, candidates) => candidates.some((candidate) => Math.abs(candidate - value) <= 1)
+    for (const entry of panels) {
+      const left = Math.round(entry.box.x)
+      const right = Math.round(entry.box.x + entry.box.w)
+      // A panel's OWN edges are removed from the set before it is judged, or every
+      // panel would be perfectly aligned with itself and the check could never fire.
+      const others = [...edges].filter((value) => value !== left && value !== right)
+      // ONE edge is enough: a panel anchored to the margin on one side and floating on
+      // the other is how a designer spans a column. A panel that lines up on NEITHER
+      // side is what the eye reads as "not aligned".
+      const leftOk = left === 0 || left === layoutResult.width || near(left, others)
+      const rightOk = right === 0 || right === layoutResult.width || near(right, others)
+      if (!leftOk && !rightOk) {
+        out.push({
+          code: 'OFFGRID',
+          level: 'warn',
+          path: entry.path,
+          message:
+            entry.path +
+            ' spans x=' +
+            left +
+            ' to x=' +
+            right +
+            ' and lines up with nothing: neither edge is on the ' +
+            margin +
+            'px margin (' +
+            margin +
+            ' / ' +
+            (layoutResult.width - margin) +
+            '), on the canvas edge, or on the edge of any text layer or other panel',
+        })
+      }
+    }
+  }
+
+  //    (b) SIBLING_EDGE: two STACKED text lines in the same parent that almost
+  //        share a left edge. "Almost" is the tell - 64 and 96 is a mistake, 64 and
+  //        140 is an inset somebody meant.
+  const textBoxes = boxes.filter((entry) => entry.kind === 'text')
+  for (let index = 0; index < textBoxes.length; index += 1) {
+    for (let other = index + 1; other < textBoxes.length; other += 1) {
+      const a = textBoxes[index]
+      const b = textBoxes[other]
+      const parent = (path) => path.slice(0, path.lastIndexOf('.'))
+      if (parent(a.path) !== parent(b.path)) continue
+      const vertical = a.box.y + a.box.h <= b.box.y + 1 || b.box.y + b.box.h <= a.box.y + 1
+      if (!vertical) continue
+      const gap = Math.abs(a.box.x - b.box.x)
+      if (gap > 1 && gap < 48) {
+        out.push({
+          code: 'SIBLING_EDGE',
+          level: 'warn',
+          path: a.path,
+          message: a.path + ' starts at x=' + Math.round(a.box.x) + ' and ' + b.path + ' at x=' + Math.round(b.box.x) + ' - ' + Math.round(gap) + 'px apart. Align them, or inset by 48px or more so the offset reads as a decision',
+        })
+      }
+    }
+  }
+
+  //    (c) TEXT_ON_IMAGE: type over a photograph or a busy art layer. The contrast
+  //        check can only sample a FLAT colour behind a text op, so a picture is
+  //        exactly the case it cannot judge - and the answer is the same one a
+  //        designer gives: the layer needs a scrim, or the text needs to move.
+  const pictures = boxes.filter((entry) => entry.kind === 'image' || entry.kind === 'art')
+  for (const text of textBoxes) {
+    for (const picture of pictures) {
+      if (!intersects(text.box, picture.box)) continue
+      const node = resolvePath(document, picture.path.split('.'))
+      const scrim = node && node.scrim && node.scrim !== 'none' ? Number(node.scrimStrength ?? 0.4) : 0
+      if (scrim >= 0.35) continue
+      out.push({
+        code: 'TEXT_ON_IMAGE',
+        level: 'warn',
+        path: text.path,
+        message: text.path + ' sits over ' + picture.path + ' with ' + (scrim > 0 ? 'a scrim of only ' + scrim : 'no scrim') + ', so its contrast cannot be judged - add a scrim (0.35 or more) or move the text off the picture',
+      })
+    }
+  }
+
+  // 10. Anything the layout itself flagged.
   for (const warning of layoutResult.warnings ?? []) {
     out.push({ code: warning.code, level: 'warn', path: warning.path, message: warning.message })
   }
 
-  // 6. A design with no text at all is almost always a mistake.
+  // 11. A design with no text at all is almost always a mistake.
   if (boxes.filter((entry) => entry.kind === 'text').length === 0 && boxes.length > 0) {
     out.push({ code: 'NO_TEXT', level: 'warn', path: 'layers', message: 'this design has no text at all' })
   }
 
-  // 7. Images that were never resolved.
+  // 12. Images that were never resolved.
   for (const entry of boxes) {
     if (entry.kind !== 'image') continue
     if (opts.assets && opts.assets[entry.src]) continue
     out.push({ code: 'MISSING_ASSET', level: 'error', path: entry.path, message: entry.path + ' uses "' + String(entry.src) + '", which is not in the asset table' })
   }
 
-  // 8. An SVG fragment the canvas painter could not draw (the client rasterizes
+  // 13. An SVG fragment the canvas painter could not draw (the client rasterizes
   //    one per fragment; when that failed, the report says so rather than
   //    pretending the shape is there).
   for (const entry of boxes) {

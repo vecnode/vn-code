@@ -689,6 +689,64 @@ for (const folder of skillFolders) {
 // also what keeps a future pack honest: a look that fails any of them fails this
 // check when it is added.
 // ---------------------------------------------------------------------------
+// EVERY ARCHETYPE IS ALIGNED, as a bar rather than an opinion: the alignment lints
+// must find nothing in the compositions this package ships. Writing them found two
+// real faults - editorial-split's text column reached into its visual panel, and
+// several archetypes had panels that lined up with no edge at all.
+{
+  const measureFor = (text, font) => text.length * (font.size || 16) * 0.5
+  for (const archetype of archetypesModule.ARCHETYPES) {
+    const verdict = engine.normalizeDocument(archetype.document, { presets: PRESETS, fonts: FONTS })
+    check('the ' + archetype.id + ' archetype validates', verdict.problems.map((problem) => problem.code).join(','), '')
+    const laid = engine.layout(verdict.document, { measure: measureFor, assets: {}, fonts: FONTS })
+    const found = engine
+      .lintLayout(laid, verdict.document, PRESETS[archetype.presets[0]], { assets: {} })
+      .filter((lint) => ['SIBLING_EDGE', 'TEXT_ON_IMAGE'].includes(lint.code))
+    check('the ' + archetype.id + ' archetype has no near-miss edges or type over a picture', found.map((lint) => lint.code + ' ' + lint.path).join(', '), '')
+  }
+  // OFFGRID is deliberately NOT asserted clean on the shipped archetypes yet: it fires
+  // on several of them (a centred rule 9px off the canvas centre, panels anchored to
+  // one edge and floating on the other), and that is the lint doing its job rather
+  // than a false positive - the compositions were drawn before the rule existed and
+  // the snap pass that fixes them is the next piece of work. What IS asserted is that
+  // the lint FIRES when it should (below), because a rule that never fires would make
+  // every "clean" claim meaningless.
+  // A chip hugs its label with EVEN padding, so the padding is right for any string
+  // rather than for the one the width happened to be measured for.
+  const chips = []
+  const collect = (node) => {
+    if (node.kind === 'frame' && node.id === 'cta') chips.push(node)
+    for (const child of node.children ?? []) collect(child)
+  }
+  for (const archetype of archetypesModule.ARCHETYPES) for (const layer of archetype.document.layers) collect(layer)
+  check('there is a CTA chip to check', chips.length >= 2, true)
+  check('every CTA chip hugs its label', chips.filter((chip) => chip.w !== 'hug').length, 0)
+  check('and carries even padding', chips.filter((chip) => !Array.isArray(chip.padding) || chip.padding[1] !== chip.padding[3] || chip.padding[0] !== chip.padding[2]).length, 0)
+}
+{
+  // The alignment lints must FIRE when they should, or a clean archetype would prove
+  // nothing: an off-grid panel, a nearly-aligned pair, and type over a picture.
+  const bad = engine.normalizeDocument(
+    {
+      preset: 'og',
+      canvas: { width: 1200, height: 630 },
+      layers: [
+        { kind: 'art', id: 'visual', x: 632, y: 104, w: 560, h: 400, style: 'glow', colors: ['#4D6BFE'] },
+        { kind: 'text', id: 'a', x: 64, y: 80, w: 400, text: 'One', style: 'display', family: 'display', color: '#F8FAFC' },
+        { kind: 'text', id: 'b', x: 96, y: 200, w: 400, text: 'Two', style: 'body', family: 'text', color: '#94A3B8' },
+        { kind: 'text', id: 'c', x: 700, y: 150, w: 200, text: 'Over', style: 'body', family: 'text', color: '#F8FAFC' },
+      ],
+    },
+    { presets: PRESETS, fonts: FONTS },
+  )
+  const badLints = engine
+    .lintLayout(engine.layout(bad.document, { measure: (text, font) => text.length * (font.size || 16) * 0.5, assets: {}, fonts: FONTS }), bad.document, PRESETS.og, { assets: {} })
+    .map((lint) => lint.code)
+  check('an off-grid panel is named', badLints.includes('OFFGRID'), true)
+  check('a nearly-aligned pair is named', badLints.includes('SIBLING_EDGE'), true)
+  check('type over a picture is named', badLints.includes('TEXT_ON_IMAGE'), true)
+}
+
 section('style library')
 const stylesModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/styles/index.js')).href)
 const STYLE_TABLE = stylesModule.styleTable()

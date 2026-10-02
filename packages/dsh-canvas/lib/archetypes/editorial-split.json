@@ -2,7 +2,11 @@
   "id": "editorial-split",
   "title": "Editorial split",
   "description": "Copy stack on the left, one visual panel on the right, on a dark surface - reaches for a launch card when you have a headline and one picture and not much else.",
-  "presets": ["github-social", "og", "linkedin-post"],
+  "presets": [
+    "github-social",
+    "og",
+    "linkedin-post"
+  ],
   "document": {
     "title": "Editorial split",
     "preset": "github-social",
@@ -49,15 +53,19 @@
         "kind": "art",
         "id": "visual",
         "style": "mesh",
-        "x": 632,
+        "x": 620,
         "y": 104,
-        "w": 560,
+        "w": 596,
         "h": 400,
         "radius": "card",
         "seed": 4021,
         "density": 0.55,
         "scale": 1.1,
-        "colors": ["accent", "surface", "ink"]
+        "colors": [
+          "accent",
+          "surface",
+          "ink"
+        ]
       },
       {
         "kind": "text",
@@ -78,11 +86,18 @@
         "id": "headline",
         "x": 64,
         "y": 160,
-        "w": 620,
+        "w": 512,
         "runs": [
-          { "text": "Ship " },
-          { "text": "plugins", "color": "#A9BBFF" },
-          { "text": ", not patches." }
+          {
+            "text": "Ship "
+          },
+          {
+            "text": "plugins",
+            "color": "#A9BBFF"
+          },
+          {
+            "text": ", not patches."
+          }
         ],
         "style": "display",
         "family": "display",
@@ -94,7 +109,7 @@
         "id": "subhead",
         "x": 64,
         "y": 340,
-        "w": 620,
+        "w": 512,
         "text": "One row per tool, no forks.",
         "style": "body",
         "family": "text",
@@ -116,7 +131,7 @@
         "id": "cta",
         "x": 64,
         "y": 460,
-        "w": 196,
+        "w": "hug",
         "h": 48,
         "direction": "row",
         "justify": "center",
@@ -134,6 +149,12 @@
             "weight": 600,
             "color": "#0B0E14"
           }
+        ],
+        "padding": [
+          13,
+          22,
+          13,
+          22
         ]
       }
     ]

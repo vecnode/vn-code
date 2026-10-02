@@ -2,7 +2,11 @@
   "id": "code-card",
   "title": "Code card",
   "description": "A bordered terminal panel of short mono lines on the right, the message and one action on the left - reaches for a developer-facing announcement where the command is the proof.",
-  "presets": ["github-social", "og", "linkedin-post"],
+  "presets": [
+    "github-social",
+    "og",
+    "linkedin-post"
+  ],
   "document": {
     "title": "Code card",
     "preset": "github-social",
@@ -73,7 +77,7 @@
         "id": "cta",
         "x": 64,
         "y": 340,
-        "w": 168,
+        "w": "hug",
         "h": 44,
         "direction": "row",
         "justify": "center",
@@ -91,6 +95,12 @@
             "weight": 600,
             "color": "#0B0E14"
           }
+        ],
+        "padding": [
+          13,
+          22,
+          13,
+          22
         ]
       },
       {
@@ -105,7 +115,10 @@
         "padding": 40,
         "background": "#0F1420",
         "radius": "card",
-        "border": { "width": 1, "color": "#94A3B840" },
+        "border": {
+          "width": 1,
+          "color": "#94A3B840"
+        },
         "children": [
           {
             "kind": "shape",

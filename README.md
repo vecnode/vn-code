@@ -15,7 +15,7 @@ other, and the Unix half never needs PowerShell).
 
 
 <p align="left">
-  <img src="assets/vncode-29092026-120650.png" alt="The vncode window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
+  <img src="assets/img1.png" alt="The vncode window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
 </p>
 
 ## Run
@@ -31,23 +31,6 @@ to your default browser. The URL is opened only when it names a **loopback**
 address, and the launch token is never written to a file - both rules are in
 [SECURITY.md](SECURITY.md).
 
-**How the harness is started depends on whether the runtime is vendored.** When
-`runtime/<rid>/` exists - produced once by `scripts\dsh\vendor.ps1` - the shell
-launches `node <runtime>/harness/…/lib/bin.js web --no-open` **directly**, with no
-npm, no npx, no registry and no cache of any kind involved. Nothing is fetched to
-start the app, and the network is used only for the chat and search themselves.
-Without a vendored runtime the launcher falls back to
-`npx @deepseek-ai/dsh@<pin> web`, which is the source-checkout path.
-
-Flags: `-Port <n>` when 3080 is taken, `-NoBrowser` to start the server alone,
-`-DefaultBrowser` to skip Chrome, `-Help` anywhere.
-
-The desktop shell answers the two questions worth asking while it starts: whether
-a **DeepSeek key** was found and which layer supplied it (the environment,
-`$DSH_HOME/.credentials.yaml`, or a `.env`), and which **harness home** this run
-will use. That is why installing a newer release over an older one is a non-event:
-sessions, settings and the key live in `~/.dsh`, not in the folder you replaced.
-The key's value never leaves the shell. Details: [app/README.md](app/README.md).
 
 ## Plugins
 
