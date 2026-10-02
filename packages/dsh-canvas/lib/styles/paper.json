@@ -1,0 +1,67 @@
+{
+  "id": "paper",
+  "name": "Paper",
+  "rank": 120,
+  "intent": "A written page rather than a screen: warm off-white stock, near-black ink, one earthy accent, small radii and a texture that reads as fibre - the calmest style in the library.",
+  "bestFor": ["poster-a3", "og", "linkedin-carousel-page", "github-readme"],
+  "color": {
+    "surface": "#FAF7F0",
+    "panel": "#FFFFFF",
+    "ink": "#1B1917",
+    "muted": "#5C564C",
+    "accent": "#8A5A2B",
+    "accent-ink": "#FFF8EE",
+    "line": "#E0D8C8",
+    "warm": "#C98B4B"
+  },
+  "font": {
+    "display": "Space Grotesk",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 0.98,
+    "displayWeight": 600,
+    "displayTracking": 0,
+    "lineHeight": 1.25
+  },
+  "space": 10,
+  "radius": {
+    "card": 3,
+    "chip": 3,
+    "pill": 999
+  },
+  "border": {
+    "weight": 1,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "none"
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "art": {
+    "preferred": ["grain", "waves"],
+    "opacity": 0.22
+  },
+  "rules": {
+    "do": [
+      "Keep the margins wide and the measure short; a page is read, not scanned.",
+      "Use the earthy accent for a rule, a number or a single word - it is ink, not paint.",
+      "Let the stock texture carry the warmth so no colour has to.",
+      "Separate sections with a hairline and space rather than with panels."
+    ],
+    "dont": [
+      "Do not use pure white or pure black; the warmth is the style.",
+      "Do not add a shadow - paper does not float.",
+      "Do not use more than one accent, and never as a large fill."
+    ]
+  },
+  "gates": [
+    "Body contrast is at least 4.5:1 on the stock.",
+    "No pure #FFFFFF surface and no pure #000000 ink.",
+    "The accent covers less than 10% of the canvas."
+  ]
+}

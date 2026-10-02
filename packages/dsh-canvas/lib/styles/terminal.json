@@ -1,0 +1,67 @@
+{
+  "id": "terminal",
+  "name": "Terminal",
+  "rank": 90,
+  "intent": "A phosphor screen: black-green ground, one luminous accent, everything monospaced, and a faint grid that reads as scanlines without drawing any.",
+  "bestFor": ["github-readme", "og", "github-social", "linkedin-post"],
+  "color": {
+    "surface": "#0B0F0B",
+    "panel": "#101710",
+    "ink": "#C9FFD6",
+    "muted": "#7FB68C",
+    "accent": "#39FF88",
+    "accent-ink": "#06120A",
+    "line": "#1E2B1E",
+    "warm": "#FFB000"
+  },
+  "font": {
+    "display": "system",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1,
+    "displayWeight": 700,
+    "displayTracking": 0,
+    "lineHeight": 1.3
+  },
+  "space": 8,
+  "radius": {
+    "card": 0,
+    "chip": 0,
+    "pill": 2
+  },
+  "border": {
+    "weight": 1,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "none"
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "art": {
+    "preferred": ["grid", "circuit"],
+    "opacity": 0.25
+  },
+  "rules": {
+    "do": [
+      "Set the display type in the mono family - the fixed advance is the whole character.",
+      "Use the luminous accent for prompts, carets, one rule and one word.",
+      "Keep the ink green and dim; a bright white destroys the phosphor illusion.",
+      "Let the grid show faintly behind the type and never in front of it."
+    ],
+    "dont": [
+      "Do not use a rounded card or a soft shadow.",
+      "Do not use more than one accent hue; amber is a warning, not a second brand.",
+      "Do not set long body copy in mono - it is for the headline and the labels."
+    ]
+  },
+  "gates": [
+    "The display family is monospaced.",
+    "Body contrast is at least 4.5:1 on the dark ground.",
+    "No rounded corner above 2px and no soft shadow."
+  ]
+}

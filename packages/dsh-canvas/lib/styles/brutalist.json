@@ -1,0 +1,71 @@
+{
+  "id": "brutalist",
+  "name": "Brutalist",
+  "rank": 20,
+  "intent": "Raw structure on show: paper-white or ink-black surfaces, thick rules instead of shadows, no rounding, and type set so large it becomes the layout rather than sitting in it.",
+  "bestFor": ["github-social", "poster-a3", "linkedin-square", "x-post"],
+  "color": {
+    "surface": "#F4F1EC",
+    "panel": "#FFFFFF",
+    "ink": "#0A0A0A",
+    "muted": "#3D3D3D",
+    "accent": "#D42A00",
+    "accent-ink": "#FFFFFF",
+    "line": "#0A0A0A",
+    "warm": "#FFE9C7"
+  },
+  "font": {
+    "display": "Space Grotesk",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1.05,
+    "displayWeight": 700,
+    "displayTracking": -2,
+    "lineHeight": 1.05
+  },
+  "space": 8,
+  "radius": {
+    "card": 0,
+    "chip": 0,
+    "pill": 0
+  },
+  "border": {
+    "weight": 4,
+    "color": "ink"
+  },
+  "shadow": {
+    "kind": "hard",
+    "x": 8,
+    "y": 8,
+    "color": "ink",
+    "alpha": 1
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "art": {
+    "preferred": ["grid", "blueprint"],
+    "opacity": 0.18
+  },
+  "rules": {
+    "do": [
+      "Give every panel a heavy rule: the border IS the decoration, so no panel floats without one.",
+      "Set the headline at the largest size the safe area allows and let it break across lines at awkward, deliberate points.",
+      "Keep the palette to ink, surface and ONE hot accent - any third colour weakens the shout.",
+      "Use the hard offset shadow at one direction only, and never with a blur."
+    ],
+    "dont": [
+      "Do not round a single corner; radius 0 is the whole point.",
+      "Do not use a gradient, a soft shadow or a translucent panel.",
+      "Do not set body copy in the display family - the contrast between the two is load-bearing."
+    ]
+  },
+  "gates": [
+    "Ink on surface is at least 12:1.",
+    "The accent covers less than 15% of the canvas.",
+    "No rounded corner, no blur, no gradient anywhere."
+  ]
+}

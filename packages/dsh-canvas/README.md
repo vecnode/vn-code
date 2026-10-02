@@ -155,6 +155,33 @@ on the words and the palette instead of on inventing a layout — and a request 
 an archetype at a preset it was not composed for is refused with the list of
 presets it does fit.
 
+### Styles: the look library
+
+Composition and look are **separate decisions**, and the package keeps them apart:
+
+- an **archetype** is *which* design — where the words, panels and art sit;
+- a **style pack** (`lib/styles/<id>.json`) is *how it looks* — palette, type
+  behaviour, shape language, surface and art treatment, plus the rules and quality
+  gates a designer follows with it.
+
+`canvas_new { preset, archetype, style }` starts a design in a look and
+`canvas_style { id, style }` applies another to a design that exists; the tab has a
+style picker beside the preset and a card in the side panel showing the current
+style's intent, its do/don't and its gates.
+
+**Applying a style never moves anything.** One pure transform
+(`lib/styles/apply.js`) replaces the colour roles and rewrites every colour
+*literal* in the document that was one of the old role values (the only way to
+re-colour a canonical document, which carries literals everywhere), sets the type
+behaviour, and applies the radius/border/shadow/surface/art language — geometry is
+untouched, which is why it is safe on a finished design. The scale factor is a
+**delta** against the style the design already carries, so applying the same style
+twice is a no-op and switching back restores the original sizes exactly.
+
+`vendor/styles-doc.mjs` generates `skills/canvas-design/reference/styles.md` from
+the packs, and the tracked check fails when that document is stale — so the
+catalogue the model reads is always the library the host will apply.
+
 ## One layout, two painters (and why the export cannot disagree)
 
 ```

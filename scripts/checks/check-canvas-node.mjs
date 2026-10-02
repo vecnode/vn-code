@@ -28,6 +28,7 @@ export {} // (import-free: ESM for the dynamic imports below)
 
 const { promises: fsp } = await import('node:fs')
 const { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } = await import('node:fs')
+const { spawnSync } = await import('node:child_process')
 const { createHash } = await import('node:crypto')
 const { deflateSync } = await import('node:zlib')
 const os = await import('node:os')
@@ -657,6 +658,155 @@ for (const folder of skillFolders) {
 // ---------------------------------------------------------------------------
 // 9. The host row: tools and routes
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// 8b. The style library
+//
+// A style is DATA, so the library is only as good as the transform that applies
+// it - and the transform is only trustworthy if it holds three promises on EVERY
+// pack and EVERY composition: the result validates, nothing MOVES, and the design
+// stays legible. Those are asserted here for the whole cross product, which is
+// also what keeps a future pack honest: a look that fails any of them fails this
+// check when it is added.
+// ---------------------------------------------------------------------------
+section('style library')
+const stylesModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/styles/index.js')).href)
+const STYLE_TABLE = stylesModule.styleTable()
+const STYLE_LIST = stylesModule.STYLE_LIST
+check('the library carries at least ten styles', STYLE_LIST.length >= 10, true)
+for (const pack of STYLE_LIST) {
+  check('style ' + pack.id + ' is complete', stylesModule.styleProblems(pack).join('; '), '')
+  const swatch = stylesModule.styleSwatch(pack)
+  check('style ' + pack.id + ' has a swatch to show', swatch.colours.length >= 3 && typeof swatch.display === 'string', true)
+  check('style ' + pack.id + ' says what it is for', typeof pack.intent === 'string' && pack.intent.length >= 20, true)
+  check('style ' + pack.id + ' ships rules and gates', pack.rules.do.length >= 3 && pack.rules.dont.length >= 3 && pack.gates.length >= 1, true)
+  check('style ' + pack.id + ' names only shipped families', Object.values(pack.font).every((family) => family === 'system' || Object.keys(FONTS).includes(family)), true)
+  const usesArt = pack.art && Array.isArray(pack.art.preferred) ? pack.art.preferred : []
+  check('style ' + pack.id + ' names only real art generators', usesArt.every((style) => engine.ART_STYLES.includes(style)), true)
+}
+{
+  let pairs = 0
+  let invalid = 0
+  let moved = 0
+  let notIdempotent = 0
+  let notReversible = 0
+  let illegible = 0
+  const details = []
+  const secondStyle = STYLE_LIST[1] ?? STYLE_LIST[0]
+  for (const pack of STYLE_LIST) {
+    for (const archetype of archetypesModule.ARCHETYPES) {
+      pairs += 1
+      const preset = PRESETS[archetype.presets[0]]
+      const base = engine.normalizeDocument(archetype.document, { presets: PRESETS, fonts: FONTS, styles: STYLE_TABLE })
+      if (!base.document) {
+        invalid += 1
+        details.push('the archetype ' + archetype.id + ' does not validate')
+        continue
+      }
+      const styled = stylesModule.applyStyle(base.document, pack, { styles: STYLE_TABLE })
+      const verdict = engine.normalizeDocument(styled.document, { presets: PRESETS, fonts: FONTS, styles: STYLE_TABLE })
+      if (verdict.problems.length > 0) {
+        invalid += 1
+        details.push(pack.id + ' on ' + archetype.id + ': ' + verdict.problems[0].code + ' ' + verdict.problems[0].message)
+        continue
+      }
+      // 1. NOTHING IS AUTHORED DIFFERENTLY. A style changes how a design LOOKS: it
+      //    never rewrites a position, a size, a layer's place in the array or a word.
+      //    The DOCUMENT's own numbers are compared node by node - and then the
+      //    LAID-OUT boxes of everything that is not text, because changing a
+      //    display weight or a line height is typography and legitimately re-wraps a
+      //    text block, which is exactly why a style is followed by a render.
+      const authoredGeometry = (doc) => {
+        const rows = []
+        const walk = (node, path) => {
+          rows.push([path, node.kind, node.x ?? '', node.y ?? '', node.w ?? '', node.h ?? '', node.text ?? '', Array.isArray(node.runs) ? node.runs.map((run) => run.text).join('') : ''].join('|'))
+          for (let index = 0; index < (node.children ?? []).length; index += 1) walk(node.children[index], path + '.children.' + index)
+        }
+        for (let index = 0; index < (doc.layers ?? []).length; index += 1) walk(doc.layers[index], 'layers.' + index)
+        return rows
+      }
+      const wasAuthored = authoredGeometry(base.document)
+      const nowAuthored = authoredGeometry(verdict.document)
+      const authoredKept = wasAuthored.length === nowAuthored.length && wasAuthored.every((row, index) => row === nowAuthored[index])
+      const before = engine.layout(base.document, { measure, assets: {}, fonts: FONTS })
+      const after = engine.layout(verdict.document, { measure, assets: {}, fonts: FONTS })
+      const beforeByPath = new Map(before.boxes.map((entry) => [entry.path, entry.box]))
+      const drift = after.boxes.filter((entry) => {
+        if (entry.kind === 'text') return false
+        const was = beforeByPath.get(entry.path)
+        if (!was) return true
+        return Math.abs(was.x - entry.box.x) > 0.01 || Math.abs(was.y - entry.box.y) > 0.01 || Math.abs(was.w - entry.box.w) > 0.01 || Math.abs(was.h - entry.box.h) > 0.01
+      })
+      if (!authoredKept || drift.length > 0) {
+        moved += 1
+        details.push(pack.id + ' on ' + archetype.id + (authoredKept ? ' moved ' + drift[0].path : ' rewrote authored geometry or a word'))
+      }
+      // 2. IDEMPOTENT: the same style twice changes nothing.
+      const twice = stylesModule.applyStyle(verdict.document, pack, { styles: STYLE_TABLE })
+      if (engine.stableJson(twice.document) !== engine.stableJson(verdict.document)) {
+        notIdempotent += 1
+        details.push(pack.id + ' on ' + archetype.id + ' is not idempotent')
+      }
+      // 3. REVERSIBLE: switching away and back restores the type scale. Rounding is
+      //    allowed to move an entry by at most one pixel, because a scale factor is
+      //    applied to integers - anything more than that is a compounding bug.
+      const switched = stylesModule.applyStyle(styled.document, secondStyle, { styles: STYLE_TABLE })
+      const back = stylesModule.applyStyle(switched.document, pack, { styles: STYLE_TABLE })
+      const scaleDrift = Object.keys(styled.document.tokens.scale ?? {}).filter((name) => Math.abs((back.document.tokens.scale[name] ?? 0) - (styled.document.tokens.scale[name] ?? 0)) > 1)
+      if (scaleDrift.length > 0) {
+        notReversible += 1
+        details.push(pack.id + ' on ' + archetype.id + ' does not restore ' + scaleDrift.join(', ') + ' after a switch')
+      }
+      // 4. LEGIBLE: the lints the language already knows how to take, on the styled
+      //    design, against its own preset.
+      const lints = engine.lintLayout(after, verdict.document, preset, { assets: {} })
+      const contrast = lints.filter((entry) => entry.code === 'LOW_CONTRAST')
+      if (contrast.length > 0) {
+        illegible += 1
+        details.push(pack.id + ' on ' + archetype.id + ': ' + contrast[0].message)
+      }
+    }
+  }
+  check('every style applies to every archetype and still validates (' + pairs + ' pairs)', invalid, 0)
+  check('a style never moves or resizes anything', moved, 0)
+  check('applying a style twice is a no-op', notIdempotent, 0)
+  check('switching styles and back restores the type scale', notReversible, 0)
+  check('every styled design stays legible', illegible, 0)
+  for (const line of details.slice(0, 8)) console.log('     ' + line)
+}
+{
+  // The catalogue the SKILL ships is generated from the packs, so it cannot drift
+  // from the library the host applies. This runs the generator's own --check.
+  const generated = spawnSync(process.execPath, [path.join(repo, 'packages/dsh-canvas/vendor/styles-doc.mjs'), '--check'], { encoding: 'utf8' })
+  check('the shipped style catalogue matches the packs', (generated.status === 0 ? '' : (generated.stdout || '') + (generated.stderr || '')).trim(), '')
+}
+{
+  // TEXT HYGIENE, asserted rather than assumed, because both halves of this bit
+  // once: a BOM is invisible and poisonous (JSON.parse refuses a data file that
+  // starts with one, and a check that pins bytes would report drift that is not
+  // there), and a UTF-8 -> cp1252 -> UTF-8 round trip through a text editor turns
+  // an ellipsis into `â€¦` - which is still VALID source, so nothing fails until a
+  // string comparison against a correct literal does. The signature below is the
+  // mojibake of the punctuation this package actually uses.
+  const bomFiles = []
+  const mangled = []
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules' && entry.name !== 'vendor') walk(full)
+        continue
+      }
+      if (!/\.(json|js|mjs|md|yml|css)$/.test(entry.name)) continue
+      const bytes = readFileSync(full)
+      if (bytes.length > 2 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) bomFiles.push(path.relative(repo, full))
+      if (/Ã[\u0080-\u00bf\u2013\u2014\u2018\u2019\u201c\u201d\u2020\u2021\u2022\u2026\u20ac\u2122]|â€[\u0093\u0094\u0096\u0097\u0099\u009c\u009d\u00a0-\u00bf]/.test(bytes.toString('utf8'))) mangled.push(path.relative(repo, full))
+    }
+  }
+  walk(path.join(repo, 'packages/dsh-canvas'))
+  check('no dsh-canvas source file carries a byte-order mark', bomFiles.join(', '), '')
+  check('no dsh-canvas source file is mojibake', mangled.join(', '), '')
+}
+
 section('host row: tools')
 /** A stub cordis context with the two services the row needs. */
 function makeCtx() {
@@ -725,6 +875,25 @@ check('a bare file name with an image extension is a workspace path', bareNameDo
 const patchedTool = await byName.get('canvas_patch').execute({ id: 'check-design', ops: [{ op: 'set', at: 'layers.1.children.0.text', value: 'Patched eyebrow' }] }, exec)
 check('canvas_patch bumped the revision', patchedTool.view.revision, 2)
 check('canvas_patch kept the design valid', patchedTool.text.includes('Patched'), true)
+// The style library, through the tools and the panel route: create with a look,
+// re-style an existing design, and refuse a look the library does not carry.
+const styledArchetype = archetypesModule.ARCHETYPES.find((entry) => entry.presets.includes('og')) ?? archetypesModule.ARCHETYPES[0]
+const secondStyle = STYLE_LIST[1] ?? STYLE_LIST[0]
+const styledNew = await byName.get('canvas_new').execute({ preset: styledArchetype.presets[0], archetype: styledArchetype.id, id: 'styled-one', style: STYLE_LIST[0].id }, exec)
+check('canvas_new applies a style', styledNew.view.id, 'styled-one')
+check('the style is recorded on the document', byName.get('canvas_read').execute({ id: 'styled-one' }, exec).text.includes('"style": "' + STYLE_LIST[0].id + '"'), true)
+const restyled = await byName.get('canvas_style').execute({ id: 'styled-one', style: secondStyle.id }, exec)
+check('canvas_style applies another look', restyled.view.revision, 2)
+check('canvas_style explains what changed', restyled.text.includes('Geometry was not touched'), true)
+check('canvas_style names the style it applied', restyled.text.includes(secondStyle.name), true)
+check('canvas_style refuses an unknown look in a sentence', (await byName.get('canvas_style').execute({ id: 'styled-one', style: 'not-a-style' }, exec)).text.includes('Unknown style'), true)
+const styledBefore = byName.get('canvas_read').execute({ id: 'styled-one' }, exec).view.revision
+await byName.get('canvas_style').execute({ id: 'styled-one', style: 'nope' }, exec)
+check('a refused style changes nothing', byName.get('canvas_read').execute({ id: 'styled-one' }, exec).view.revision, styledBefore)
+const styleRoute = routeFor.get('/api/dsh-canvas/document')
+const styleBody = await (await styleRoute(new Request('http://localhost/api/dsh-canvas/document', { method: 'POST', body: JSON.stringify({ session: 'session-tools', id: 'styled-one', style: STYLE_LIST[0].id }) }))).json()
+check('the panel route can re-style a design', styleBody.ok, true)
+check('the panel route refuses an unknown look', (await styleRoute(new Request('http://localhost/api/dsh-canvas/document', { method: 'POST', body: JSON.stringify({ session: 'session-tools', id: 'styled-one', style: 'nope' }) }))).status, 400)
 const badPatch = await byName.get('canvas_patch').execute({ id: 'check-design', ops: [{ op: 'set', at: 'layers.9.children.0', value: 1 }] }, exec)
 check('a bad patch changes nothing', badPatch.problems[0].code, 'NO_TARGET')
 check('the revision did not move on a refused patch', byName.get('canvas_read').execute({ id: 'check-design' }, exec).view.revision, 2)
@@ -790,6 +959,11 @@ const stateResponse = await routeFor.get('/api/dsh-canvas/state')(new Request('h
 const stateBody = await stateResponse.json()
 check('state carries the designs with their documents', Array.isArray(stateBody.designs) && stateBody.designs[0].document.layers.length > 0, true)
 check('state carries the preset table', Object.keys(stateBody.presets).length, 10)
+// The style library reaches the tab through this one payload: the gallery rows the
+// picker draws, each with the swatch and the rules the side panel shows.
+check('state carries the style gallery', (stateBody.styles ?? []).length >= 10, true)
+check('the gallery rows carry a swatch and rules', Boolean(stateBody.styles[0].swatch.colours.length >= 3 && stateBody.styles[0].do.length >= 3 && stateBody.styles[0].gates.length >= 1), true)
+check('the gallery is ordered for a person', stateBody.styles.every((entry, index) => index === 0 || (stateBody.styles[index - 1].rank ?? 100) <= (entry.rank ?? 100)), true)
 check('state carries the font URLs', stateBody.fonts.Inter.weights['400'].url.startsWith('/api/dsh-canvas/vendor/fonts/'), true)
 check('state carries the engine route', stateBody.engineRoute, '/api/dsh-canvas/vendor/engine.js')
 check('state carries the asset table', typeof stateBody.assets, 'object')

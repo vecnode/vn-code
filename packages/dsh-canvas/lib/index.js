@@ -1,5 +1,5 @@
-﻿/**
- * dsh-canvas â€” host half.
+/**
+ * dsh-canvas — host half.
  *
  * One row owns the whole capability:
  *
@@ -45,6 +45,7 @@ import { ENGINE_VERSION, LIMITS, applyPatches, clone, normalizeDocument } from '
 import { PRESETS, exportProblems, presetById } from './presets.js'
 import { FONT_ROUTE_PREFIX, fontFileFor, fontStatus, fontTable } from './fonts.js'
 import { ARCHETYPES, archetypeById } from './archetypes/index.js'
+import { applyStyle, styleById, styleGallery, styleIds, styleTable } from './styles/index.js'
 import { AssetStore, CanvasStore, ID_PATTERN, SCOPES, MAX_ASSET_BYTES, MAX_DOCUMENT_BYTES, renderPath, resolveHome, summarize, verificationOf } from './store.js'
 import { desktopDirectory, humanBytes, resolveNewInside, sanitizeName, writeCreateExclusive } from './export.js'
 
@@ -86,7 +87,7 @@ const SKILL_FILES = [
 ]
 
 /** Every tool name, in the order the conversation cards register. */
-export const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
+export const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -359,7 +360,7 @@ function locate(row, sessionId, id, scope) {
 
 /** Validate a document for a session: presets, fonts, and the asset names it references. */
 function validateDocument(row, input) {
-  const result = normalizeDocument(input, { presets: PRESETS, fonts: fontTable() })
+  const result = normalizeDocument(input, { presets: PRESETS, fonts: fontTable(), styles: styleTable() })
   const problems = result.problems.slice()
   if (result.document) {
     const known = row.assets.table()
@@ -368,7 +369,7 @@ function validateDocument(row, input) {
       problems.push({
         path: 'layers',
         code: 'MISSING_ASSET',
-        message: 'the image "' + src + '" is neither a stored asset nor a workspace-relative path. Import it first with canvas_assets { op: "import", path: "â€¦" } (or paste it into the Canvas tab).',
+        message: 'the image "' + src + '" is neither a stored asset nor a workspace-relative path. Import it first with canvas_assets { op: "import", path: "…" } (or paste it into the Canvas tab).',
       })
     }
   }
@@ -472,12 +473,40 @@ export function documentFor(request) {
         },
       }
     }
-    const document = clone(archetype.document)
-    document.preset = preset.id
-    document.title = typeof request.title === 'string' && request.title.length > 0 ? request.title : archetype.title
-    return { document }
+    const built = clone(archetype.document)
+    built.preset = preset.id
+    built.title = typeof request.title === 'string' && request.title.length > 0 ? request.title : archetype.title
+    return withStyle(built, request.style)
   }
-  return { document: starterDocument(preset, typeof request.title === 'string' ? request.title : undefined) }
+  return withStyle(starterDocument(preset, typeof request.title === 'string' ? request.title : undefined), request.style)
+}
+
+/**
+ * Apply a style to a freshly built document, or refuse by name.
+ *
+ * One function for every caller - `canvas_new`, the tab's "+ New", and a plain
+ * `canvas_write` that names a style - so a design built three ways from the same
+ * request cannot come out looking different.
+ *
+ * @param document - the composition, before the look.
+ * @param styleId - a style id, or nothing.
+ * @returns `{ document, notes, style }` or `{ error }`.
+ */
+export function withStyle(document, styleId) {
+  if (typeof styleId !== 'string' || styleId.length === 0) return { document }
+  const style = styleById(styleId)
+  if (!style) {
+    return { error: { code: 'UNKNOWN_STYLE', message: 'unknown style ' + JSON.stringify(styleId) + '; the library carries:\n' + styleLines() } }
+  }
+  const applied = applyStyle(document, style, { styles: styleTable() })
+  return { document: applied.document, notes: applied.notes, style: style.id }
+}
+
+/** The style library as text, for a tool answer or a refusal. */
+function styleLines() {
+  return styleGallery()
+    .map((entry) => '  - ' + entry.id + '  ' + entry.name + '  (' + entry.swatch.display + ')  ' + entry.intent)
+    .join('\n')
 }
 
 /** The browser-visible summary of one design, with its document. */function viewOf(scopeKey, entry) {
@@ -557,7 +586,7 @@ function problemLines(problems) {
 function lintLines(lints, limit = 12) {
   const shown = lints.slice(0, limit)
   const lines = shown.map((entry) => '  - [' + entry.level + '] ' + entry.code + ': ' + entry.message)
-  if (lints.length > shown.length) lines.push('  â€¦ and ' + (lints.length - shown.length) + ' more')
+  if (lints.length > shown.length) lines.push('  … and ' + (lints.length - shown.length) + ' more')
   return lines.join('\n')
 }
 
@@ -622,6 +651,7 @@ export function buildTools(row, ctx) {
       properties: {
         preset: { type: 'string', description: 'The destination preset id (see canvas_read for the table).' },
         archetype: { type: 'string', description: 'An archetype id whose composition to start from; canvas_read lists them.' },
+        style: { type: 'string', description: 'A style id from the look library (editorial, brutalist, neon, ...); canvas_read lists them.' },
         title: { type: 'string', description: 'A short human title; the tab chip and the design list show it.' },
         id: ID_SCHEMA,
         scope: SCOPE_SCHEMA,
@@ -641,7 +671,7 @@ export function buildTools(row, ctx) {
       if (!preset) {
         return { text: 'Unknown preset ' + JSON.stringify(args.preset) + '. Known presets:\n' + presetLines() }
       }
-      const built = documentFor({ preset: args.preset, archetype: args.archetype, title: args.title })
+      const built = documentFor({ preset: args.preset, archetype: args.archetype, title: args.title, style: args.style })
       if (built.error) return { text: built.error.message }
       const verdict = validateDocument(row, built.document)
       if (!verdict.document) {
@@ -790,6 +820,71 @@ export function buildTools(row, ctx) {
         'Tab address: ' + addressOf(found.scopeKey, entry.id),
       ]
       return { text: lines.join('\n'), view: viewOf(found.scopeKey, entry) }
+    },
+  }
+
+  // -------------------------------------------------------------------------
+  // canvas_style
+  // -------------------------------------------------------------------------
+  const restyle = {
+    name: 'canvas_style',
+    description: [
+      'Apply a LOOK from the style library to an existing design: the palette, the type behaviour, the shape language, the surface and the art treatment.',
+      'Geometry is untouched - a style never moves or resizes anything, which is what makes this safe: the composition stays exactly as it is and the design comes out looking like another genre.',
+      'The document records the style it carries (`style`), and the scale factor is applied as a DELTA against the previous one, so applying the same style twice changes nothing and switching back restores the original type sizes exactly.',
+      'A style cannot do what the language cannot express (there is no blur, so "glass" is translucency plus a hairline plus a soft shadow); the library says so in the style\'s own intent and rules.',
+    ].join('\n'),
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id', 'style'],
+      properties: {
+        id: ID_SCHEMA,
+        style: { type: 'string', description: 'The style id to apply; canvas_read lists the library.' },
+        scope: SCOPE_SCHEMA,
+        note: { type: 'string', description: 'One line on what changed, kept in the design history.' },
+      },
+    },
+    output: {
+      schema: { type: 'object', properties: { text: { type: 'string' }, view: VIEW_SCHEMA, problems: PROBLEMS_SCHEMA }, required: ['text'] },
+      render: (_args, value) => [{ type: 'text', text: value.text }],
+      presentationMeta: (_args, value) => (value.view && value.view.id ? value.view : {}),
+    },
+    presentCall: (args) => callView(args, 'Style'),
+    presentResult: resultView,
+    execute(args, exec) {
+      const sessionId = sessionOf(exec)
+      const style = styleById(args.style)
+      if (!style) {
+        return { text: 'Unknown style ' + JSON.stringify(args.style) + '. The library carries:\n' + styleLines() }
+      }
+      const found = requireDesign(sessionId, args.id, args.scope)
+      const applied = applyStyle(found.entry.document, style, { styles: styleTable() })
+      const verdict = validateDocument(row, applied.document)
+      if (!verdict.document) {
+        return { text: 'The styled design did NOT validate (nothing was changed):\n' + problemLines(verdict.problems), problems: verdict.problems }
+      }
+      const stored = putDesign(row.storeFor(found.scopeKey), {
+        id: found.entry.id,
+        title: found.entry.title,
+        preset: verdict.document.preset,
+        document: verdict.document,
+        by: 'model',
+        note: args.note,
+      })
+      if (!stored.entry) return { text: stored.text }
+      const lines = [
+        'Applied the "' + style.name + '" style to "' + stored.entry.id + '" (revision ' + stored.entry.revision + ').',
+        style.intent,
+        'What changed: ' + (applied.notes.length > 0 ? applied.notes.join('; ') : 'the palette only') + '.',
+        'Geometry was not touched. Render it and look before styling again - a new look is a new judgement.',
+        'Tab address: ' + addressOf(found.scopeKey, stored.entry.id),
+      ]
+      if (style.rules) {
+        lines.push('The style\u2019s own rules: ' + style.rules.do.slice(0, 2).join(' '))
+        lines.push('Do not: ' + style.rules.dont.slice(0, 2).join(' '))
+      }
+      return { text: lines.join('\n'), view: viewOf(found.scopeKey, stored.entry) }
     },
   }
 
@@ -1164,7 +1259,7 @@ export function buildTools(row, ctx) {
     },
   }
 
-  return [newDesign, write, patch, read, publish, remove, render, exportTool, assets]
+  return [newDesign, write, patch, read, restyle, publish, remove, render, exportTool, assets]
 }
 
 /**
@@ -1262,6 +1357,9 @@ function indexText(row, sessionId) {
   lines.push('')
   lines.push('Presets:')
   lines.push(presetLines())
+  lines.push('')
+  lines.push('Styles (a look to apply to any composition):')
+  lines.push(styleLines())
   lines.push('')
   lines.push('Archetypes (start from one of these):')
   lines.push(archetypeLines())
@@ -1398,6 +1496,7 @@ export function registerRoutes(ctx, row) {
       package: 'dsh-canvas',
       fonts,
       presets: Object.keys(PRESETS),
+      styles: styleIds(),
       archetypes: ARCHETYPES.map((entry) => entry.id),
       limits: LIMITS,
       queue: row.queue.status(),
@@ -1424,6 +1523,7 @@ export function registerRoutes(ctx, row) {
         limits: LIMITS,
         archetypes: ARCHETYPES.map((entry) => ({ id: entry.id, title: entry.title, description: entry.description, presets: entry.presets })),
         designs: own,
+        styles: styleGallery(),
         library,
         assets: row.assets.table(),
         assetList: row.assets.list(),
@@ -1453,13 +1553,24 @@ export function registerRoutes(ctx, row) {
       if (!candidate && typeof body.preset === 'string' && body.preset.length > 0) {
         // The tab's "+ New" asks for the same thing the model's `canvas_new`
         // does: a starter (or an archetype's document) for a destination preset,
-        // built here so both paths produce byte-identical documents.
-        candidate = documentFor({ preset: body.preset, archetype: body.archetype, title: body.title })
-        if (candidate.error) return json(400, { ok: false, error: { code: candidate.error.code, message: candidate.error.message } })
-        candidate = candidate.document
+        // built here so both paths produce byte-identical documents. A `style`
+        // named beside the preset goes through the same `withStyle` transform the
+        // tool uses.
+        const built = documentFor({ preset: body.preset, archetype: body.archetype, title: body.title, style: body.style })
+        if (built.error) return json(400, { ok: false, error: { code: built.error.code, message: built.error.message } })
+        candidate = built.document
+      }
+      if (!candidate && typeof body.style === 'string' && typeof body.id === 'string') {
+        // Re-styling an existing design from the panel: the same transform the
+        // `canvas_style` tool runs, on the stored canonical document.
+        const found = locate(row, sessionId, body.id, body.scope)
+        if (!found) throw httpError(404, 'NOT_FOUND', 'no design ' + body.id)
+        const style = styleById(body.style)
+        if (!style) return json(400, { ok: false, error: { code: 'UNKNOWN_STYLE', message: 'unknown style ' + JSON.stringify(body.style) } })
+        candidate = applyStyle(found.entry.document, style, { styles: styleTable() }).document
       }
       if (!candidate) throw httpError(400, 'BAD_REQUEST', 'a document (or an id with ops, or a preset) is required')
-      const verdict = normalizeDocument(candidate, { presets: PRESETS, fonts: fontTable() })
+      const verdict = normalizeDocument(candidate, { presets: PRESETS, fonts: fontTable(), styles: styleTable() })
       if (!verdict.document) return json(400, { ok: false, error: { code: 'INVALID', message: 'the document did not validate' }, problems: verdict.problems })
       const store = row.storeFor(scopeKey)
       const id = typeof body.id === 'string' && body.id.length > 0 ? body.id : store.freeId(verdict.document.title ?? 'design')

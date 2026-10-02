@@ -1,0 +1,81 @@
+{
+  "id": "gradient",
+  "name": "Gradient",
+  "rank": 50,
+  "intent": "A saturated two-stop wash as the whole background: the composition sits on colour rather than in a frame, with generous rounding and white type that holds against the darkest part of the wash.",
+  "bestFor": ["github-social", "linkedin-post", "linkedin-carousel-page", "og"],
+  "color": {
+    "surface": "#1B0B3A",
+    "panel": "#2A1257",
+    "ink": "#FFFFFF",
+    "muted": "#C9B8F0",
+    "accent": "#FF6BD6",
+    "accent-ink": "#2A0033",
+    "line": "#3A2170",
+    "warm": "#FFD166"
+  },
+  "font": {
+    "display": "Space Grotesk",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1.08,
+    "displayWeight": 700,
+    "displayTracking": -1.5,
+    "lineHeight": 1.1
+  },
+  "space": 8,
+  "radius": {
+    "card": 22,
+    "chip": 14,
+    "pill": 999
+  },
+  "border": {
+    "weight": 0,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "soft",
+    "y": 24,
+    "blur": 60,
+    "color": "surface",
+    "alpha": 0.5
+  },
+  "background": {
+    "type": "linear",
+    "angle": 150,
+    "stops": [
+      {
+        "at": 0,
+        "color": "#3B1A6E"
+      },
+      {
+        "at": 1,
+        "color": "#1B0B3A"
+      }
+    ]
+  },
+  "art": {
+    "preferred": ["mesh", "rings"],
+    "opacity": 0.45
+  },
+  "rules": {
+    "do": [
+      "Keep the wash to two stops of ONE hue family; a rainbow is a different style.",
+      "Place type over the darker end of the gradient, and check the render rather than trusting the numbers.",
+      "Round panels generously - the softness is what separates this from a flat colour.",
+      "Use the accent for one chip or rule, and let the gradient carry the colour budget."
+    ],
+    "dont": [
+      "Do not put the headline across the lightest band of the wash.",
+      "Do not add a second gradient at another angle.",
+      "Do not use a hard edge or a 0 radius anywhere - blunt shapes fight the wash."
+    ]
+  },
+  "gates": [
+    "Body contrast is at least 4.5:1 against the darkest area behind it.",
+    "Both gradient stops are the same hue family.",
+    "No text sits across a hard stop."
+  ]
+}

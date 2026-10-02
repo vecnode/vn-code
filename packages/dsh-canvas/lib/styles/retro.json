@@ -1,0 +1,71 @@
+{
+  "id": "retro",
+  "name": "Retro",
+  "rank": 80,
+  "intent": "Printed ephemera: a warm cream stock, two inks, small hard offsets instead of shadows, and a texture that admits it was printed - the palette of a 1970s poster rather than a screen.",
+  "bestFor": ["poster-a3", "linkedin-square", "github-social", "x-post"],
+  "color": {
+    "surface": "#F5ECD9",
+    "panel": "#FFF8E8",
+    "ink": "#221A10",
+    "muted": "#5F5138",
+    "accent": "#C2451E",
+    "accent-ink": "#FFF3E2",
+    "line": "#C9B79A",
+    "warm": "#E8A33D"
+  },
+  "font": {
+    "display": "Space Grotesk",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1.02,
+    "displayWeight": 700,
+    "displayTracking": 0,
+    "lineHeight": 1.15
+  },
+  "space": 8,
+  "radius": {
+    "card": 2,
+    "chip": 2,
+    "pill": 999
+  },
+  "border": {
+    "weight": 2,
+    "color": "ink"
+  },
+  "shadow": {
+    "kind": "hard",
+    "x": 4,
+    "y": 4,
+    "color": "ink",
+    "alpha": 1
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "art": {
+    "preferred": ["grain", "stripes"],
+    "opacity": 0.3
+  },
+  "rules": {
+    "do": [
+      "Keep to two inks plus the cream stock, and let the cream be the lightest thing on the page.",
+      "Use the warm accent for one band, rule or chip - it is the second colour, not a third.",
+      "Offset a panel by a few pixels with a hard shadow in ink to make it feel letterpressed.",
+      "Let the texture sit at a low opacity so it reads as stock rather than noise."
+    ],
+    "dont": [
+      "Do not use a cool grey anywhere - it kills the warmth instantly.",
+      "Do not round corners beyond 2px.",
+      "Do not use a soft or coloured shadow; the offset is always ink."
+    ]
+  },
+  "gates": [
+    "Body contrast is at least 4.5:1 on the cream stock.",
+    "The ink offset is visible at 100% and never blurred.",
+    "No cool-toned colour is present."
+  ]
+}

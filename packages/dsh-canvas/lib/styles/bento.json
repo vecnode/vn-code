@@ -1,0 +1,71 @@
+{
+  "id": "bento",
+  "name": "Bento",
+  "rank": 70,
+  "intent": "A light page of rounded cards in a grid, each holding one idea with its own label: the composition reads as a set of tidy boxes, and the design's job is to decide which box is biggest.",
+  "bestFor": ["github-readme", "og", "linkedin-square", "linkedin-carousel-page"],
+  "color": {
+    "surface": "#F6F7F9",
+    "panel": "#FFFFFF",
+    "ink": "#17191F",
+    "muted": "#525A68",
+    "accent": "#2F6BFF",
+    "accent-ink": "#FFFFFF",
+    "line": "#E3E6EB",
+    "warm": "#FFE8CC"
+  },
+  "font": {
+    "display": "Inter",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1,
+    "displayWeight": 600,
+    "displayTracking": -0.8,
+    "lineHeight": 1.25
+  },
+  "space": 10,
+  "radius": {
+    "card": 16,
+    "chip": 10,
+    "pill": 999
+  },
+  "border": {
+    "weight": 1,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "soft",
+    "y": 8,
+    "blur": 24,
+    "color": "ink",
+    "alpha": 0.08
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "art": {
+    "preferred": ["grid", "mesh"],
+    "opacity": 0.2
+  },
+  "rules": {
+    "do": [
+      "Make one card clearly the biggest and give it the headline; equal boxes read as a table.",
+      "Give every card the same radius, hairline and inner padding.",
+      "Put the label inside the card it belongs to, never beside it.",
+      "Keep the gaps even and the outer margin larger than the inner gaps."
+    ],
+    "dont": [
+      "Do not mix more than two card sizes.",
+      "Do not centre the text inside a card; the grid wants a left edge.",
+      "Do not use the accent as a card fill for more than one card."
+    ]
+  },
+  "gates": [
+    "One card is at least twice the area of any other.",
+    "Every card shares one radius and one hairline.",
+    "The outer margin is larger than the gaps between cards."
+  ]
+}

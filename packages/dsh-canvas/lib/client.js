@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
     /** The version marker shown in the toolbar, so a fresh bundle is easy to spot. */
-    const PLUGIN_VERSION = '0.1.0-alpha.1'
+    const PLUGIN_VERSION = '0.1.0-alpha.2'
     /** The conversation view this package adds to the chat panel's ring. */
     const VIEW_ID = 'canvas'
     /** Keep in sync with lib/index.js. */
@@ -58,7 +58,7 @@ window.__ModuleLoader__.load({
     const WORKSPACE_ASSET_ROUTE = API_ROOT + '/workspace-asset'
     const ENGINE_ROUTE = API_ROOT + '/vendor/engine.js'
     /** The tool names whose conversation cards this package draws. */
-    const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
+    const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
     /** The zoom ladder. `fit` is resolved from the stage size at paint time. */
     const ZOOM_STEPS = ['fit', 0.25, 0.5, 1, 2]
     /** The feed-size factor a report carries, so the model can judge a phone feed. */
@@ -126,6 +126,18 @@ window.__ModuleLoader__.load({
 .dsc-galleryItem:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dsc-galleryTitle{font-size:11.5px;color:var(--dsw-alias-label-primary);display:block}
 .dsc-galleryMeta{font-size:10px;color:var(--dsw-alias-label-tertiary);display:block;margin-top:2px}
+.dsc-styles{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}
+.dsc-styleChip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px 3px 5px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;cursor:pointer}
+.dsc-styleChip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsc-styleChip[data-selected=true]{border-color:var(--dsw-alias-brand-primary,#4D6BFE);color:var(--dsw-alias-label-primary)}
+.dsc-styleDots{display:inline-flex;gap:2px}
+.dsc-styleDots i{width:9px;height:9px;border-radius:3px;display:block}
+.dsc-styleName{white-space:nowrap}
+.dsc-styleCard{display:flex;flex-direction:column;gap:4px;padding:7px 8px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-layer-1);margin:0 0 10px}
+.dsc-styleCard strong{font-size:11.5px;color:var(--dsw-alias-label-primary)}
+.dsc-styleIntent{font-size:11px;color:var(--dsw-alias-label-tertiary);line-height:1.45}
+.dsc-styleRule{font-size:10.5px;color:var(--dsw-alias-label-secondary);line-height:1.45}
+.dsc-styleRule b{color:var(--dsw-alias-label-tertiary);font-weight:600}
 .dsc-side{flex:none;width:296px;border-left:.5px solid var(--dsw-alias-border-l3);display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-layer-1)}
 .dsc-sideHead{flex:none;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary)}
 .dsc-sideBody{flex:1;min-height:0;overflow:auto;padding:8px 10px}
@@ -1292,15 +1304,38 @@ window.__ModuleLoader__.load({
         }
       }, [draft, selected, sessionId])
 
+      /** Apply a look to the selected design - the same transform `canvas_style` runs. */
+      const restyle = useCallback(
+        async (styleId) => {
+          if (!selected || !sessionId || !styleId) return
+          setBusy(true)
+          setNote(null)
+          try {
+            const answer = await api(DOCUMENT_ROUTE, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ session: sessionId, id: selected.id, scope: selected.scope, style: styleId, by: 'person' }),
+            })
+            if (answer && answer.design) mergeDesign(storeFor(sessionId), answer.design)
+            setNote({ kind: 'info', text: 'Applied the ' + styleId + ' style (revision ' + (answer && answer.design ? answer.design.revision : '?') + ') - nothing moved.' })
+          } catch (err) {
+            setNote({ kind: 'error', text: err && err.message ? err.message : 'the style could not be applied' })
+          } finally {
+            setBusy(false)
+          }
+        },
+        [selected, sessionId],
+      )
+
       /** Start a new design from a preset + archetype. */
       const createDesign = useCallback(
-        async (presetId, archetypeId) => {
+        async (presetId, archetypeId, styleId) => {
           if (!sessionId) return
           setBusy(true)
           setNote(null)
           setNewOpen(false)
           try {
-            const body = { session: sessionId, document: null, preset: presetId, archetype: archetypeId }
+            const body = { session: sessionId, document: null, preset: presetId, archetype: archetypeId, style: styleId ?? null }
             // The host's own starter (and archetype) live behind the tools, so the
             // tab asks for the same thing a model asks for: a document, validated.
             const answer = await api(DOCUMENT_ROUTE, {
@@ -1369,6 +1404,19 @@ window.__ModuleLoader__.load({
         { className: 'dsc-bar', 'data-canvas-bar': 'true' },
         h('span', { className: 'dsc-chip', title: 'dsh-canvas version' }, 'Canvas ' + PLUGIN_VERSION),
         selected ? h('span', { className: 'dsc-chip' }, selected.preset ?? 'free-form') : null,
+        (state && state.styles && state.styles.length > 0)
+          ? h('select', {
+              className: 'dsc-select',
+              'data-canvas-style-picker': 'true',
+              title: 'The look this design carries - applying one never moves anything',
+              value: (selected && selected.document && selected.document.style) || '',
+              disabled: busy || !selected,
+              onChange: (event) => restyle(event.target.value),
+            },
+              h('option', { value: '' }, 'No style'),
+              (state.styles || []).map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name)),
+            )
+          : null,
         selected ? h(Pill, { verification: selected.verification }) : null,
         h('span', { className: 'dsc-spacer' }),
         h('div', { className: 'dsc-barGroup' },
@@ -1437,11 +1485,28 @@ window.__ModuleLoader__.load({
       )
 
       const layers = selected ? layerTree(selected.document) : []
+      const styleLibrary = (state && state.styles) || []
+      const currentStyleId = selected && selected.document ? selected.document.style ?? null : null
+      const currentStyle = styleLibrary.find((entry) => entry.id === currentStyleId) ?? null
       const side = h(
         'aside',
         { className: 'dsc-side', 'data-canvas-side': 'true' },
         h('div', { className: 'dsc-sideHead' }, h('span', null, 'Layers'), h('span', null, selected ? layers.length + ' · rev ' + selected.revision : '')),
         h('div', { className: 'dsc-sideBody' },
+          // THE STYLE this design carries: its name, what it is for, and the rules
+          // the person and the model are both held to. Coming from the same pack the
+          // transform reads, so the advice cannot drift from the look.
+          currentStyle
+            ? h('div', { className: 'dsc-styleCard', 'data-canvas-style-card': currentStyle.id },
+                h('strong', null, currentStyle.name),
+                h('span', { className: 'dsc-styleIntent' }, currentStyle.intent),
+                ...(currentStyle.do || []).slice(0, 2).map((rule, index) => h('span', { key: 'do-' + index, className: 'dsc-styleRule' }, h('b', null, 'Do: '), rule)),
+                ...(currentStyle.dont || []).slice(0, 2).map((rule, index) => h('span', { key: 'dont-' + index, className: 'dsc-styleRule' }, h('b', null, 'Don\u2019t: '), rule)),
+                ...(currentStyle.gates || []).slice(0, 2).map((gate, index) => h('span', { key: 'gate-' + index, className: 'dsc-styleRule' }, h('b', null, 'Gate: '), gate)),
+              )
+            : styleLibrary.length > 0
+              ? h('p', { className: 'dsc-rowMeta' }, 'No style yet - pick one above, or ask the agent for a look.')
+              : null,
           // THE LAYER LIST: every node of the design, in paint order, nested. A row
           // selects the node the drag will move; the arrows reorder it inside its
           // own array; the values are the design's own, in design pixels.
@@ -1528,24 +1593,48 @@ window.__ModuleLoader__.load({
     function NewGallery({ state, onCreate, busy }) {
       const presets = state && state.presets ? Object.values(state.presets) : []
       const archetypes = (state && state.archetypes) || []
+      const styles = (state && state.styles) || []
       const [presetId, setPresetId] = useState(presets.length > 0 ? presets[0].id : null)
+      const [styleId, setStyleId] = useState(null)
       useEffect(() => {
         if (presetId === null && presets.length > 0) setPresetId(presets[0].id)
       }, [presetId, presets])
       const matching = archetypes.filter((entry) => !presetId || entry.presets.includes(presetId))
+      const chosenStyle = styles.find((entry) => entry.id === styleId) ?? null
       return h(
         'div',
         { 'data-canvas-new': 'true' },
         h('select', { className: 'dsc-select', value: presetId ?? '', onChange: (event) => setPresetId(event.target.value), style: { width: '100%', marginBottom: '6px' } },
-          presets.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.label + ' · ' + entry.width + '\u00d7' + entry.height)),
+          presets.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.label + ' \u00b7 ' + entry.width + '\u00d7' + entry.height)),
         ),
+        // THE LOOK LIBRARY: a composition is WHICH design, a style is HOW it looks.
+        // They are independent, so a banner can be started in any genre and
+        // re-styled later without moving a single element.
+        styles.length > 0
+          ? h('div', { className: 'dsc-styles', 'data-canvas-styles': 'true' },
+              styles.map((entry) =>
+                h('button', {
+                  key: entry.id,
+                  type: 'button',
+                  className: 'dsc-styleChip',
+                  'data-selected': entry.id === styleId ? 'true' : 'false',
+                  title: entry.intent,
+                  onClick: () => setStyleId(entry.id === styleId ? null : entry.id),
+                },
+                  h('span', { className: 'dsc-styleDots' }, (entry.swatch.colours || []).slice(0, 4).map((colour, index) => h('i', { key: colour + index, style: { background: colour } }))),
+                  h('span', { className: 'dsc-styleName' }, entry.name),
+                ),
+              ),
+            )
+          : null,
+        chosenStyle ? h('p', { className: 'dsc-rowMeta', style: { margin: '6px 0' } }, chosenStyle.intent) : null,
         h('div', { className: 'dsc-gallery' },
-          h('button', { type: 'button', className: 'dsc-galleryItem', disabled: busy, onClick: () => onCreate(presetId, null) },
+          h('button', { type: 'button', className: 'dsc-galleryItem', disabled: busy, onClick: () => onCreate(presetId, null, styleId) },
             h('span', { className: 'dsc-galleryTitle' }, 'Blank starter'),
-            h('span', { className: 'dsc-galleryMeta' }, 'Mesh + your headline'),
+            h('span', { className: 'dsc-galleryMeta' }, chosenStyle ? chosenStyle.name + ' starter' : 'Mesh + your headline'),
           ),
           matching.map((entry) =>
-            h('button', { key: entry.id, type: 'button', className: 'dsc-galleryItem', disabled: busy, onClick: () => onCreate(presetId, entry.id), title: entry.description },
+            h('button', { key: entry.id, type: 'button', className: 'dsc-galleryItem', disabled: busy, onClick: () => onCreate(presetId, entry.id, styleId), title: entry.description },
               h('span', { className: 'dsc-galleryTitle' }, entry.title),
               h('span', { className: 'dsc-galleryMeta' }, entry.presets.length + ' preset(s)'),
             ),

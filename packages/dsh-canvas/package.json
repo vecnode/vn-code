@@ -1,6 +1,6 @@
 {
   "name": "dsh-canvas",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Canvas (row `canvas`, conversation view `canvas`): a design page the agent drives, in the chat panel's own view ring to the right of Trajectory. The model authors a small JSON design language (frames, text, images, shapes, a seeded procedural art pack, one validated raw-SVG escape hatch) against destination PRESETS that fix the exact pixel canvas for a GitHub social preview, a LinkedIn banner, a post, an OG card or an A3 poster; a pure layout pass with an INJECTED text measurer turns it into a draw-op list that one canvas painter serves to both the artboard and the PNG export (so the preview and the file cannot disagree) plus an SVG serializer for a vector output. The browser is the rasterizer: it lays out, paints, reports back a PNG with the measurements and the lints, and the model reads its own poster with `read_image` and fixes it - which is the loop, not a nicety. Bundled OFL fonts (Inter, Space Grotesk) are vendored with pinned SHA-256 hashes and their licence texts, so a design renders and exports identically on a machine that has neither. Two skills (canvas-design, social-banners) carry the craft and the per-network delivery rules. Alpha.",
   "type": "module",
   "main": "lib/index.js",

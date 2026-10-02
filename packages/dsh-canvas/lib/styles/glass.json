@@ -1,0 +1,71 @@
+{
+  "id": "glass",
+  "name": "Glass",
+  "rank": 60,
+  "intent": "Layered translucent panels on a dark surface with thin light hairlines and soft shadows. This language has no blur, so the glass is honesty rather than a filter: translucency, a hairline and a shadow do the work, and nothing pretends to be frosted.",
+  "bestFor": ["github-social", "og", "linkedin-post", "linkedin-company-banner"],
+  "color": {
+    "surface": "#0A1018",
+    "panel": "#16202C",
+    "ink": "#F2F7FF",
+    "muted": "#A7B6C6",
+    "accent": "#7AD7FF",
+    "accent-ink": "#04121C",
+    "line": "#2C3D4F",
+    "warm": "#C9A7FF"
+  },
+  "font": {
+    "display": "Inter",
+    "text": "Inter",
+    "mono": "system"
+  },
+  "scale": {
+    "factor": 1,
+    "displayWeight": 600,
+    "displayTracking": -0.5,
+    "lineHeight": 1.2
+  },
+  "space": 8,
+  "radius": {
+    "card": 18,
+    "chip": 12,
+    "pill": 999
+  },
+  "border": {
+    "weight": 1,
+    "color": "line"
+  },
+  "shadow": {
+    "kind": "soft",
+    "y": 20,
+    "blur": 56,
+    "color": "#000000",
+    "alpha": 0.4
+  },
+  "background": {
+    "type": "solid",
+    "color": "surface"
+  },
+  "art": {
+    "preferred": ["waves", "mesh"],
+    "opacity": 0.3
+  },
+  "rules": {
+    "do": [
+      "Give every panel the same hairline and the same radius; the family resemblance is the style.",
+      "Keep panels one step of lightness off the surface, never a different hue.",
+      "Use the soft shadow to lift a panel and nothing else - one shadow per design.",
+      "Set the display size close to the body size and let the spacing carry the hierarchy."
+    ],
+    "dont": [
+      "Do not claim a blur: the language has none, and a style that pretends will not survive a render.",
+      "Do not use more than two panel levels.",
+      "Do not put the accent on a panel fill - it belongs on a hairline, an icon or one word."
+    ]
+  },
+  "gates": [
+    "Every panel carries a hairline.",
+    "Body contrast is at least 4.5:1 on the panel it sits on.",
+    "At most one soft shadow in the composition."
+  ]
+}

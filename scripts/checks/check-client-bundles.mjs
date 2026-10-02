@@ -5306,6 +5306,17 @@ check('a selection draws a box and handles', canvasSource.includes("'data-canvas
 check('a drag sends x and y as pointer ops', canvasSource.includes("path + '.x'") && canvasSource.includes("path + '.y'"), true)
 check('a reorder is a remove plus an insert', canvasSource.includes('Reordered the layers') && canvasSource.includes("{ op: 'remove', at: path }"), true)
 check('dragging is a pointer gesture', canvasSource.includes('pointermove') && canvasSource.includes("element.setAttribute('data-dragging'"), true)
+// THE STYLE LIBRARY in the tab: a style is picked when starting a design and changed
+// on a finished one, and both go through the same document route the model uses.
+check('the new-design gallery offers the style library', canvasSource.includes("'data-canvas-styles'") && canvasSource.includes('dsc-styleChip'), true)
+check('a style chip carries its own swatch', canvasSource.includes('entry.swatch.colours'), true)
+check('starting a design sends the chosen style', canvasSource.includes('preset: presetId, archetype: archetypeId, style: styleId'), true)
+check('a finished design can be re-styled from the toolbar', canvasSource.includes("'data-canvas-style-picker'") && canvasSource.includes('onChange: (event) => restyle(event.target.value)'), true)
+check('restyling posts the style, not a document', canvasSource.includes('scope: selected.scope, style: styleId'), true)
+check('the tab says nothing moved', canvasSource.includes('nothing moved'), true)
+check('the side panel carries the current style card', canvasSource.includes("'data-canvas-style-card'") && canvasSource.includes('currentStyle.gates'), true)
+check('the style dress is styled', canvasCss.includes('.dsc-styleChip[data-selected=true]') && canvasCss.includes('.dsc-styleCard{'), true)
+check('the canvas tool list carries canvas_style', canvasInternals.TOOL_NAMES.includes('canvas_style'), true)
 // Unload the row: the renderer's own effect returned a stopper, which is what the
 // shell calls when the plugin goes away (and what lets this process exit).
 for (const dispose of canvasDisposers) dispose()

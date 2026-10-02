@@ -314,7 +314,15 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
   well-formed, because the recipes are made of them.
 - `check-canvas-node.mjs` drives `dsh-canvas`'s whole host half with no browser and
   no network, and is the check that makes a browser-only surface verifiable at
-  all. In order: the **engine** (a full document through `normalizeDocument`, then
+  all. It also holds the **style library** to its promises over the whole cross
+  product - every style pack x every archetype: the styled document still
+  validates, NOTHING moved (every node's box is compared before and after),
+  applying the same style twice is a no-op, switching to another style and back
+  restores the type scale exactly, and the styled design stays legible against its
+  own preset - plus each pack's own completeness (roles, shipped families, real art
+  generators, rules, gates) and `vendor/styles-doc.mjs --check`, which fails when
+  the generated catalogue the skill ships is not what the packs would produce. In
+  order: the **engine** (a full document through `normalizeDocument`, then
   22 refusal cases by code; the pure layout with an INJECTED measurer, so
   wrapping, hugging, filling, absolute children, `maxLines` with an ellipsis,
   image crops and a row frame's hug axis are all arithmetic on this host - the

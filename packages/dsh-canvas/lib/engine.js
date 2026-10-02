@@ -603,6 +603,18 @@ export function normalizeDocument(input, options = {}) {
   if (input.notes !== undefined && (typeof input.notes !== 'string' || input.notes.length > LIMITS.maxNotesChars)) {
     out.push(problem('notes', 'BAD_NOTES', 'notes must be a string of at most ' + LIMITS.maxNotesChars + ' characters'))
   }
+  // `style` names the STYLE PACK the design was built from. It is a label the
+  // package keeps honest: the style table is passed in, so a design can never
+  // claim a look the library does not carry, and `applyStyle` reads it back to
+  // apply its factor as a DELTA rather than compounding it.
+  const styles = options.styles ?? null
+  if (input.style !== undefined && input.style !== null) {
+    if (typeof input.style !== 'string' || !NAME_PATTERN.test(input.style)) {
+      out.push(problem('style', 'BAD_STYLE', 'style must be one of the library ids'))
+    } else if (styles && !Object.prototype.hasOwnProperty.call(styles, input.style)) {
+      out.push(problem('style', 'UNKNOWN_STYLE', 'unknown style ' + JSON.stringify(input.style) + ' (known: ' + Object.keys(styles).join(', ') + ')'))
+    }
+  }
 
   const background = rawCanvas.background === undefined ? null : rawCanvas.background
   if (background !== null) {
@@ -626,6 +638,7 @@ export function normalizeDocument(input, options = {}) {
     layers,
   }
   if (typeof input.notes === 'string' && input.notes.length > 0) document.notes = input.notes
+  if (typeof input.style === 'string' && input.style.length > 0) document.style = input.style
   return { document, problems: [], preset }
 }
 

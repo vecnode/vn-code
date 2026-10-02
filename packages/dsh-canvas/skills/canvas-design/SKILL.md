@@ -42,14 +42,15 @@ Two or three rounds is normal. Do not re-emit the whole document with
 `canvas_write` to move one element - `canvas_patch` is one operation per change
 and it validates the result identically.
 
-## The nine tools
+## The ten tools
 
 | Tool | Use it for |
 |---|---|
-| `canvas_new` | instantiate a starter document from `{ preset, archetype }` - the first call of almost every design |
+| `canvas_new` | instantiate a starter document from `{ preset, archetype, style }` - the first call of almost every design |
 | `canvas_write` | write a whole document (a new design, or a rewrite you actually intend) |
 | `canvas_patch` | the edit; 1-64 pointer operations on the stored document |
 | `canvas_read` | re-read the canonical document and the last render verdict - after a compaction, or before building on a design you did not just write |
+| `canvas_style` | apply a LOOK from the style library to an existing design: palette, type behaviour, shape language, surface and art. Never moves anything |
 | `canvas_render` | make the browser paint it and report; the only way to see the design |
 | `canvas_export` | write the final file (format, `@2x`, Desktop or workspace) |
 | `canvas_assets` | register an image the document may name: a workspace path or a pasted asset |
@@ -65,6 +66,36 @@ When it is worth citing later - a house banner, a wordmark lockup, a poster
 template - `canvas_publish { id }` copies it into the shared **library**, whose
 address names no conversation, so `canvas_read { id }` finds it from any chat.
 Keep scratch work in the conversation.
+
+## Styles: composition and look are separate decisions
+
+The package ships a **style library** (`reference/styles.md` is the generated
+catalogue, so it is always the library the host will actually apply). A style is a
+palette, a type behaviour, a shape language, a surface and an art treatment - and
+it is applied by one transform that **never moves, resizes or reorders anything**:
+
+```
+canvas_new { preset: "github-social", archetype: "editorial-split", style: "neon" }
+canvas_style { id: "launch-banner", style: "brutalist" }      # same layout, another genre
+```
+
+Three things follow, and they are the reason to use it rather than hand-picking
+colours:
+
+- **A style is reversible.** The type scale factor is applied as a DELTA against
+  the style the document already carries, so applying the same style twice is a
+  no-op and switching back restores the original sizes exactly. The document
+  records the style it wears in its own `style` field.
+- **A style is a contract.** Each pack carries `rules.do`, `rules.dont` and
+  `gates`, and the render report already enforces the measurable ones (contrast,
+  safe areas, type size). When a style's intent and your composition disagree, the
+  render is the referee - not the intent.
+- **A style is not a composition.** If the design needs a different arrangement,
+  that is an archetype or a patch; restyling will not fix a layout.
+
+Practically: pick the style from the brief when the person names one ("make it
+brutalist"), otherwise the one whose `bestFor` names your preset. Apply ONE, then
+render. Two styles in one design is not a look, it is an accident.
 
 ## Patching
 
@@ -375,6 +406,7 @@ the offending token named. `viewBox` is `[x, y, width, height]`;
 |---|---|
 | `reference/document.md` | every key of every node kind, the token block, the defaults, `LIMITS`, and every validator code with its fix |
 | `reference/recipes.md` | a copy-paste JSON fragment for a mesh background, a terminal card, a dot-grid fade, a glass panel, a logo lockup, a stat row, a copy stack, a carousel footer, a giant-type poster, or a product shot with a scrim |
+| `reference/styles.md` | **the style library, generated from the packs themselves**: every style's palette, families, type behaviour, shape language, art treatment, its do/don't and its gates, plus what applying a style does and does not change |
 
 Read the reference before writing a field you are unsure of rather than guessing
 and paying for a round trip: the validator is complete, so a wrong key is always

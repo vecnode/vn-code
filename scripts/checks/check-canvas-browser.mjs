@@ -1,4 +1,4 @@
-// check-canvas-browser.mjs â€” prove, in a REAL browser, the parts of dsh-canvas
+// check-canvas-browser.mjs — prove, in a REAL browser, the parts of dsh-canvas
 // that no Node check can: that the engine survives being imported from a blob URL,
 // that the vendored OFL faces actually load and measure, that the canvas painter
 // puts ink on a canvas, and that the PNG the export path produces is EXACTLY the
