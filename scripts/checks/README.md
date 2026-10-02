@@ -347,25 +347,17 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
   `packages/` does not have, a flag or a generated file only ONE half knows
   about, the two sentinel lists drifting apart (the guard that catches a copy
   which flattened or nested a tree), a half that stopped redacting the launch
-  token, `dist/` missing from `.gitignore`, and a workflow that stopped building
-  one of the four targets or dropped the end-to-end `-Verify`. Node only, no
-  build, no network.
+  token, and `dist/` missing from `.gitignore`. Node only, no build, no network.
 
-  It also pins the RUNNER LABELS, which is the one failure local running cannot
-  catch: the first cut asked GitHub for `macos-13`, an image that has been
-  retired, and the whole run died at scheduling time before any step could
-  report why. The matrix's own `- os:` values are what it reads - the comments
-  above the matrix name the retired labels on purpose, to record why they left -
-  and the ARM64 legs must be marked `experimental` (continue-on-error) while
-  their toolchains settle, so a preview-image surprise cannot block a release.
-  Every launcher lives in `scripts/`, so the workflow's `paths:` filter has to
-  watch `scripts/**` - a change to any of them would otherwise build nothing.
-
-  **All of that is skipped LOUDLY while the workflow is parked.**
-  `.github/workflows/distribute.yml` was removed on purpose for now, so this one
-  file is read OPTIONALLY (`skip the workflow section ...`) and every assertion
-  above comes back the moment the file does - it is not a check that quietly
-  stopped looking.
+  **It also fails if `.github/workflows/` comes back.** This repository has no CI
+  on purpose and GitHub Actions is disabled on it; the failure it guards against
+  is not a *missing* workflow but a workflow *returning*, which would start
+  filling the Actions cache and artifact stores on the next push, silently. The
+  section that used to assert the matrix, the runner labels, the action pins and
+  the `paths:` filter was removed **with** the workflow rather than left
+  commented out - a list of assertions about a file that must not exist is a
+  second thing to keep in step. See `docs/RELEASE.md` for how a release is cut
+  instead.
 
   And it pins the CONSOLE CONTRACT, which is what keeps five Windows launchers
   and four POSIX ones behaving the same way: each Windows entry point must call

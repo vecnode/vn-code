@@ -26,7 +26,7 @@ turning it into artifacts.
 | What `run-dist` leaves in `dist/` | **Both** - the folder (dev, live-linked) and one self-extracting `.exe` (the thing you hand over) |
 | Runtime | **Vendor the harness AND bundle a pinned Node runtime**, shipped whole (~176 MB). No `npx`, no `PATH` lookup, and **no network at startup** - the network is for the chat and search only. See `STAGE2.md` |
 | Profile | **Pre-built into the payload** and copied on first run, so every launch is pure Node: no npm, no pnpm, no registry |
-| Signing | **Wired behind `-Sign`, off by default** - local builds stay fast and unsigned; CI turns it on with a secret |
+| Signing | **Wired behind `-Sign`, off by default** - local builds stay fast and unsigned; the certificate comes from the environment, since there is no CI to hold one |
 | JavaScript/TypeScript build | **No bundler for `packages/`** - hand-written client bundles, live-linked, preserved as the fast dev loop |
 
 ---
@@ -205,8 +205,9 @@ exist:
 - publish `SHA256SUMS.txt` and `BUILD-INFO.json` (both already generated);
 - keep a stable publisher identity and version metadata.
 
-`-Sign` takes a certificate from CI secrets so it is never in the repository, and
-it is **off by default** so a local release run stays fast.
+`-Sign` takes a certificate named by the environment (never committed), and it is
+**off by default** so a local release run stays fast. There is no CI to hold a
+secret for it — see [`RELEASE.md`](RELEASE.md).
 
 ---
 
@@ -257,47 +258,40 @@ skill examples. A build that fails a check is not a build.
 
 ---
 
-## 9. CI, compiled the same way as locally
+## 9. No CI, and why
 
-`scripts/checks/check-dist-layout.mjs` already validates a distributer workflow in
-detail, and it reads it **optionally and loudly**: the workflow
-`.github/workflows/distribute.yml` was **parked on purpose** (commit `276b4ba`,
-"no CI for now"), so the check prints a skip line and every assertion in it comes
-back the moment the file does. Restore it with
+**This repository has no CI.** `.github/workflows/` does not exist, GitHub Actions
+is disabled on the repository, and `scripts/checks/check-dist-layout.mjs` **fails**
+if a workflow directory ever comes back — so a deleted CI cannot quietly return on
+somebody's push. A release is cut by hand with `scripts\run-dist.bat -NoShell -Verify`;
+[`RELEASE.md`](RELEASE.md) is the whole ritual.
 
-```sh
-git log --diff-filter=D --name-only -- .github/workflows/distribute.yml
-git checkout <sha>^ -- .github/workflows/distribute.yml
-```
+The workflow that used to live here asserted a matrix of runner labels, pinned
+GitHub-official actions to commit SHAs, ran `cargo test` so the shell's unit tests
+were not laptop-only, ran the end-to-end `-Verify` on every leg and uploaded
+artifacts. All of it was removed **with** the file rather than left commented out.
+What it bought, and what it cost, is worth recording:
 
-and it will be held to the rules that are already written down for it: the
-`windows-2022` / `macos-15-intel` / `macos-15` / `ubuntu-22.04` legs (plus the
-`windows-11-arm` / `ubuntu-22.04-arm` ARM64 legs, which are required, not
-experimental), `cargo test` so the shell's unit tests are not laptop-only,
-`-Verify`, `upload-artifact` gated by event, `scripts/**` in the `paths:` filter,
-and every GitHub-official action pinned to a commit SHA. One rule matters more
-than the YAML:
+- **What it bought:** six archives per release (win/mac/linux × x64/arm64), each
+  built and verified on its own real runner, and a green light before a tag.
+- **What it cost:** 6.6 GB of `v0-rust-*` caches and 369 MB of artifacts that then
+  had to be cleaned out by hand, a compile of the Rust shell on every leg, and a
+  push that took minutes and produced six archives nobody downloaded.
 
-> **CI calls the same script a person calls.** It never reimplements a build step.
+The trade made instead: **the release compiles nothing and ships source**, so
+there is nothing a per-architecture runner is needed for. One assembly on this
+machine is published as the three operating-system archives (`-TargetOs` labels
+each one), and `-Verify` — the same end-to-end check the runners ran — still runs
+locally before anything is pushed.
 
-`windows-latest`:
+> If a build step is ever added to a pipeline here, the rule to keep is the one the
+> workflow held: **it calls the same script a person calls.** It never reimplements
+> a build step.
 
-```text
-actions/setup-node@<sha>       (Node 22, for the checks and the vendor step)
-dtolnay/rust-toolchain@<sha>
-Swatinem/rust-cache@<sha>      (cargo)
-actions/cache@<sha>            (the vendored runtime tree, keyed on the lock hash)
-scripts\run-dist.ps1 -Verify [-Sign]
-upload-artifact                (.exe, .zip, SHA256SUMS.txt, BUILD-INFO.json)
-```
-
-The runtime cache key is the **vendor lock hash**, so a pin bump is the only thing
-that re-downloads, and a normal run restores the tree from cache.
-
-`-Verify` is the end-to-end check both a local run and CI run: install into a
-throwaway `DSH_HOME`, boot the pinned harness from the produced folder, and wait
-for the ready line. It never opens a window, which is what makes it runnable on a
-runner with no screen.
+`-Verify` is the end-to-end check a release runs: install into a throwaway
+`DSH_HOME`, boot the pinned harness from the produced folder, and wait for the
+ready line. It never opens a window, which is what makes it runnable on a machine
+with no screen — and it is what replaces the runners' green light.
 
 ---
 
@@ -335,7 +329,7 @@ ships, and a `runtime/` tree it does not know about is a failing build.
 | `app/src-tauri/src/main.rs` | Node resolver (bundled -> `PATH`), bootstrap call, launch with the local CLI |
 | `app/src-tauri/src/payload.rs` | sweep older unpack directories after a good boot |
 | `app/src-tauri/build.rs` + a `.manifest` / `.rc` | application manifest and `VERSIONINFO` |
-| `.github/workflows/distribute.yml` | **parked on purpose** (commit `276b4ba`). The tracked check skips it loudly; restore it with `git checkout <sha>^ -- .github/workflows/distribute.yml` when CI comes back |
+| `.github/workflows/distribute.yml` | **REMOVED, deliberately** - there is no CI. Actions is disabled on the repository and the tracked check FAILS if a workflow directory comes back. See [`RELEASE.md`](RELEASE.md) for how a release is cut instead |
 
 ## What stage 1 measured
 

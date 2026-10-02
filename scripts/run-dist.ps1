@@ -1,10 +1,10 @@
 <#
     scripts/run-dist.ps1 - build the vncode distribution, quickly.
 
-    THE ONE VERB. scripts\run-dist.bat calls this file, scripts\run-dist.bat
-    forwards to that same batch, and .github\workflows\distribute.yml will call
-    scripts\dist.ps1 on every runner when the workflow is restored (it is parked
-    for now). One implementation, three doors.
+    THE ONE VERB. scripts\run-dist.bat calls this file. One entry point, one
+    worker, one implementation. There is NO CI: this repository carries no
+    .github/workflows and Actions is disabled on it, so a release is cut here,
+    by hand, with `run-dist.bat -NoShell -Verify` - see docs/RELEASE.md.
 
     WHAT IT ADDS OVER scripts\dist.ps1, AND WHY THAT MATTERS
     --------------------------------------------------------
@@ -18,7 +18,8 @@
          is newer than the built binary, cargo is never invoked (-ForceBuild
          overrides). Cargo's own freshness check would reach the same answer, but
          only after paying for a cargo process and a workspace resolve every
-         time.
+         time. With -NoShell there is no shell to be stale, so this whole
+         question is skipped and cargo is never reached at all.
 
       2. THE ASSEMBLED FOLDER. dist.ps1 records a fingerprint of the inputs that
          decide the folder's contents - the shell binary's hash, the version, the
@@ -36,6 +37,10 @@
 
     FLAGS
       -Version <v>      override the pack version used in the names
+      -NoShell          SOURCE-ONLY release: compile nothing, ship app/ as source,
+                        and name the artifact vncode-<version>-win|mac|linux. This
+                        is the release mode; no single-file build either, because
+                        that artifact IS the zip appended to the shell binary
       -SkipBuild        reuse the binary under app/src-tauri/target/release
       -ForceBuild       run cargo even when nothing looks stale
       -NoZip            assemble the folder only (no .zip, no single file)
@@ -54,6 +59,8 @@
 [CmdletBinding()]
 param(
     [string]$Version = '',
+    [switch]$NoShell,
+    [string]$TargetOs = '',
     [switch]$SkipBuild,
     [switch]$ForceBuild,
     [switch]$NoZip,
@@ -94,6 +101,10 @@ function Show-Usage {
     Write-Host 'Usage: scripts\run-dist.bat [flags]'
     Write-Host ''
     Write-Host '  -Version <v>      override the pack version used in the names'
+    Write-Host '  -NoShell          SOURCE-ONLY release: compile nothing, ship app\ as source,'
+    Write-Host '                    and name the artifact vncode-<version>-win|mac|linux'
+    Write-Host '  -TargetOs <os>    win|mac|linux - name and label the artifact for this OS'
+    Write-Host '                    instead of the host (one assembly, three OS releases)'
     Write-Host '  -SkipBuild        reuse the binary already under app\src-tauri\target\release'
     Write-Host '  -ForceBuild       run cargo even when nothing looks stale'
     Write-Host '  -NoZip            assemble the folder only (no .zip, no single file)'
@@ -114,6 +125,11 @@ function Show-Usage {
     Write-Host 'using scripts\dist.ps1. Nothing changed means nothing rebuilt: the shell is'
     Write-Host 'not recompiled when its source is older than the binary, and the folder,'
     Write-Host 'zip and single file are not rebuilt when their inputs are unchanged.'
+    Write-Host ''
+    Write-Host 'With -NoShell the shell is shipped as SOURCE and nothing is compiled - the'
+    Write-Host 'release mode. Three archives, one per operating system, and the zip is the'
+    Write-Host 'whole artifact (a one-file build is the zip appended to a binary that is not'
+    Write-Host 'there). docs\RELEASE.md is the release ritual; there is no CI.'
     Write-Host ''
     Write-Host 'macOS/Linux: ./scripts/dist.sh is the same work in POSIX shell.'
     Write-Host ''
@@ -196,7 +212,16 @@ function Test-ShellStale {
 }
 
 $script:SkipBuildInWorker = [bool]$SkipBuild
-if (-not $SkipBuild -and -not $ForceBuild) {
+if ($NoShell) {
+    # -NoShell IS "compile nothing": there is no shell output for a staleness
+    # test to reason about, so cargo is never consulted and -ForceBuild/-SkipBuild
+    # have nothing left to decide.
+    $script:SkipBuildInWorker = $true
+    if ($ForceBuild) { Write-Note '-ForceBuild has no meaning with -NoShell: nothing is compiled.' }
+    if ($SkipBuild) { Write-Note '-SkipBuild has no meaning with -NoShell: nothing is compiled.' }
+    Write-Step 'Source-only release (-NoShell): the shell ships as source, so cargo will not run.'
+}
+elseif (-not $SkipBuild -and -not $ForceBuild) {
     if (Test-ShellStale -Binary $script:ShellBinary) {
         Write-Step 'The shell is stale (or not built yet) - cargo will run.'
     }
@@ -271,6 +296,8 @@ else {
 # owning every decision about WHAT ships.
 $forward = @{}
 if ($Version) { $forward['Version'] = $Version }
+if ($NoShell) { $forward['NoShell'] = $true }
+if ($TargetOs) { $forward['TargetOs'] = $TargetOs }
 if ($script:SkipBuildInWorker) { $forward['SkipBuild'] = $true }
 if ($NoZip) { $forward['NoZip'] = $true }
 if ($Verify) { $forward['Verify'] = $true }
@@ -310,6 +337,11 @@ if ($Run -or $RunApp) {
     }
 
     if ($RunApp) {
+        if ($NoShell) {
+            Write-VnFail '-RunApp runs the packed vncode.exe, and -NoShell ships no compiled shell.'
+            Write-Note 'The release shape is source-only, so use -Run (START-HERE), which needs only Node.js.'
+            exit 1
+        }
         $app = Join-Path $folder.FullName 'vncode.exe'
         if (-not (Test-Path -LiteralPath $app)) {
             Write-VnFail "The distribution has no vncode.exe at $app."

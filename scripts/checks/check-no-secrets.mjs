@@ -30,8 +30,9 @@
 //
 //  Run:  node scripts/checks/check-no-secrets.mjs
 // ============================================================================
-import { execFileSync } from 'node:child_process'
-import { readFileSync, statSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -144,13 +145,48 @@ export function scanText(text, file) {
 // ---------------------------------------------------------------------------
 // 2. The set `git add -A` would stage
 // ---------------------------------------------------------------------------
-function stagedCandidates() {
-  const raw = execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
-    cwd: repo,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  })
-  return raw.split('\0').filter(Boolean)
+// git is normally asked through a PIPE, which is what makes its output readable
+// here - and a sandboxed host can refuse that outright (`spawnSync git EPERM`;
+// the DSH file sandbox cannot open a named pipe, so every piped spawn fails while
+// an inherited one works). When that happens this falls back to redirecting git's
+// stdout into a REAL FILE, which touches no pipe and works under the same
+// sandbox - so the scan still runs rather than reporting nothing. Only if both
+// routes fail is the scan skipped, and then it is skipped LOUDLY: a check that
+// fails because the host declined to run git teaches its reader to ignore it.
+function runGit(args, maxBuffer) {
+  try {
+    return { out: execFileSync('git', args, { cwd: repo, encoding: 'utf8', maxBuffer }), blocked: null, viaFile: false }
+  } catch (error) {
+    if (!error || (error.code !== 'EPERM' && error.code !== 'EACCES')) throw error
+    const dir = mkdtempSync(path.join(tmpdir(), 'vncode-git-'))
+    try {
+      const outFile = path.join(dir, 'stdout')
+      let fd
+      try {
+        fd = openSync(outFile, 'w')
+        const redirected = spawnSync('git', args, { cwd: repo, stdio: ['ignore', fd, 'ignore'], windowsHide: true })
+        if (redirected.error) return { out: '', blocked: redirected.error, viaFile: true }
+      } finally {
+        if (fd !== undefined) closeSync(fd)
+      }
+      return { out: readFileSync(outFile, 'utf8'), blocked: null, viaFile: true }
+    } catch (fallbackError) {
+      return { out: '', blocked: fallbackError, viaFile: true }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+}
+
+// `-z` is NUL-separated, so it is split on NUL and never on a newline: a path may
+// legally contain one, and splitting on lines would read such a path as two.
+const stagedRun = runGit(['ls-files', '-co', '--exclude-standard', '-z'], 64 * 1024 * 1024)
+const stagedFiles = stagedRun.blocked ? [] : stagedRun.out.split('\0').filter(Boolean)
+if (stagedRun.viaFile && !stagedRun.blocked) {
+  notes.push('reached git by redirecting it to a file, because this host refuses a piped spawn - the scan below is complete')
+}
+if (stagedRun.blocked) {
+  notes.push(`SKIPPED the staged-file scan: this host would not run git at all (${stagedRun.blocked.code || stagedRun.blocked.message}) - run the check in a normal terminal, where git is reachable`)
 }
 
 function isBinary(file) {
@@ -166,7 +202,7 @@ function isBinary(file) {
 
 let scanned = 0
 let skipped = 0
-for (const relative of stagedCandidates()) {
+for (const relative of stagedFiles) {
   const absolute = path.join(repo, relative)
   let size = 0
   try {
@@ -240,22 +276,18 @@ for (const { pattern, what } of REQUIRED_IGNORES) {
 // --exclude-standard` is git's own answer to "which files I track would I be
 // ignoring?", and it must be empty.
 {
-  let ignoredTracked = []
-  try {
-    ignoredTracked = execFileSync('git', ['ls-files', '-i', '-c', '--exclude-standard'], {
-      cwd: repo,
-      encoding: 'utf8',
-      maxBuffer: 16 * 1024 * 1024,
-    })
-      .split(/\r?\n/)
-      .filter(Boolean)
-  } catch {
-    // Older git builds do not accept -i with -c; the rule above still stands.
-  }
+  const ignoredRun = runGit(['ls-files', '-i', '-c', '--exclude-standard'], 16 * 1024 * 1024)
+  // An older git build, or a host that will not run git through a pipe at all,
+  // leaves this empty - the ignore rules themselves are still asserted above.
+  const ignoredTracked = ignoredRun.blocked ? [] : ignoredRun.out.split(/\r?\n/).filter(Boolean)
   for (const file of ignoredTracked) {
     fail(`.gitignore hides the TRACKED file '${file}' - an ignore rule is too broad, so new files beside it (and this scan) would skip it.`)
   }
-  if (ignoredTracked.length === 0) notes.push('no tracked file is hidden by an ignore rule')
+  if (ignoredRun.blocked) {
+    notes.push('SKIPPED the tracked-file-hidden-by-.gitignore scan for the same reason (this host refused git)')
+  } else if (ignoredTracked.length === 0) {
+    notes.push('no tracked file is hidden by an ignore rule')
+  }
 }
 
 // ---------------------------------------------------------------------------

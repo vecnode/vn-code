@@ -93,8 +93,16 @@ if exist "%VN_BUILT%" goto :run
 set "VN_MANIFEST=%~dp0..\app\src-tauri\Cargo.toml"
 if not exist "%VN_MANIFEST%" (
   echo [vncode] Neither vncode.exe nor app\src-tauri\Cargo.toml is in the
-  echo   folder above this one. Run scripts\run-desktop.bat from a repository
-  echo   checkout, or from a distribution folder assembled by scripts\run-dist.bat.
+  echo   folder above this one, so there is no shell to run and no source to
+  echo   build one from.
+  echo.
+  echo   Run scripts\run-desktop.bat from a repository checkout, or from one of
+  echo   the SOURCE distributions on the releases page - they carry
+  echo   app\src-tauri. A folder from an older release carries a prebuilt
+  echo   vncode.exe instead, and if that is gone there is nothing here to run.
+  echo.
+  echo   Neither is needed to USE vncode: run START-HERE.bat, or
+  echo   scripts\run-web.bat, to start the same app in a browser tab.
   goto :failed
 )
 

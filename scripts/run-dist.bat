@@ -5,17 +5,21 @@ rem
 rem  ONE verb that produces the distribution you actually run
 rem  and hand over:
 rem
-rem    dist\vncode-<version>-win-x64\      <- the folder: click
-rem                                            START-HERE.bat inside
-rem    dist\vncode-<version>-win-x64.zip    <- or hand this over
-rem    dist\vncode-<version>-win-x64.exe    <- or hand over ONE file,
-rem                                            which unpacks itself and starts
+rem    dist\vncode-<version>-<os>\      <- the folder: click
+rem                                          START-HERE.bat inside
+rem    dist\vncode-<version>-<os>.zip   <- or hand this over. THE artifact
 rem
-rem  This is the launcher the maintainer uses day to day. It is
-rem  the SAME work .github\workflows\distribute.yml runs when the
-rem  workflow is restored (it is parked for now), and the same
-rem  worker scripts\run-dist.bat drives - that file now just
-rem  forwards here, so there is one implementation and not two.
+rem  There is no single-file build any more: that was the zip appended
+rem  to a compiled shell binary, and a release compiles nothing. With
+rem  -NoShell the shell travels as SOURCE (app\src-tauri), so the
+rem  browser path needs only Node.js and the native window is a
+rem  `cargo build` away for anyone who wants it.
+rem
+rem  This is the launcher the maintainer uses day to day, and it is
+rem  the ONLY path - there is no CI in this repository on purpose.
+rem  Actions is disabled on it and the tracked check fails if a
+rem  workflow directory comes back, so a release is cut here, by
+rem  hand: docs\RELEASE.md is the whole ritual.
 rem
 rem  WHY THIS IS FAST ON THE SECOND RUN. Two caches, both keyed on
 rem  things that did NOT change:

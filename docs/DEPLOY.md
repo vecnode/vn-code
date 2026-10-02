@@ -1,12 +1,19 @@
 # Deploying vncode
 
 What stands between today's `scripts\run-dist.bat` and a distribution somebody can run
-on a machine that has never seen Node, plus the launcher contract, the state map
-and the CI plan for the three operating systems.
+on a machine that has never seen Node, plus the launcher contract and the state map.
 
 Companion pages: [`PATHS.md`](PATHS.md) is the map of every location the app
 touches, [`DISTRIBUTE.md`](DISTRIBUTE.md) is how the distributer works today,
-[`../app/README.md`](../app/README.md) is the shell.
+[`RELEASE.md`](RELEASE.md) is how a release is cut, [`../app/README.md`](../app/README.md)
+is the shell.
+
+> **Two things here have since changed on purpose, and §7 is one of them.** There
+> is **no CI**: the workflow was removed and Actions is disabled, because a release
+> now compiles nothing and ships source. And the shipped distribution no longer
+> carries a built shell — `app/` travels as source, so the browser path needs only
+> Node. Where this page says "CI" or "the built binary", read
+> [`RELEASE.md`](RELEASE.md) and [`DISTRIBUTE.md`](DISTRIBUTE.md) instead.
 
 Every number below was measured on this machine or read from the harness's own
 source; the source location is named so it can be re-verified after a pin bump.
@@ -106,7 +113,11 @@ contract that fixes this.
 Answered by [`PATHS.md`](PATHS.md), which is new in this change. It also states
 the rule (§5 of that page) the rest of this plan implements.
 
-### G7 — the CI matrix cannot run as written
+### G7 — the CI matrix cannot run as written — SUPERSEDED
+
+> **Moot: there is no CI any more** (see §7). The finding below is kept because a
+> retired runner label is still the clearest example of the class of problem CI
+> hid until it was too late.
 
 `.github/workflows/distribute.yml` names `macos-13` for `mac-x64`. That image no
 longer exists — the current runner list has no macOS 13, and `macos-14` is
@@ -127,6 +138,8 @@ The whole distribution feature is **untracked** (`git status`: `.github/`,
 `scripts/dist.sh`, `scripts/dist-manifest.txt`,
 `scripts/checks/check-dist-layout.mjs`), on `main` at `origin`
 `https://github.com/vecnode/vncode.git`. Nothing CI-related has ever run.
+*(Historical: all of it has been tracked for a long time now, `.github/` no longer
+exists, and releases are cut by hand — [`RELEASE.md`](RELEASE.md).)*
 Code signing, notarization, `.msi`/`.dmg`/`.deb` and a `.app` bundle stay
 deliberately out of scope (`bundle.active: false`) — that is a decision to
 revisit, not an oversight to fix here.
@@ -354,7 +367,22 @@ in the same commit — the map is only "well defined" while it is current.
 
 ---
 
-## 7. CI on the three operating systems
+## 7. CI on the three operating systems — SUPERSEDED, DO NOT IMPLEMENT
+
+> **This whole section is obsolete.** The decision recorded here was reversed on
+> purpose: there is now **no CI at all**. `.github/workflows/` does not exist,
+> GitHub Actions is disabled on the repository, and
+> `scripts/checks/check-dist-layout.mjs` **fails** if a workflow directory comes
+> back. A release is cut by hand — see [`RELEASE.md`](RELEASE.md) — and it
+> **compiles nothing**, because a source distribution has no per-architecture
+> artifact for a matrix of runners to produce.
+>
+> It is kept rather than deleted because the reasoning below is still the best
+> record of *why* the matrix looked the way it did, and because the failure it
+> chased — a runner label that no longer exists, `macos-13` — is a real class of
+> problem. What it cost is the other half of the record: **6.6 GB of
+> `v0-rust-*` caches and 369 MB of artifacts**, all of which had to be deleted by
+> hand. If CI is ever reconsidered, start from that number.
 
 One workflow, one matrix, the same two scripts the developer runs. Three changes
 to what exists.

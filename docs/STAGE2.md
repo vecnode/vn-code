@@ -132,8 +132,9 @@ the destination's file count to stop changing before it checks anything.
 - **Trimming** - explicitly out. The payload ships whole.
 - **Signing** - already wired behind `-Sign` and off by default; it moves to
   stage 3 alongside the manifest and `VERSIONINFO`.
-- **The CI workflow** - `.github/workflows/distribute.yml` stays parked; the
-  tracked check skips it loudly.
+- **The CI workflow** - **removed, not parked.** There is no CI: Actions is
+  disabled on the repository and the tracked check *fails* if a workflow directory
+  comes back. A release is cut by hand (`docs/RELEASE.md`) and compiles nothing.
 
 ## Cost, stated plainly
 

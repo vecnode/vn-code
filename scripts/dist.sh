@@ -1,8 +1,13 @@
 #!/bin/sh
 # ============================================================================
 #  scripts/dist.sh - build a vncode DISTRIBUTION folder and its archive
-#  (macOS / Linux). The twin of scripts/dist.ps1, and the half
-#  .github/workflows/distribute.yml runs on the macOS and Linux runners.
+#  (macOS / Linux). The twin of scripts/dist.ps1 - same flags, same ship list,
+#  same result - and it does the work itself rather than handing off to a
+#  second name.
+#
+#  NO CI: this repository carries no .github/workflows and Actions is disabled
+#  on it, so a release is cut by hand - see docs/RELEASE.md. Nothing here
+#  compiles anything in -NoShell mode, which is the release mode.
 #
 #  WHAT IT PRODUCES
 #      dist/vncode-<version>-<rid>/       the folder: the built shell
@@ -10,6 +15,16 @@
 #                                             pack it live-links from
 #      dist/vncode-<version>-<rid>.zip    the same folder, zipped
 #                                             (.tar.gz when zip is absent)
+#
+#  -NoShell IS WHAT A RELEASE USES. It assembles the SAME folder with the shell
+#  left as SOURCE (app/src-tauri, which dist-manifest.txt ships) and no built
+#  binary, so nothing is compiled anywhere and the artifact is named for the
+#  OPERATING SYSTEM alone (vncode-<version>-win|mac|linux) rather than for an
+#  architecture: the payload is plain JavaScript with both entry-point halves in
+#  it, so one assembly is what every OS downloads. The browser path
+#  (START-HERE -> scripts/run-web.sh) needs nothing but Node.js; the native
+#  window stays available to anyone who runs cargo build in the shipped
+#  app/src-tauri.
 #
 #  WHY A FOLDER AND NOT JUST A BINARY - app/ is a LAUNCHER. The shell walks up
 #  for .dsh-version.json, runs the pinned
@@ -24,12 +39,16 @@
 #
 #  FLAGS (scripts/run-dist.bat / scripts/dist.ps1 take the same ones)
 #      -Version <v>      override the pack version used in the names
+#      -NoShell          SOURCE-ONLY release: compile nothing, ship app/ as
+#                        source, and name the artifact for the OS alone. No
+#                        single-file build either, because that artifact IS the
+#                        zip appended to the shell binary
 #      -SkipBuild        reuse the binary under app/src-tauri/target/release
 #      -NoZip            assemble the folder only (no .zip, no single file)
 #      -Run              assemble, then run the produced distribution
 #      -Verify           assemble, then install into a throwaway DSH_HOME and
 #                        boot the pinned harness from it, waiting for the ready
-#                        line - the end-to-end check the CI job also runs
+#                        line - the end-to-end check a release runs
 #      -KeepVerifyHome   keep that throwaway home for inspection
 #      -Clean            delete dist/ first
 #      -Help
@@ -52,6 +71,8 @@ script_dir=$(CDPATH= cd -- "$script_dir" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 
 version_arg=''
+no_shell=0
+target_os_arg=''
 skip_build=0
 no_zip=0
 run_dist=0
@@ -66,11 +87,16 @@ usage() {
     'Usage: sh scripts/dist.sh [flags]' \
     '' \
     '  -Version <v>      override the pack version used in the names' \
+    '  -NoShell          SOURCE-ONLY release: compile nothing, ship app/ as source,' \
+    '                    and name the artifact vncode-<version>-win|mac|linux' \
+    '  -TargetOs <os>    win|mac|linux - name and label the artifact for this OS' \
+    '                    instead of the host (the payload is OS-neutral, so one' \
+    '                    assembly is published as the three OS releases)' \
     '  -SkipBuild        reuse the binary already under app/src-tauri/target/release' \
     '  -NoZip            assemble the folder only (no .zip, no single file)' \
     '  -Run              assemble, then run the produced distribution' \
     '  -Verify           assemble, then install into a throwaway DSH_HOME and boot' \
-    '                    the pinned harness from it (the CI end-to-end check)' \
+    '                    the pinned harness from it (the end-to-end release check)' \
     '  -KeepVerifyHome   keep that throwaway home for inspection' \
     '  -OutDir <dir>     assemble under this folder instead of dist/ (a relative' \
     '                    path resolves against the repository root)' \
@@ -81,6 +107,8 @@ usage() {
     '' \
     'Builds <out>/vncode-<version>-<rid>/ from scripts/dist-manifest.txt plus the' \
     'built shell, and archives it beside itself. dist/ is never committed.' \
+    'With -NoShell the shell ships as SOURCE and nothing is compiled - the release' \
+    'mode: three archives, one per operating system.' \
     '' \
     'Run it from anywhere: this file lives in scripts/ and resolves the repository' \
     'root as the folder above.'
@@ -100,6 +128,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -Version|--version) shift; version_arg=${1:-} ;;
     -Version=*|--version=*) version_arg=${1#*=} ;;
+    -NoShell|--no-shell) no_shell=1 ;;
+    -TargetOs|--target-os) shift; target_os_arg=${1:-} ;;
+    -TargetOs=*|--target-os=*) target_os_arg=${1#*=} ;;
     -SkipBuild|--skip-build) skip_build=1 ;;
     -NoZip|--no-zip) no_zip=1 ;;
     -Run|--run) run_dist=1 ;;
@@ -131,11 +162,37 @@ case "$(uname -s)" in
   *) fail "This host ($(uname -s)) is not one this pack supports; use scripts/dist.ps1 on Windows." ;;
 esac
 case "$platform:$(uname -m)" in
-  macos:arm64|macos:aarch64) rid=mac-arm64 ;;
-  macos:*) rid=mac-x64 ;;
-  *:arm64|*:aarch64) rid=linux-arm64 ;;
-  *) rid=linux-x64 ;;
+  macos:arm64|macos:aarch64) host_rid=mac-arm64 ;;
+  macos:*) host_rid=mac-x64 ;;
+  *:arm64|*:aarch64) host_rid=linux-arm64 ;;
+  *) host_rid=linux-x64 ;;
 esac
+# The label in the ARTIFACT NAME. -NoShell ships no compiled file at all, so
+# there is no architecture in the payload to tell two downloads apart: the name
+# says which operating system it is for and nothing else, which is what makes
+# one assembly the thing all three OS releases download. host_rid is still what
+# BUILD-INFO.json records, so a reader can always tell which machine built it.
+os_family=linux
+if [ "$platform" = macos ]; then os_family=mac; fi
+# The OS the ARTIFACT is for - the host's own unless -TargetOs named another.
+artifact_os=$os_family
+if [ -n "$target_os_arg" ]; then
+  # Accept the spellings a person actually types, and nothing else: a typo must
+  # not silently produce a fourth artifact nobody downloads.
+  case "$target_os_arg" in
+    win|windows|WIN|Windows) artifact_os=win ;;
+    mac|macos|darwin|osx|Mac|MacOS) artifact_os=mac ;;
+    linux|Linux|LINUX) artifact_os=linux ;;
+    *) fail "-TargetOs '$target_os_arg' is not one of win, mac or linux." ;;
+  esac
+  if [ "$no_shell" = 0 ]; then
+    # A compiled shell is built FOR the host it was compiled on; labelling it as
+    # another OS would be a lie a recipient would discover by running it.
+    fail "-TargetOs only makes sense with -NoShell. A built shell is platform-specific, so it can only be labelled as the host that built it ($host_rid)."
+  fi
+fi
+rid=$host_rid
+if [ "$no_shell" = 1 ]; then rid=$artifact_os; fi
 binary_name=vncode
 cargo_binary_name=vncode-desktop
 if [ "$platform" = windows ]; then
@@ -209,17 +266,29 @@ if [ "$do_clean" = 1 ] && [ -d "$dist_root" ]; then
 fi
 
 # --- 1. the shell binary ----------------------------------------------------
+# In -NoShell mode there is no step 1 at all: nothing is compiled, nothing is
+# copied in, and what the folder carries instead is the shell's SOURCE, brought
+# in by scripts/dist-manifest.txt like any other shipped file. shell_sha stays
+# EMPTY rather than absent, so the fingerprint and BUILD-INFO.json keep one shape
+# across both modes - and an empty hash can never collide with a real one, so a
+# folder built one way is never reused as the other.
 binary="$repo_root/app/src-tauri/target/release/$cargo_binary_name"
-if [ "$skip_build" = 0 ]; then
-  cargo_bin=$(tool_path cargo) || fail 'cargo was not found on PATH. Install the Rust toolchain from https://rustup.rs, or pass -SkipBuild to reuse an existing build.'
-  step 'Building app/src-tauri (cargo does nothing when it is current)...'
-  "$cargo_bin" build --release --manifest-path "$repo_root/app/src-tauri/Cargo.toml" \
-    || fail 'cargo build failed - see the errors above.'
+shell_sha=''
+if [ "$no_shell" = 1 ]; then
+  step 'Source-only build (-NoShell): nothing is compiled and app/ ships as source.'
 else
-  step 'Skipping the build (-SkipBuild).'
+  if [ "$skip_build" = 0 ]; then
+    cargo_bin=$(tool_path cargo) || fail 'cargo was not found on PATH. Install the Rust toolchain from https://rustup.rs, or pass -SkipBuild to reuse an existing build - or -NoShell for a source-only release, which compiles nothing at all.'
+    step 'Building app/src-tauri (cargo does nothing when it is current)...'
+    "$cargo_bin" build --release --manifest-path "$repo_root/app/src-tauri/Cargo.toml" \
+      || fail 'cargo build failed - see the errors above.'
+  else
+    step 'Skipping the build (-SkipBuild).'
+  fi
+  [ -f "$binary" ] || fail "The shell binary is not at $binary. Drop -SkipBuild so it gets built."
+  shell_sha=$(sha256_of_file "$binary")
+  step "Shell binary: $binary"
 fi
-[ -f "$binary" ] || fail "The shell binary is not at $binary. Drop -SkipBuild so it gets built."
-step "Shell binary: $binary"
 
 # --- 2. the payload --------------------------------------------------------
 manifest_file="$repo_root/scripts/dist-manifest.txt"
@@ -355,6 +424,12 @@ check_sentinels() {
     packages/dsh-pdf/skills/pdf-analysis/SKILL.md; do
     if [ ! -f "$dist_dir/$_sent" ]; then _sent_missing="$_sent_missing $_sent"; fi
   done
+  if [ "$no_shell" = 1 ]; then
+    # The release shape: the shell is source, so its source has to be here.
+    for _sent in app/src-tauri/Cargo.toml app/src-tauri/src/main.rs; do
+      if [ ! -f "$dist_dir/$_sent" ]; then _sent_missing="$_sent_missing $_sent"; fi
+    done
+  fi
   if [ -n "$_sent_missing" ]; then
     fail "The assembled distribution is missing:$_sent_missing (dist-manifest.txt and the walk disagree)."
   fi
@@ -387,9 +462,13 @@ for include_path in $includes; do
 done
 IFS=$_old_ifs
 
-cp -p "$binary" "$dist_dir/$binary_name"
-chmod 755 "$dist_dir/$binary_name"
-note "$include_count include rules applied; the shell binary copied in as $binary_name."
+if [ "$no_shell" = 1 ]; then
+  note "$include_count include rules applied; no shell binary - app/ ships as source, so nothing is compiled."
+else
+  cp -p "$binary" "$dist_dir/$binary_name"
+  chmod 755 "$dist_dir/$binary_name"
+  note "$include_count include rules applied; the shell binary copied in as $binary_name."
+fi
 check_sentinels
 
 payload_files=$(find "$dist_dir" -type f | wc -l | tr -d ' ')
@@ -400,7 +479,13 @@ git_commit=$(git -C "$repo_root" rev-parse --short HEAD 2>/dev/null || printf ''
 [ -n "$git_commit" ] || git_commit=unknown
 if [ -n "$(git -C "$repo_root" status --porcelain 2>/dev/null)" ]; then dirty=true; else dirty=false; fi
 built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-shell_sha=$(sha256_of_file "$binary")
+# shell_sha was decided in step 1: a real hash in binary mode, empty in -NoShell.
+shell_kind=binary
+shell_binary_field=$binary_name
+if [ "$no_shell" = 1 ]; then
+  shell_kind=source
+  shell_binary_field=''
+fi
 
 # --- 3. the files a distribution generates for itself ----------------------
 start_here="$dist_dir/START-HERE.sh"
@@ -472,17 +557,30 @@ chmod 755 "$start_here"
   printf '%s\n' "vncode $pack_version - $rid"
   printf '%s\n' "Built $built_at from commit $git_commit."
   printf '\n'
-  printf '%s\n' 'TWO WAYS TO GET THIS'
-  printf '%s\n' '  If you were handed ONE file - vncode-<version>-<rid>.exe on'
-  printf '%s\n' '  Windows, vncode-<version>-<rid>.run on macOS and Linux - just run'
-  printf '%s\n' '  it. That file IS this folder: it unpacks itself into your own user'
-  printf '%s\n' '  data folder (<local app data>/vncode/<version>-<rid>, so the live'
-  printf '%s\n' '  links the pack installs have somewhere permanent to point) and then'
-  printf '%s\n' '  does everything CLICK THIS describes. You never handle the files.'
-  printf '\n'
-  printf '%s\n' '  If you have this folder, or the .zip, use CLICK THIS instead. Either'
-  printf '%s\n' '  way the result is the same: the pack is installed into the harness web'
-  printf '%s\n' '  profile and the window opens.'
+  if [ "$no_shell" = 1 ]; then
+    printf '%s\n' 'WHAT YOU WERE GIVEN'
+    printf '%s\n' '  This is a SOURCE release: nothing in it is compiled, and nothing has to'
+    printf '%s\n' '  be compiled to use it. It is the vncode repository itself - the plugin'
+    printf '%s\n' '  pack plus the launchers - so the whole thing is plain readable'
+    printf '%s\n' '  JavaScript. The one thing NOT in it is a built ./vncode: the native'
+    printf '%s\n' '  window is built from the app/src-tauri source that ships beside it, by'
+    printf '%s\n' '  anyone who wants it, with the Rust toolchain.'
+    printf '\n'
+    printf '%s\n' '  Use CLICK THIS below. It installs the pack into the harness web profile'
+    printf '%s\n' '  and opens the same application in a browser tab, which needs nothing but'
+    printf '%s\n' '  Node.js.'
+  else
+    printf '%s\n' 'TWO WAYS TO GET THIS'
+    printf '%s\n' '  If you were handed ONE file - vncode-<version>-<rid>.run on macOS and'
+    printf '%s\n' '  Linux, .exe on Windows - just run it. That file IS this folder: it'
+    printf '%s\n' '  unpacks itself into your own user data folder, so the live links the'
+    printf '%s\n' '  pack installs have somewhere permanent to point, and then does'
+    printf '%s\n' '  everything CLICK THIS describes. You never handle the files.'
+    printf '\n'
+    printf '%s\n' '  If you have this folder, or the .zip, use CLICK THIS instead. Either'
+    printf '%s\n' '  way the result is the same: the pack is installed into the harness web'
+    printf '%s\n' '  profile and the window opens.'
+  fi
   printf '\n'
   printf '%s\n' 'WHAT THIS IS'
   printf '%s\n' '  vncode - an agent application that runs on the DeepSeek Harness'
@@ -490,15 +588,34 @@ chmod 755 "$start_here"
   printf '%s\n' '  bundles: the plugins are plain JavaScript with ZERO npm dependencies,'
   printf '%s\n' '  and the launchers run on Windows, macOS and Linux.'
   printf '\n'
-  printf '%s\n' '  The window is a LAUNCHER: ./vncode starts the pinned harness'
-  printf '\n'
-  printf '%s\n' "      npx @deepseek-ai/dsh@$pin web --no-open"
-  printf '\n'
-  printf '%s\n' '  on a free loopback port, reads the ready line it prints once the'
-  printf '%s\n' '  server is listening, and shows THAT url in a WKWebView / WebKitGTK'
-  printf '%s\n' '  window. The plugins are not compiled into the binary - the harness web'
-  printf '%s\n' '  profile installs every bundle in packages/ as a LIVE LINK, which is'
-  printf '%s\n' '  why this folder must stay where it is.'
+  if [ "$no_shell" = 1 ]; then
+    printf '%s\n' '  There is no window binary here, and none is needed: scripts/run-web.sh'
+    printf '%s\n' '  starts the pinned harness'
+    printf '\n'
+    printf '%s\n' "      npx @deepseek-ai/dsh@$pin web --no-open"
+    printf '\n'
+    printf '%s\n' '  on a free loopback port, reads the ready line it prints once the server'
+    printf '%s\n' '  is listening, and opens THAT url in your browser. The plugins are not'
+    printf '%s\n' '  compiled into anything - the harness web profile installs every bundle'
+    printf '%s\n' '  in packages/ as a LIVE LINK, which is why this folder must stay where it'
+    printf '%s\n' '  is. To get the native window instead, build it from the shipped source:'
+    printf '\n'
+    printf '%s\n' '      cd app/src-tauri && cargo build --release'
+    printf '\n'
+    printf '%s\n' '  then copy app/src-tauri/target/release/vncode-desktop to ./vncode'
+    printf '%s\n' '  beside this README and run scripts/run-desktop.bat (or the built file'
+    printf '%s\n' '  directly).'
+  else
+    printf '%s\n' '  The window is a LAUNCHER: ./vncode starts the pinned harness'
+    printf '\n'
+    printf '%s\n' "      npx @deepseek-ai/dsh@$pin web --no-open"
+    printf '\n'
+    printf '%s\n' '  on a free loopback port, reads the ready line it prints once the'
+    printf '%s\n' '  server is listening, and shows THAT url in a WKWebView / WebKitGTK'
+    printf '%s\n' '  window. The plugins are not compiled into the binary - the harness web'
+    printf '%s\n' '  profile installs every bundle in packages/ as a LIVE LINK, which is'
+    printf '%s\n' '  why this folder must stay where it is.'
+  fi
   printf '\n'
   printf '%s\n' 'WHAT THE AGENT CAN DO'
   printf '%s\n' '  Every surface below comes from this pack (all alpha), and it opens the'
@@ -520,33 +637,49 @@ chmod 755 "$start_here"
   printf '\n'
   printf '%s\n' 'REQUIREMENTS'
   printf '%s\n' '  - Node.js 22 or newer on PATH .......... https://nodejs.org'
-  printf '%s\n' '  - Network access on the first run ...... the shell downloads the'
-  printf '%s\n' "    pinned harness $pin through npx, once (it is"
-  printf '%s\n' '    cached afterwards).'
-  printf '%s\n' '  - Linux: the WebKitGTK runtime the binary was built against'
-  printf '%s\n' '    (libwebkit2gtk-4.1). macOS: nothing beyond Node.js.'
+  printf '%s\n' '  - Network access on the first run ...... the pinned harness'
+  printf '%s\n' "    $pin is fetched through npx, once (it is cached"
+  printf '%s\n' '    afterwards).'
+  if [ "$no_shell" = 1 ]; then
+    printf '%s\n' '  - Nothing else. To build the native window instead you also need the'
+    printf '%s\n' '    Rust toolchain and the WebKitGTK development packages, but that is a'
+    printf '%s\n' '    choice, not a requirement - the browser path above is the same app.'
+  else
+    printf '%s\n' '  - Linux: the WebKitGTK runtime the binary was built against'
+    printf '%s\n' '    (libwebkit2gtk-4.1). macOS: nothing beyond Node.js.'
+  fi
   printf '\n'
   printf '%s\n' 'CLICK THIS'
   printf '%s\n' '  ./START-HERE.sh'
   printf '\n'
   printf '%s\n' '  It installs this pack into the harness web profile (from THIS folder,'
-  printf '%s\n' '  wherever it now is) and then opens the window. Already installed? Run'
-  printf '%s\n' '  ./vncode and skip the check. If the executable bit was lost while'
-  printf '%s\n' '  copying, run:  sh ./START-HERE.sh'
+  printf '%s\n' '  wherever it now is) and then opens the app. Already installed? Run'
+  printf '%s\n' '  ./scripts/run-web.sh and skip the check. If the executable bit was lost'
+  printf '%s\n' '  while copying, run:  sh ./START-HERE.sh'
   printf '\n'
-  printf '%s\n' '  The window shows the SAME profile a ./scripts/run-web.sh browser tab'
+  printf '%s\n' '  The app shows the SAME profile a ./scripts/run-web.sh browser tab'
   printf '%s\n' '  shows, so sessions, settings and everything the pack remembers are'
   printf '%s\n' '  shared.'
   printf '\n'
   printf '%s\n' 'THE LAUNCHERS'
-  printf '%s\n' '  ./vncode                          the app in its native window'
-  printf '%s\n' '  scripts/run-desktop.bat           Windows: the same, from a console -'
-  printf '%s\n' '                                    and it needs no Rust, because it runs'
-  printf '%s\n' '                                    the binary beside it in the folder'
-  printf '%s\n' '                                    ABOVE scripts/'
-  printf '%s\n' '  ./scripts/run-web.sh              the app in a browser tab instead'
-  printf '%s\n' '  ./scripts/install.sh              install/re-install the pack, no window'
-  printf '%s\n' '  ./scripts/uninstall.sh            remove what this pack installed'
+  if [ "$no_shell" = 1 ]; then
+    printf '%s\n' '  ./START-HERE.sh                   install the pack, then open the app'
+    printf '%s\n' '  ./scripts/run-web.sh              the same, in a browser tab, any time'
+    printf '%s\n' '  scripts/run-desktop.bat           the native window - builds'
+    printf '%s\n' '                                    app/src-tauri with cargo the first'
+    printf '%s\n' '                                    time, then runs it'
+    printf '%s\n' '  ./scripts/install.sh              install/re-install the pack, no window'
+    printf '%s\n' '  ./scripts/uninstall.sh            remove what this pack installed'
+  else
+    printf '%s\n' '  ./vncode                          the app in its native window'
+    printf '%s\n' '  scripts/run-desktop.bat           Windows: the same, from a console -'
+    printf '%s\n' '                                    and it needs no Rust, because it runs'
+    printf '%s\n' '                                    the binary beside it in the folder'
+    printf '%s\n' '                                    ABOVE scripts/'
+    printf '%s\n' '  ./scripts/run-web.sh              the app in a browser tab instead'
+    printf '%s\n' '  ./scripts/install.sh              install/re-install the pack, no window'
+    printf '%s\n' '  ./scripts/uninstall.sh            remove what this pack installed'
+  fi
   printf '\n'
   printf '%s\n' '  Every launcher lives in scripts/; the repository root carries none. All'
   printf '%s\n' '  of them take -Help (also -h and --help), -NoPause and -NoTerminal, and'
@@ -554,17 +687,26 @@ chmod 755 "$start_here"
   printf '%s\n' '  colour appears only on a real terminal and never in a redirected log,'
   printf '%s\n' '  and the launch token is never written down.'
   printf '\n'
-  printf '%s\n' 'THE FLAGS THE SHELL TAKES'
-  printf '%s\n' '  -Port <n>          listen on this port instead of a free one'
-  printf '%s\n' '  -DshHome <dir>     override DSH_HOME (default: $DSH_HOME, else ~/.dsh)'
-  printf '%s\n' '  -DshVersion <ver>  override the pinned harness version'
-  printf '%s\n' '  -Help              print the help'
-  printf '\n'
   printf '%s\n' '  The launch token in the ready line is a live credential for the'
-  printf '%s\n' '  running process: the shell prints that line with the token REDACTED,'
-  printf '%s\n' '  holds the real one in memory only, and refuses to open a url that is'
-  printf '%s\n' '  not a loopback address.'
+  printf '%s\n' '  running process: whoever reads that line holds a login for it. The'
+  printf '%s\n' '  launchers print the line with the token REDACTED, hold the real one in'
+  printf '%s\n' '  memory only, and refuse to open a url that is not a loopback address.'
   printf '\n'
+  if [ "$no_shell" = 1 ]; then
+    printf '%s\n' 'BUILDING THE NATIVE WINDOW (OPTIONAL)'
+    printf '%s\n' '  The only thing this release does not carry ready-made is the window'
+    printf '%s\n' '  binary - and compiling it is a choice, not a requirement, because the'
+    printf '%s\n' '  browser path above is the same application. If you want the window:'
+    printf '\n'
+    printf '%s\n' '      cd app/src-tauri && cargo build --release'
+    printf '\n'
+    printf '%s\n' '  which needs the Rust toolchain (https://rustup.rs) and, on Linux, the'
+    printf '%s\n' '  WebKitGTK development packages. The result lands in'
+    printf '%s\n' '  app/src-tauri/target/release/ as vncode-desktop; copy it beside this'
+    printf '%s\n' '  README as ./vncode and scripts/run-desktop.bat will run it instead of'
+    printf '%s\n' '  building again.'
+    printf '\n'
+  fi
   printf '%s\n' 'BUILDING ANOTHER COPY'
   printf '%s\n' '  This folder is the product, not the workshop: dist.sh is'
   printf '%s\n' '  deliberately NOT here. A distribution is assembled in the repository it'
@@ -588,16 +730,18 @@ chmod 755 "$start_here"
   printf '%s\n' "  \"packVersion\": \"$pack_version\","
   printf '%s\n' "  \"artifact\": \"$artifact\","
   printf '%s\n' "  \"dshPin\": \"$pin\","
-  printf '%s\n' "  \"rid\": \"$rid\","
+  printf '%s\n' "  \"rid\": \"$host_rid\","
   printf '%s\n' "  \"platform\": \"$platform\","
-  printf '%s\n' "  \"arch\": \"${rid##*-}\","
+  printf '%s\n' "  \"targetOs\": \"$artifact_os\","
+  printf '%s\n' "  \"arch\": \"${host_rid##*-}\","
   printf '%s\n' "  \"commit\": \"$git_commit\","
   printf '%s\n' "  \"dirty\": $dirty,"
   printf '%s\n' "  \"builtAt\": \"$built_at\","
   printf '%s\n' '  "builtBy": "scripts/dist.sh",'
   printf '%s\n' "  \"rustc\": \"$rustc_version\","
   printf '%s\n' "  \"node\": \"$node_version\","
-  printf '%s\n' "  \"shellBinary\": \"$binary_name\","
+  printf '%s\n' "  \"shell\": \"$shell_kind\","
+  printf '%s\n' "  \"shellBinary\": \"$shell_binary_field\","
   printf '%s\n' "  \"shellSha256\": \"$shell_sha\","
   printf '%s\n' "  \"payloadFiles\": $payload_files,"
   printf '%s\n' "  \"payloadBytes\": $payload_bytes"
@@ -675,25 +819,33 @@ build_single_file() {
 }
 
 # --- 4. the archive, and the single file built from it ----------------------
+# There is NO single-file build in -NoShell mode, and this is structural rather
+# than a saving: that artifact IS the archive appended to the shell binary, so
+# with no binary there is nothing to append it to. The release ships the archive
+# alone.
 archive_path=''
 if [ "$no_zip" = 0 ]; then
   if command -v zip >/dev/null 2>&1; then
     rm -f "$zip_path"
     ( cd "$dist_root" && zip -q -r -X "$artifact.zip" "$artifact" ) || fail 'zip failed.'
     archive_path=$zip_path
-    build_single_file
+    if [ "$no_shell" = 0 ]; then build_single_file; fi
   else
     rm -f "$tarball_path"
     ( cd "$dist_root" && tar -czf "$artifact.tar.gz" "$artifact" ) || fail 'tar failed.'
     archive_path=$tarball_path
-    # The single-file build carries a ZIP, because the shell reads exactly one
-    # container format on all three hosts. Without a zip tool there is nothing
-    # to append, and saying so beats shipping a file that cannot unpack.
-    step 'No zip tool, so no single-file build - install zip and re-run for one.'
+    if [ "$no_shell" = 1 ]; then
+      step 'Source-only release: the archive IS the artifact, so there is no single-file build.'
+    else
+      # The single-file build carries a ZIP, because the shell reads exactly one
+      # container format on all three hosts. Without a zip tool there is nothing
+      # to append, and saying so beats shipping a file that cannot unpack.
+      step 'No zip tool, so no single-file build - install zip and re-run for one.'
+    fi
   fi
   step "Archive: $archive_path"
 else
-  step 'Skipping the archive and the single-file build (-NoZip).'
+  step 'Skipping the archive (-NoZip).'
 fi
 
 # ---------------------------------------------------------------------------
@@ -833,18 +985,29 @@ fi
 printf '\n'
 step 'Done.'
 note "Folder to click: $dist_dir"
-note '  ./START-HERE.sh (it installs the pack, then opens the window)'
+note '  ./START-HERE.sh (it installs the pack, then opens the app)'
+if [ "$no_shell" = 1 ]; then
+  note '  Source-only: no compiled shell here. The browser path needs only Node.js.'
+fi
 if [ -n "$archive_path" ]; then note "Archive to hand over: $archive_path"; fi
-if [ -f "$one_file_path" ]; then
+if [ "$no_shell" = 0 ] && [ -f "$one_file_path" ]; then
   note "One file to hand over: $one_file_path  (it unpacks itself into your user folder, then starts)"
 fi
 note 'dist/ is gitignored on purpose: it is build output, and it is a copy - re-run this after editing a plugin.'
 
 if [ "$run_dist" = 1 ]; then
   printf '\n'
-  step "Running the distribution: $dist_dir/$binary_name"
-  cd "$dist_dir" || fail "Cannot enter $dist_dir."
-  exec "./$binary_name"
+  if [ "$no_shell" = 1 ]; then
+    # -Run means "run the shell binary". A source-only folder has none, and
+    # silently opening the browser instead would be a different thing than the
+    # flag promises - so this says so and points at the real entry point.
+    note 'There is no shell binary here to run (-NoShell), so -Run has nothing to do.'
+    note "Run the distribution's own entry point instead: $dist_dir/START-HERE.sh"
+  else
+    step "Running the distribution: $dist_dir/$binary_name"
+    cd "$dist_dir" || fail "Cannot enter $dist_dir."
+    exec "./$binary_name"
+  fi
 fi
 
 exit 0

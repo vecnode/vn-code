@@ -146,8 +146,9 @@ if (ps && sh) {
   }
 
   // The same flags, both halves. A flag only one half knows is a run that fails
-  // on half the matrix.
-  const flags = ['-Version', '-SkipBuild', '-NoZip', '-Run', '-Verify', '-KeepVerifyHome', '-OutDir', '-Clean', '-NoPause', '-Help']
+  // on half the matrix. -NoShell is the release mode and is asserted FIRST for
+  // that reason: it is the one flag a release actually passes.
+  const flags = ['-NoShell', '-TargetOs', '-Version', '-SkipBuild', '-NoZip', '-Run', '-Verify', '-KeepVerifyHome', '-OutDir', '-Clean', '-NoPause', '-Help']
   for (const flag of flags) {
     if (!ps.includes(flag)) fail(`scripts/dist.ps1 does not handle ${flag}.`)
     if (!sh.includes(flag)) fail(`scripts/dist.sh does not handle ${flag}.`)
@@ -239,106 +240,41 @@ if (gitignore && !/^dist\/?$/m.test(gitignore)) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. The workflow: the matrix, the same scripts, three operating systems
+// 4. NO CI, and this is the assertion that keeps it that way
 // ---------------------------------------------------------------------------
-// PARKED, NOT DELETED FOREVER. `.github/workflows/distribute.yml` was removed on
-// purpose for now (the push that removed it says so), so this file reads it
-// OPTIONALLY: the section below is skipped LOUDLY rather than failing, and every
-// assertion in it comes back the moment the workflow does. Restore it with
-//   git log --diff-filter=D --name-only -- .github/workflows/distribute.yml
-// and then `git checkout <sha>^ -- .github/workflows/distribute.yml`.
-const workflowPath = '.github/workflows/distribute.yml'
-const workflow = existsSync(path.join(repo, workflowPath)) ? readFileSync(path.join(repo, workflowPath), 'utf8') : null
-if (workflow === null) {
-  console.log('skip the workflow section                          (' + workflowPath + ' is parked - no CI for now)')
+// The workflow was deleted on purpose and GitHub Actions is DISABLED on the
+// repository, so a release is cut by hand on the maintainer's machine
+// (docs/RELEASE.md). The failure mode this section exists for is not a missing
+// workflow - it is a workflow coming BACK: a re-added `distribute.yml` starts
+// running on the next push, fills the Actions cache and artifact stores with
+// hundreds of megabytes, and does it silently, because nothing about adding a
+// file looks wrong in a diff. So the check FAILS on the directory rather than
+// skipping when it is absent.
+//
+// This replaced a whole section that asserted the matrix, the runner labels,
+// the action pins and the trigger split. Restoring CI means restoring all of
+// it: `git log --diff-filter=D --path .github/workflows/` names the deleting
+// commit, and one `git checkout <sha>^ -- .github/workflows/<file>` brings the
+// file back - at which point this assertion fails until it is re-armed, which
+// is the intended two-step.
+const workflowsDir = path.join(repo, '.github', 'workflows')
+if (existsSync(workflowsDir)) {
+  const strays = readdirSync(workflowsDir).filter((name) => !name.startsWith('.'))
+  fail(
+    '.github/workflows/ exists again' +
+    (strays.length > 0 ? ` (${strays.join(', ')})` : '') +
+    ' - this repository has NO CI on purpose and Actions is disabled on it. ' +
+    'Either delete it again, or restore the workflow section of this check together with the ' +
+    'file and re-enable Actions deliberately. See docs/RELEASE.md.',
+  )
 }
-if (workflow) {
-  // The matrix's own `os:` values, and nothing else. The comments above the
-  // matrix name the retired labels on purpose - to record why they left - so a
-  // plain text search over the file would fail on its own explanation.
-  const matrixOs = [...workflow.matchAll(/^\s*-\s+os:\s*(\S+)\s*$/gm)].map((match) => match[1])
-  if (matrixOs.length === 0) fail('.github/workflows/distribute.yml has no readable matrix of `- os:` entries.')
+console.log('no .github/workflows - CI stays deleted                     (docs/RELEASE.md)')
 
-  // The labels a build MUST have. These are the images GitHub publishes today;
-  // `macos-13` used to be here and was retired, which is the failure this list
-  // exists to catch - a label that no longer resolves fails the whole run at
-  // scheduling time, before any step can report why.
-  for (const runner of ['windows-2022', 'macos-15-intel', 'macos-15', 'ubuntu-22.04']) {
-    if (!matrixOs.includes(runner)) fail(`.github/workflows/distribute.yml does not build on ${runner}.`)
-  }
-
-  // ...and the labels it must NOT have, because GitHub has retired them. Naming
-  // a dead image is not a style question: the run never starts.
-  for (const retired of ['macos-13', 'macos-12', 'macos-11', 'windows-2019', 'ubuntu-20.04']) {
-    if (matrixOs.includes(retired)) {
-      fail(`.github/workflows/distribute.yml builds on '${retired}', a retired runner image.`)
-    }
-  }
-
-  // The ARM64 legs produce artifacts no other leg can, and they are REQUIRED.
-  // They were staged behind `experimental` / continue-on-error while the newer
-  // toolchains settled; each has been green on every run since, and a leg that
-  // may fail without failing the run is exactly how an ARM64 archive silently
-  // stops appearing in a release. Making one optional again is a deliberate
-  // two-file act - the workflow and this assertion.
-  for (const arm of ['windows-11-arm', 'ubuntu-22.04-arm']) {
-    if (!workflow.includes(arm)) {
-      fail(`.github/workflows/distribute.yml no longer builds on ${arm}, so that ARM64 archive would silently stop shipping.`)
-    }
-  }
-  if (/experimental:\s*true/.test(workflow) || /continue-on-error:/.test(workflow)) {
-    fail('.github/workflows/distribute.yml marks a leg experimental / continue-on-error - every leg in this matrix is required now.')
-  }
-
-  for (const script of ['scripts/dist.ps1', 'scripts/dist.sh']) {
-    if (!workflow.includes(script)) fail(`.github/workflows/distribute.yml never runs ${script}.`)
-  }
-  // The end-to-end check the local run also makes.
-  if (!workflow.includes('-Verify')) fail('.github/workflows/distribute.yml does not run the end-to-end verify.')
-  // Artifacts always; the workflow_dispatch trigger is how a run is inspected
-  // without pushing a tag.
-  if (!workflow.includes('workflow_dispatch')) fail('.github/workflows/distribute.yml has no workflow_dispatch trigger.')
-  if (!workflow.includes('upload-artifact')) fail('.github/workflows/distribute.yml uploads no artifacts.')
-
-  // The shell's unit tests are the ONLY thing that executes keystate.rs /
-  // readyline.rs / windowstate.rs: the build legs run `cargo build --release`,
-  // which runs no test, and every check in this repository reads the Rust as
-  // TEXT. A workflow that never calls `cargo test` makes 56 passing tests
-  // invisible to CI - which is what it was until this assertion existed.
-  if (!workflow.includes('cargo test')) {
-    fail('.github/workflows/distribute.yml never runs `cargo test` - the shell\'s unit tests would only ever run on a laptop.')
-  }
-
-  // A push gets a fast answer, not artifact churn: six archives uploaded per
-  // push and expired unused. The upload is gated by event for exactly that.
-  if (!workflow.includes("github.event_name != 'push'")) {
-    fail('.github/workflows/distribute.yml does not gate its artifact upload by event - a push would upload archives nobody asked for.')
-  }
-
-  // The GitHub-official actions are pinned to a COMMIT, never to a tag. A tag is
-  // mutable, so `@v4` is a pin a compromised release can move under this
-  // repository; the comment beside each SHA records which major it is.
-  const mutablePins = [...workflow.matchAll(/uses:\s*(actions\/[A-Za-z0-9_.-]+)@(?![0-9a-f]{40}\b)(\S+)/g)]
-    .map((match) => `${match[1]}@${match[2]}`)
-  if (mutablePins.length > 0) {
-    fail(`.github/workflows/distribute.yml pins GitHub-official actions by a mutable ref (${mutablePins.join(', ')}) - pin the commit SHA and keep the major in a comment.`)
-  }
-
-  // --- every entry point that ships must be able to trigger a rebuild --------
-  // The push filter is a list of paths, and a file missing from it means a change
-  // to it builds nothing - silent, and only visible as a stale artifact later.
-  // The list is read from the workflow's own `paths:` block, not re-typed.
-  const pathsBlock = /^\s*paths:\s*\n((?:\s*-\s*'[^']+'\s*\n)+)/m.exec(workflow)
-  const watched = pathsBlock
-    ? pathsBlock[1].split(/\r?\n/).map((line) => /-\s*'([^']+)'/.exec(line)?.[1]).filter(Boolean)
-    : []
-  if (watched.length === 0) fail('.github/workflows/distribute.yml has no readable paths: filter.')
-  // The launchers all live under scripts/ now, so ONE glob covers them; a push
-  // that edits any of them has to build. `scripts/**` is therefore required.
-  if (!watched.includes('scripts/**')) {
-    fail(".github/workflows/distribute.yml's paths: filter does not watch 'scripts/**' - a change to a launcher would build nothing.")
-  }
-}
+// The workflow assertions that used to live here - the matrix of runner labels,
+// the action pins, the `-Verify` step, the event split, the `paths:` filter - were
+// removed WITH the workflow. They are not kept commented out on purpose: a list of
+// assertions about a file that must not exist is a second thing to keep in step,
+// and the guard above is the assertion that matters now.
 
 // ---------------------------------------------------------------------------
 // 5. The console contract: one shared layer, five entry points, two hosts
@@ -492,7 +428,16 @@ if (consoleText.adapt) {
         timeout: 30000,
       })
       const output = `${result.stdout || ''}${result.stderr || ''}`
-      if (/unexpected at this time/i.test(output)) {
+      // A host that will not let this process START cmd.exe is not a defect in
+      // the launcher, and it is not the same answer as a launcher that aborts.
+      // The DSH file sandbox refuses a piped stdio spawn outright (EPERM), so on
+      // a sandboxed Windows host this probe cannot run at all - measured, and it
+      // is why the branch below exists. It SKIPS LOUDLY rather than failing: a
+      // check that reports a repository defect when the host declined to run the
+      // probe is a check that teaches its reader to pass -SkipChecks.
+      if (result.error) {
+        note(`skipped the no-argument launcher run - this host refused to start cmd.exe (${result.error.code || result.error.message}); the launcher itself is not implicated`)
+      } else if (/unexpected at this time/i.test(output)) {
         fail('a launcher with NO arguments aborts: cmd reports "set was unexpected at this time.", so an argument variable is undefined and a `%VAR:-flag=%` substitution cannot expand.')
       } else if (!/^ARGS=\[ \]$/m.test(output) || !/^ARGV=\[ \]$/m.test(output)) {
         fail(`calling scripts/console/adapt.cmd with no arguments did not leave one space in both argument variables; it answered: ${output.trim()}`)
@@ -699,9 +644,9 @@ if (sh !== null && !sh.includes('$artifact.run')) {
 // command writes to stderr the moment that stderr is captured at all - `2>&1`
 // and `2>$null` BOTH do it. With `2>&1` the record is printed as a full
 // "At line:... CategoryInfo... FullyQualifiedErrorId : NativeCommandError"
-// block, so npm's own deprecation warnings read as failures in a CI log; and
-// under `$ErrorActionPreference = 'Stop'`, which both installers set at the top,
-// the record is TERMINATING.
+// block, so npm's own deprecation warnings read as failures in a captured log;
+// and under `$ErrorActionPreference = 'Stop'`, which both installers set at the
+// top, the record is TERMINATING.
 //
 // That second half is the one that bites: the pnpm bootstrap sits under 'Stop'
 // with no guard of its own, so a single `npm warn deprecated` would abort the
@@ -736,7 +681,7 @@ for (const worker of ['scripts/install-all.ps1', 'scripts/uninstall-all.ps1']) {
 // ---------------------------------------------------------------------------
 // report
 // ---------------------------------------------------------------------------
-console.log('check-dist-layout: the ship list, the two halves, the entry points and the workflow')
+console.log('check-dist-layout: the ship list, the two halves, the entry points, and no CI')
 for (const line of notes) console.log(`  - ${line}`)
 if (failures.length > 0) {
   console.log('')

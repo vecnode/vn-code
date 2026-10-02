@@ -8,6 +8,18 @@
         dist/vncode-<version>-<rid>.zip    the same folder, for handing to
                                                somebody else
 
+    SOURCE-ONLY MODE (-NoShell), WHICH IS WHAT A RELEASE USES
+        -NoShell assembles the SAME folder with the shell left as SOURCE
+        (app/src-tauri + app/ui, which dist-manifest.txt ships) and no built
+        binary. Nothing is compiled anywhere, so the result is reproducible on
+        any machine and the artifact is named for the OPERATING SYSTEM alone
+        (vncode-<version>-win|mac|linux) rather than for an architecture: the
+        payload is plain JavaScript with both entry-point halves in it, so one
+        assembly is what every OS downloads. The browser path
+        (START-HERE -> scripts/run-web) needs nothing but Node.js; the native
+        window is still available to anyone who runs cargo build in the shipped
+        app/src-tauri. This is why no release compiles anything.
+
     WHY A FOLDER AND NOT JUST AN .exe
         app/ is a LAUNCHER, not a bundle. The shell walks up for
         .dsh-version.json, runs the pinned `npx @deepseek-ai/dsh@<pin> web
@@ -18,13 +30,12 @@
         profile's links point at folders that are no longer there; re-running
         START-HERE.bat re-installs from wherever the folder now lives.
 
-    THE SAME FILE CI RUNS
-        .github/workflows/distribute.yml calls exactly this script on
-        windows-latest and scripts/dist.sh on the macOS/Linux runners, so a local
-        run and a CI run cannot drift: one implementation, the same flags, the
-        same layout. `run-dist.bat -Verify` runs the same end-to-end check the
-        workflow runs after assembling, so a green local run means the CI step
-        has nothing new to discover.
+    NO CI, ON PURPOSE
+        There is no .github/workflows in this repository and GitHub Actions is
+        disabled on it. A release is cut HERE, on the maintainer's machine, with
+        `run-dist.bat -NoShell -Verify`; docs/RELEASE.md is the whole ritual.
+        scripts/checks/check-dist-layout.mjs fails if a workflow directory ever
+        comes back, so a deleted CI cannot quietly return.
 
     WHAT SHIPS is not decided here: it is scripts/dist-manifest.txt, read by both
     halves of this feature (and pinned by scripts/checks/check-dist-layout.mjs).
@@ -32,13 +43,24 @@
     FLAGS (dist.sh takes the same ones)
         -Version <v>      override the pack version used in the names
                           (default: package.json's version)
+        -NoShell          SOURCE-ONLY: build no shell binary and ship app/ as
+                          source instead, naming the artifact for the OS alone
+                          (vncode-<version>-win|mac|linux). This is the release
+                          mode - nothing is compiled
+        -TargetOs <os>    name and label the artifact for this operating system
+                          (win|mac|linux) instead of the host's own. The payload
+                          is OS-neutral, so one assembly can be published as the
+                          three OS releases; this is what stops the mac and
+                          linux zips from claiming `platform: windows`. Without
+                          -NoShell it is refused, because a compiled shell really
+                          is platform-specific
         -SkipBuild        reuse the binary under app/src-tauri/target/release
         -NoZip            assemble the folder only (no .zip, no single file)
         -Run              assemble, then RUN the produced distribution
                           (foreground: the shell's console output stays here)
         -Verify           assemble, then install into a throwaway DSH_HOME and
                           boot the pinned harness from it, waiting for the ready
-                          line - the end-to-end check the CI job also runs
+                          line - the end-to-end check a release runs
         -KeepVerifyHome   keep that throwaway home for inspection
         -Clean            delete dist/ first
         -Help
@@ -52,6 +74,8 @@
 [CmdletBinding()]
 param(
     [string]$Version = '',
+    [switch]$NoShell,
+    [string]$TargetOs = '',
     [switch]$SkipBuild,
     [switch]$NoZip,
     [switch]$Run,
@@ -134,11 +158,16 @@ function Show-Usage {
     Write-Host 'Usage: scripts\run-dist.bat [flags]'
     Write-Host ''
     Write-Host '  -Version <v>      override the pack version used in the names'
+    Write-Host '  -NoShell          SOURCE-ONLY release: compile nothing, ship app/ as source,'
+    Write-Host '                    and name the artifact vncode-<version>-win|mac|linux'
+    Write-Host '  -TargetOs <os>    win|mac|linux - name and label the artifact for this OS'
+    Write-Host '                    instead of the host (the payload is OS-neutral, so one'
+    Write-Host '                    assembly is published as the three OS releases)'
     Write-Host '  -SkipBuild        reuse the binary already under app/src-tauri/target/release'
     Write-Host '  -NoZip            assemble the folder only (no .zip, no single file)'
     Write-Host '  -Run              assemble, then run the produced distribution'
     Write-Host '  -Verify           assemble, then install into a throwaway DSH_HOME and boot'
-    Write-Host '                    the pinned harness from it (the CI end-to-end check)'
+    Write-Host '                    the pinned harness from it (the end-to-end release check)'
     Write-Host '  -KeepVerifyHome   keep that throwaway home for inspection'
     Write-Host '  -OutDir <dir>     assemble under this folder instead of dist/ (a relative'
     Write-Host '                    path resolves against the repository root)'
@@ -148,6 +177,8 @@ function Show-Usage {
     Write-Host ''
     Write-Host 'Builds dist/vncode-<version>-<rid>/ from scripts/dist-manifest.txt plus the'
     Write-Host 'built shell, and zips it beside itself. dist/ is never committed.'
+    Write-Host 'With -NoShell the shell is shipped as SOURCE and nothing is compiled, which'
+    Write-Host 'is what a release uses: three archives, one per operating system.'
     Write-Host 'macOS/Linux: ./scripts/dist.sh is the same thing in POSIX shell.'
     Write-Host 'Run it from anywhere: it lives in scripts/ and resolves the repository root'
     Write-Host 'as the folder above.'
@@ -194,6 +225,17 @@ function Get-HostRid {
     }
     if ($isArm) { return 'linux-arm64' }
     return 'linux-x64'
+}
+
+# The OPERATING SYSTEM alone, with no architecture in it - 'win', 'mac' or
+# 'linux'. This is the artifact label in -NoShell mode and the reason is the
+# payload: source-only ships app/ as source and no compiled file at all, so the
+# folder has no architecture in it to tell two downloads apart. One assembly is
+# what every OS downloads, and the name says which OS it is for.
+function Get-HostOsFamily {
+    if ($script:Platform -eq 'windows') { return 'win' }
+    if ($script:Platform -eq 'macos') { return 'mac' }
+    return 'linux'
 }
 
 function Get-UtcStamp { return (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
@@ -315,7 +357,7 @@ function Copy-Payload {
 # nests a tree fails HERE instead of shipping. The POSIX half checks the same
 # list (scripts/checks/check-dist-layout.mjs fails when the two lists drift).
 function Assert-Sentinels {
-    param([string]$DistDir)
+    param([string]$DistDir, [switch]$NoShell)
     $sentinels = @(
         '.dsh-version.json',
         'README.md',
@@ -323,9 +365,11 @@ function Assert-Sentinels {
         'scripts/install-all.sh',
         'docs/INSTALL.md',
         'assets/vncode.svg',
-        # The shell family's sentinel is its README, not its source: a
-        # distribution ships the binary and app/README.md and nothing else of
-        # app/, so asserting on a .rs file would fail every correct build.
+        # The shell family's sentinel. app/README.md is in every distribution;
+        # the Rust source is in a SOURCE-ONLY one (-NoShell, the release mode),
+        # which is why the manifest ships it. Asserting on the source here is
+        # right: a source-only folder without it is a folder whose native window
+        # can never be built, and that is a broken release rather than a lean one.
         'app/README.md',
         'packages/dsh-vn-master/package.json',
         'packages/dsh-vn-master/cordis.patch.yml',
@@ -341,6 +385,11 @@ function Assert-Sentinels {
         # trusted.
         '.vncode-fingerprint.json'
     )
+    if ($NoShell) {
+        # The release shape: the shell is source, so its source has to be here.
+        $sentinels += 'app/src-tauri/Cargo.toml'
+        $sentinels += 'app/src-tauri/src/main.rs'
+    }
     $missing = New-Object System.Collections.ArrayList
     foreach ($sentinel in $sentinels) {
         if (-not (Test-Path -LiteralPath (Join-Path $DistDir $sentinel.Replace('/', $script:Sep)))) {
@@ -535,11 +584,13 @@ function New-StartHere {
 }
 
 function New-DistReadme {
-    param([string]$DistDir, [string]$Version, [string]$DshPin, [string]$Rid, [string]$BuiltAt, [string]$Commit)
-    $lines = @(
-        "vncode $Version - $Rid",
-        "Built $BuiltAt from commit $Commit.",
-        '',
+    param([string]$DistDir, [string]$Version, [string]$DshPin, [string]$Rid, [string]$BuiltAt, [string]$Commit,
+          [switch]$NoShell)
+    # The two shapes this README describes differ in ONE fact - whether a built
+    # shell is in the folder - and a source-only release must not tell its reader
+    # to double-click a vncode.exe that is not there. So the paragraphs that
+    # mention the binary are chosen rather than left to contradict the folder.
+    $oneFile = @(
         'TWO WAYS TO GET THIS',
         '  If you were handed ONE file - vncode-<version>-<rid>.exe on',
         '  Windows, vncode-<version>-<rid>.run on macOS and Linux - just run',
@@ -551,13 +602,23 @@ function New-DistReadme {
         '  If you have this folder, or the .zip, use CLICK THIS instead. Either',
         '  way the result is the same: the pack is installed into the harness web',
         '  profile and the window opens.',
+        ''
+    )
+    $sourceOnly = @(
+        'WHAT YOU WERE GIVEN',
+        '  This is a SOURCE release: nothing in it is compiled, and nothing has to',
+        '  be compiled to use it. It is the vncode repository itself - the plugin',
+        '  pack plus the launchers - so the whole thing is plain readable',
+        '  JavaScript. The one thing NOT in it is a built vncode.exe: the native',
+        '  window is built from the app/src-tauri source that ships beside it, by',
+        '  anyone who wants it, with the Rust toolchain.',
         '',
-        'WHAT THIS IS',
-        '  vncode - an agent application that runs on the DeepSeek Harness',
-        '  (DSH). A native cross-platform app plus a pack of standard dsh',
-        '  bundles: the plugins are plain JavaScript with ZERO npm dependencies,',
-        '  and the launchers run on Windows, macOS and Linux.',
-        '',
+        '  Use CLICK THIS below. It installs the pack into the harness web profile',
+        '  and opens the same application in a browser tab, which needs nothing but',
+        '  Node.js.',
+        ''
+    )
+    $windowBinary = @(
         '  The window is a LAUNCHER: vncode.exe (./vncode on macOS and',
         '  Linux) starts the pinned harness',
         '',
@@ -568,7 +629,91 @@ function New-DistReadme {
         '  WebKitGTK window. The plugins are not compiled into the binary - the',
         '  harness web profile installs every bundle in packages/ as a LIVE LINK,',
         '  which is why this folder must stay where it is.',
+        ''
+    )
+    $windowBrowser = @(
+        '  There is no window binary here, and none is needed: scripts/run-web',
+        '  starts the pinned harness',
         '',
+        "      npx @deepseek-ai/dsh@$DshPin web --no-open",
+        '',
+        '  on a free loopback port, reads the ready line it prints once the server',
+        '  is listening, and opens THAT url in your browser. The plugins are not',
+        '  compiled into anything - the harness web profile installs every bundle',
+        '  in packages/ as a LIVE LINK, which is why this folder must stay where it',
+        '  is. To get the native window instead, build it from the shipped source:',
+        '',
+        '      cd app/src-tauri && cargo build --release',
+        '',
+        '  then copy the binary beside this README as vncode.exe (Windows) or',
+        '  ./vncode (macOS/Linux) and run scripts/run-desktop.bat.',
+        ''
+    )
+    $launcherBinary = @(
+        '  vncode.exe | ./vncode    the app in its native window',
+        '  scripts\run-desktop.bat  the same, started from a console - and it',
+        '                           needs no Rust, because it runs the binary in',
+        '                           the folder ABOVE scripts/',
+        '  scripts\run-web.bat | ./scripts/run-web.sh',
+        '                           the app in a browser tab instead',
+        '  scripts\install.bat | ./scripts/install.sh',
+        '                           install/re-install the pack, no window',
+        '  scripts\uninstall.bat | ./scripts/uninstall.sh',
+        '                           remove what this pack installed',
+        ''
+    )
+    $launcherSource = @(
+        '  START-HERE.bat | ./START-HERE.sh',
+        '                           install the pack, then open the app',
+        '  scripts\run-web.bat | ./scripts/run-web.sh',
+        '                           the same, in a browser tab, any time after',
+        '  scripts\run-desktop.bat  the native window - builds app/src-tauri with',
+        '                           cargo the first time, then runs it',
+        '  scripts\install.bat | ./scripts/install.sh',
+        '                           install/re-install the pack, no window',
+        '  scripts\uninstall.bat | ./scripts/uninstall.sh',
+        '                           remove what this pack installed',
+        ''
+    )
+    $firstRun = @(
+        '  Both install this pack into the harness web profile (from THIS',
+        '  folder, wherever it now is) and then open the window. Already',
+        '  installed? Run vncode.exe (./vncode) and skip the check.',
+        ''
+    )
+    $firstRunSource = @(
+        '  Both install this pack into the harness web profile (from THIS',
+        '  folder, wherever it now is) and then open the app. Already installed?',
+        '  Run scripts/run-web.bat (./scripts/run-web.sh) and skip the check.',
+        ''
+    )
+    $noShellNote = @(
+        'BUILDING THE NATIVE WINDOW (OPTIONAL)',
+        '  The only thing this release does not carry ready-made is the window',
+        '  binary - and compiling it is a choice, not a requirement, because the',
+        '  browser path above is the same application. If you want the window:',
+        '',
+        '      cd app/src-tauri && cargo build --release',
+        '',
+        '  which needs the Rust toolchain (https://rustup.rs) and, on Linux, the',
+        '  WebKitGTK development packages. The result lands in',
+        '  app/src-tauri/target/release/ as vncode-desktop (vncode-desktop.exe on',
+        '  Windows); copy it beside this README as vncode (vncode.exe) and',
+        '  scripts/run-desktop.bat will run it instead of building again.',
+        ''
+    )
+    $lines = @(
+        "vncode $Version - $Rid",
+        "Built $BuiltAt from commit $Commit.",
+        ''
+    ) + $(if ($NoShell) { $sourceOnly } else { $oneFile }) + @(
+        'WHAT THIS IS',
+        '  vncode - an agent application that runs on the DeepSeek Harness',
+        '  (DSH). A native cross-platform app plus a pack of standard dsh',
+        '  bundles: the plugins are plain JavaScript with ZERO npm dependencies,',
+        '  and the launchers run on Windows, macOS and Linux.',
+        ''
+    ) + $(if ($NoShell) { $windowBrowser } else { $windowBinary }) + @(
         'WHAT THE AGENT CAN DO',
         '  Every surface below comes from this pack (all alpha), and it opens the',
         '  files that are in the conversation workspace:',
@@ -589,55 +734,37 @@ function New-DistReadme {
         '',
         'REQUIREMENTS',
         '  - Node.js 22 or newer on PATH .......... https://nodejs.org',
-        '  - Network access on the first run ...... the shell downloads the',
-        "    pinned harness $DshPin through npx, once (it is",
-        '    cached afterwards).',
+        '  - Network access on the first run ...... the pinned harness',
+        "    $DshPin is fetched through npx, once (it is cached",
+        '    afterwards).',
         '  - Windows: the WebView2 runtime (present on Windows 10 and 11).',
         '  - macOS/Linux: nothing beyond Node.js.',
         '',
         'CLICK THIS',
         '  Windows:      START-HERE.bat',
         '  macOS/Linux:  ./START-HERE.sh',
-        '',
-        '  Both install this pack into the harness web profile (from THIS',
-        '  folder, wherever it now is) and then open the window. Already',
-        '  installed? Run vncode.exe (./vncode) and skip the check.',
-        '',
-        '  The window shows the SAME profile a scripts/run-web.bat or a',
+        ''
+    ) + $(if ($NoShell) { $firstRunSource } else { $firstRun }) + @(
+        '  The app shows the SAME profile a scripts/run-web.bat or a',
         '  ./scripts/run-web.sh browser tab shows, so sessions, settings and',
         '  everything the pack remembers are shared with it.',
         '',
         'THE LAUNCHERS',
         '  Every launcher lives in scripts/; the repository root carries none.',
-        '',
-        '  vncode.exe | ./vncode    the app in its native window',
-        '  scripts\run-desktop.bat  the same, started from a console - and it',
-        '                           needs no Rust, because it runs the binary in',
-        '                           the folder ABOVE scripts/',
-        '  scripts\run-web.bat | ./scripts/run-web.sh',
-        '                           the app in a browser tab instead',
-        '  scripts\install.bat | ./scripts/install.sh',
-        '                           install/re-install the pack, no window',
-        '  scripts\uninstall.bat | ./scripts/uninstall.sh',
-        '                           remove what this pack installed',
-        '',
+        ''
+    ) + $(if ($NoShell) { $launcherSource } else { $launcherBinary }) + @(
         '  All of them take -Help (also -h and /?), -NoPause and -NoTerminal, and',
         '  all of them decide their console in ONE shared place (scripts/console/):',
         '  a double-click opens in Windows Terminal when it is installed, colour',
         '  appears only on a real terminal and never in a redirected log, and the',
         '  launch token is never written down.',
         '',
-        'THE FLAGS THE SHELL TAKES',
-        '  -Port <n>          listen on this port instead of a free one',
-        '  -DshHome <dir>     override DSH_HOME (default: $DSH_HOME, else ~/.dsh)',
-        '  -DshVersion <ver>  override the pinned harness version',
-        '  -Help              print the help',
-        '',
         '  The launch token in the ready line is a live credential for the',
-        '  running process: the shell prints that line with the token REDACTED,',
-        '  holds the real one in memory only, and refuses to open a url that is',
-        '  not a loopback address.',
-        '',
+        '  running process: whoever reads that line holds a login for it. The',
+        '  launchers print the line with the token REDACTED, hold the real one in',
+        '  memory only, and refuse to open a url that is not a loopback address.',
+        ''
+    ) + $(if ($NoShell) { $noShellNote } else { @() }) + @(
         'BUILDING ANOTHER COPY',
         '  This folder is the product, not the workshop: run-dist.bat is',
         '  deliberately NOT here. A distribution is assembled in the repository it',
@@ -664,7 +791,22 @@ function New-DistReadme {
 function New-BuildInfo {
     param([string]$DistDir, [string]$Version, [string]$DshPin, [string]$Rid, [string]$Artifact,
         [string]$Commit, [bool]$Dirty, [string]$BuiltAt, [string]$Builder, [string]$Rustc,
-        [string]$Node, [int]$PayloadFiles, [long]$PayloadBytes, [string]$ShellSha)
+        [string]$Node, [int]$PayloadFiles, [long]$PayloadBytes, [string]$ShellSha,
+        [string]$TargetOs, [switch]$NoShell)
+    # `shell` is the field a reader uses to tell the two shapes apart, and it is
+    # written rather than inferred: a source-only release has no binary, so
+    # saying "vncode.exe" there would be a claim the folder cannot honour.
+    #
+    # `platform` stays the HOST that assembled this folder and `targetOs` is the
+    # operating system the artifact is published FOR. In a release they differ on
+    # purpose - one assembly is published as the win, mac and linux archives - and
+    # recording both is what keeps that honest instead of confusing the two.
+    $shellKind = 'binary'
+    $shellBinaryName = $script:BinaryName
+    if ($NoShell) {
+        $shellKind = 'source'
+        $shellBinaryName = ''
+    }
     $lines = @(
         '{',
         "  `"name`": `"vncode`",",
@@ -673,6 +815,7 @@ function New-BuildInfo {
         "  `"dshPin`": `"$DshPin`",",
         "  `"rid`": `"$Rid`",",
         "  `"platform`": `"$script:Platform`",",
+        "  `"targetOs`": `"$TargetOs`",",
         "  `"arch`": `"$($Rid.Split('-')[-1])`",",
         "  `"commit`": `"$Commit`",",
         "  `"dirty`": $(if ($Dirty) { 'true' } else { 'false' }),",
@@ -680,7 +823,8 @@ function New-BuildInfo {
         "  `"builtBy`": `"$Builder`",",
         "  `"rustc`": `"$Rustc`",",
         "  `"node`": `"$Node`",",
-        "  `"shellBinary`": `"$script:BinaryName`",",
+        "  `"shell`": `"$shellKind`",",
+        "  `"shellBinary`": `"$shellBinaryName`",",
         "  `"shellSha256`": `"$ShellSha`",",
         "  `"payloadFiles`": $PayloadFiles,",
         "  `"payloadBytes`": $PayloadBytes",
@@ -1218,7 +1362,36 @@ Write-Step "Repo: $script:RepoRoot"
 $pin = Get-DshPin
 $packVersion = $Version
 if (-not $packVersion) { $packVersion = Get-PackVersion }
-$rid = Get-HostRid
+# The host's own architecture label, recorded in BUILD-INFO.json so a reader can
+# always tell which machine assembled the folder.
+$hostRid = Get-HostRid
+$hostOs = Get-HostOsFamily
+# The OS the ARTIFACT is for - the host's own unless -TargetOs named another.
+$artifactOs = $hostOs
+if ($TargetOs) {
+    $wanted = $TargetOs.Trim().ToLowerInvariant()
+    # Accept the three spellings a person actually types, and nothing else: a
+    # typo must not silently produce a fourth artifact nobody downloads.
+    if ($wanted -eq 'windows') { $wanted = 'win' }
+    if ($wanted -eq 'macos' -or $wanted -eq 'darwin' -or $wanted -eq 'osx') { $wanted = 'mac' }
+    if ($wanted -notin @('win', 'mac', 'linux')) {
+        throw "-TargetOs '$TargetOs' is not one of win, mac or linux."
+    }
+    if (-not $NoShell) {
+        # A compiled shell is built FOR the host it was compiled on; labelling it
+        # as another OS would be a lie a recipient would discover by running it.
+        throw "-TargetOs only makes sense with -NoShell. A built shell is platform-specific, so it can only be labelled as the host that built it ($hostRid)."
+    }
+    $artifactOs = $wanted
+}
+# The label in the ARTIFACT NAME. -NoShell ships no compiled file at all, so
+# there is no architecture in the payload to tell two downloads apart: the name
+# says which operating system it is for and nothing else, which is what makes
+# one assembly the thing all three OS releases download. The fingerprint uses
+# the same label, so re-running the release for a second OS reuses the assembled
+# folder rather than copying 12 MB again.
+$rid = $hostRid
+if ($NoShell) { $rid = $artifactOs }
 $artifact = "vncode-$packVersion-$rid"
 # The output root. `dist/` unless -OutDir chose somewhere else, and the reason it
 # exists is not tidiness: a distribution that is RUNNING holds its own
@@ -1244,35 +1417,49 @@ if ($Clean -and (Test-Path -LiteralPath $distRoot)) {
 }
 
 # --- 1. the shell binary ---------------------------------------------------
+# In -NoShell mode there is no step 1 at all: nothing is compiled, nothing is
+# copied in, and what the folder carries instead is the shell's SOURCE, brought
+# in by scripts/dist-manifest.txt like any other shipped file. This is the whole
+# of "a release compiles nothing". $shellSha256 stays EMPTY rather than absent,
+# so the fingerprint and BUILD-INFO.json keep one shape across both modes - and
+# an empty hash can never collide with a real one, so a folder built one way is
+# never reused as the other.
 $binary = Join-Path $script:RepoRoot (Join-Path 'app/src-tauri' (Join-Path 'target/release' $script:CargoBinaryName))
-if (-not $SkipBuild) {
-    $cargo = Get-Command cargo -ErrorAction SilentlyContinue
-    if (-not $cargo) {
-        throw 'cargo was not found on PATH. Install the Rust toolchain from https://rustup.rs, or pass -SkipBuild to reuse an existing build.'
-    }
-    Write-Step 'Building app/src-tauri (cargo does nothing when it is current)...'
-    $manifest = Join-Path $script:RepoRoot 'app/src-tauri/Cargo.toml'
-    & cargo build --release --manifest-path $manifest
-    if ($LASTEXITCODE -ne 0) {
-        # The failure a person actually hits: Windows locks a RUNNING binary, so
-        # a window that is open makes cargo's relink fail with a bare "Access is
-        # denied" that names the .exe and nothing else. Say what it means.
-        $running = @(Get-Process -Name 'vncode-desktop' -ErrorAction SilentlyContinue)
-        if ($running.Count -gt 0) {
-            $pids = ($running | ForEach-Object { $_.Id }) -join ', '
-            throw "cargo build failed (exit $LASTEXITCODE), and vncode is RUNNING right now (PID $pids). Windows does not let a build replace a binary that is in use, which is what 'Access is denied' on vncode-desktop.exe means. Close the vncode window and run this again, or pass -SkipBuild to package the binary already under app/src-tauri/target/release."
-        }
-        throw "cargo build failed (exit $LASTEXITCODE) - see the errors above."
-    }
+$shellSha = ''
+if ($NoShell) {
+    Write-Step 'Source-only build (-NoShell): nothing is compiled and app/ ships as source.'
+    if ($SkipBuild) { Write-Note '-SkipBuild means nothing here; -NoShell already builds no binary.' }
 }
 else {
-    Write-Step 'Skipping the build (-SkipBuild).'
+    if (-not $SkipBuild) {
+        $cargo = Get-Command cargo -ErrorAction SilentlyContinue
+        if (-not $cargo) {
+            throw 'cargo was not found on PATH. Install the Rust toolchain from https://rustup.rs, or pass -SkipBuild to reuse an existing build - or -NoShell for a source-only release, which compiles nothing at all.'
+        }
+        Write-Step 'Building app/src-tauri (cargo does nothing when it is current)...'
+        $manifest = Join-Path $script:RepoRoot 'app/src-tauri/Cargo.toml'
+        & cargo build --release --manifest-path $manifest
+        if ($LASTEXITCODE -ne 0) {
+            # The failure a person actually hits: Windows locks a RUNNING binary, so
+            # a window that is open makes cargo's relink fail with a bare "Access is
+            # denied" that names the .exe and nothing else. Say what it means.
+            $running = @(Get-Process -Name 'vncode-desktop' -ErrorAction SilentlyContinue)
+            if ($running.Count -gt 0) {
+                $pids = ($running | ForEach-Object { $_.Id }) -join ', '
+                throw "cargo build failed (exit $LASTEXITCODE), and vncode is RUNNING right now (PID $pids). Windows does not let a build replace a binary that is in use, which is what 'Access is denied' on vncode-desktop.exe means. Close the vncode window and run this again, or pass -SkipBuild to package the binary already under app/src-tauri/target/release."
+            }
+            throw "cargo build failed (exit $LASTEXITCODE) - see the errors above."
+        }
+    }
+    else {
+        Write-Step 'Skipping the build (-SkipBuild).'
+    }
+    if (-not (Test-Path -LiteralPath $binary)) {
+        throw "The shell binary is not at $binary. Drop -SkipBuild so it gets built."
+    }
+    $shellSha = Get-Sha256 -Path $binary
+    Write-Step "Shell binary: $binary ($([math]::Round((Get-Item -LiteralPath $binary).Length / 1MB, 1)) MB)"
 }
-if (-not (Test-Path -LiteralPath $binary)) {
-    throw "The shell binary is not at $binary. Drop -SkipBuild so it gets built."
-}
-$shellSha = Get-Sha256 -Path $binary
-Write-Step "Shell binary: $binary ($([math]::Round((Get-Item -LiteralPath $binary).Length / 1MB, 1)) MB)"
 
 # --- 2. the payload --------------------------------------------------------
 # The facts that decide what the folder WOULD contain are all known before
@@ -1301,7 +1488,7 @@ if (-not $Clean) {
 if ($reuse) {
     # Nothing to copy: prove the folder is still the one the last run vouched
     # for, then reuse its own measured size rather than walking it again.
-    Assert-Sentinels -DistDir $distDir
+    Assert-Sentinels -DistDir $distDir -NoShell:$NoShell
     $payload = [pscustomobject]@{ Files = [int]$previousFprint.payloadFiles; Bytes = [long]$previousFprint.payloadBytes }
     Write-Step 'The payload is unchanged since the last build - reusing the assembled folder.'
 }
@@ -1319,9 +1506,14 @@ else {
     New-Item -ItemType Directory -Force -Path $distDir | Out-Null
     Write-Step "Assembling $distDir from scripts/dist-manifest.txt ..."
     $included = Copy-Payload -Destination $distDir -Rules $rules
-    Copy-Item -LiteralPath $binary -Destination (Join-Path $distDir $script:BinaryName) -Force
-    if (-not $script:IsWindowsHost) { try { & chmod 755 (Join-Path $distDir $script:BinaryName) | Out-Null } catch { } }
-    Write-Note "$included include rules applied; the shell binary copied in as $($script:BinaryName)."
+    if ($NoShell) {
+        Write-Note "$included include rules applied; no shell binary - app/ ships as source, so nothing is compiled."
+    }
+    else {
+        Copy-Item -LiteralPath $binary -Destination (Join-Path $distDir $script:BinaryName) -Force
+        if (-not $script:IsWindowsHost) { try { & chmod 755 (Join-Path $distDir $script:BinaryName) | Out-Null } catch { } }
+        Write-Note "$included include rules applied; the shell binary copied in as $($script:BinaryName)."
+    }
     # Written FIRST, and rewritten at the end with the measured payload facts.
     # Assert-Sentinels below asserts the fingerprint is present, and that is the
     # right order: the sentinel list is what proves the assembly copied what it
@@ -1330,7 +1522,7 @@ else {
     $null = New-DistFingerprint -DistDir $distDir -Version $packVersion -Rid $rid -DshPin $pin `
         -ShellSha $shellSha -ManifestSha $manifestSha -Commit $commit -Dirty $dirty `
         -PayloadFiles 0 -PayloadBytes 0
-    Assert-Sentinels -DistDir $distDir
+    Assert-Sentinels -DistDir $distDir -NoShell:$NoShell
     # A credential-shaped file that reached the folder is not shipped. The
     # source-side scan is the gate; this is the second half, on what actually
     # ships (see Assert-NoSecrets).
@@ -1342,12 +1534,13 @@ else {
 # Written on EVERY run, reused folder or not: they are derived from the
 # fingerprint's own facts, so they are always current by construction.
 New-StartHere -DistDir $distDir -DshPin $pin
-New-DistReadme -DistDir $distDir -Version $packVersion -DshPin $pin -Rid $rid -BuiltAt $builtAt -Commit $commit
+New-DistReadme -DistDir $distDir -Version $packVersion -DshPin $pin -Rid $rid -BuiltAt $builtAt -Commit $commit -NoShell:$NoShell
 $buildInfoArgs = @{
     DistDir      = $distDir
     Version      = $packVersion
     DshPin       = $pin
-    Rid          = $rid
+    Rid          = $hostRid
+    TargetOs     = $artifactOs
     Artifact     = $artifact
     Commit       = $commit
     Dirty        = $dirty
@@ -1358,6 +1551,7 @@ $buildInfoArgs = @{
     PayloadFiles = $payload.Files
     PayloadBytes = $payload.Bytes
     ShellSha     = $shellSha
+    NoShell      = $NoShell
 }
 New-BuildInfo @buildInfoArgs
 # The fingerprint is written BEFORE the sums, so the sums cover it - and it is
@@ -1375,10 +1569,15 @@ Write-Step ("Distribution: {0} files, {1:N1} MB" -f $total.Files, ($total.Bytes 
 # A CHANGED folder invalidates both, whichever route produced it. A file that
 # changed under a reused folder is a file the zip no longer describes, so it is
 # dropped rather than shipped stale - the fingerprint is what notices.
+#
+# There is NO single-file build in -NoShell mode, and this is structural rather
+# than a saving: that artifact IS the zip appended to the shell binary, so with
+# no binary there is nothing to append it to. The release ships the .zip alone.
 if (-not $NoZip -and -not $reuse) {
-    $previousArtifacts = @($zipPath, $oneFilePath) | Where-Object { Test-Path -LiteralPath $_ }
+    $previousArtifacts = (@($zipPath) + $(if ($NoShell) { @() } else { @($oneFilePath) })) |
+        Where-Object { Test-Path -LiteralPath $_ }
     if ($previousArtifacts.Count -gt 0) {
-        Write-Note 'The folder changed, so the previous zip and single file were dropped rather than shipped stale.'
+        Write-Note 'The folder changed, so the previous artifact(s) were dropped rather than shipped stale.'
         foreach ($path in $previousArtifacts) {
             try { Remove-Item -LiteralPath $path -Force }
             catch { throw "Could not remove the stale artifact $path ($($_.Exception.Message)). Close any running copy and run this again." }
@@ -1387,23 +1586,21 @@ if (-not $NoZip -and -not $reuse) {
 }
 
 if ($NoZip) {
-    Write-Step 'Skipping the zip and the single-file build (-NoZip).'
+    Write-Step 'Skipping the zip (-NoZip).'
 }
-elseif ($reuse -and (Test-Path -LiteralPath $zipPath) -and (Test-Path -LiteralPath $oneFilePath)) {
+elseif ($reuse -and (Test-Path -LiteralPath $zipPath) -and
+        ($NoShell -or (Test-Path -LiteralPath $oneFilePath))) {
     $zipStamp = (Get-Item -LiteralPath $zipPath).LastWriteTimeUtc
     if ($zipStamp -ge (Get-Item -LiteralPath $distDir).LastWriteTimeUtc) {
-        Write-Step 'The zip and the single file are up to date - not rebuilding them.'
+        Write-Step 'The zip is up to date - not rebuilding it.'
         Write-Note ("Zip: {0} ({1:N1} MB)" -f $zipPath, ((Get-Item -LiteralPath $zipPath).Length / 1MB))
-        Write-Note ("One file: {0} ({1:N1} MB)" -f $oneFilePath, ((Get-Item -LiteralPath $oneFilePath).Length / 1MB))
     }
     else {
         # The folder's own generated files were rewritten, so "the zip exists"
-        # is not enough - rebuild both from the folder that is there now.
-        Write-Step "Refreshing the zip and the single-file build ..."
+        # is not enough - rebuild it from the folder that is there now.
+        Write-Step 'Refreshing the zip ...'
         New-ZipArchive -SourceDir $distDir -ZipPath $zipPath -RootName $artifact
-        New-StandaloneExecutable -Binary $binary -ZipPath $zipPath -OutPath $oneFilePath -Version $packVersion -Rid $rid
         Write-Step ("Zip: {0} ({1:N1} MB)" -f $zipPath, ((Get-Item -LiteralPath $zipPath).Length / 1MB))
-        Write-Step ("One file: {0} ({1:N1} MB)" -f $oneFilePath, ((Get-Item -LiteralPath $oneFilePath).Length / 1MB))
     }
 }
 else {
@@ -1411,11 +1608,13 @@ else {
     New-ZipArchive -SourceDir $distDir -ZipPath $zipPath -RootName $artifact
     Write-Step ("Zip: {0} ({1:N1} MB)" -f $zipPath, ((Get-Item -LiteralPath $zipPath).Length / 1MB))
 
-    # Built from the zip that ships, in the same run, so the two can never
-    # describe different folders.
-    Write-Step "Building the single-file build $oneFilePath ..."
-    New-StandaloneExecutable -Binary $binary -ZipPath $zipPath -OutPath $oneFilePath -Version $packVersion -Rid $rid
-    Write-Step ("One file: {0} ({1:N1} MB)" -f $oneFilePath, ((Get-Item -LiteralPath $oneFilePath).Length / 1MB))
+    if (-not $NoShell) {
+        # Built from the zip that ships, in the same run, so the two can never
+        # describe different folders.
+        Write-Step "Building the single-file build $oneFilePath ..."
+        New-StandaloneExecutable -Binary $binary -ZipPath $zipPath -OutPath $oneFilePath -Version $packVersion -Rid $rid
+        Write-Step ("One file: {0} ({1:N1} MB)" -f $oneFilePath, ((Get-Item -LiteralPath $oneFilePath).Length / 1MB))
+    }
 }
 
 # --- 5. what was asked for next -------------------------------------------
@@ -1427,16 +1626,25 @@ if ($Verify) {
 Write-Host ''
 Write-Step 'Done.'
 Write-Note "Folder to click: $distDir"
-if ($script:IsWindowsHost) { Write-Note "  double-click START-HERE.bat (it installs the pack, then opens the window)" }
-else { Write-Note "  ./START-HERE.sh (it installs the pack, then opens the window)" }
+Write-Note "  START-HERE.bat (Windows) / ./START-HERE.sh (macOS, Linux) - it installs the pack, then opens the app"
+if ($NoShell) { Write-Note '  Source-only: no compiled shell here. The browser path needs only Node.js.' }
 if (-not $NoZip) { Write-Note "Zip to hand over: $zipPath" }
-if (-not $NoZip) { Write-Note "One file to hand over: $oneFilePath  (it unpacks itself into your user folder, then starts)" }
+if (-not $NoZip -and -not $NoShell) { Write-Note "One file to hand over: $oneFilePath  (it unpacks itself into your user folder, then starts)" }
 Write-Note 'The output folder is build output, never content - re-run this after editing a plugin.'
 
 if ($Run) {
     Write-Host ''
-    Write-Step "Running the distribution: $(Join-Path $distDir $script:BinaryName)"
-    & (Join-Path $distDir $script:BinaryName)
-    exit $LASTEXITCODE
+    if ($NoShell) {
+        # -Run means "run the shell binary". A source-only folder has none, and
+        # silently opening the browser instead would be a different thing than
+        # the flag promises - so this says so and points at the real entry point.
+        Write-Note 'There is no shell binary here to run (-NoShell), so -Run has nothing to do.'
+        Write-Note "Run the distribution's own entry point instead: $(Join-Path $distDir 'START-HERE.bat')"
+    }
+    else {
+        Write-Step "Running the distribution: $(Join-Path $distDir $script:BinaryName)"
+        & (Join-Path $distDir $script:BinaryName)
+        exit $LASTEXITCODE
+    }
 }
 exit 0

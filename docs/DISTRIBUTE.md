@@ -1,21 +1,25 @@
 # Building a vncode distribution
 
-A distribution is **one folder you can click** and, optionally, a zip of it. This
-page is the local story and the CI story, side by side, because they are the
-same story: the GitHub workflow calls the very scripts you run on your machine.
+A distribution is **one folder you can click** and a **zip of it**. It contains no
+compiled file at all: it is the plugin pack, the launchers, and the shell's
+source. This page is how you build one and what is in it.
+
+**A release is three of those zips, one per operating system, cut by hand with the
+commands below.** There is no CI in this repository, on purpose — the whole ritual,
+including how the Release is published, is [`docs/RELEASE.md`](RELEASE.md).
 
 | | Windows | macOS / Linux |
 |---|---|---|
 | **Build it** | double-click `scripts\run-dist.bat` | `./scripts/dist.sh` |
 | **The work** | `scripts/dist.ps1` | `scripts/dist.sh` |
 | **Logs / flags** | `scripts\run-dist.bat -Help` | `./scripts/dist.sh -Help` |
-| **CI equivalent** | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Verify` | `sh scripts/dist.sh -Verify` |
+| **A release** | `scripts\run-dist.bat -NoShell -Verify` | `sh scripts/dist.sh -NoShell -Verify` |
 
 ---
 
-## 1. Why a distribution is a folder - and one file built from it
+## 1. Why a distribution is a folder
 
-`app/` is a **launcher**, not a bundle:
+`app/` is a **launcher**:
 
 1. the shell binary walks up from itself for `.dsh-version.json` and reads the
    pinned harness version from it (there is no built-in fallback pin);
@@ -30,200 +34,191 @@ same story: the GitHub workflow calls the very scripts you run on your machine.
 3. it reads the `dsh web:` ready line and shows **that** url in a WebView2 /
    WKWebView / WebKitGTK window, holding the launch token in memory only.
 
-The plugins are not compiled into it. The harness **web profile** installs every
-bundle as a **live link** into `packages/`, so the folder *is* the application.
-That is why:
+**The plugins are not compiled into it, and neither is anything else.** The harness
+**web profile** installs every bundle as a **live link** into `packages/`, so the
+folder *is* the application — plain readable JavaScript. That is why:
 
-- the distribution carries `packages/`, `.dsh-version.json` and the installer
-  scripts beside the binary;
-- the folder must stay where it is - move it and the profile's links point at
-  folders that no longer exist. Re-running `START-HERE.bat` /
-  `./START-HERE.sh` re-installs from wherever it now lives;
+- the distribution carries `packages/`, `.dsh-version.json`, `app/src-tauri/` (the
+  shell's source) and the installer scripts;
+- the folder must stay where it is – move it and the profile's links point at
+  folders that no longer exist. Re-running `START-HERE.bat` / `./START-HERE.sh`
+  re-installs from wherever it now lives;
 - the target machine needs **Node.js 22+** and, on the first run, **network
   access** (the pinned harness is fetched through `npx` once and cached).
-
-The **single-file build** is the same folder, addressed to somebody who wants one
-thing to download. It is the zip appended to a copy of the shell binary, with a
-small trailer saying where the payload is; on its first run it unpacks that
-payload into `<local app data>/vncode/<version>-<rid>/` and then runs the
-unpacked folder's own `START-HERE`. It cannot replace the folder - the live links
-above need a directory that stays put - and it does not try to: it delegates, so
-`vncode` still only *runs* and the installer still only *installs*.
 
 ## 2. What comes out
 
 ```text
 dist/
-  vncode-<version>-<rid>/          <- the folder you click
-    vncode.exe  |  vncode      <- the built shell
+  vncode-<version>-<os>/           <- the folder you click
     START-HERE.bat  |  START-HERE.sh   <- generated: install, then open
     DIST-README.txt                    <- generated: requirements, flags, uninstall
     BUILD-INFO.json                    <- generated: version, pin, commit, toolchain
     SHA256SUMS.txt                     <- generated: SHA-256 of every file beside it
-    .dsh-version.json                  <- the pin the shell reads (required)
+    .dsh-version.json                  <- the pin the launcher reads (required)
     packages/                          <- every bundle, live-linked by the profile
     scripts/                           <- the installers the folder installs itself with,
                                           including scripts/console/ (the shared launcher
                                           console layer every entry point calls)
-    app/README.md                      <- the shell's README; the shell itself
-                                          ships built, so its source is not here
+    app/README.md  app/ui/  app/src-tauri/   <- the native window, AS SOURCE
     assets/vncode.svg  docs/  README.md  LICENSE  SECURITY.md
     scripts/install.bat | scripts/install.sh       <- the launchers: one pair
-    scripts/uninstall.bat | scripts/uninstall.sh      per host, plus the
-    scripts/run-web.bat | scripts/run-web.sh          Windows-only desktop
-    scripts/run-desktop.bat                           launcher
-  vncode-<version>-<rid>.zip       <- the same folder, archived
-  vncode-<version>-<rid>.exe       <- Windows: the zip above appended to the
-  vncode-<version>-<rid>.run          shell binary; unpacks itself, then runs
-                                          the unpacked folder's START-HERE
+    scripts/uninstall.bat | scripts/uninstall.sh      per host, plus
+    scripts/run-web.bat | scripts/run-web.sh          run-desktop.bat
+  vncode-<version>-<os>.zip        <- the same folder, archived. THE ARTIFACT
 ```
 
-`<rid>` is `win-x64`, `win-arm64`, `mac-x64`, `mac-arm64`, `linux-x64` or
-`linux-arm64` - derived from the host, never passed in. `<version>` is
-`package.json`'s version unless `-Version` overrides it.
+`<os>` is **`win`, `mac` or `linux`** and `<version>` is `package.json`'s version
+unless `-Version` overrides it. There is no architecture in the name and no
+per-architecture build: the payload is OS-neutral, so **one assembly is what all
+three operating-system releases download**, and the three zips differ only in the
+name they are published under. `BUILD-INFO.json` records the machine that
+assembled it (`win-x64`, `mac-arm64`, …) so the provenance is never lost.
+
+**There is no `.exe` and no `.run`.** Those were the *single-file* builds: the zip
+appended to the compiled shell binary, which unpacked itself and started. With no
+compiled binary there is nothing to append the zip to, so a release ships the zip
+alone. The capability is still in the scripts for anyone building a distribution
+*with* a shell (`-SkipBuild` / a cargo build produces them as before).
 
 **The distributer is not in the folder.** `scripts/run-dist.bat` / `scripts/run-dist.ps1`
 and their `.sh` twins are the FACTORY, not the product: a recipient gets
 `START-HERE.bat` and never needs the tool that assembled the folder. Both are
 named explicitly in `scripts/dist-manifest.txt`'s skip rules rather than merely
-left out, because `include scripts` would otherwise sweep them in - and a build
+left out, because `include scripts` would otherwise sweep them in – and a build
 tool inside the thing it builds invites a nested `dist/` inside a distribution.
 `check-dist-layout.mjs` fails when that exclusion is dropped.
 
 **Every launcher shares one console layer.** `scripts/console/adapt.cmd` decides
 which window a Windows entry point runs in (relaunching into Windows Terminal
 when it exists and we are not already inside one), which PowerShell runs the
-worker (`pwsh` 7 first, else Windows PowerShell 5.1 - both are first class), and
+worker (`pwsh` 7 first, else Windows PowerShell 5.1 – both are first class), and
 whether the window is held open at the end; `scripts/console/theme.ps1` and its
 POSIX twin `scripts/console/theme.sh` own the colour policy (a terminal gets
 colour, a redirected log never does, `NO_COLOR` always wins). That layer is why
 the generated `START-HERE.bat` behaves like the launchers beside it instead of
-like a hand-written one-off, and it ships inside `scripts/`. `scripts\run-desktop.bat` is
-shipped for the same reason it exists: in this folder it runs `vncode.exe`
-directly and needs no Rust toolchain, which is what `-NoBuild` pins down.
+like a hand-written one-off, and it ships inside `scripts/`.
 
-**The shell ships BUILT, not in source.** `app/src-tauri/` (the Rust source, its
-Cargo manifests, `build.rs`, `tauri.conf.json`), `app/src-tauri/icons/` and
-`app/ui/` are build **inputs**: tauri-build compiles the icons and the splash
-page into the binary's own resources, so nothing at runtime ever opens one of
-them, and `app/README.md` is the only file of `app/` in the folder. The same
-rule takes the maintainer tooling out of `scripts/`: `scripts/checks/` runs
-against a checkout (`packages/`, the Rust source, a git history),
-`scripts/sync-vendored.ps1` moves the vendored forks forward and wants `pwsh` on
-every host, and `scripts/make-desktop-icon.mjs` regenerates icons that are not
-shipped either. `scripts\run-desktop.bat` does not miss them: it decides between "run
-the binary in the folder above" and "build from source" on the presence of `vncode.exe`,
-never on a `Cargo.toml`.
+### The shell ships as SOURCE, and that is the release shape
 
-> The **plugins** are the exception, and it is structural rather than a choice:
-> the web profile installs every bundle as a **live link** into `packages/`, so
-> `packages/` has to be there as readable JavaScript for the app to have plugins
-> at all. Hiding the plugin source means giving up live links and installing
-> copies instead - see section 1.
+`app/src-tauri/` (the Rust source, its Cargo manifests, `build.rs`,
+`tauri.conf.json`, the icons) and `app/ui/` (the splash page) are **in** the
+folder. Together they are 13 files and about 300 KB, and they are what makes the
+native window available to anyone who wants it:
+
+```sh
+cd app/src-tauri && cargo build --release
+# then copy target/release/vncode-desktop[.exe] to the folder root as vncode[.exe]
+```
+
+**Nothing has to be compiled to USE vncode.** `START-HERE` → `scripts/run-web`
+starts the same application in a browser tab and needs only Node.js; the window is
+an option, not a requirement. That is why a release can compile nothing at all.
+
+`target/` (the Rust build tree) and `gen/` (tauri-build's regenerated ACL schemas)
+are still skipped: they are OUTPUT, not source.
+
+> The **plugins** are the other half of "source, not binary", and it is structural
+> rather than a choice: the web profile installs every bundle as a **live link**
+> into `packages/`, so `packages/` has to be there as readable JavaScript for the
+> app to have plugins at all. Hiding the plugin source means giving up live links
+> and installing copies instead – see section 1.
 
 **What is deliberately NOT in it** (`scripts/dist-manifest.txt` is the one list,
-read by both halves): `app/src-tauri/target/` (the Rust build tree),
-`app/src-tauri/gen/`, `tools/` (where the installer bootstraps pnpm),
-`.scratch/`, `.git/`, `docs/diagrams/` and every `node_modules/`. That last one
-matters: the three `packages/*/vendor/node_modules` trees are 200 MB of build
-**inputs** for artifacts that are already committed under `lib/vendor/`, so
-shipping them would multiply the archive by twenty for nothing. A full
-distribution is ~20 MB (~7 MB zipped).
+read by both halves): `app/src-tauri/target/`, `app/src-tauri/gen/`, `tools/`
+(where the installer bootstraps pnpm), `.scratch/`, `.git/`, `docs/diagrams/` and
+every `node_modules/`. That last one matters: the three
+`packages/*/vendor/node_modules` trees are 200 MB of build **inputs** for
+artifacts that are already committed under `lib/vendor/`, so shipping them would
+multiply the archive by twenty for nothing. A full distribution is ~12.6 MB
+(~4.9 MB zipped).
 
-`dist/` is gitignored. It is a copy - after editing a plugin, re-run the
+`dist/` is gitignored. It is a copy – after editing a plugin, re-run the
 distributer.
 
 ## 3. Local use
 
 ```bat
-:: Windows - the whole thing: build the shell, assemble, zip
+:: Windows - the whole thing: assemble the folder and zip it
 scripts\run-dist.bat
 
-:: skip the cargo build (reuse app\src-tauri\target\release as it is)
-scripts\run-dist.bat -SkipBuild
+:: A RELEASE: compile nothing, ship app/ as source, name it for the OS alone
+scripts\run-dist.bat -NoShell
+
+:: ...and prove it runs: install into a throwaway DSH_HOME and boot the harness
+scripts\run-dist.bat -NoShell -Verify
 
 :: assemble and RUN the distribution, in the foreground
 scripts\run-dist.bat -Run
-
-:: assemble, then install into a throwaway DSH_HOME and boot the pinned
-:: harness from a copy of the folder - the end-to-end check
-scripts\run-dist.bat -Verify
 
 :: start over; name the version something else
 scripts\run-dist.bat -Clean
 scripts\run-dist.bat -Version 0.2.0
 
 :: assemble somewhere else, leaving dist/ alone - the case that NEEDS it is a
-:: distribution that is still RUNNING: Windows will not let a live
-:: vncode.exe be overwritten, so the new cut is built beside it and swapped
-:: in after the window is closed
+:: distribution that is still RUNNING: Windows will not let a live vncode.exe
+:: be overwritten, so the new cut is built beside it and swapped in after the
+:: window is closed
 scripts\run-dist.bat -OutDir dist2
 ```
 
 ```sh
 # macOS / Linux - the same flags, one file
-./scripts/dist.sh -SkipBuild
-./scripts/dist.sh -Verify
+./scripts/dist.sh -NoShell -Verify
 ./scripts/dist.sh -OutDir dist2      # assemble beside dist/, leaving it alone
 sh ./scripts/dist.sh -Help          # if the executable bit was lost
 ```
 
 Every run prints the folder and the archive to click.
 
+### Which flags matter
+
+- **`-NoShell`** is the release mode. It compiles nothing, ships `app/` as source,
+  and names the artifact `vncode-<version>-<os>`.
+- **`-SkipBuild`** reuses a binary already under `app/src-tauri/target/release`
+  instead of running cargo. It is the *other* mode – a distribution **with** a
+  built shell – and it is what `run-dist.ps1` selects by itself when the shell is
+  not stale.
+- **`-Verify`** is the end-to-end check and the one worth running before a release
+  (section 4).
+- `-Run` assembles and then runs the produced folder's own `START-HERE`; `-RunApp`
+  runs just the packed binary, so it needs the binary mode.
+
 ### Why the second run is fast, and when it is not
 
 `scripts\run-dist.bat` is the entry point to use on every edit, so it refuses to
 redo work whose inputs did not change:
 
-- **the shell**: if nothing under `app\src-tauri`, `app\ui` or the icon generator
-  is newer than the built binary, cargo is never invoked (`-ForceBuild` overrides,
-  `-SkipBuild` skips the decision entirely);
-- **the payload, the zip and the single file**: `scripts/dist.ps1` writes a build
-  fingerprint into the folder recording the shell hash, the version, the ship
-  list, the last commit **and a sha256 plus byte length for every shipped file**.
-  The next run reuses the assembled folder only when all of those still match -
-  including the tree on disk, in both directions, so a changed file and a stray
-  file both count as a change.
+- **the shell**: in binary mode, if nothing under `app\src-tauri`, `app\ui` or the
+  icon generator is newer than the built binary, cargo is never invoked
+  (`-ForceBuild` overrides, `-SkipBuild` skips the decision entirely). In
+  `-NoShell` mode there is no shell to be stale, so cargo is never reached.
+- **the payload and the zip**: `scripts/dist.ps1` writes a build fingerprint into
+  the folder recording the shell hash, the version, the ship list, the last commit
+  **and a sha256 plus byte length for every shipped file**. The next run reuses the
+  assembled folder only when all of those still match – including the tree on disk,
+  in both directions, so a changed file and a stray file both count as a change.
 
-Measured on this machine: a full assemble is 8.8 s (377 files, 20.5 MB), and a run
-with nothing changed is 2.1 s. An edit to one shipped file is detected even when
-its size and timestamp are unchanged - the hash is what decides - and the stale
-zip and single file are **dropped and rebuilt** rather than shipped.
+Measured on this machine: a full assemble is ~9 s, and a run with nothing changed
+is ~2 s. An edit to one shipped file is detected even when its size and timestamp
+are unchanged – the hash is what decides – and the stale zip is **dropped and
+rebuilt** rather than shipped.
 
 `-Clean` throws all of that away and rebuilds from scratch, which is also what
 happens automatically when there is no usable fingerprint.
 
-Two guards run before anything is copied: `scripts/checks/check-no-secrets.mjs`
-and `scripts/checks/check-dist-layout.mjs`. A distribution is the artifact
-somebody installs, so a folder the repository's own checks reject is not
-assembled at all. `-SkipChecks` builds anyway and says out loud that the result is
-unverified. After assembly, `Assert-NoSecrets` in `scripts/dist.ps1` scans what
-actually shipped for credential-shaped names, which is the half a source scan
-cannot see.
-
-### The other two verbs
-
-- `-Run` assembles and then runs the produced folder's **`START-HERE.bat`** - the
-  whole new-user path, installing the pack into your profile and then opening the
-  window. That is how you test the distribution as a recipient receives it.
-- `-RunApp` assembles and runs just the packed `vncode.exe`, skipping the install
-  check - faster, and it tests the window rather than the first-run experience.
-
-`scripts\run-dist.bat` still works and is still documented everywhere, because
-it now **forwards to `scripts\run-dist.bat`**: one implementation, two doors.
-
-`-OutDir` exists for the
-one case that cannot be worked around: a distribution that is **running** holds
-its own `vncode.exe` open, and Windows refuses to overwrite or delete a file
-in use - so a new cut is assembled beside it and swapped in once the window is
-closed (`dist2/` is gitignored for that reason). `-Verify` is the useful one
-while you are changing something: it proves the **folder** works, not just that
-it assembled, and it never opens a window (which is exactly why CI can run it
-too).
+One guard runs before anything is copied: `scripts/checks/check-dist-layout.mjs`
+(the ship list, the two halves in step, and that no CI has crept back). The source
+scan for credentials is `scripts/checks/check-no-secrets.mjs`; `run-dist.ps1` runs
+both. A distribution is the artifact somebody installs, so a folder the
+repository's own checks reject is not assembled at all. `-SkipChecks` builds anyway
+and says out loud that the result is unverified. After assembly, `Assert-NoSecrets`
+in `scripts/dist.ps1` scans what actually shipped for credential-shaped names,
+which is the half a source scan cannot see.
 
 ### What `-Verify` actually does
 
-1. copies the assembled folder to a temp directory - a distribution is a folder
+1. copies the assembled folder to a temp directory – a distribution is a folder
    somebody extracts somewhere else, so a copy is the thing being promised.
    (It also keeps the real folder pristine: the installer bootstraps its own
    pnpm under a local `tools/` when the machine has none, and that bootstrap
@@ -234,188 +229,90 @@ too).
 4. boots the pinned harness with that home, waits up to 180 s for the
    `dsh web: http://127.0.0.1:<port>/?token=...` ready line, stops the whole
    process tree, and proves the port is free again;
-5. prints the url with **`token=REDACTED`** - the token is a live credential and
-   never reaches a log or a scrollback - and refuses a ready line that does not
+5. prints the url with **`token=REDACTED`** – the token is a live credential and
+   never reaches a log or a scrollback – and refuses a ready line that does not
    name a loopback address.
 
 The throwaway home is deleted afterwards; `-KeepVerifyHome` keeps it.
 
-## 4. CI: what it does, and how to see it
+> **If `-Verify` fails with `npm error code EPERM`.** npm is writing to a cache
+> outside this folder (`npm config get cache`, usually `%LOCALAPPDATA%\npm-cache`)
+> and this account may not write there. Point it at somewhere it can:
+> `set npm_config_cache=%CD%\.scratch\npm-cache` before the run. The vendored
+> runtime exists for the same reason on the app's side (section 1). A sandboxed
+> shell that blocks npm's nested lifecycle spawns fails the same way and needs a
+> normal terminal.
 
-> **Parked, not deleted forever.** `.github/workflows/distribute.yml` was removed
-> on purpose for now, so nothing runs on a push - `gh run list` shows only the
-> runs that already happened, and `check-dist-layout.mjs` skips its workflow
-> section loudly instead of failing. The file is one `git` command away:
-> `git log --diff-filter=D --name-only -- .github/workflows/distribute.yml` names
-> the deleting commit, and `git checkout <sha>^ -- .github/workflows/distribute.yml`
-> brings it back - with every assertion in §4 and §7 below applying again. Until
-> then, run the same work locally: `scripts\run-dist.bat -Verify` (or
-> `./scripts/dist.sh -Verify`), which is what the build legs call.
+## 4. Cutting a release
 
-`.github/workflows/distribute.yml` has five jobs, and which of them run depends on
-the event, because a push and a release want different things:
+`docs/RELEASE.md` is the full ritual. In short, on this machine:
 
-| Job | What it is |
-|---|---|
-| `checks` | `check-no-secrets.mjs` (nothing credential-shaped reaches a commit), `check-dist-layout.mjs` (ship list, every bundle carried, both halves' flags/sentinels in step, the matrix policy, the action pins), then a pinned `react` + `react-dom` 18.3.1 installed into `$DSH_HOME/profiles/node_modules` (the runtime the client check renders with - a fresh runner has none and that check throws rather than skipping), then the client-bundle, skill-example (the diagram examples parsed/compiled, the media and PDF examples shaped and - where the runner has ffmpeg - executed) and startup-window checks, each of which skips its host-dependent sections loudly |
-| `rust-tests` | `cargo test --locked` on the shell. This is the only job that EXECUTES `keystate.rs` / `readyline.rs` / `windowstate.rs`: the build legs run `cargo build --release`, which runs no test, and every check above reads the Rust as TEXT. It runs in parallel with the builds, and `release` waits on it |
-| `build-core` | one leg per operating system - `windows-2022` → win-x64, `macos-15` → mac-arm64, `ubuntu-22.04` → linux-x64: checkout, Node 22, Rust 1.98.1, `Swatinem/rust-cache`, Linux webview deps, then **the same `dist.ps1` / `dist.sh` with `-Verify`** |
-| `build-extra` | the legs no core leg can produce - `macos-15-intel` → mac-x64, `ubuntu-22.04-arm` → linux-arm64, `windows-11-arm` → win-arm64 - on the events that produce an artifact |
-| `release` | waits on the builds **and** the tests, collects every artifact, writes a `SHA256SUMS.txt` over them, and attaches them to a GitHub Release |
+```bat
+scripts\run-dist.bat -NoShell -Verify -Clean
+```
 
-Every leg writes a one-screen summary of what it produced - pack version, harness
-pin, commit, toolchain, archive and size - to that run's own summary page.
+then rename/copy `dist\vncode-0.1.0-win.zip` for the other two names, write
+`SHA256SUMS.txt`, and publish. Nothing else runs: no workflow, no runner, no cache.
 
-`check-node-routes.mjs` and `check-pdf-node.mjs` are deliberately **not** part of
-the CI job: they want a real harness profile installed, which this workflow does
-not build. Run them locally.
+### The three zips are one payload
 
-### Which events run which legs
-
-Standard GitHub-hosted runners are **free for a public repository**, so this split
-is about wall-clock time and churn rather than the runner bill:
-
-| Event | checks | rust-tests | core legs | extra legs | `-Verify` | uploads |
-|---|---|---|---|---|---|---|
-| push to `main` / pull request | yes | yes | 3 of 6 | – | linux-x64 | no |
-| `workflow_dispatch` | yes | yes | 6 of 6 | yes | all | yes |
-| `schedule` (weekly, Monday 06:17 UTC) | yes | yes | 6 of 6 | yes | all | yes |
-| `release: published` | yes | yes | 6 of 6 | yes | all | yes |
-
-A push is judged by one leg per operating system and uploads nothing: six
-archives per push, expired unused, is the churn this removes. A superseded run is
-cancelled (`concurrency`) - except a release, which is never cancelled mid-flight,
-because a tag with half its assets attached is worse than a slow run.
-
-**Where the minutes actually go** (measured on a real run, not estimated): the
-Windows leg sets the wall clock at ~7 minutes, and **275 s of that is the
-`-Verify` install**. Breaking that step down from its own log: the pnpm bootstrap
-is 9 s, and fetching the harness's own dependency closure into a throwaway home is
-~230 s (~223 MB through npm's and pnpm's stores, with Windows Defender inspecting
-every file), while the Rust build and the assembly are ~95 s of it. Linux and
-macOS verify in a fraction of that time.
-
-That is why a push verifies **once**, on the cheapest leg, rather than three
-times; why the package stores are cached (keyed on `.dsh-version.json`, so a new
-harness pin misses and refills rather than serving a stale closure); and why the
-legs that actually produce an artifact still all verify - there, "does this folder
-really run" is the question being answered.
-
-The **weekly schedule** exists because the runner images move under us: the first
-cut asked for `macos-13`, which had been retired, and only a runner can notice
-that. The full matrix runs on a clock so an image change is caught before a
-release rather than during one.
-
-**Both ARM64 legs are required.** They were staged behind `experimental` /
-continue-on-error while the newer toolchains settled; each has been green on every
-run since, and a leg that may fail without failing the run is exactly how an ARM64
-archive silently stops appearing. Making one optional again is a two-file act: the
-matrix and the assertion in `check-dist-layout.mjs`.
-
-### Triggers, one by one
-
-- **`workflow_dispatch`** (Actions → distribute → *Run workflow*): the way to
-  watch the whole thing and download the artifacts without pushing anything.
-  Inputs: `version` (override the name), `release` (publish a Release when
-  green), `tag` (which tag that release uses).
-- **push to `main`** that touches anything that can change what ships: checks,
-  tests and three build legs, publishes nothing.
-- **pull request**: the same path as a push, with no `paths:` filter of its own -
-  `check-dist-layout.mjs` reads the one tuned list out of this file, and two lists
-  can drift.
-- **`release: published`**: builds all six matrix targets and attaches their
-  archives to the release. `gh release create v0.1.2 --generate-notes` is the
-  whole ritual. The release build **fails** when the tag (minus a leading `v`)
-  does not equal `package.json`'s version, so a tag can never name a version that
-  was never built.
-
-### Action pins
-
-The four GitHub-official actions are pinned to a **commit SHA** (a tag is mutable,
-a commit is not), each to the FIRST release of that action whose `runs.using` is
-`node24` - checkout v5, setup-node v5, upload-artifact v6, download-artifact v7 -
-because Node 20 actions are force-upgraded by GitHub and warn on every job, and
-v5 of the artifact actions was still `node20` by default. `check-dist-layout.mjs`
-fails on a mutable pin, so `@v4` cannot come back without the check failing too.
-
-### Watching a run locally
-
-You cannot run GitHub's Windows or macOS runners on your machine (`act` only
-approximates Linux, and a container's WebKitGTK is not a runner's). What you can
-do - and what this feature is built around - is make the local run and the CI run
-**the same code and the same steps**:
-
-| The workflow's step | What you run instead |
-|---|---|
-| `checks` job | `node scripts/checks/check-dist-layout.mjs`, `check-no-secrets.mjs`, `check-splash.mjs` |
-| `rust-tests` job | `cargo test --manifest-path app/src-tauri/Cargo.toml` |
-| Linux webview deps | nothing on Windows; on Linux, the `apt-get` line in the workflow |
-| build + assemble + `-Verify` | `scripts\run-dist.bat -Verify` / `./scripts/dist.sh -Verify` |
-| tag/version guard | `node -p "require('./package.json').version"` vs your tag |
-| `upload-artifact` | the zip in `dist/` |
-| `release` job | `gh release create <tag> --generate-notes`, then attach the zips |
-
-So: run `scripts\run-dist.bat -Verify` locally, and a green run means the CI step has
-nothing new left to discover. What CI adds on top is only the *other* operating
-systems and the artifact plumbing.
+Because the payload carries both entry-point halves (`START-HERE.bat` and
+`START-HERE.sh`, `install`/`uninstall`/`run-web` in both flavours) and no compiled
+file, the three archives are byte-identical apart from the `artifact`/`rid` fields
+inside `BUILD-INFO.json`. That is a property worth stating rather than hiding: "three
+releases" is about which file a visitor to the releases page should pick, not about
+three different builds.
 
 ## 5. Tradeoffs and known limits
 
-- **Unsigned binaries.** Windows SmartScreen will say "unknown publisher"
-  (More info → Run anyway). macOS quarantines an unsigned binary - right-click →
-  **Open**, or `xattr -d com.apple.quarantine ./vncode`, and the first launch
-  from Finder rather than Terminal is the one that gets flagged.
+- **No compiled binary ships.** The native window is a `cargo build` away from the
+  shipped source, and the browser path needs nothing. This is the deliberate cost
+  of a release that compiles nothing: there is no `vncode.exe` to double-click in a
+  fresh download, so the entry point is `START-HERE`.
+- **The zips are unsigned, as before.** Antivirus and SmartScreen heuristics look
+  at downloaded archives; there is no signature on a zip. When a built shell *is*
+  shipped, the signing rules in `docs/BUILD.md` still apply to the binary.
 - **No installers.** `app/src-tauri/tauri.conf.json` keeps `bundle.active: false`,
-  so there is no `.msi`, `.dmg`, `.deb` or `.AppImage`, no Tauri CLI in CI, no
-  icon ladder and no signing identity. Turning that on is the next step if the
-  zip stops being enough.
-- **The single-file build is bigger than the zip, deliberately.** It IS the zip
-  appended to a full copy of the shell binary, so the payload is carried twice:
-  ~15 MB against the zip's ~7 MB. What that buys is one file to hand somebody,
-  with nothing to extract by hand.
-- **Its files are not hidden, and cannot be.** A payload the app can execute is a
-  payload the user can read: they are ordinary files under
-  `<local app data>/vncode/<version>-<rid>/`. Deleting that folder is safe -
-  the next run unpacks it again - but deleting it while the app is running is
-  not, on Windows where a running binary is locked.
-- **A new version unpacks beside the old one**, never over it, so an upgrade
-  cannot pull the folder out from under a running window. The unpack directory
-  is keyed on `<version>-<rid>` for exactly that reason.
-- **macOS ships a bare binary**, not a `.app` bundle (see above), so there is no
-  Dock icon or `Info.plist` identity yet.
-- **Node.js 22+ and network on the target machine** - the shell is a launcher
-  over `npx`, by design. The first run downloads the pinned harness.
-- **Linux needs the WebKitGTK runtime** the binary was built against
-  (`libwebkit2gtk-4.1`), which is what `ubuntu-22.04` in the matrix is for: a
-  binary built there runs on anything at or above its glibc.
-- **A distribution is a snapshot.** The plugins live-linked from `dist/.../packages`
-  are copies; editing the repository does not change an already-built
-  distribution.
+  so there is no `.msi`, `.dmg`, `.deb` or `.AppImage` and no signing identity.
+- **Node.js 22+ and network on the target machine** – the browser path is a
+  launcher over `npx`, by design. The first run downloads the pinned harness.
+- **Building the window needs the toolchain** if you choose to: Rust from
+  <https://rustup.rs>, and on Linux the WebKitGTK development packages
+  (`libwebkit2gtk-4.1-dev` and friends) that a binary built elsewhere would have
+  demanded as *runtime* packages instead.
+- **A distribution is a snapshot.** The plugins live-linked from
+  `dist/.../packages` are copies; editing the repository does not change an
+  already-built distribution.
+- **`packages/` is readable JavaScript, and cannot not be.** A source release is a
+  source release; there is nothing obfuscated here to pretend otherwise.
 - **Optional host engines** (a TeX engine for TikZ, poppler/mutool/Ghostscript
-  and tesseract for the PDF tools) are not shipped and not required: the plugins
-  degrade in a sentence when they are absent. `docs/COMPATIBILITY.md` has the
-  details.
+  and tesseract for the PDF tools, ffmpeg for the media tools) are not shipped and
+  not required: the plugins degrade in a sentence when they are absent.
+  `docs/COMPATIBILITY.md` has the details.
 
 ## 6. When something goes wrong
 
 | Symptom | What it means |
 |---|---|
-| `cargo was not found on PATH` | install the Rust toolchain (https://rustup.rs) or pass `-SkipBuild` |
-| `cargo build failed ..., and vncode is RUNNING right now (PID ...)` | a vncode window is open and **Windows locks a running binary**, so cargo cannot relink it. Close the window and run again, or pass `-SkipBuild` to package the binary already under `app/src-tauri/target/release` (check it is current first: nothing under `app/` newer than the `.exe`) |
-| `The shell binary is not at ...` | you passed `-SkipBuild` with nothing built yet |
+| `cargo was not found on PATH` | you are in binary mode. Install Rust (<https://rustup.rs>, or pass `-SkipBuild` to reuse a build) - or pass `-NoShell` for a release, which compiles nothing |
+| `cargo build failed …, and vncode is RUNNING right now (PID …)` | a vncode window is open and **Windows locks a running binary**, so cargo cannot relink it. Close the window and run again, or pass `-SkipBuild` |
+| `The shell binary is not at …` | `-SkipBuild` with nothing built yet |
 | `dist-manifest.txt includes '<x>', which does not exist` | a rule names a path this repository does not have |
-| `The assembled distribution is missing: ...` | the copy lost a file - the sentinel guard fired. This is the check that catches a walk that flattened or nested a tree, and it has earned its place |
+| `The assembled distribution is missing: …` | the copy lost a file – the sentinel guard fired. This is the check that catches a walk that flattened or nested a tree, and it has earned its place |
+| `npm error code EPERM` during `-Verify` | npm is writing to a cache outside this folder, or the host blocks its nested spawns. `set npm_config_cache=%CD%\.scratch\npm-cache`, and run it in a normal terminal (section 3) |
 | `no "dsh web:" ready line within 180 seconds` | the harness did not start: no network on the first `npx` run, a `DSH_HOME` it cannot write, or a profile problem. The tail of the boot log is printed with the token redacted |
 | `The ready line did not name a loopback address` | the harness reported something other than `127.0.0.1` and the check refused it rather than trusting it |
 | `Warning: 127.0.0.1:<port> was still listening` | a stray `node` survived the stop; kill it |
 | `START-HERE.bat` opens a window that says the harness server did not start | read its console: `npx` missing, no free port, or the pin unreadable |
-| `scripts\run-web.bat` works but the distribution looks unadorned | the pack is not installed in the profile yet - run `START-HERE.bat`, or check it installed from **this** folder with `scripts\install.bat -DshHome <home>` |
+| `scripts\run-web.bat` works but the distribution looks unadorned | the pack is not installed in the profile yet – run `START-HERE.bat`, or check it installed from **this** folder with `scripts/install.bat -DshHome <home>` |
+| `scripts\run-desktop.bat` says neither `vncode.exe` nor `Cargo.toml` is above it | the folder is neither a checkout nor a source distribution. Use `START-HERE` – the window is optional |
 
 ## 7. See also
 
-- [`app/README.md`](../app/README.md) - what the shell is and the two rules it
+- [`docs/RELEASE.md`](RELEASE.md) – cutting and publishing a release, with no CI.
+- [`app/README.md`](../app/README.md) – what the shell is and the two rules it
   holds about the launch token.
-- [`docs/INSTALL.md`](INSTALL.md) - installing the pack into a profile by hand.
-- [`scripts/checks/README.md`](../scripts/checks/README.md) - every tracked
+- [`docs/INSTALL.md`](INSTALL.md) – installing the pack into a profile by hand.
+- [`scripts/checks/README.md`](../scripts/checks/README.md) – every tracked
   check, including `check-dist-layout.mjs`.
-- `scripts/dist-manifest.txt` - the ship list, with the reasoning inline.
+- `scripts/dist-manifest.txt` – the ship list, with the reasoning inline.

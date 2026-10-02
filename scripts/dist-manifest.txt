@@ -62,15 +62,24 @@ include LICENSE
 include SECURITY.md
 include docs
 
-# --- the shell DOCUMENTED, not the shell in SOURCE ---------------------------
-# The binary is what RUNS. app/src-tauri (the Rust source, its Cargo manifests,
-# the build script and the tauri config), app/src-tauri/icons and app/ui are
-# build INPUTS: tauri-build compiles the icons into the binary's resources and
-# `frontendDist` folds the splash page into it, so nothing at runtime ever opens
-# one of them. Shipping them would hand every recipient a readable copy of the
-# shell for no benefit - and `run-desktop.bat` does not need them to choose its
-# path either: it decides between "run the binary beside me" and "build from
-# source" on the presence of vncode.exe, never on a Cargo.toml.
+# --- the shell: SOURCE, because the release compiles nothing -----------------
+# A distribution no longer ships a built vncode.exe. The release mode is
+# `-NoShell` (see docs/RELEASE.md and docs/DISTRIBUTE.md), which assembles this
+# same folder with the shell left as SOURCE and no binary at all - so what a
+# recipient downloads is plain JavaScript plus this tree, and NOTHING has to be
+# compiled to run it: the browser path (START-HERE -> scripts/run-web) needs only
+# Node.js.
+#
+# app/src-tauri is the Rust source of the native window (the three .rs files,
+# build.rs, Cargo.toml, Cargo.lock, tauri.conf.json), app/src-tauri/icons is what
+# tauri-build compiles into the binary's resources, and app/ui is the splash page
+# `frontendDist` folds in. All of it is 13 files and ~300 KB, so shipping it
+# costs nothing and buys the thing a source release has to have: somebody who
+# wants the window can run `cargo build --release` in the folder they downloaded.
+# `target/` (the 1 GB+ Rust build tree) and `gen/` (tauri-build's regenerated ACL
+# schemas) are still skipped below - they are OUTPUT, not source.
+include app
+# The source tree's own README stays; it is the file that explains the launcher.
 include app/README.md
 
 # --- the branding source (dsh-themes inlines assets/vncode.svg) ---------
