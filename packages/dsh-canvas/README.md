@@ -427,10 +427,59 @@ plugins, because the artifact IS the build and a text diff against a minified
 3.07 MiB instead of 8.02 MiB. **No submodule**: the pack's rule is a pinned build
 root plus a committed artifact, and the install flow is "clone, run the installer".
 
+## The scene language (alpha.10, in progress)
+
+The Canvas tab is being moved onto Excalidraw's own vocabulary. What an agent will
+write is a **scene**: a name, a preset, and a list of Excalidraw **skeletons**
+(`{ type: 'rectangle', x, y, width, height, label: { text } }`) — the compact shape
+Excalidraw's own `convertToExcalidrawElements` takes.
+
+The awkward part of that choice is stated rather than hidden: skeletons cannot be
+*expanded* on the host, because expansion is Excalidraw's code and it needs a
+browser. So the split is explicit, and it is what `lib/scene.js` is:
+
+| side | owns |
+|---|---|
+| **the host** (`lib/scene.js`, pure — no DOM, no fs, no imports) | the language: validate, normalize, patch, summarize. It is the side the model talks to |
+| **the browser** (the tab's surface) | materialization: `convertToExcalidrawElements` turns what the host validated into elements the editor draws |
+
+**Every refusal carries a code the model can act on** — `ELEMENT_SIZE`,
+`ELEMENT_COLOR`, `ELEMENT_POINTS`, `SCENE_PRESET`, `SCENE_OP_OWNED` — and two rules
+are load-bearing:
+
+- **Nothing is silently dropped.** An unknown field is refused (`ELEMENT_UNKNOWN_KEY`)
+  rather than ignored, because a field the host drops is a design the model believes
+  it wrote; and a key the validator *accepts* is carried (that is how `frameId` was
+  caught being allowed-but-dropped).
+- **Validation is idempotent.** `validate(normalize(x))` returns a byte-identical
+  scene that still validates. Without it a stored scene could never be patched, since
+  a patch re-validates the stored form — and the check pins it, because this property
+  failed twice while the file was being written.
+
+**Patching** is pointer ops over the scene JSON (`set` / `remove` / `insert`, with
+`-` to append), and the result is re-validated whole: **a patch can never leave a
+scene the write path would have refused**, which is what makes an agent's second
+write as safe as its first. `id`, `revision`, `createdAt` and `updatedAt` belong to
+the store and a patch is refused if it touches them — a model that can rewrite a
+revision can defeat the check that a render belongs to the thing it drew.
+
+**What is deliberately absent:** `image` is refused by name with the reason (an
+Excalidraw image element needs a `files` map and this package's asset route, neither
+of which exists yet), and the presets stay — they are the export size and the safe
+areas, and a scene names one.
+
+**Status:** the language, its validator, its ops and its summary are landed and
+covered by `check-canvas-scene.mjs` (100 assertions). The **tools are not re-pointed
+yet** — `canvas_write` and its siblings still speak this package's document
+language, and the design surface is still behind `Alt+D`. That re-point is the next
+step, and it is the one that retires the engine, the archetypes, the styles and the
+lints.
+
 ## Check
 
 ```sh
 node scripts/checks/check-canvas-node.mjs       # the host half, hermetically
+node scripts/checks/check-canvas-scene.mjs      # the scene language, exhaustively
 node scripts/checks/check-canvas-excalidraw.mjs # the vendored surface, in a real browser
 node scripts/checks/check-client-bundles.mjs    # the browser half, with real React
 node scripts/checks/check-skill-examples.mjs    # every ```canvas block in the skills
@@ -466,9 +515,13 @@ record.
   on pointer down), the inspect pane (nudge pad, typed size, rotate, opacity,
   colours per layer kind), the layers pane, and the one-row bar.
 - **alpha.10 (this branch)** — the vendored **Excalidraw surface**: the build root,
-  the pinned + trimmed + hashed artifact, its two routes, the client loader, the
-  preview toggle, and the browser check above. Nothing is re-pointed yet.
-- Next: the asset routes (fonts/locales), then the agent tools on the scene
-  (`canvas_write` → skeletons, `canvas_read` → the scene JSON), then the question
-  this preview exists to answer — whether the design surface, its presets, styles
-  and lints move onto Excalidraw or stay beside it.
+  the pinned + trimmed + hashed artifact, its three route families (bundle,
+  stylesheet, one per vendored face), the client loader, the Latin faces (25 files,
+  429 KiB; the CJK family declared skipped), the Library seeded with the house
+  examples and persisted by this pack, the scene **language** with its host-side
+  validator, and the browser check above. The agent tools are not re-pointed yet.
+- Next: **re-point the tools** (`canvas_write` on skeletons, `canvas_read` returning
+  the scene, `canvas_patch` on pointer ops — all through `lib/scene.js`), bake the
+  house examples into scenes, then retire what that makes redundant: the document
+  engine, the archetypes, the styles, the lints, the sets, the design surface, its
+  bridge and `Alt+D` — and with them the check sections that own them.

@@ -380,6 +380,27 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
   paragraph ("noforks"). Both now have Node-side regression assertions too. With no
   Chromium-family browser installed it SKIPS LOUDLY and exits 0; `DSH_CANVAS_BROWSER`
   points it at a binary.
+- `check-canvas-scene.mjs` is the **scene language** - the vocabulary the Canvas
+  tab's agent tools are being moved onto - and it is exhaustive (100 assertions) for
+  a reason no browser check can be: the language lives on the HOST, in a file that
+  imports nothing, touches no DOM and reads no file, so every branch of it can be
+  driven directly rather than sampled through a page. An agent writes Excalidraw
+  SKELETONS; the host validates, normalises, patches and summarises them; the browser
+  materialises them with Excalidraw's own `convertToExcalidrawElements`, which is why
+  the split exists at all. What the check defends: every refusal carries a code the
+  model can act on, nothing is silently dropped (an unknown field is refused, and a
+  key the validator ACCEPTS is carried - that asymmetry is a bug either way, and it
+  caught `frameId` being allowed and then dropped), and the normalised scene
+  RE-VALIDATES byte-identically, because a patch re-validates the stored form and
+  without idempotence no stored scene could ever be patched. That property failed
+  twice while the file was being written, which is why it is pinned. The pointer ops
+  are driven too - `set`/`remove`/`insert`, `-` to append, out-of-range and unknown
+  paths, the op-count and path-depth caps, and a patch that would leave the scene
+  invalid being refused - as is the rule that `id`, `revision`, `createdAt` and
+  `updatedAt` belong to the STORE and cannot be rewritten through a patch (a model
+  that can rewrite a revision can defeat the check that a render belongs to the thing
+  it drew). It also pins what is deliberately absent, `image` by name with its
+  reason.
 - `check-canvas-excalidraw.mjs` covers the one thing in `dsh-canvas` whose bytes are
   NOT written in this repository: the vendored **Excalidraw** surface (alpha.10,
   preview). It checks it from both sides, because either half alone can be fooled -
