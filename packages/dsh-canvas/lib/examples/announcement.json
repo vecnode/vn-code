@@ -1,24 +1,37 @@
 {
-  "id": "statement-centered",
-  "title": "Statement centered",
-  "description": "One centred sentence at display size under a small eyebrow and a hairline rule, with the rest of the canvas left empty - reaches for an announcement that has nothing to show yet.",
-  "presets": [
-    "og",
-    "github-social",
-    "linkedin-post"
-  ],
+  "id": "announcement",
+  "title": "Announcement",
+  "intent": "An announcement with nothing to show yet: one large centred sentence, generous margins, a single warm accent.",
+  "preset": "og",
+  "archetype": "statement-centered",
+  "style": "editorial",
+  "copy": {
+    "eyebrow": "NEW RELEASE",
+    "headline": "Version 2 is out.",
+    "subhead": "One line on what changed.",
+    "cta": "Read the notes"
+  },
   "document": {
-    "title": "Statement centered",
+    "title": "Announcement",
     "preset": "og",
     "canvas": {
-      "background": "surface"
+      "width": 1200,
+      "height": 630,
+      "background": {
+        "type": "solid",
+        "color": "#0b0e14"
+      }
     },
     "tokens": {
       "color": {
-        "ink": "#F8FAFC",
-        "muted": "#94A3B8",
-        "accent": "#4D6BFE",
-        "surface": "#0B0E14"
+        "ink": "#f8fafc",
+        "muted": "#9aa6b8",
+        "accent": "#e3b25a",
+        "surface": "#0b0e14",
+        "panel": "#141a24",
+        "accent-ink": "#1a1206",
+        "line": "#242c38",
+        "warm": "#f2e3c6"
       },
       "font": {
         "display": "Space Grotesk",
@@ -28,14 +41,15 @@
       "scale": {
         "display": 92,
         "title": 40,
+        "subtitle": 26,
         "body": 24,
         "caption": 15
       },
       "space": 8,
       "radius": {
-        "card": 20,
-        "chip": 8,
-        "pill": 999
+        "card": 4,
+        "pill": 999,
+        "chip": 4
       }
     },
     "layers": [
@@ -47,7 +61,10 @@
         "w": 1200,
         "h": 630,
         "shape": "rect",
-        "fill": "surface"
+        "fill": {
+          "type": "solid",
+          "color": "#0b0e14"
+        }
       },
       {
         "kind": "text",
@@ -57,12 +74,12 @@
         "w": 240,
         "text": "Canvas",
         "style": "caption",
-        "family": "text",
         "weight": 600,
-        "color": "muted",
+        "family": "text",
+        "color": "#9aa6b8",
+        "letterSpacing": 4,
         "align": "center",
-        "transform": "upper",
-        "letterSpacing": 4
+        "transform": "upper"
       },
       {
         "kind": "shape",
@@ -72,7 +89,10 @@
         "w": 90,
         "h": 2,
         "shape": "rect",
-        "fill": "accent"
+        "fill": {
+          "type": "solid",
+          "color": "#e3b25a"
+        }
       },
       {
         "kind": "text",
@@ -82,9 +102,11 @@
         "w": 800,
         "text": "Compose, don't patch.",
         "style": "display",
-        "family": "display",
         "weight": 700,
-        "color": "ink",
+        "family": "display",
+        "color": "#f8fafc",
+        "lineHeight": 1.08,
+        "letterSpacing": -1.5,
         "align": "center"
       },
       {
@@ -96,9 +118,10 @@
         "text": "Every surface is a row you can replace.",
         "style": "body",
         "family": "text",
-        "color": "muted",
+        "color": "#9aa6b8",
         "align": "center"
       }
-    ]
+    ],
+    "style": "editorial"
   }
 }

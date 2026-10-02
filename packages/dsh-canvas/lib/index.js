@@ -46,8 +46,11 @@ import { PRESETS, exportProblems, presetById } from './presets.js'
 import { FONT_ROUTE_PREFIX, fontFileFor, fontStatus, fontTable } from './fonts.js'
 import { ARCHETYPES, archetypeById } from './archetypes/index.js'
 import { applyStyle, styleById, styleGallery, styleIds, styleTable } from './styles/index.js'
+import { EXAMPLE_LIST, exampleById, exampleGallery, exampleIds, exampleLines } from './examples/index.js'
+import { SETS, deriveFor, deriveSet, setById, setGallery } from './sets.js'
 import { AssetStore, CanvasStore, ID_PATTERN, SCOPES, MAX_ASSET_BYTES, MAX_DOCUMENT_BYTES, renderPath, resolveHome, summarize, verificationOf } from './store.js'
 import { desktopDirectory, humanBytes, resolveNewInside, sanitizeName, writeCreateExclusive } from './export.js'
+import { hostRenderStatus, renderOnHost } from './host-render.js'
 
 export const name = 'dsh-canvas'
 
@@ -75,6 +78,7 @@ const MAX_POLL_MS = 25_000
 /** A request older than this is dead and is dropped rather than answered late. */
 const REQUEST_TTL_MS = 120_000
 /** The largest render the REPORT path asks for (the export path is larger). */
+const REPORT_FEED_SCALE = 0.25
 const REPORT_MAX_SIDE = 2048
 /** The largest JSON body a route accepts: an export at 2x can be a big PNG. */
 const MAX_BODY_BYTES = 64 * 1024 * 1024
@@ -87,7 +91,11 @@ const SKILL_FILES = [
 ]
 
 /** Every tool name, in the order the conversation cards register. */
-export const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
+export const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_set', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
+// The unattended renderer is part of the row's interface, not an implementation
+// detail: a check, the health route and a person all need to ask this machine whether
+// a render can happen with no page open.
+export { hostRenderStatus } from './host-render.js'
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -454,6 +462,20 @@ function starterDocument(preset, title) {
  * @returns `{ document }` or `{ error: { code, message } }`.
  */
 export function documentFor(request) {
+  // AN EXAMPLE FIRST: it names its own preset, archetype and style, so it is the one
+  // entry point that needs none of them - the whole point of a gallery row is that the
+  // choice has already been made well.
+  if (typeof request.example === 'string' && request.example.length > 0) {
+    const example = exampleById(request.example)
+    if (!example) {
+      return { error: { code: 'UNKNOWN_EXAMPLE', message: 'unknown example ' + JSON.stringify(request.example) + '; the gallery carries:\n' + exampleLines() } }
+    }
+    const document = clone(example.document)
+    if (typeof request.title === 'string' && request.title.length > 0) document.title = request.title
+    // A style named BESIDE an example switches its look; without one it keeps the look
+    // it was built with, which is recorded on the document, so re-applying is a no-op.
+    return withStyle(document, request.style ?? null)
+  }
   const preset = presetById(request.preset)
   if (!preset) {
     return { error: { code: 'UNKNOWN_PRESET', message: 'unknown preset ' + JSON.stringify(request.preset) + '; known presets:\n' + presetLines() } }
@@ -507,6 +529,94 @@ function styleLines() {
   return styleGallery()
     .map((entry) => '  - ' + entry.id + '  ' + entry.name + '  (' + entry.swatch.display + ')  ' + entry.intent)
     .join('\n')
+}
+
+/** The house gallery as text, for the index a model reads first. */
+function exampleLinesForIndex() {
+  return exampleLines()
+}
+
+/** The sets as text: what each one derives, and to which sizes. */
+function setLines() {
+  return setGallery()
+    .map((entry) => '  - ' + entry.id + '  ' + entry.title + '  ' + entry.source + ' -> ' + entry.targets.join(', ') + '  (' + entry.sizes.join(', ') + ')')
+    .join('\n')
+}
+
+/**
+ * The pictures a document names, as data URLs, for the unattended renderer.
+ *
+ * The tab gets its bitmaps from its own routes; a render with no page open has to be
+ * handed the bytes, or an image-led design would come out with a hole in it. Only the
+ * assets the document actually references are read, and a name that is not in the
+ * store is simply absent - which the MISSING_ASSET lint then reports by name.
+ */
+async function assetPayload(row, document) {
+  const wanted = new Set()
+  const walk = (node) => {
+    if (node && node.kind === 'image' && typeof node.src === 'string') wanted.add(node.src)
+    for (const child of (node && node.children) ?? []) walk(child)
+  }
+  for (const layer of document.layers ?? []) walk(layer)
+  const out = {}
+  for (const name of wanted) {
+    const file = row.assets.path(name)
+    if (!file) continue
+    try {
+      const bytes = await fsp.readFile(file)
+      const extension = path.extname(file).toLowerCase()
+      const mime = extension === '.jpg' || extension === '.jpeg' ? 'image/jpeg' : extension === '.gif' ? 'image/gif' : extension === '.webp' ? 'image/webp' : 'image/png'
+      out[name] = 'data:' + mime + ';base64,' + bytes.toString('base64')
+    } catch (err) {
+      row.log?.warn?.('[dsh-canvas] could not read the asset ' + name + ': ' + (err && err.message ? err.message : err))
+    }
+  }
+  return out
+}
+
+/**
+ * Render a design ON THE HOST, with no app page involved.
+ *
+ * Same outputs as the tab's render report - the full picture, the 25% feed thumbnail,
+ * the metrics and the lints - written to the same paths, so nothing downstream can
+ * tell which painter answered. This is what makes `canvas_render` and `canvas_export`
+ * work with the app closed, and it is used as the FALLBACK: when a page is open it
+ * does the work, because a person watching the render happen is worth more than a
+ * fast answer.
+ */
+async function renderUnattended(row, sessionId, scopeKey, entry, options = {}) {
+  const scale = options.scale === 2 ? 2 : 1
+  const preset = entry.preset ? presetById(entry.preset) : null
+  const result = await renderOnHost({
+    document: entry.document,
+    preset,
+    scale,
+    assets: await assetPayload(row, entry.document),
+    timeoutMs: options.timeoutMs ?? 90000,
+  })
+  if (!result.ok) return { ok: false, error: result.error, by: 'host' }
+  const file = renderPath(row.home, sessionId, entry.id, entry.revision, scale)
+  const feedFile = renderPath(row.home, sessionId, entry.id, entry.revision, REPORT_FEED_SCALE)
+  // The same create-exclusive writer the tab's report goes through, with `overwrite`
+  // because a revision is a picture: re-rendering it replaces its own file.
+  await writeCreateExclusive({ directory: path.dirname(file), baseName: path.basename(file, '.png'), ext: 'png', bytes: result.png, overwrite: true })
+  if (result.feed) {
+    await writeCreateExclusive({ directory: path.dirname(feedFile), baseName: path.basename(feedFile, '.png'), ext: 'png', bytes: result.feed, overwrite: true })
+  }
+  return {
+    ok: true,
+    by: 'host',
+    path: file,
+    feedPath: result.feed ? feedFile : null,
+    feedScale: REPORT_FEED_SCALE,
+    width: result.width,
+    height: result.height,
+    scale: result.scale,
+    lints: result.lints ?? [],
+    metrics: result.metrics ?? null,
+    browser: result.browser,
+    ms: result.ms,
+  }
 }
 
 /** The browser-visible summary of one design, with its document. */function viewOf(scopeKey, entry) {
@@ -652,6 +762,7 @@ export function buildTools(row, ctx) {
         preset: { type: 'string', description: 'The destination preset id (see canvas_read for the table).' },
         archetype: { type: 'string', description: 'An archetype id whose composition to start from; canvas_read lists them.' },
         style: { type: 'string', description: 'A style id from the look library (editorial, brutalist, neon, ...); canvas_read lists them.' },
+        example: { type: 'string', description: 'A house example id: a proven preset + archetype + style combination to start from instead of a blank canvas; canvas_read lists them.' },
         title: { type: 'string', description: 'A short human title; the tab chip and the design list show it.' },
         id: ID_SCHEMA,
         scope: SCOPE_SCHEMA,
@@ -671,7 +782,7 @@ export function buildTools(row, ctx) {
       if (!preset) {
         return { text: 'Unknown preset ' + JSON.stringify(args.preset) + '. Known presets:\n' + presetLines() }
       }
-      const built = documentFor({ preset: args.preset, archetype: args.archetype, title: args.title, style: args.style })
+      const built = documentFor({ preset: args.preset, archetype: args.archetype, title: args.title, style: args.style, example: args.example })
       if (built.error) return { text: built.error.message }
       const verdict = validateDocument(row, built.document)
       if (!verdict.document) {
@@ -889,6 +1000,116 @@ export function buildTools(row, ctx) {
   }
 
   // -------------------------------------------------------------------------
+  // canvas_set
+  // -------------------------------------------------------------------------
+  const designSet = {
+    name: 'canvas_set',
+    description: [
+      'Derive ONE design to the several sizes a launch actually needs - the repository card, the square post, the link preview - and optionally write every file in one call.',
+      'A set is a source preset and a list of destinations. Each derived design is the source with EVERY number multiplied by the width ratio (positions, sizes, radii, padding, gaps, borders, letter spacing, shadows and the type scale), full-bleed layers widened to the new canvas, and the composition centred in a taller one. So the family cannot drift: one headline, one palette, one composition, at three sizes.',
+      'It does NOT re-compose. A derived design is the same design with more room; if a destination needs a different ARRANGEMENT, that is a different archetype and a different design. The lints on each derived design say what the new destination wants adjusted (a margin, an edge, a keep-out area) - read them and fix the family, not just one card.',
+      'Each derived design is stored as a design of its own (id + the destination), so it can be rendered, patched and exported like any other.',
+    ].join('\n'),
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id'],
+      properties: {
+        id: ID_SCHEMA,
+        set: { type: 'string', description: 'A set id: launch, social or repository; canvas_read lists them with their destinations.' },
+        targets: { type: 'array', items: { type: 'string' }, description: 'Explicit destination preset ids instead of a set.' },
+        export: { type: 'boolean', description: 'Write every derived file in one call (uses the host renderer, so no app page is needed).' },
+        target: { type: 'string', enum: ['desktop', 'workspace'], description: 'Where the files go when exporting (default desktop).' },
+        scale: { type: 'number', enum: [1, 2], description: 'Export scale (2 for an @2x file).' },
+        scope: SCOPE_SCHEMA,
+        note: { type: 'string', description: 'One line on what changed, kept in each design\u2019s history.' },
+      },
+    },
+    output: {
+      schema: { type: 'object', properties: { text: { type: 'string' }, problems: PROBLEMS_SCHEMA }, required: ['text'] },
+      render: (_args, value) => [{ type: 'text', text: value.text }],
+      presentationMeta: () => ({}),
+    },
+    presentCall: (args) => callView(args, 'Set'),
+    presentResult: resultView,
+    async execute(args, exec) {
+      const sessionId = sessionOf(exec)
+      const found = requireDesign(sessionId, args.id, args.scope)
+      const targets = Array.isArray(args.targets) && args.targets.length > 0 ? args.targets : null
+      if (!targets && typeof args.set !== 'string') {
+        return { text: 'Name a set or a list of destinations. The sets are:\n' + setLines() }
+      }
+      if (targets) {
+        for (const id of targets) {
+          if (!presetById(id)) return { text: 'Unknown destination ' + JSON.stringify(id) + '. The presets are:\n' + presetLines() }
+        }
+      }
+      const chosen = targets ?? setById(args.set).targets
+      const lines = []
+      const written = []
+      for (const target of chosen) {
+        const derived = deriveFor(found.entry.document, target)
+        if (derived.error) return { text: 'Could not derive for ' + target + ': ' + derived.error.message }
+        const verdict = validateDocument(row, derived.document)
+        if (!verdict.document) return { text: 'The derived design for ' + target + ' did NOT validate (nothing was stored):\n' + problemLines(verdict.problems) }
+        const preset = presetById(target)
+        const stored = putDesign(row.storeFor(found.scopeKey), {
+          id: found.entry.id + '-' + target,
+          title: (found.entry.title ?? found.entry.id) + ' \u00b7 ' + preset.label,
+          preset: target,
+          document: verdict.document,
+          by: 'model',
+          note: args.note ?? ('derived from ' + found.entry.id),
+        })
+        if (!stored.entry) return { text: stored.text }
+        lines.push(
+          '- ' + stored.entry.id + '  ' + preset.width + '\u00d7' + preset.height + '  revision ' + stored.entry.revision +
+            (derived.notes.length > 0 ? '  (' + derived.notes[0] + ')' : ''),
+        )
+        // There is no local linting here on purpose: a lint needs a LAYOUT, a layout
+        // needs real text metrics, and this host has none - it is the browser that
+        // measures. The lints for a derived design therefore arrive with its render.
+        if (args.export === true) {
+          const status = hostRenderStatus()
+          if (!status.available) {
+            lines.push('    NOT written: ' + status.reason)
+            continue
+          }
+          const rendered = await renderOnHost({
+            document: stored.entry.document,
+            preset,
+            scale: args.scale === 2 ? 2 : 1,
+            assets: await assetPayload(row, stored.entry.document),
+            timeoutMs: 90000,
+          })
+          if (!rendered.ok) {
+            lines.push('    export FAILED: ' + rendered.error)
+            continue
+          }
+          const directory = args.target === 'workspace' ? sessionRoot(sessionId) : desktopDirectory()
+          if (!directory) {
+            lines.push('    no folder to write into on this host')
+            continue
+          }
+          const suffix = args.scale === 2 ? '@2x' : ''
+          const file = await writeCreateExclusive({ directory, baseName: sanitizeName(stored.entry.id) + suffix, ext: 'png', bytes: rendered.png })
+          written.push(file.path)
+          lines.push('    wrote ' + file.path + ' (' + humanBytes(file.bytes) + ', ' + rendered.width + '\u00d7' + rendered.height + ')')
+          const flags = (rendered.lints ?? []).filter((lint) => lint.level !== 'info')
+          if (flags.length > 0) lines.push('    this destination wants: ' + flags.map((lint) => lint.code).join(', '))
+        }
+      }
+      const head = [
+        'Derived "' + found.entry.id + '" into ' + chosen.length + ' size(s)' + (args.set ? ' (the ' + args.set + ' set)' : '') + '.',
+        'One design, several destinations: the composition is scaled, the words and the palette are the same.',
+      ]
+      if (written.length > 0) head.push(written.length + ' file(s) written.')
+      head.push('Tab addresses: ' + (found.scopeKey ? '' : ''))
+      return { text: head.join('\n') + '\n' + lines.join('\n') }
+    },
+  }
+
+  // -------------------------------------------------------------------------
   // canvas_read
   // -------------------------------------------------------------------------
   const read = {
@@ -1053,7 +1274,7 @@ export function buildTools(row, ctx) {
       const preset = found.entry.preset ? presetById(found.entry.preset) : null
       const maxSide = preset ? Math.max(preset.width, preset.height, 1) : 1280
       const scale = maxSide > REPORT_MAX_SIDE ? REPORT_MAX_SIDE / maxSide : 1
-      const answer = await row.queue.request(
+      const queued = await row.queue.request(
         sessionId,
         {
           id: found.entry.id,
@@ -1066,6 +1287,13 @@ export function buildTools(row, ctx) {
         },
         REPORT_TIMEOUT_MS,
       )
+      // NO PAGE AT ALL? The host paints it instead. The fallback is for SILENCE, not
+      // for a failure: when a page is open and its render fails, that failure is the
+      // truth about the design and is reported as one - only nobody-answered means
+      // there was no painter, and then a headless Chromium on this machine becomes the
+      // painter. Same engine, same faces, same paint call.
+      const silent = !queued.ok && typeof queued.error === 'string' && queued.error.startsWith('no page answered the render')
+      const answer = silent && hostRenderStatus().available ? await renderUnattended(row, sessionId, found.scopeKey, found.entry, { scale: 1 }) : queued
       if (!answer.ok) {
         row.storeFor(found.scopeKey).recordRender(found.entry.id, { revision: found.entry.revision, ok: false, error: String(answer.error ?? 'the render failed') })
         const failed = row.storeFor(found.scopeKey).get(found.entry.id)
@@ -1158,7 +1386,34 @@ export function buildTools(row, ctx) {
         EXPORT_TIMEOUT_MS,
       )
       if (!answer.ok) {
-        return { text: 'The export FAILED: ' + String(answer.error ?? 'unknown error') }
+        // NO PAGE OPEN? The host writes the file. png, jpg and svg are all encoded by
+        // the same engine in the headless browser; anything the host cannot do is
+        // answered in a sentence that says which machine must be awake.
+        const status = hostRenderStatus()
+        if (!status.available) return { text: 'The export FAILED: ' + String(answer.error ?? 'unknown error') }
+        const rendered = await renderOnHost({
+          document: found.entry.document,
+          preset,
+          scale: scale === 2 ? 2 : 1,
+          format,
+          assets: await assetPayload(row, found.entry.document),
+          timeoutMs: 90000,
+        })
+        if (!rendered.ok) return { text: 'The export FAILED: ' + String(rendered.error) }
+        const directory = target === 'workspace' ? sessionRoot(sessionId) : desktopDirectory()
+        if (!directory) return { text: 'There is no folder to write into on this host.' }
+        const extension = rendered.format === 'svg' ? 'svg' : rendered.format === 'jpg' ? 'jpg' : 'png'
+        const stem = sanitizeName(name ?? found.entry.id)
+        const suffix = scale === 2 && extension !== 'svg' ? '@2x' : ''
+        const written = await writeCreateExclusive({ directory, baseName: stem + suffix, ext: extension, bytes: rendered.svg ?? rendered.png })
+        const file = written.path
+        const bytes = written.bytes ?? (rendered.svg ?? rendered.png).length
+        const lines = ['Wrote ' + file + ' (' + humanBytes(bytes) + ', ' + rendered.width + '\u00d7' + rendered.height + ', painted on the host - no app page was needed).']
+        if (preset) {
+          if (bytes > preset.maxBytes) lines.push('NOTE: that file is larger than ' + preset.label + '\u2019s ' + humanBytes(preset.maxBytes) + ' ceiling - export a JPG or a smaller scale.')
+          lines.push('Where it goes: ' + preset.destination.where)
+        }
+        return { text: lines.join('\n'), path: file, bytes }
       }
       const sizeLine = 'Wrote ' + answer.path + ' (' + humanBytes(answer.bytes ?? 0) + (answer.width ? ', ' + answer.width + '\u00d7' + answer.height : '') + ').'
       const lines = [sizeLine]
@@ -1259,7 +1514,7 @@ export function buildTools(row, ctx) {
     },
   }
 
-  return [newDesign, write, patch, read, restyle, publish, remove, render, exportTool, assets]
+  return [newDesign, write, patch, read, restyle, designSet, publish, remove, render, exportTool, assets]
 }
 
 /**
@@ -1357,6 +1612,12 @@ function indexText(row, sessionId) {
   lines.push('')
   lines.push('Presets:')
   lines.push(presetLines())
+  lines.push('')
+  lines.push('Examples (a proven preset + archetype + style, with the copy to write - start here):')
+  lines.push(exampleLinesForIndex())
+  lines.push('')
+  lines.push('Sets (one design derived to several destinations, then written in one call):')
+  lines.push(setLines())
   lines.push('')
   lines.push('Styles (a look to apply to any composition):')
   lines.push(styleLines())
@@ -1497,6 +1758,10 @@ export function registerRoutes(ctx, row) {
       fonts,
       presets: Object.keys(PRESETS),
       styles: styleIds(),
+      // Whether a render can happen with NO app page open, and which browser would do
+      // it: a fact about this machine, and the reason a tool answer can say where its
+      // pixels came from.
+      unattended: hostRenderStatus(),
       archetypes: ARCHETYPES.map((entry) => entry.id),
       limits: LIMITS,
       queue: row.queue.status(),
@@ -1524,6 +1789,8 @@ export function registerRoutes(ctx, row) {
         archetypes: ARCHETYPES.map((entry) => ({ id: entry.id, title: entry.title, description: entry.description, presets: entry.presets })),
         designs: own,
         styles: styleGallery(),
+        examples: exampleGallery(),
+        sets: setGallery(),
         library,
         assets: row.assets.table(),
         assetList: row.assets.list(),
@@ -1549,6 +1816,13 @@ export function registerRoutes(ctx, row) {
         const patched = applyPatches(found.entry.document, body.ops)
         if (patched.problems.length > 0) return json(400, { ok: false, error: { code: patched.problems[0].code, message: patched.problems[0].message }, problems: patched.problems })
         candidate = patched.document
+      }
+      if (!candidate && typeof body.example === 'string' && body.example.length > 0) {
+        // A gallery row: the preset, archetype and style are already chosen well, so a
+        // request only has to name which example.
+        const built = documentFor({ example: body.example, title: body.title, style: body.style })
+        if (built.error) return json(400, { ok: false, error: { code: built.error.code, message: built.error.message } })
+        candidate = built.document
       }
       if (!candidate && typeof body.preset === 'string' && body.preset.length > 0) {
         // The tab's "+ New" asks for the same thing the model's `canvas_new`

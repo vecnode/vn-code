@@ -1,41 +1,55 @@
 {
-  "id": "docs-collage",
-  "title": "Docs collage",
-  "description": "Three overlapping panels with different radii and a soft shadow, like documents caught mid-flight, under a display headline - reaches for a documentation, changelog or knowledge-base cover.",
-  "presets": [
-    "github-social",
-    "og",
-    "linkedin-post"
-  ],
+  "id": "docs-cover",
+  "title": "Docs cover",
+  "intent": "A documentation or changelog cover: overlapping translucent panels with hairlines, soft shadow, restrained accent.",
+  "preset": "og",
+  "archetype": "docs-collage",
+  "style": "glass",
+  "copy": {
+    "eyebrow": "DOCUMENTATION",
+    "headline": "Everything, written down.",
+    "subhead": "Guides, reference, recipes.",
+    "cta": "Read the docs"
+  },
   "document": {
-    "title": "Docs collage",
-    "preset": "github-social",
+    "title": "Docs cover",
+    "preset": "og",
     "canvas": {
-      "background": "surface"
+      "width": 1200,
+      "height": 630,
+      "background": {
+        "type": "solid",
+        "color": "#0a1018"
+      }
     },
     "tokens": {
       "color": {
-        "ink": "#F8FAFC",
-        "muted": "#94A3B8",
-        "accent": "#4D6BFE",
-        "surface": "#0B0E14"
+        "ink": "#f2f7ff",
+        "muted": "#a7b6c6",
+        "accent": "#7ad7ff",
+        "surface": "#0a1018",
+        "panel": "#16202c",
+        "accent-ink": "#04121c",
+        "line": "#2c3d4f",
+        "warm": "#c9a7ff"
       },
       "font": {
-        "display": "Space Grotesk",
+        "display": "Inter",
         "text": "Inter",
         "mono": "system"
       },
       "scale": {
         "display": 56,
         "title": 40,
+        "subtitle": 26,
         "body": 22,
         "caption": 15
       },
       "space": 8,
       "radius": {
-        "card": 20,
-        "chip": 8,
-        "pill": 999
+        "card": 18,
+        "pill": 999,
+        "chip": 12
       }
     },
     "layers": [
@@ -47,7 +61,10 @@
         "w": 1280,
         "h": 640,
         "shape": "rect",
-        "fill": "surface"
+        "fill": {
+          "type": "solid",
+          "color": "#0a1018"
+        }
       },
       {
         "kind": "text",
@@ -57,9 +74,11 @@
         "w": 680,
         "text": "Everything on one canvas.",
         "style": "display",
+        "weight": 600,
         "family": "display",
-        "weight": 700,
-        "color": "ink"
+        "color": "#f2f7ff",
+        "lineHeight": 1.2,
+        "letterSpacing": -0.5
       },
       {
         "kind": "shape",
@@ -68,9 +87,12 @@
         "y": 232,
         "w": 72,
         "h": 4,
+        "radius": 12,
         "shape": "rect",
-        "fill": "accent",
-        "radius": 2
+        "fill": {
+          "type": "solid",
+          "color": "#7ad7ff"
+        }
       },
       {
         "kind": "frame",
@@ -80,18 +102,22 @@
         "w": 320,
         "h": 300,
         "rotate": -4,
-        "radius": 32,
-        "background": "#131A29",
-        "border": {
-          "width": 1,
-          "color": "#94A3B833"
-        },
         "shadow": {
           "x": 0,
-          "y": 16,
-          "blur": 40,
-          "color": "#00000099"
+          "y": 20,
+          "blur": 56,
+          "color": "#00000066"
         },
+        "background": {
+          "type": "solid",
+          "color": "#131A29"
+        },
+        "radius": 18,
+        "border": {
+          "width": 1,
+          "color": "#2c3d4f"
+        },
+        "direction": "column",
         "children": [
           {
             "kind": "text",
@@ -101,9 +127,9 @@
             "w": 240,
             "text": "Notes",
             "style": "body",
-            "family": "display",
             "weight": 700,
-            "color": "muted"
+            "family": "display",
+            "color": "#a7b6c6"
           },
           {
             "kind": "shape",
@@ -113,7 +139,10 @@
             "w": 160,
             "h": 2,
             "shape": "rect",
-            "fill": "#94A3B84D"
+            "fill": {
+              "type": "solid",
+              "color": "#94A3B84D"
+            }
           }
         ]
       },
@@ -124,28 +153,29 @@
         "y": 280,
         "w": 356,
         "h": 336,
-        "radius": 12,
-        "background": {
-          "type": "linear",
-          "angle": 160,
-          "stops": [
-            {
-              "at": 0,
-              "color": "#E2E8F0"
-            },
-            {
-              "at": 1,
-              "color": "#8FA2C4"
-            }
-          ]
-        },
         "rotate": 3,
         "shadow": {
           "x": 0,
-          "y": 18,
-          "blur": 44,
-          "color": "#000000A6"
+          "y": 20,
+          "blur": 56,
+          "color": "#00000066"
         },
+        "background": {
+          "type": "linear",
+          "stops": [
+            {
+              "at": 0,
+              "color": "#f6f9ff"
+            },
+            {
+              "at": 1,
+              "color": "#a7b6c6"
+            }
+          ],
+          "angle": 160
+        },
+        "radius": 12,
+        "direction": "column",
         "children": [
           {
             "kind": "text",
@@ -155,9 +185,9 @@
             "w": 280,
             "text": "Runbook",
             "style": "body",
-            "family": "display",
             "weight": 700,
-            "color": "#0B0E14"
+            "family": "display",
+            "color": "#0a1018"
           },
           {
             "kind": "shape",
@@ -167,7 +197,10 @@
             "w": 200,
             "h": 2,
             "shape": "rect",
-            "fill": "#0B0E1433"
+            "fill": {
+              "type": "solid",
+              "color": "#0B0E1433"
+            }
           }
         ]
       },
@@ -178,18 +211,22 @@
         "y": 180,
         "w": 500,
         "h": 340,
-        "radius": "card",
-        "background": "surface",
-        "border": {
-          "width": 1,
-          "color": "#94A3B840"
-        },
         "shadow": {
           "x": 0,
-          "y": 24,
+          "y": 20,
           "blur": 56,
-          "color": "#000000B3"
+          "color": "#00000066"
         },
+        "background": {
+          "type": "solid",
+          "color": "#0a1018"
+        },
+        "radius": 18,
+        "border": {
+          "width": 1,
+          "color": "#2c3d4f"
+        },
+        "direction": "column",
         "children": [
           {
             "kind": "shape",
@@ -198,9 +235,12 @@
             "y": 52,
             "w": 72,
             "h": 14,
+            "radius": 12,
             "shape": "rect",
-            "fill": "accent",
-            "radius": 7
+            "fill": {
+              "type": "solid",
+              "color": "#7ad7ff"
+            }
           },
           {
             "kind": "text",
@@ -210,9 +250,11 @@
             "w": 404,
             "text": "The plugin guide",
             "style": "title",
+            "weight": 600,
             "family": "display",
-            "weight": 700,
-            "color": "ink"
+            "color": "#f2f7ff",
+            "lineHeight": 1.2,
+            "letterSpacing": -0.5
           },
           {
             "kind": "shape",
@@ -222,7 +264,10 @@
             "w": 340,
             "h": 2,
             "shape": "rect",
-            "fill": "#94A3B84D"
+            "fill": {
+              "type": "solid",
+              "color": "#94A3B84D"
+            }
           },
           {
             "kind": "shape",
@@ -232,7 +277,10 @@
             "w": 300,
             "h": 2,
             "shape": "rect",
-            "fill": "#94A3B84D"
+            "fill": {
+              "type": "solid",
+              "color": "#94A3B84D"
+            }
           },
           {
             "kind": "shape",
@@ -242,7 +290,10 @@
             "w": 300,
             "h": 2,
             "shape": "rect",
-            "fill": "#94A3B84D"
+            "fill": {
+              "type": "solid",
+              "color": "#94A3B84D"
+            }
           },
           {
             "kind": "text",
@@ -253,10 +304,11 @@
             "text": "Twelve pages, no forks.",
             "style": "caption",
             "family": "text",
-            "color": "muted"
+            "color": "#a7b6c6"
           }
         ]
       }
-    ]
+    ],
+    "style": "glass"
   }
 }

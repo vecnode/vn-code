@@ -182,6 +182,33 @@ twice is a no-op and switching back restores the original sizes exactly.
 the packs, and the tracked check fails when that document is stale — so the
 catalogue the model reads is always the library the host will apply.
 
+### The house gallery
+
+Twelve examples ship with the package - one per style - each a **preset + archetype +
+style that has already been chosen well**, plus the copy that belongs in it and a
+sentence saying when to reach for it. `canvas_new { example: "night-launch" }` starts
+from one; the tab's "+ New" lists them; `canvas_read` prints the gallery; an unknown id
+is refused by name.
+
+They are **data, not pictures**: the tab paints a row live and the model copies the
+document, where twelve PNGs in the repository would be megabytes of pixels that go
+stale the moment a style changes. `vendor/examples.mjs` generates them from the
+library and `--check`s them, and every example is held to the same bar as the
+archetypes and the styles: it validates, it sits on its grid, and it is legible.
+
+### Sets: one design, several destinations
+
+`canvas_set { id, set: "launch", export: true }` derives a design to the sizes a launch
+needs (repository card, square post, link preview) - every number in the document
+multiplied by the width ratio, full-bleed layers widened to the new canvas, the
+composition centred in a taller one - stores each as a design of its own
+(`<id>-<destination>`) and writes every file in one call through the host renderer, so
+no app page is needed.
+
+It deliberately does **not** re-compose: a derived design is the same design with more
+room. Each destination judges it by its own rules, and the lints that come back name
+what that destination wants adjusted - which is the family's business, not one card's.
+
 ## One layout, two painters (and why the export cannot disagree)
 
 ```

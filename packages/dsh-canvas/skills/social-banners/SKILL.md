@@ -304,3 +304,10 @@ To place it, state the steps from the table:
   each item. Walk it before you tell the user the file is ready.
 - `reference/print.md` - `poster-a3`: 300 dpi, bleed and trim, why a 3 px rule and
   a hairline blend fail on paper, and the one thing this pack cannot do for print.
+
+## Write the words to the destination’s budget
+
+The numbers live in **eference/copy.md**, generated from the presets by
+endor/copy-doc.mjs: for every destination it states the usable width, what fits each
+type role on one line, and the formulas a headline, a subhead, an eyebrow and a CTA
+should follow. Read it before you write, not after a render comes back truncated.

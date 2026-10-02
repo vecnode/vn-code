@@ -5313,6 +5313,10 @@ check('a text layer stretches in width only', canvasSource.includes("node.kind =
 check('a drag reports which gesture it is', canvasSource.includes("handle ? 'resize' : 'move'"), true)
 check('the cursor names the edge pair', canvasSource.includes("'ew-resize'") && canvasSource.includes("'ns-resize'"), true)
 check('the resize dress is styled', canvasCss.includes('.dsc-art[data-dragging=resize]'), true)
+// THE HOUSE GALLERY in the tab: the rows the state route carries, each starting a
+// design by example id rather than by preset + archetype + style.
+check('the new-design gallery lists the house examples', canvasSource.includes("'data-canvas-examples'") && canvasSource.includes('state.examples.map'), true)
+check('an example row starts a design by id', canvasSource.includes('onCreate(null, null, null, entry.id)') && canvasSource.includes('example: exampleId'), true)
 check('a drag sends x and y as pointer ops', canvasSource.includes("path + '.x'") && canvasSource.includes("path + '.y'"), true)
 check('a reorder is a remove plus an insert', canvasSource.includes('Reordered the layers') && canvasSource.includes("{ op: 'remove', at: path }"), true)
 check('dragging is a pointer gesture', canvasSource.includes('pointermove') && canvasSource.includes("element.setAttribute('data-dragging'"), true)

@@ -1,24 +1,37 @@
 {
-  "id": "editorial-split",
-  "title": "Editorial split",
-  "description": "Copy stack on the left, one visual panel on the right, on a dark surface - reaches for a launch card when you have a headline and one picture and not much else.",
-  "presets": [
-    "github-social",
-    "og",
-    "linkedin-post"
-  ],
+  "id": "command-proof",
+  "title": "Command proof",
+  "intent": "A developer announcement where the command IS the argument: heavy rules, no rounding, a terminal panel on the right.",
+  "preset": "github-social",
+  "archetype": "editorial-split",
+  "style": "brutalist",
+  "copy": {
+    "eyebrow": "CLI",
+    "headline": "One command.",
+    "subhead": "Nothing else to install.",
+    "cta": "npx your-tool init"
+  },
   "document": {
-    "title": "Editorial split",
+    "title": "Command proof",
     "preset": "github-social",
     "canvas": {
-      "background": "surface"
+      "width": 1280,
+      "height": 640,
+      "background": {
+        "type": "solid",
+        "color": "#f4f1ec"
+      }
     },
     "tokens": {
       "color": {
-        "ink": "#F8FAFC",
-        "muted": "#94A3B8",
-        "accent": "#4D6BFE",
-        "surface": "#0B0E14"
+        "ink": "#0a0a0a",
+        "muted": "#3d3d3d",
+        "accent": "#d42a00",
+        "surface": "#f4f1ec",
+        "panel": "#ffffff",
+        "accent-ink": "#ffffff",
+        "line": "#0a0a0a",
+        "warm": "#ffe9c7"
       },
       "font": {
         "display": "Space Grotesk",
@@ -26,16 +39,17 @@
         "mono": "system"
       },
       "scale": {
-        "display": 58,
-        "title": 40,
-        "body": 25,
-        "caption": 15
+        "display": 61,
+        "title": 42,
+        "subtitle": 26,
+        "body": 26,
+        "caption": 16
       },
       "space": 8,
       "radius": {
-        "card": 20,
-        "chip": 8,
-        "pill": 999
+        "card": 0,
+        "pill": 0,
+        "chip": 0
       }
     },
     "layers": [
@@ -47,25 +61,29 @@
         "w": 1280,
         "h": 640,
         "shape": "rect",
-        "fill": "surface"
+        "fill": {
+          "type": "solid",
+          "color": "#f4f1ec"
+        }
       },
       {
         "kind": "art",
         "id": "visual",
-        "style": "mesh",
         "x": 620,
         "y": 104,
         "w": 612,
         "h": 400,
-        "radius": "card",
+        "opacity": 0.18,
+        "radius": 0,
+        "style": "grid",
+        "colors": [
+          "#d42a00",
+          "#f4f1ec",
+          "#0a0a0a"
+        ],
         "seed": 4021,
         "density": 0.55,
-        "scale": 1.1,
-        "colors": [
-          "accent",
-          "surface",
-          "ink"
-        ]
+        "scale": 1.1
       },
       {
         "kind": "text",
@@ -75,11 +93,11 @@
         "w": 260,
         "text": "DeepSeek Harness",
         "style": "caption",
-        "family": "text",
         "weight": 600,
-        "color": "muted",
-        "transform": "upper",
-        "letterSpacing": 2
+        "family": "text",
+        "color": "#3d3d3d",
+        "letterSpacing": 2,
+        "transform": "upper"
       },
       {
         "kind": "text",
@@ -93,16 +111,18 @@
           },
           {
             "text": "plugins",
-            "color": "#A9BBFF"
+            "color": "#5a1200"
           },
           {
             "text": ", not patches."
           }
         ],
         "style": "display",
-        "family": "display",
         "weight": 700,
-        "color": "ink"
+        "family": "display",
+        "color": "#0a0a0a",
+        "lineHeight": 1.05,
+        "letterSpacing": -2
       },
       {
         "kind": "text",
@@ -113,7 +133,7 @@
         "text": "One row per tool, no forks.",
         "style": "body",
         "family": "text",
-        "color": "muted"
+        "color": "#3d3d3d"
       },
       {
         "kind": "shape",
@@ -122,9 +142,12 @@
         "y": 424,
         "w": 72,
         "h": 4,
+        "radius": 0,
         "shape": "rect",
-        "fill": "accent",
-        "radius": 2
+        "fill": {
+          "type": "solid",
+          "color": "#d42a00"
+        }
       },
       {
         "kind": "frame",
@@ -133,11 +156,20 @@
         "y": 460,
         "w": "hug",
         "h": 48,
+        "background": {
+          "type": "solid",
+          "color": "#0a0a0a"
+        },
+        "radius": 0,
         "direction": "row",
+        "padding": {
+          "top": 13,
+          "right": 22,
+          "bottom": 13,
+          "left": 22
+        },
         "justify": "center",
         "align": "center",
-        "background": "ink",
-        "radius": "chip",
         "children": [
           {
             "kind": "text",
@@ -145,18 +177,13 @@
             "w": "hug",
             "text": "Browse the pack",
             "size": 19,
-            "family": "text",
             "weight": 600,
-            "color": "#0B0E14"
+            "family": "text",
+            "color": "#f4f1ec"
           }
-        ],
-        "padding": [
-          13,
-          22,
-          13,
-          22
         ]
       }
-    ]
+    ],
+    "style": "brutalist"
   }
 }

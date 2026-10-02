@@ -1,41 +1,55 @@
 {
-  "id": "editorial-split",
-  "title": "Editorial split",
-  "description": "Copy stack on the left, one visual panel on the right, on a dark surface - reaches for a launch card when you have a headline and one picture and not much else.",
-  "presets": [
-    "github-social",
-    "og",
-    "linkedin-post"
-  ],
+  "id": "release-numbers",
+  "title": "Release numbers",
+  "intent": "A release note where the numbers are the argument: light rounded cards on a common baseline, one card leading.",
+  "preset": "linkedin-post",
+  "archetype": "editorial-split",
+  "style": "bento",
+  "copy": {
+    "eyebrow": "THIS RELEASE",
+    "headline": "What shipped.",
+    "subhead": "Four numbers that matter.",
+    "cta": "See the changelog"
+  },
   "document": {
-    "title": "Editorial split",
-    "preset": "github-social",
+    "title": "Release numbers",
+    "preset": "linkedin-post",
     "canvas": {
-      "background": "surface"
+      "width": 1200,
+      "height": 627,
+      "background": {
+        "type": "solid",
+        "color": "#f6f7f9"
+      }
     },
     "tokens": {
       "color": {
-        "ink": "#F8FAFC",
-        "muted": "#94A3B8",
-        "accent": "#4D6BFE",
-        "surface": "#0B0E14"
+        "ink": "#17191f",
+        "muted": "#525a68",
+        "accent": "#2f6bff",
+        "surface": "#f6f7f9",
+        "panel": "#ffffff",
+        "accent-ink": "#ffffff",
+        "line": "#e3e6eb",
+        "warm": "#ffe8cc"
       },
       "font": {
-        "display": "Space Grotesk",
+        "display": "Inter",
         "text": "Inter",
         "mono": "system"
       },
       "scale": {
         "display": 58,
         "title": 40,
+        "subtitle": 26,
         "body": 25,
         "caption": 15
       },
-      "space": 8,
+      "space": 10,
       "radius": {
-        "card": 20,
-        "chip": 8,
-        "pill": 999
+        "card": 16,
+        "pill": 999,
+        "chip": 10
       }
     },
     "layers": [
@@ -47,25 +61,29 @@
         "w": 1280,
         "h": 640,
         "shape": "rect",
-        "fill": "surface"
+        "fill": {
+          "type": "solid",
+          "color": "#f6f7f9"
+        }
       },
       {
         "kind": "art",
         "id": "visual",
-        "style": "mesh",
         "x": 620,
         "y": 104,
         "w": 612,
         "h": 400,
-        "radius": "card",
+        "opacity": 0.2,
+        "radius": 16,
+        "style": "grid",
+        "colors": [
+          "#2f6bff",
+          "#f6f7f9",
+          "#17191f"
+        ],
         "seed": 4021,
         "density": 0.55,
-        "scale": 1.1,
-        "colors": [
-          "accent",
-          "surface",
-          "ink"
-        ]
+        "scale": 1.1
       },
       {
         "kind": "text",
@@ -75,11 +93,11 @@
         "w": 260,
         "text": "DeepSeek Harness",
         "style": "caption",
-        "family": "text",
         "weight": 600,
-        "color": "muted",
-        "transform": "upper",
-        "letterSpacing": 2
+        "family": "text",
+        "color": "#525a68",
+        "letterSpacing": 2,
+        "transform": "upper"
       },
       {
         "kind": "text",
@@ -93,16 +111,18 @@
           },
           {
             "text": "plugins",
-            "color": "#A9BBFF"
+            "color": "#142d6c"
           },
           {
             "text": ", not patches."
           }
         ],
         "style": "display",
+        "weight": 600,
         "family": "display",
-        "weight": 700,
-        "color": "ink"
+        "color": "#17191f",
+        "lineHeight": 1.25,
+        "letterSpacing": -0.8
       },
       {
         "kind": "text",
@@ -113,7 +133,7 @@
         "text": "One row per tool, no forks.",
         "style": "body",
         "family": "text",
-        "color": "muted"
+        "color": "#525a68"
       },
       {
         "kind": "shape",
@@ -122,9 +142,12 @@
         "y": 424,
         "w": 72,
         "h": 4,
+        "radius": 10,
         "shape": "rect",
-        "fill": "accent",
-        "radius": 2
+        "fill": {
+          "type": "solid",
+          "color": "#2f6bff"
+        }
       },
       {
         "kind": "frame",
@@ -133,11 +156,20 @@
         "y": 460,
         "w": "hug",
         "h": 48,
+        "background": {
+          "type": "solid",
+          "color": "#17191f"
+        },
+        "radius": 10,
         "direction": "row",
+        "padding": {
+          "top": 13,
+          "right": 22,
+          "bottom": 13,
+          "left": 22
+        },
         "justify": "center",
         "align": "center",
-        "background": "ink",
-        "radius": "chip",
         "children": [
           {
             "kind": "text",
@@ -145,18 +177,13 @@
             "w": "hug",
             "text": "Browse the pack",
             "size": 19,
-            "family": "text",
             "weight": 600,
-            "color": "#0B0E14"
+            "family": "text",
+            "color": "#f6f7f9"
           }
-        ],
-        "padding": [
-          13,
-          22,
-          13,
-          22
         ]
       }
-    ]
+    ],
+    "style": "bento"
   }
 }

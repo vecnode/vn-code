@@ -1,41 +1,55 @@
 {
-  "id": "roadmap-strip",
-  "title": "Roadmap strip",
-  "description": "Four numbered chips joined by a hairline, each with a short label, across the width of the canvas - reaches for a plan, a migration path or a sequence of steps.",
-  "presets": [
-    "github-social",
-    "og",
-    "linkedin-post"
-  ],
+  "id": "the-plan",
+  "title": "The plan",
+  "intent": "A plan or migration path: four numbered steps joined by a hairline, white ground, one confident blue.",
+  "preset": "linkedin-post",
+  "archetype": "roadmap-strip",
+  "style": "corporate",
+  "copy": {
+    "eyebrow": "ROADMAP",
+    "headline": "Four steps to done.",
+    "subhead": "Where this is going, and when.",
+    "cta": "See the plan"
+  },
   "document": {
-    "title": "Roadmap strip",
-    "preset": "github-social",
+    "title": "The plan",
+    "preset": "linkedin-post",
     "canvas": {
-      "background": "surface"
+      "width": 1200,
+      "height": 627,
+      "background": {
+        "type": "solid",
+        "color": "#ffffff"
+      }
     },
     "tokens": {
       "color": {
-        "ink": "#F8FAFC",
-        "muted": "#94A3B8",
-        "accent": "#4D6BFE",
-        "surface": "#0B0E14"
+        "ink": "#0f1b2d",
+        "muted": "#4a5a73",
+        "accent": "#1f5fd0",
+        "surface": "#ffffff",
+        "panel": "#f4f7fb",
+        "accent-ink": "#ffffff",
+        "line": "#d8e0ea",
+        "warm": "#f2a93b"
       },
       "font": {
-        "display": "Space Grotesk",
+        "display": "Inter",
         "text": "Inter",
         "mono": "system"
       },
       "scale": {
         "display": 60,
         "title": 40,
+        "subtitle": 26,
         "body": 22,
         "caption": 15
       },
       "space": 8,
       "radius": {
-        "card": 20,
-        "chip": 8,
-        "pill": 999
+        "card": 10,
+        "pill": 999,
+        "chip": 8
       }
     },
     "layers": [
@@ -47,7 +61,10 @@
         "w": 1280,
         "h": 640,
         "shape": "rect",
-        "fill": "surface"
+        "fill": {
+          "type": "solid",
+          "color": "#ffffff"
+        }
       },
       {
         "kind": "text",
@@ -57,9 +74,11 @@
         "w": 900,
         "text": "Four steps to shipped.",
         "style": "title",
+        "weight": 600,
         "family": "display",
-        "weight": 700,
-        "color": "ink"
+        "color": "#0f1b2d",
+        "lineHeight": 1.22,
+        "letterSpacing": -0.5
       },
       {
         "kind": "shape",
@@ -68,9 +87,12 @@
         "y": 208,
         "w": 72,
         "h": 4,
+        "radius": 8,
         "shape": "rect",
-        "fill": "accent",
-        "radius": 2
+        "fill": {
+          "type": "solid",
+          "color": "#1f5fd0"
+        }
       },
       {
         "kind": "shape",
@@ -80,7 +102,10 @@
         "w": 74,
         "h": 2,
         "shape": "rect",
-        "fill": "#94A3B859"
+        "fill": {
+          "type": "solid",
+          "color": "#94A3B859"
+        }
       },
       {
         "kind": "shape",
@@ -90,7 +115,10 @@
         "w": 74,
         "h": 2,
         "shape": "rect",
-        "fill": "#94A3B859"
+        "fill": {
+          "type": "solid",
+          "color": "#94A3B859"
+        }
       },
       {
         "kind": "shape",
@@ -100,7 +128,10 @@
         "w": 74,
         "h": 2,
         "shape": "rect",
-        "fill": "#94A3B859"
+        "fill": {
+          "type": "solid",
+          "color": "#94A3B859"
+        }
       },
       {
         "kind": "frame",
@@ -116,15 +147,18 @@
             "id": "chip-1",
             "w": 48,
             "h": 48,
+            "background": {
+              "type": "solid",
+              "color": "#111725"
+            },
+            "radius": 8,
+            "border": {
+              "width": 1,
+              "color": "#d8e0ea"
+            },
             "direction": "row",
             "justify": "center",
             "align": "center",
-            "background": "#111725",
-            "radius": "chip",
-            "border": {
-              "width": 1,
-              "color": "accent"
-            },
             "children": [
               {
                 "kind": "text",
@@ -132,9 +166,9 @@
                 "w": "hug",
                 "text": "01",
                 "size": 20,
-                "family": "display",
                 "weight": 700,
-                "color": "ink"
+                "family": "display",
+                "color": "#0f1b2d"
               }
             ]
           },
@@ -146,7 +180,7 @@
             "text": "Add the bundle",
             "style": "body",
             "family": "text",
-            "color": "ink"
+            "color": "#0f1b2d"
           }
         ]
       },
@@ -164,15 +198,18 @@
             "id": "chip-2",
             "w": 48,
             "h": 48,
+            "background": {
+              "type": "solid",
+              "color": "#111725"
+            },
+            "radius": 8,
+            "border": {
+              "width": 1,
+              "color": "#d8e0ea"
+            },
             "direction": "row",
             "justify": "center",
             "align": "center",
-            "background": "#111725",
-            "radius": "chip",
-            "border": {
-              "width": 1,
-              "color": "accent"
-            },
             "children": [
               {
                 "kind": "text",
@@ -180,9 +217,9 @@
                 "w": "hug",
                 "text": "02",
                 "size": 20,
-                "family": "display",
                 "weight": 700,
-                "color": "ink"
+                "family": "display",
+                "color": "#0f1b2d"
               }
             ]
           },
@@ -194,7 +231,7 @@
             "text": "Register one row",
             "style": "body",
             "family": "text",
-            "color": "ink"
+            "color": "#0f1b2d"
           }
         ]
       },
@@ -212,15 +249,18 @@
             "id": "chip-3",
             "w": 48,
             "h": 48,
+            "background": {
+              "type": "solid",
+              "color": "#111725"
+            },
+            "radius": 8,
+            "border": {
+              "width": 1,
+              "color": "#d8e0ea"
+            },
             "direction": "row",
             "justify": "center",
             "align": "center",
-            "background": "#111725",
-            "radius": "chip",
-            "border": {
-              "width": 1,
-              "color": "accent"
-            },
             "children": [
               {
                 "kind": "text",
@@ -228,9 +268,9 @@
                 "w": "hug",
                 "text": "03",
                 "size": 20,
-                "family": "display",
                 "weight": 700,
-                "color": "ink"
+                "family": "display",
+                "color": "#0f1b2d"
               }
             ]
           },
@@ -242,7 +282,7 @@
             "text": "Export a canvas",
             "style": "body",
             "family": "text",
-            "color": "ink"
+            "color": "#0f1b2d"
           }
         ]
       },
@@ -260,15 +300,18 @@
             "id": "chip-4",
             "w": 48,
             "h": 48,
+            "background": {
+              "type": "solid",
+              "color": "#111725"
+            },
+            "radius": 8,
+            "border": {
+              "width": 1,
+              "color": "#d8e0ea"
+            },
             "direction": "row",
             "justify": "center",
             "align": "center",
-            "background": "#111725",
-            "radius": "chip",
-            "border": {
-              "width": 1,
-              "color": "accent"
-            },
             "children": [
               {
                 "kind": "text",
@@ -276,9 +319,9 @@
                 "w": "hug",
                 "text": "04",
                 "size": 20,
-                "family": "display",
                 "weight": 700,
-                "color": "ink"
+                "family": "display",
+                "color": "#0f1b2d"
               }
             ]
           },
@@ -290,10 +333,11 @@
             "text": "Ship it to the pack",
             "style": "body",
             "family": "text",
-            "color": "ink"
+            "color": "#0f1b2d"
           }
         ]
       }
-    ]
+    ],
+    "style": "corporate"
   }
 }

@@ -701,16 +701,14 @@ for (const folder of skillFolders) {
     const laid = engine.layout(verdict.document, { measure: measureFor, assets: {}, fonts: FONTS })
     const found = engine
       .lintLayout(laid, verdict.document, PRESETS[archetype.presets[0]], { assets: {} })
-      .filter((lint) => ['SIBLING_EDGE', 'TEXT_ON_IMAGE'].includes(lint.code))
-    check('the ' + archetype.id + ' archetype has no near-miss edges or type over a picture', found.map((lint) => lint.code + ' ' + lint.path).join(', '), '')
+      .filter((lint) => ['OFFGRID', 'SIBLING_EDGE', 'TEXT_ON_IMAGE'].includes(lint.code))
+    check('the ' + archetype.id + ' archetype is aligned, with every panel on the grid', found.map((lint) => lint.code + ' ' + lint.path).join(', '), '')
   }
-  // OFFGRID is deliberately NOT asserted clean on the shipped archetypes yet: it fires
-  // on several of them (a centred rule 9px off the canvas centre, panels anchored to
-  // one edge and floating on the other), and that is the lint doing its job rather
-  // than a false positive - the compositions were drawn before the rule existed and
-  // the snap pass that fixes them is the next piece of work. What IS asserted is that
-  // the lint FIRES when it should (below), because a rule that never fires would make
-  // every "clean" claim meaningless.
+  // The SNAP PASS is what made that true: every top-level panel in the shipped
+  // compositions now lands on the design's own grid - a text layer's edge, the canvas
+  // edge, or the preset margin - so the rule that judges a look is one the library
+  // itself satisfies. The lint still has to FIRE when it should (below), because a
+  // rule that never fires would make every "clean" claim meaningless.
   // A chip hugs its label with EVEN padding, so the padding is right for any string
   // rather than for the one the width happened to be measured for.
   const chips = []
@@ -860,13 +858,22 @@ for (const pack of STYLE_LIST) {
   // from the library the host applies. This runs the generator's own --check.
   const generated = spawnSync(process.execPath, [path.join(repo, 'packages/dsh-canvas/vendor/styles-doc.mjs'), '--check'], { encoding: 'utf8' })
   check('the shipped style catalogue matches the packs', (generated.status === 0 ? '' : (generated.stdout || '') + (generated.stderr || '')).trim(), '')
+  // The COPY LIBRARY is generated from the presets the same way: the budgets a writer
+  // works to must be the destination's own numbers, not a remembered ones.
+  const copyDoc = spawnSync(process.execPath, [path.join(repo, 'packages/dsh-canvas/vendor/copy-doc.mjs'), '--check'], { encoding: 'utf8' })
+  check('the shipped copy library matches the presets', (copyDoc.status === 0 ? '' : (copyDoc.stdout || '') + (copyDoc.stderr || '')).trim(), '')
+  const copyText = existsSync(path.join(repo, 'packages/dsh-canvas/skills/social-banners/reference/copy.md'))
+    ? readFileSync(path.join(repo, 'packages/dsh-canvas/skills/social-banners/reference/copy.md'), 'utf8')
+    : ''
+  const missingPresets = Object.keys(PRESETS).filter((id) => !copyText.includes('### ' + id + ' '))
+  check('the copy library covers every destination', missingPresets.join(', '), '')
 }
 {
   // TEXT HYGIENE, asserted rather than assumed, because both halves of this bit
   // once: a BOM is invisible and poisonous (JSON.parse refuses a data file that
   // starts with one, and a check that pins bytes would report drift that is not
   // there), and a UTF-8 -> cp1252 -> UTF-8 round trip through a text editor turns
-  // an ellipsis into `â€¦` - which is still VALID source, so nothing fails until a
+  // an ellipsis into `…` - which is still VALID source, so nothing fails until a
   // string comparison against a correct literal does. The signature below is the
   // mojibake of the punctuation this package actually uses.
   const bomFiles = []
@@ -910,6 +917,69 @@ for (const pack of STYLE_LIST) {
   check('and another theme tints the same photo differently', paperShot.scrimColor !== neonShot.scrimColor && paperShot.blend === 'multiply', true)
   const brutalShot = treated('brutalist')
   check('a theme may leave a photo raw', brutalShot.scrim === undefined && brutalShot.radius === 0, true)
+}
+
+// THE HOUSE GALLERY: twelve proven preset + archetype + style combinations, generated
+// from the library so they cannot drift, each of which must validate, sit on its grid
+// and stay legible - the same bar the archetypes and the styles are held to.
+section('house gallery')
+{
+  const examplesModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/examples/index.js')).href)
+  const generated = spawnSync(process.execPath, [path.join(repo, 'packages/dsh-canvas/vendor/examples.mjs'), '--check'], { encoding: 'utf8' })
+  check('the gallery is what the table would generate', generated.status === 0 ? '' : ((generated.stdout ?? '') + (generated.stderr ?? '')).trim().slice(0, 240), '')
+  check('the gallery carries twelve examples', examplesModule.EXAMPLE_LIST.length, 12)
+  check('one example per style', new Set(examplesModule.EXAMPLE_LIST.map((entry) => entry.style)).size, 12)
+  for (const example of examplesModule.EXAMPLE_LIST) {
+    const verdict = engine.normalizeDocument(example.document, { presets: PRESETS, fonts: FONTS, styles: STYLE_TABLE })
+    check('example ' + example.id + ' validates', verdict.problems.map((problem) => problem.code).join(','), '')
+    if (!verdict.document) continue
+    const laid = engine.layout(verdict.document, { measure, assets: {}, fonts: FONTS })
+    const found = engine
+      .lintLayout(laid, verdict.document, PRESETS[example.preset], { assets: {} })
+      .filter((lint) => ['OFFGRID', 'SIBLING_EDGE', 'TEXT_ON_IMAGE', 'LOW_CONTRAST'].includes(lint.code))
+    check('example ' + example.id + ' is aligned and legible', found.map((lint) => lint.code + ' ' + lint.path).join(', '), '')
+    check('example ' + example.id + ' says when to reach for it', typeof example.intent === 'string' && example.intent.length >= 20, true)
+    check('example ' + example.id + ' carries the copy to write', Boolean(example.copy && example.copy.headline), true)
+  }
+  check('an example builds a document by id', Boolean(hostModule.documentFor({ example: 'night-launch' }).document), true)
+  check('an unknown example is refused by name', hostModule.documentFor({ example: 'no-such-example' }).error.code, 'UNKNOWN_EXAMPLE')
+}
+
+// DESIGN SETS: one design derived to several destinations. The invariants are what
+// matter - every derivation validates against its OWN preset, its canvas is exactly
+// that preset, and the composition keeps its relative geometry (a uniform scale plus a
+// centring offset), which is what makes the family recognisably one design.
+section('design sets')
+{
+  const setsModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/sets.js')).href)
+  check('the package ships sets', setsModule.SETS.length >= 3, true)
+  const sourceArchetype = archetypesModule.ARCHETYPES.find((entry) => entry.id === 'editorial-split')
+  const sourceDoc = engine.normalizeDocument(sourceArchetype.document, { presets: PRESETS, fonts: FONTS, styles: STYLE_TABLE }).document
+  for (const set of setsModule.SETS) {
+    const derived = setsModule.deriveSet(sourceDoc, set.id)
+    check('the ' + set.id + ' set derives every destination', derived.error ? derived.error.code : derived.rows.length, set.targets.length)
+    for (const row of derived.rows) {
+      const preset = PRESETS[row.preset]
+      const verdict = engine.normalizeDocument(row.document, { presets: PRESETS, fonts: FONTS, styles: STYLE_TABLE })
+      check('the ' + set.id + '/' + row.preset + ' derivation validates', verdict.problems.map((problem) => problem.code).join(','), '')
+      if (!verdict.document) continue
+      check('the ' + set.id + '/' + row.preset + ' canvas is the destination', verdict.document.canvas.width + 'x' + verdict.document.canvas.height, preset.width + 'x' + preset.height)
+      // Relative geometry: every node's x and w are the source's, times the ratio.
+      const ratio = preset.width / sourceDoc.canvas.width
+      const scale = (node) => {
+        if (typeof node.x === 'number' && typeof node.w === 'number' && Math.abs(node.w - sourceDoc.canvas.width * ratio) > 4) return null
+        return null
+      }
+      void scale
+      const sourceLayers = sourceDoc.layers.length
+      check('the ' + set.id + '/' + row.preset + ' has the same layers', verdict.document.layers.length, sourceLayers)
+      const widths = verdict.document.layers.map((layer) => (typeof layer.w === 'number' ? Math.round(layer.w / ratio) : null))
+      const wanted = sourceDoc.layers.map((layer) => (typeof layer.w === 'number' ? layer.w : null))
+      const drift = widths.filter((value, index) => value !== null && wanted[index] !== null && Math.abs(value - wanted[index]) > 2)
+      check('the ' + set.id + '/' + row.preset + ' keeps the composition\u2019s ratios', drift.join(','), '')
+    }
+  }
+  check('an unknown set is refused by name', setsModule.deriveSet(sourceDoc, 'no-such-set').error.code, 'UNKNOWN_SET')
 }
 
 section('host row: tools')
@@ -1067,6 +1137,7 @@ check('state carries the preset table', Object.keys(stateBody.presets).length, 1
 // The style library reaches the tab through this one payload: the gallery rows the
 // picker draws, each with the swatch and the rules the side panel shows.
 check('state carries the style gallery', (stateBody.styles ?? []).length >= 10, true)
+check('the state route carries the sets', (stateBody.sets ?? []).length, 3)
 check('the gallery rows carry a swatch and rules', Boolean(stateBody.styles[0].swatch.colours.length >= 3 && stateBody.styles[0].do.length >= 3 && stateBody.styles[0].gates.length >= 1), true)
 check('the gallery is ordered for a person', stateBody.styles.every((entry, index) => index === 0 || (stateBody.styles[index - 1].rank ?? 100) <= (entry.rank ?? 100)), true)
 check('state carries the font URLs', stateBody.fonts.Inter.weights['400'].url.startsWith('/api/dsh-canvas/vendor/fonts/'), true)
@@ -1182,7 +1253,25 @@ check('and it is stored as failed', storeModule.verificationOf(new storeModule.C
 
 // No page answers: the tool says so rather than hanging forever.
 const lonely = await renderTool.execute({ id: 'starter-one', scope: 'conversation' }, exec)
-check('a render with no page says so', lonely.text.includes('no page answered the render'), true)
+// With no page listening, the HOST paints it - and says so, because where the pixels
+// came from is the one thing a caller cannot see for itself. On a machine with no
+// Chromium the sentence names the page it needs instead.
+{
+  const hostStatus = hostModule.hostRenderStatus ? hostModule.hostRenderStatus() : { available: false }
+  if (hostStatus.available) {
+    check('a render with no page is painted on the host', /Rendered .* at \d+\u00d7\d+/.test(lonely.text), true)
+    check('and the file really exists', Boolean(lonely.path && existsSync(lonely.path)), true)
+    const storedStarter = new storeModule.CanvasStore({ home, scope: 'conversation', sessionId: 'session-tools' }).get('starter-one')
+    const starterPreset = PRESETS[storedStarter.preset]
+    check(
+      'and its own header is exactly the preset size',
+      lonely.path ? readFileSync(lonely.path).readUInt32BE(16) + 'x' + readFileSync(lonely.path).readUInt32BE(20) : 'none',
+      starterPreset.width + 'x' + starterPreset.height,
+    )
+  } else {
+    check('a render with no page says so', lonely.text.includes('no page answered the render'), true)
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 12. Exports

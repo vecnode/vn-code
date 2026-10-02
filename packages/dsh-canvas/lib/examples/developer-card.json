@@ -1,41 +1,55 @@
 {
-  "id": "code-card",
-  "title": "Code card",
-  "description": "A bordered terminal panel of short mono lines on the right, the message and one action on the left - reaches for a developer-facing announcement where the command is the proof.",
-  "presets": [
-    "github-social",
-    "og",
-    "linkedin-post"
-  ],
+  "id": "developer-card",
+  "title": "Developer card",
+  "intent": "A README header for a tool: phosphor ground, monospaced display, one luminous accent and a faint scanline grid.",
+  "preset": "og",
+  "archetype": "code-card",
+  "style": "terminal",
+  "copy": {
+    "eyebrow": "TOOL",
+    "headline": "your-tool --help",
+    "subhead": "What it does, in one line.",
+    "cta": "npm i your-tool"
+  },
   "document": {
-    "title": "Code card",
-    "preset": "github-social",
+    "title": "Developer card",
+    "preset": "og",
     "canvas": {
-      "background": "surface"
+      "width": 1200,
+      "height": 630,
+      "background": {
+        "type": "solid",
+        "color": "#0b0f0b"
+      }
     },
     "tokens": {
       "color": {
-        "ink": "#F8FAFC",
-        "muted": "#94A3B8",
-        "accent": "#4D6BFE",
-        "surface": "#0B0E14"
+        "ink": "#c9ffd6",
+        "muted": "#7fb68c",
+        "accent": "#39ff88",
+        "surface": "#0b0f0b",
+        "panel": "#101710",
+        "accent-ink": "#06120a",
+        "line": "#1e2b1e",
+        "warm": "#ffb000"
       },
       "font": {
-        "display": "Space Grotesk",
+        "display": "system",
         "text": "Inter",
         "mono": "system"
       },
       "scale": {
         "display": 44,
         "title": 40,
+        "subtitle": 26,
         "body": 22,
         "caption": 14
       },
       "space": 8,
       "radius": {
-        "card": 20,
-        "chip": 8,
-        "pill": 999
+        "card": 0,
+        "pill": 2,
+        "chip": 0
       }
     },
     "layers": [
@@ -47,7 +61,10 @@
         "w": 1280,
         "h": 640,
         "shape": "rect",
-        "fill": "surface"
+        "fill": {
+          "type": "solid",
+          "color": "#0b0f0b"
+        }
       },
       {
         "kind": "text",
@@ -57,9 +74,11 @@
         "w": 552,
         "text": "Ship a plugin in an afternoon.",
         "style": "display",
-        "family": "mono",
         "weight": 700,
-        "color": "ink"
+        "family": "mono",
+        "color": "#c9ffd6",
+        "lineHeight": 1.3,
+        "letterSpacing": 0
       },
       {
         "kind": "text",
@@ -70,7 +89,7 @@
         "text": "One row, one bundle, no forks.",
         "style": "body",
         "family": "text",
-        "color": "muted"
+        "color": "#7fb68c"
       },
       {
         "kind": "frame",
@@ -79,11 +98,20 @@
         "y": 340,
         "w": "hug",
         "h": 44,
+        "background": {
+          "type": "solid",
+          "color": "#c9ffd6"
+        },
+        "radius": 2,
         "direction": "row",
+        "padding": {
+          "top": 13,
+          "right": 22,
+          "bottom": 13,
+          "left": 22
+        },
         "justify": "center",
         "align": "center",
-        "background": "ink",
-        "radius": "pill",
         "children": [
           {
             "kind": "text",
@@ -91,16 +119,10 @@
             "w": "hug",
             "text": "Read the guide",
             "size": 18,
-            "family": "text",
             "weight": 600,
-            "color": "#0B0E14"
+            "family": "text",
+            "color": "#0b0f0b"
           }
-        ],
-        "padding": [
-          13,
-          22,
-          13,
-          22
         ]
       },
       {
@@ -110,14 +132,22 @@
         "y": 144,
         "w": 584,
         "h": 352,
-        "direction": "column",
-        "gap": 18,
-        "padding": 40,
-        "background": "#0F1420",
-        "radius": "card",
+        "background": {
+          "type": "solid",
+          "color": "#0F1420"
+        },
+        "radius": 0,
         "border": {
           "width": 1,
-          "color": "#94A3B840"
+          "color": "#1e2b1e"
+        },
+        "direction": "column",
+        "gap": 18,
+        "padding": {
+          "top": 40,
+          "right": 40,
+          "bottom": 40,
+          "left": 40
         },
         "children": [
           {
@@ -128,46 +158,50 @@
             "w": 12,
             "h": 12,
             "shape": "ellipse",
-            "fill": "accent"
+            "fill": {
+              "type": "solid",
+              "color": "#39ff88"
+            }
           },
           {
             "kind": "text",
             "id": "line-1",
             "w": "fill",
             "text": "$ dsh plugin add canvas",
-            "family": "mono",
             "size": 15,
-            "color": "#9FB2FF"
+            "family": "mono",
+            "color": "#9affc2"
           },
           {
             "kind": "text",
             "id": "line-2",
             "w": "fill",
             "text": "installed canvas -> web profile",
-            "family": "mono",
             "size": 15,
-            "color": "muted"
+            "family": "mono",
+            "color": "#7fb68c"
           },
           {
             "kind": "text",
             "id": "line-3",
             "w": "fill",
             "text": "restart the harness to compose",
-            "family": "mono",
             "size": 15,
-            "color": "muted"
+            "family": "mono",
+            "color": "#7fb68c"
           },
           {
             "kind": "text",
             "id": "line-4",
             "w": "fill",
             "text": "canvas_new { preset: 'og' }",
-            "family": "mono",
             "size": 15,
-            "color": "ink"
+            "family": "mono",
+            "color": "#c9ffd6"
           }
         ]
       }
-    ]
+    ],
+    "style": "terminal"
   }
 }
