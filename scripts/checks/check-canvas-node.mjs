@@ -658,6 +658,27 @@ for (const folder of skillFolders) {
 // ---------------------------------------------------------------------------
 // 9. The host row: tools and routes
 // ---------------------------------------------------------------------------
+// A FRAME'S OWN RADIUS MUST REACH ITS BACKGROUND FILL, not only the clip its
+// children get. The fill is the most visible surface of a chip or a panel, and for
+// a long time the op was emitted with `radius: 0` while the children were clipped
+// to the rounded box - so a pill painted as a square with rounded clipping, and the
+// canvas painter and the SVG serializer disagreed about the same document. A real
+// banner with a pill CTA is what showed it.
+{
+  const pillDoc = engine.normalizeDocument(
+    {
+      preset: 'og',
+      canvas: { width: 400, height: 200 },
+      layers: [{ kind: 'frame', id: 'chip', x: 20, y: 20, w: 330, h: 48, radius: 999, background: { type: 'solid', color: '#F8FAFC' }, children: [{ kind: 'text', id: 'l', w: 'hug', text: 'hi', size: 18, family: 'text' }] }],
+    },
+    { presets: PRESETS, fonts: FONTS },
+  )
+  const pillOps = engine.layout(pillDoc.document, { measure, assets: {}, fonts: FONTS }).ops
+  const chipFill = pillOps.find((op) => op.kind === 'rect' && op.fill && typeof op.fill.color === 'string' && op.fill.color.toLowerCase() === '#f8fafc')
+  check('a frame fill carries the frame\u2019s own radius', chipFill ? chipFill.radius : null, 999)
+  check('and the SVG serializer agrees with it', /rx="999"/.test(engine.toSvg(pillOps, { width: 400, height: 200 })), true)
+}
+
 // ---------------------------------------------------------------------------
 // 8b. The style library
 //

@@ -307,9 +307,14 @@ export function applyStyle(document, style, options = {}) {
           node.radius = values.reduce((best, value) => (Math.abs(value - node.radius) < Math.abs(best - node.radius) ? value : best))
         }
       }
+      // The style's border and shadow belong to a PANEL, not to every box. A frame
+      // filled with the surface or the panel colour is a panel and takes the style's
+      // edge; a frame filled with the accent is a BUTTON, and giving it a dark
+      // hairline and a glow is how a pill ends up looking notched. The fills are
+      // already remapped at this point, so they are compared against the palette.
       if (node.border && borderWeight !== null) {
         node.border = { ...node.border, width: borderWeight, color: borderColour ?? node.border.color }
-      } else if (!node.border && borderWeight !== null && borderWeight > 0 && node.kind === 'frame' && node.background && depth === 0) {
+      } else if (!node.border && borderWeight !== null && borderWeight > 0 && depth === 0 && isPanel(node, palette)) {
         node.border = { width: borderWeight, color: borderColour ?? palette.line ?? palette.muted ?? palette.ink }
         replacedSurface += 1
       } else if (node.border && borderColour) {
@@ -317,7 +322,7 @@ export function applyStyle(document, style, options = {}) {
       }
       if (style.shadow) {
         if (node.shadow) node.shadow = shadowSpec(style.shadow, palette)
-        else if (node.kind === 'frame' && node.background && depth === 0) node.shadow = shadowSpec(style.shadow, palette)
+        else if (depth === 0 && isPanel(node, palette)) node.shadow = shadowSpec(style.shadow, palette)
       }
     }
     if (node.kind === 'art') {
@@ -333,6 +338,18 @@ export function applyStyle(document, style, options = {}) {
 
   out.style = style.id
   return { document: out, notes }
+}
+
+/**
+ * Whether a node is a PANEL: a frame whose own fill is the style's surface or panel
+ * colour. That is the box a border and a shadow belong to - not a chip, not a rule,
+ * not a button painted in the accent.
+ */
+function isPanel(node, palette) {
+  if (!node || node.kind !== 'frame' || !node.background || node.background.type !== 'solid') return false
+  const fill = literal(node.background.color)
+  if (!fill) return false
+  return [palette.surface, palette.panel].filter(Boolean).map((colour) => literal(colour)).includes(fill)
 }
 
 /** A style's shadow spec as a node shadow. */

@@ -1302,18 +1302,31 @@ export function layout(document, opts = {}) {
   }
 }
 
-/** Emit one background paint over a box (used by the canvas and by frames). */
-function emitBackground(paint, box, ctx, clip) {
+/**
+ * Emit one background paint over a box (used by the canvas and by frames).
+ *
+ * `radius` is the NODE's own radius and it has to reach the fill: a frame's
+ * background is its most visible surface, and for a long time it was emitted with
+ * `radius: 0` while the frame's CHILDREN were clipped to the rounded shape - so a
+ * pill rendered as a square with rounded clipping, a shape that is neither a
+ * rectangle nor a pill, and the canvas painter and the SVG serializer disagreed
+ * about it (the serializer read the op's radius, which was always 0).
+ */
+function emitBackground(paint, box, ctx, clip, radius = 0) {
   const resolved = coercePaint(paint)
   if (!resolved) return
+  const rounded = radius > 0 ? { x: box.x, y: box.y, w: box.w, h: box.h, radius } : null
   if (resolved.type === 'art') {
+    // Generated art is a list of its own shapes, so the only way to round it is to
+    // clip it to the rounded box.
+    const artClip = rounded ?? clip
     for (const op of generateArt({ ...resolved, kind: 'art' }, box, ctx.document)) {
-      if (clip) op.clip = clip
+      if (artClip) op.clip = artClip
       ctx.ops.push(op)
     }
     return
   }
-  ctx.ops.push({ kind: 'rect', x: box.x, y: box.y, w: box.w, h: box.h, fill: resolved, radius: 0, clip: clip ?? undefined })
+  ctx.ops.push({ kind: 'rect', x: box.x, y: box.y, w: box.w, h: box.h, fill: resolved, radius: rounded ? radius : 0, clip: clip ?? undefined })
 }
 
 /** A paint is a colour string, a paint object, or nothing: painters only ever see the object form. */
@@ -1427,7 +1440,7 @@ function placeNode(node, box, path, ctx, clip, measured) {
     path,
   }
   if (node.kind === 'frame') {
-    if (node.background) emitBackground(node.background, box2, ctx, clip ?? null)
+    if (node.background) emitBackground(node.background, box2, ctx, clip ?? null, node.radius ?? 0)
     const frameClip =
       node.clip === true || (node.radius && node.clip !== false)
         ? { x: box2.x, y: box2.y, w: box2.w, h: box2.h, radius: node.radius ?? 0 }

@@ -514,10 +514,21 @@ window.__ModuleLoader__.load({
       return { ops: laid.ops, boxes: laid.boxes, lints, metrics, images, fontSpecs, width: laid.width, height: laid.height, warnings: laid.warnings }
     }
 
-    /** Paint an op list into a canvas of `width x height` CSS pixels at `scale`. */
-    function paintInto(engine, canvas, prepared, scale) {
-      const dpr = Math.min(3, (typeof window !== 'undefined' && window.devicePixelRatio) || 1)
-      const pixelRatio = scale <= 0.5 ? 1 : dpr
+    /**
+     * Paint an op list into a canvas of `width x height` DESIGN pixels at `scale`.
+     *
+     * The device pixel ratio belongs to the DISPLAY and to nothing else. On screen
+     * it is what makes a 1px hairline a hairline rather than a grey smear, so the
+     * artboard renders at `scale * devicePixelRatio` and is sized back down with
+     * CSS. A FILE must be exactly what the preset promises - a GitHub social preview
+     * is 1280x640 and its `@2x` is 2560x1280 - so the export and the render report
+     * pass `forDisplay: false`, because otherwise a 135%-scaled Windows display
+     * silently writes a 1728x864 banner (measured, on this machine).
+     */
+    function paintInto(engine, canvas, prepared, scale, options = {}) {
+      const forDisplay = options.forDisplay !== false
+      const dpr = forDisplay ? Math.min(3, (typeof window !== 'undefined' && window.devicePixelRatio) || 1) : 1
+      const pixelRatio = forDisplay && scale > 0.5 ? dpr : 1
       const deviceScale = scale * pixelRatio
       canvas.width = Math.max(1, Math.round(prepared.width * deviceScale))
       canvas.height = Math.max(1, Math.round(prepared.height * deviceScale))
@@ -552,7 +563,8 @@ window.__ModuleLoader__.load({
     /** Render a prepared design into a fresh canvas at a scale, returning the canvas. */
     async function rasterize(engine, prepared, scale) {
       const canvas = document.createElement('canvas')
-      paintInto(engine, canvas, prepared, scale)
+      // A FILE, not a display: exact design pixels times the scale, no device ratio.
+      paintInto(engine, canvas, prepared, scale, { forDisplay: false })
       return canvas
     }
 
