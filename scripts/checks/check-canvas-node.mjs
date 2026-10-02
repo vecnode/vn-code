@@ -858,6 +858,15 @@ for (const pack of STYLE_LIST) {
   // from the library the host applies. This runs the generator's own --check.
   const generated = spawnSync(process.execPath, [path.join(repo, 'packages/dsh-canvas/vendor/styles-doc.mjs'), '--check'], { encoding: 'utf8' })
   check('the shipped style catalogue matches the packs', (generated.status === 0 ? '' : (generated.stdout || '') + (generated.stderr || '')).trim(), '')
+  // The COPY LIBRARY is generated from the presets the same way: the budgets a writer
+  // works to must be the destination's own numbers, not a remembered ones.
+  const copyDoc = spawnSync(process.execPath, [path.join(repo, 'packages/dsh-canvas/vendor/copy-doc.mjs'), '--check'], { encoding: 'utf8' })
+  check('the shipped copy library matches the presets', (copyDoc.status === 0 ? '' : (copyDoc.stdout || '') + (copyDoc.stderr || '')).trim(), '')
+  const copyText = existsSync(path.join(repo, 'packages/dsh-canvas/skills/social-banners/reference/copy.md'))
+    ? readFileSync(path.join(repo, 'packages/dsh-canvas/skills/social-banners/reference/copy.md'), 'utf8')
+    : ''
+  const missingPresets = Object.keys(PRESETS).filter((id) => !copyText.includes('### ' + id + ' '))
+  check('the copy library covers every destination', missingPresets.join(', '), '')
 }
 {
   // TEXT HYGIENE, asserted rather than assumed, because both halves of this bit
