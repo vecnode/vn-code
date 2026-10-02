@@ -357,6 +357,21 @@ async function run() {
     }
     report.artboard = await waitFor('[data-canvas-artboard]')
     report.layersRendered = await waitFor('[data-canvas-layers]')
+    // THE DESIGN SURFACE IS BEHIND A MODE NOW (alpha.10): Excalidraw is the tab's
+    // surface, the pack's own bar is not rendered while it is up, and the way back
+    // is deliberately a KEY rather than a button. So this check - whose entire
+    // subject is the design surface's panel - reaches it the way a person would:
+    // it presses Alt+D, and asserts that the mode really changed before driving
+    // anything.
+    report.surfaceBefore = (document.querySelector('[data-dsh-canvas-view]') || {}).getAttribute
+      ? document.querySelector('[data-dsh-canvas-view]').getAttribute('data-canvas-surface')
+      : null
+    report.barBeforeAltD = document.querySelector('[data-canvas-bar]') !== null
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', altKey: true, bubbles: true }))
+    await settle(10)
+    report.surfaceAfter = document.querySelector('[data-dsh-canvas-view]').getAttribute('data-canvas-surface')
+    report.barAfterAltD = await waitFor('[data-canvas-bar]', 120)
+    report.zoomControl = document.querySelector('[data-canvas-zoom]') !== null
     // Errors React reported to the window while mounting, kept for the failure path.
     report.console = report.console.concat(seenErrors)
     report.markup = String(mount.innerHTML).replace(/\\s+/g, ' ').slice(0, 400)
@@ -1012,7 +1027,14 @@ run()
       check('and back to full is written, not dropped', reported.opacityBack, 1)
       check('the colour control knows its targets', typeof reported.colorTargets === 'string' && reported.colorTargets.length > 0, true)
       check('picking a colour writes the literal', (reported.recolored ?? {}).written, '#ff0000')
-      // (5c) THE ZOOM MENU: one rung per row, the summary naming the one in force, and
+      // (5c) THE MODE, before anything else can be asked of this surface: Excalidraw
+      //      is the tab's surface, the bar is NOT rendered while it is up, and the
+      //      way back is a KEY. This is the check that the mode really changed.
+      check('the tab opens on the Excalidraw surface', reported.surfaceBefore, 'excalidraw')
+      check('...with the pack\u2019s own bar NOT drawn', reported.barBeforeAltD, false)
+      check('Alt+D reaches the design surface', reported.surfaceAfter, 'design')
+      check('...and its bar is there once it is up', reported.barAfterAltD, true)
+      // (5d) THE ZOOM MENU: one rung per row, the summary naming the one in force, and
       //      the rung really changing the layout the artboard paints into.
       check('zoom is a menu', reported.zoomControl, true)
       check('its summary names the current rung', String(reported.zoomSummary ?? '').startsWith('Zoom: Fit'), true)

@@ -259,13 +259,15 @@ window.__ModuleLoader__.load({
 .dsc-cardTitle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dsw-alias-label-primary)}
 .dsc-cardBody{font-size:11.5px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;max-height:132px;overflow:hidden}
 .dsc-hidden{display:none}
-/* The Excalidraw surface (the preview mode). It is an OVERLAY on purpose: the
-   design surface underneath stays mounted and untouched, so switching back is a
-   state change and not a reload of anything, and this file never has to
-   restructure the tab's own tree for a surface that is still being proved. */
-.dsc-excalidraw{position:absolute;inset:38px 0 0 0;z-index:5;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff)}
+/* The Excalidraw surface (the Canvas tab's surface). It is an OVERLAY on purpose:
+   the design surface underneath stays mounted and untouched, so the migration is
+   reversible and this file never has to restructure the tab's tree for an editor
+   it does not own. In Excalidraw mode the pack's own bar is not rendered at all,
+   so the editor gets the WHOLE pane: no zoom menu, no overlays, no export menu -
+   Excalidraw brings its own. */
+.dsc-excalidraw{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff)}
 .dsc-excalidrawHost{flex:1;min-height:0;position:relative}
-.dsc-excalidrawNote{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:.5px solid var(--dsw-alias-border-l2);font-size:11.5px;color:var(--dsw-alias-label-secondary)}
+.dsc-excalidrawNote{flex:none;box-sizing:border-box;min-height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l2);font-size:11.5px;color:var(--dsw-alias-label-secondary)}
 `
     const CSS_TAG = 'dsh-canvas/canvas.css'
     const FONT_CSS_TAG = 'dsh-canvas/fonts.css'
@@ -282,6 +284,72 @@ window.__ModuleLoader__.load({
      * only thing that has to be true.
      */
     const EXCALIDRAW_ASSET_PATH = '/api/dsh-canvas/vendor/'
+    /**
+     * The house examples become Excalidraw LIBRARY items, and these two numbers
+     * are the whole policy: a stable id prefix (so re-seeding MERGES instead of
+     * doubling the library) and a ceiling, because every example costs one layout
+     * pass and a library nobody can scroll is not a library.
+     */
+    const LIBRARY_ID_PREFIX = 'dsh-canvas/'
+    const LIBRARY_EXAMPLE_LIMIT = 12
+    /**
+     * Where the Excalidraw LIBRARY lives.
+     *
+     * WHY THE PACK PERSISTS IT. Excalidraw's library is not persisted by the
+     * component: its own embedding hook (`useHandleLibrary`) takes an ADAPTER the
+     * host supplies, which is exactly the seam it offers and exactly the seam this
+     * package fills - in the client bundle rather than in the vendored artifact, so
+     * the artifact stays upstream-plus-declared-trims. The adapter is this origin's
+     * `localStorage`, so the house examples a person drags out today are there
+     * tomorrow, in this app, without a store of our own.
+     *
+     * Every access is guarded, because a browser that blocks storage THROWS on it
+     * rather than answering null - the same discipline every other store in this
+     * pack follows, and the check drives both halves through a storage double,
+     * including one that throws.
+     */
+    const LIBRARY_STORAGE_KEY = 'dsh-canvas/excalidraw-library'
+
+    /** The library this origin stored, or an empty list. */
+    function readStoredLibrary(storage) {
+      if (storage === null || storage === undefined || typeof storage.getItem !== 'function') return []
+      let raw = null
+      try {
+        raw = storage.getItem(LIBRARY_STORAGE_KEY)
+      } catch (err) {
+        return []
+      }
+      if (typeof raw !== 'string' || raw === '') return []
+      try {
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed) ? parsed : []
+      } catch (err) {
+        return []
+      }
+    }
+
+    /** Remember the library, best effort. */
+    function writeStoredLibrary(storage, items) {
+      if (storage === null || storage === undefined || typeof storage.setItem !== 'function') return false
+      if (!Array.isArray(items) || items.length === 0) return false
+      try {
+        storage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(items))
+        return true
+      } catch (err) {
+        // A full or blocked store is not a failure of the surface: the library still
+        // works for this session, and Excalidraw never learns about this.
+        return false
+      }
+    }
+
+    function localStorageNow() {
+      if (typeof window === 'undefined') return null
+      try {
+        return window.localStorage
+      } catch (err) {
+        return null
+      }
+    }
 
     // -----------------------------------------------------------------------
     // Small utilities
@@ -528,12 +596,17 @@ window.__ModuleLoader__.load({
       const hostRef = useRef(null)
       const apiRef = useRef(null)
       const syncedRef = useRef(null)
+      const librarySeededRef = useRef(false)
       const [note, setNote] = useState('Loading the Excalidraw surface\u2026')
       const [ready, setReady] = useState(false)
       const design = props.design ?? null
       const sessionId = props.sessionId ?? null
       const fonts = props.fonts ?? {}
       const preset = props.preset ?? null
+      /** What this origin stored last time, read ONCE per mount. */
+      const storedLibraryRef = useRef(null)
+      if (storedLibraryRef.current === null) storedLibraryRef.current = readStoredLibrary(localStorageNow())
+      const storedLibrary = storedLibraryRef.current
 
       useEffect(() => {
         let live = true
@@ -543,6 +616,14 @@ window.__ModuleLoader__.load({
             if (!live || hostRef.current === null) return
             mounted = surface.mount(hostRef.current, {
               theme: 'light',
+              // THE LIBRARY'S TWO SEAMS: it is LOADED from what this origin stored
+              // (so the house examples are there on the next visit) and SAVED through
+              // the change callback. Excalidraw persists nothing by itself - its own
+              // hook takes an adapter, and this is that adapter, in this bundle.
+              ...(storedLibrary.length > 0 ? { initialData: { libraryItems: storedLibrary } } : {}),
+              onLibraryChange: (items) => {
+                if (Array.isArray(items) && items.length > 0) writeStoredLibrary(localStorageNow(), items)
+              },
               excalidrawAPI: (api) => {
                 apiRef.current = api
                 if (!live) return
@@ -609,6 +690,91 @@ window.__ModuleLoader__.load({
           live = false
         }
       }, [ready, design, preset, sessionId, fonts])
+
+      /**
+       * Seed Excalidraw's OWN LIBRARY with the house examples, once.
+       *
+       * WHY THE LIBRARY AND NOT A GALLERY OF OURS: a library item is exactly what a
+       * banner template IS - a reusable group of elements - and Excalidraw already
+       * persists the library by itself, in this origin's storage, so a person who
+       * drags "product-launch" onto a blank canvas tomorrow still finds it there.
+       * That is the "persistent across the app" ask, and it is Excalidraw's own
+       * storage doing the work rather than a second store of ours.
+       *
+       * IDEMPOTENCE is the ids: each item is named for the example it came from, and
+       * `merge: true` is a union keyed by id (Excalidraw's own `mergeLibraryItems`),
+       * so seeding twice cannot double the library. It still runs once per page
+       * load, because laying eight examples out is not free.
+       */
+      useEffect(() => {
+        if (!ready || librarySeededRef.current) return undefined
+        const api = apiRef.current
+        if (api === null || typeof api.updateLibrary !== 'function') return undefined
+        const examples = Array.isArray(props.examples) ? props.examples : []
+        if (examples.length === 0) return undefined
+        let live = true
+        librarySeededRef.current = true
+        ;(async () => {
+          try {
+            const surface = await loadExcalidraw()
+            const engine = await loadEngine()
+            const items = []
+            let skipped = 0
+            for (const entry of examples.slice(0, LIBRARY_EXAMPLE_LIMIT)) {
+              if (!entry || typeof entry.id !== 'string' || entry.document === undefined) continue
+              const preset = props.presets && props.presets[entry.preset] ? props.presets[entry.preset] : null
+              const prepared = await prepareRender(engine, entry.document, preset, sessionId, fonts)
+              const mapped = sceneSkeletonsFor(prepared)
+              skipped += mapped.skipped
+              if (mapped.skeletons.length === 0) continue
+              items.push({
+                id: LIBRARY_ID_PREFIX + entry.id,
+                // `published` is what makes it usable rather than a draft.
+                status: 'published',
+                name: String(entry.title ?? entry.id),
+                elements: surface.convertToExcalidrawElements(mapped.skeletons),
+                created: Date.now(),
+              })
+            }
+            if (!live || items.length === 0) return
+            await api.updateLibrary({ libraryItems: items, merge: true, openLibraryMenu: false })
+            setNote(
+              'Library: ' +
+                String(items.length) +
+                ' house example(s) ready' +
+                (skipped > 0 ? ' \u00b7 ' + String(skipped) + ' box(es) this editor has no shape for' : '') +
+                ' \u00b7 Excalidraw keeps them in this browser, so they are there next time',
+            )
+          } catch (err) {
+            librarySeededRef.current = false
+            if (live) setNote('the house examples could not be loaded into the Library: ' + (err && err.message ? err.message : 'unknown error'))
+          }
+        })()
+        return () => {
+          live = false
+        }
+      }, [ready, props.examples, props.presets, sessionId, fonts])
+
+      /**
+       * THE ONE WAY BACK TO THE DESIGN SURFACE, and it is a KEY rather than a
+       * button because the ask was "no buttons in the top bar": the bar is not
+       * rendered in this mode, so the pack's own surface would be unreachable
+       * without it. Alt+D is deliberately obscure - it is a migration handle, not a
+       * feature, and it goes when the agent tools speak the scene.
+       */
+      useEffect(() => {
+        if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
+        const onKeyDown = (event) => {
+          if (!event.altKey) return
+          if (event.key !== 'd' && event.key !== 'D') return
+          event.preventDefault()
+          if (typeof props.onEscapeToDesign === 'function') props.onEscapeToDesign()
+        }
+        document.addEventListener('keydown', onKeyDown, true)
+        return () => {
+          document.removeEventListener('keydown', onKeyDown, true)
+        }
+      }, [props.onEscapeToDesign])
 
       return h(
         'div',
@@ -2862,8 +3028,12 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { className: 'dsc-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true', 'data-canvas-version': PLUGIN_VERSION },
-        toolbar,
+        { className: 'dsc-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true', 'data-canvas-version': PLUGIN_VERSION, 'data-canvas-surface': surface },
+        // THE PACK'S OWN BAR IS NOT RENDERED IN EXCALIDRAW MODE. The editor owns the
+        // pane: its own toolbar, its own zoom, its own export and Library. Keeping
+        // this bar above it was a strip of controls for a surface the person is no
+        // longer looking at - so it exists only while the design surface is up.
+        surface === 'design' ? toolbar : null,
         h('div', { className: 'dsc-body' }, rail, stage, side),
         drawer && selected
           ? h(
@@ -2883,7 +3053,23 @@ window.__ModuleLoader__.load({
         // state change, the design keeps its zoom/selection/exports, and the
         // editor never sees a half-torn-down tree. It is seeded from the design
         // the tab already selected, so the agent's work is what opens.
-        surface === 'excalidraw' ? h(ExcalidrawSurface, { sessionId, design: selected, preset, fonts: (state && state.fonts) || {} }) : null,
+        surface === 'excalidraw'
+          ? h(ExcalidrawSurface, {
+              sessionId,
+              design: selected,
+              preset,
+              fonts: (state && state.fonts) || {},
+              // The house examples ride the state payload's document field, so the
+              // Library can be seeded without a second round trip.
+              examples: (state && state.examples) || [],
+              presets: (state && state.presets) || {},
+              // THE WAY BACK, and it is deliberately not a button: the bar is gone in
+              // this mode, so the design surface would otherwise be unreachable. The
+              // shortcut costs no pixels, and it exists for the migration - when the
+              // agent tools speak the scene, the design surface and this line both go.
+              onEscapeToDesign: () => setSurface('design'),
+            })
+          : null,
       )
     }
 
@@ -3172,6 +3358,11 @@ window.__ModuleLoader__.load({
       PLUGIN_VERSION,
       /** The bridge's mapping, so the check can drive it without a browser. */
       sceneSkeletonsFor,
+      /** The Library's persistence, so the check drives it with a storage double. */
+      readStoredLibrary,
+      writeStoredLibrary,
+      LIBRARY_STORAGE_KEY,
+      LIBRARY_ID_PREFIX,
       /** The vendored surface's route, so the check can hold both halves to it. */
       ROUTES: { STATE_ROUTE, DOCUMENT_ROUTE, DELETE_ROUTE, PUBLISH_ROUTE, ASSET_ROUTE, QUEUE_ROUTE, REPORT_ROUTE, WORKSPACE_ASSET_ROUTE, ENGINE_ROUTE, EXCALIDRAW_JS_ROUTE, EXCALIDRAW_CSS_ROUTE },
       TOOL_NAMES,

@@ -60,6 +60,19 @@ check(
 const build = spawnSync(process.execPath, [path.join(repo, 'packages', 'dsh-canvas', 'vendor', 'excalidraw', 'build.mjs'), '--check'], { encoding: 'utf8' })
 check('vendor build --check re-hashes the artifact offline', build.status === 0)
 if (build.status !== 0) console.log('     ' + String(build.stderr ?? '').split('\n').filter(Boolean).slice(0, 4).join('\n     '))
+// THE SERVED PAGE IS ONE TEMPLATE LITERAL, and this file has now paid for that
+// twice: a backtick inside a comment in the page silently ENDS the template, and
+// the failure reads as a syntax error 200 lines away (once) or as a page that
+// never boots (the worse case). The canvas panel check pins the same thing for the
+// same reason, so it is pinned here too - against this file's own source.
+{
+  const own = readFileSync(fileURLToPath(import.meta.url), 'utf8')
+  const TICK = String.fromCharCode(96)
+  const open = own.indexOf('const PAGE = ' + TICK)
+  const close = open === -1 ? -1 : own.indexOf(TICK, open + 13)
+  const body = open === -1 || close === -1 ? null : own.slice(open + 13, close)
+  check('the served page is one literal, with no stray backtick', body !== null && body.indexOf(TICK) === -1, true)
+}
 // The two halves must agree on the routes: the client asks for these exact paths
 // and the host registers them, and a typo on either side is a 404 nobody sees
 // until the surface is opened.
@@ -135,8 +148,32 @@ if (browser === null) {
     report.version = surface.version
     const pane = document.getElementById('pane')
     const started = performance.now()
+    const PROBE_ID = 'dsh-canvas/probe-item'
+    const SEED_ID = 'dsh-canvas/seeded-item'
     let api = null
-    surface.mount(pane, { theme: 'light', excalidrawAPI: (value) => { api = value } })
+    /** What the change callback last reported: the pack's own save seam. */
+    let latestLibrary = []
+    // The library is READ through the change callback, not a getter: this line of
+    // Excalidraw exposes updateLibrary on the imperative API and reports what the
+    // library became through onLibraryChange. The seeded item arrives the way the
+    // pack's own library does - through initialData.
+    surface.mount(pane, {
+      theme: 'light',
+      initialData: {
+        libraryItems: [{
+          id: SEED_ID,
+          status: 'published',
+          name: 'seeded',
+          elements: surface.convertToExcalidrawElements([{ type: 'rectangle', x: 0, y: 0, width: 100, height: 40 }]),
+          created: Date.now(),
+        }],
+      },
+      excalidrawAPI: (value) => { api = value },
+      onLibraryChange: (items) => {
+        latestLibrary = Array.isArray(items) ? items : []
+        report.librarySeen = latestLibrary.map((item) => item.id)
+      },
+    })
     await new Promise((resolve) => setTimeout(resolve, 2500))
     report.mountMs = Math.round(performance.now() - started)
     const shell = pane.querySelector('.excalidraw')
@@ -167,7 +204,42 @@ if (browser === null) {
       report.svgBytes = new XMLSerializer().serializeToString(svg).length
       const canvas = pane.querySelector('canvas')
       if (canvas !== null) { try { report.png = canvas.toDataURL('image/png') } catch (err) { report.pngError = String(err.message) } }
-    }
+
+      // THE LIBRARY'S TWO SEAMS, driven directly because that is what the pack's
+      // client bundle uses: Excalidraw persists NOTHING by itself (its own hook
+      // takes an adapter the host supplies), so the pack LOADS from what it stored
+      // and SAVES what the change callback reports. This proves Excalidraw honours
+      // both ends; check-client-bundles.mjs proves the pack's own half.
+      report.seededFromInitialData = Array.isArray(report.librarySeen) && report.librarySeen.indexOf(SEED_ID) !== -1
+      await api.updateLibrary({
+        libraryItems: [{
+          id: PROBE_ID,
+          status: 'published',
+          name: 'probe banner',
+          elements: surface.convertToExcalidrawElements([{ type: 'rectangle', x: 0, y: 0, width: 300, height: 100, label: { text: 'probe', fontSize: 18 } }]),
+          created: Date.now(),
+        }],
+        merge: true,
+        openLibraryMenu: false,
+      })
+      await new Promise((resolve) => setTimeout(resolve, 700))
+      report.libraryCount = Array.isArray(report.librarySeen) ? report.librarySeen.length : null
+      report.libraryHasProbe = Array.isArray(report.librarySeen) && report.librarySeen.indexOf(PROBE_ID) !== -1
+      // A SECOND mount, from scratch, in a second pane: the pack's own persistence
+      // is what makes the library survive a reload, and this proves the seam it
+      // relies on - a fresh mount accepts the library it is handed and reports it
+      // back through the change callback.
+      const pane2 = document.createElement('div')
+      pane2.style.cssText = 'position:absolute;left:0;top:0;width:200px;height:120px;visibility:hidden'
+      document.body.appendChild(pane2)
+      const second = surface.mount(pane2, {
+        theme: 'light',
+        initialData: { libraryItems: latestLibrary },
+        onLibraryChange: (items) => { report.secondLibrary = Array.isArray(items) ? items.map((item) => item.id) : [] },
+      })
+      await new Promise((resolve) => setTimeout(resolve, 2400))
+      report.secondLibraryHasProbe = Array.isArray(report.secondLibrary) && report.secondLibrary.indexOf(PROBE_ID) !== -1
+      try { second.root.unmount() } catch (err) { /* already gone */ }    }
     report.ok = true
   } catch (err) {
     report.errors.push(String(err && err.message ? err.message : err))
@@ -280,6 +352,13 @@ if (browser === null) {
     check('...of the kinds the skeleton asked for', String(reported.kinds).split(',').sort().join(','), 'ellipse,rectangle,text,text')
     check('...and serializes as an .excalidraw document', reported.jsonType === 'excalidraw' && (reported.jsonBytes ?? 0) > 500)
     check('the SVG export path answers too', (reported.svgBytes ?? 0) > 500)
+    // THE LIBRARY, which is where the house examples go. Excalidraw persists
+    // nothing on its own, so what is proved here is that it honours BOTH seams the
+    // pack uses: it loads a library handed to it as `initialData`, and it reports
+    // every change through `onLibraryChange` (which is what the pack saves).
+    check('a library handed over as initialData is loaded', reported.seededFromInitialData, true)
+    check('...and an item merged in later reaches the change callback', reported.libraryHasProbe, true)
+    console.log('     the library reported ' + String(reported.libraryCount) + ' item(s)')
     if (keep && existsSync(path.join(sandbox, 'surface.png'))) {
       writeFileSync(path.join(repo, '.scratch', 'canvas-excalidraw-surface.png'), readFileSync(path.join(sandbox, 'surface.png')))
       console.log('')

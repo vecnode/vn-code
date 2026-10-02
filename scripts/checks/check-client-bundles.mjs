@@ -5870,11 +5870,38 @@ check('the canvas tool list carries canvas_style', canvasInternals.TOOL_NAMES.in
 // and the size the design measured, and the kinds with no counterpart are SKIPPED
 // AND COUNTED rather than drawn as a rectangle pretending to be art.
 check('the Excalidraw surface is the tab\u2019s default', canvasSource.includes("const [surface, setSurface] = useState('excalidraw')"))
+// NO BUTTONS IN THE TOP BAR, by not drawing the bar at all in this mode: the editor
+// owns the pane, and the pack's own bar exists only while the design surface is up.
+check('...and the pack\u2019s own bar is NOT rendered in that mode', canvasSource.includes("surface === 'design' ? toolbar : null") && canvasSource.includes("'data-canvas-surface': surface"))
+check('...so the way back to the design surface is a KEY, not a button', canvasSource.includes("event.key !== 'd' && event.key !== 'D'") && canvasSource.includes('onEscapeToDesign'))
+check('...and the note strip is the 30px one', canvasCss.includes('.dsc-excalidrawNote{flex:none;box-sizing:border-box;min-height:30px'), true)
+check('...and the editor gets the WHOLE pane', canvasCss.includes('.dsc-excalidraw{position:absolute;inset:0;'), true)
+check('...and it is seeded from the design the tab selected', canvasSource.includes('design: selected,') && canvasSource.includes('examples: (state && state.examples) || []'))
+// THE LIBRARY IS PERSISTED BY THIS PACK, because Excalidraw persists nothing by
+// itself (its own hook takes an adapter the host supplies). Both halves are driven
+// here against a storage double - including a store that THROWS, which is what a
+// browser with storage blocked does instead of answering null.
+const canvasLibraryStore = { map: {}, getItem(key) { return Object.prototype.hasOwnProperty.call(this.map, key) ? this.map[key] : null }, setItem(key, value) { this.map[key] = String(value) } }
+check('an empty store is an empty library', canvasInternals.readStoredLibrary(canvasLibraryStore).length, 0)
 check(
-  '...reached from one bar control',
-  canvasSource.includes("'data-canvas-action': 'surface'") && canvasSource.includes("surface === 'excalidraw' ? 'Design' : 'Excalidraw'"),
+  'a library round-trips through storage',
+  canvasInternals.writeStoredLibrary(canvasLibraryStore, [{ id: 'dsh-canvas/x', elements: [] }]) === true && canvasInternals.readStoredLibrary(canvasLibraryStore).length === 1,
 )
-check('...and seeded from the design the tab selected', canvasSource.includes('h(ExcalidrawSurface, { sessionId, design: selected, preset, fonts:'))
+check('...under the pack\u2019s own key', canvasLibraryStore.map[canvasInternals.LIBRARY_STORAGE_KEY] !== undefined, true)
+check('corrupt storage is an empty library, not a crash', canvasInternals.readStoredLibrary({ getItem: () => '{ not json' }).length, 0)
+const throwingStore = { getItem() { throw new Error('blocked') }, setItem() { throw new Error('blocked') } }
+check('a BLOCKED store is survivable in both directions', canvasInternals.readStoredLibrary(throwingStore).length === 0 && canvasInternals.writeStoredLibrary(throwingStore, [{ id: 'x' }]) === false)
+check('no storage at all is survivable too', canvasInternals.readStoredLibrary(null).length === 0 && canvasInternals.writeStoredLibrary(null, [{ id: 'x' }]) === false)
+check(
+  'the surface hands the stored library in and saves what comes back',
+  canvasSource.includes('initialData: { libraryItems: storedLibrary }') && canvasSource.includes('onLibraryChange: (items) =>') && canvasSource.includes('writeStoredLibrary(localStorageNow(), items)'),
+)
+check(
+  'the house examples are merged into that library, once, under stable ids',
+  canvasSource.includes("const LIBRARY_ID_PREFIX = 'dsh-canvas/'") &&
+    canvasSource.includes('id: LIBRARY_ID_PREFIX + entry.id') &&
+    canvasSource.includes('updateLibrary({ libraryItems: items, merge: true, openLibraryMenu: false })'),
+)
 const sceneSkeletonsFor = canvasInternals.sceneSkeletonsFor
 const bridged = sceneSkeletonsFor({
   boxes: [
