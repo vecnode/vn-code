@@ -265,6 +265,43 @@ check('maxLines cuts the text with an ellipsis', ellipsis.text.some((entry) => e
 check('a truncated node is reported', ellipsis.warnings.some((entry) => entry.code === 'TEXT_TRUNCATED'), true)
 const unwrapped = engine.layout(engine.normalizeDocument({ canvas: { width: 200, height: 200 }, layers: [{ kind: 'text', text: 'a very long line that will not fit the canvas at all', size: 30 }] }, { presets: PRESETS, fonts: FONTS }).document, { measure, assets: {}, fonts: FONTS })
 check('an unwrapped line wider than the canvas is reported', unwrapped.warnings.some((entry) => entry.code === 'TEXT_UNWRAPPED'), true)
+
+// Whitespace at a RUN BOUNDARY must survive, in either spelling: the first cut of
+// the run wrapper dropped it, and the browser check's own rendered banner read
+// "Shipplugins" - which is exactly the class of bug a picture finds and a
+// synthetic measurer does not.
+const runSpellings = [
+  [{ text: 'Ship ' }, { text: 'plugins', color: 'accent' }],
+  [{ text: 'Ship' }, { text: ' plugins', color: 'accent' }],
+  [{ text: 'Ship' }, { text: ' ' }, { text: 'plugins', color: 'accent' }],
+]
+for (const [index, runs] of runSpellings.entries()) {
+  const runDoc = engine.normalizeDocument({ canvas: { width: 600, height: 200 }, layers: [{ kind: 'text', w: 560, runs, style: 'display' }] }, { presets: PRESETS, fonts: FONTS })
+  const runLaid = engine.layout(runDoc.document, { measure, assets: {}, fonts: FONTS })
+  const joined = runLaid.text.map((entry) => entry.text).join('')
+  check('runs spelling ' + (index + 1) + ' keeps the space', joined.includes('Ship plugins'), true)
+  check('runs spelling ' + (index + 1) + ' styles the second word', runLaid.text.some((entry) => entry.text.includes('plugins') && entry.color === '#4D6BFE'), true)
+}
+const wrappedRuns = engine.normalizeDocument(
+  { canvas: { width: 300, height: 200 }, layers: [{ kind: 'text', w: 200, runs: [{ text: 'one two ' }, { text: 'three four five six' }], style: 'body' }] },
+  { presets: PRESETS, fonts: FONTS },
+)
+const wrappedRunLaid = engine.layout(wrappedRuns.document, { measure, assets: {}, fonts: FONTS })
+check('a wrapped run line keeps its word spacing', wrappedRunLaid.text.map((entry) => entry.text).join('').includes('one two three'), true)
+check('the wrapped runs got more than one line', wrappedRunLaid.boxes[0].lines > 1, true)
+
+// A single-run paragraph must keep EVERY space, including the one before its last
+// word: the wrapper used to join each word with the NEXT word's trailing space, so
+// "One row per tool, no forks." rendered as "…noforks." in a real banner.
+const spacingDoc = engine.normalizeDocument(
+  { canvas: { width: 800, height: 300 }, layers: [{ kind: 'text', w: 700, size: 25, letterSpacing: 2, text: 'One row per tool, no forks.' }] },
+  { presets: PRESETS, fonts: FONTS },
+)
+const spacingLaid = engine.layout(spacingDoc.document, { measure, assets: {}, fonts: FONTS })
+check('a plain paragraph keeps every space', spacingLaid.text.map((entry) => entry.text).join(''), 'One row per tool, no forks.')
+check('a two-word line keeps its only space', engine.layout(engine.normalizeDocument({ canvas: { width: 400, height: 100 }, layers: [{ kind: 'text', w: 380, text: 'DeepSeek Harness' }] }, { presets: PRESETS, fonts: FONTS }).document, { measure, assets: {}, fonts: FONTS }).text.map((entry) => entry.text).join(''), 'DeepSeek Harness')
+const spilled = engine.layout(engine.normalizeDocument({ canvas: { width: 200, height: 200 }, layers: [{ kind: 'text', w: 120, text: 'alpha beta gamma delta' }] }, { presets: PRESETS, fonts: FONTS }).document, { measure, assets: {}, fonts: FONTS })
+check('a word too wide to start a line is broken, and no space is invented', spilled.text.map((entry) => entry.text).join('').startsWith('alpha beta'), true)
 const nested = engine.layout(engine.normalizeDocument({ canvas: { width: 400, height: 400 }, layers: [{ kind: 'frame', w: 300, padding: 20, gap: 10, children: [{ kind: 'text', w: 'fill', text: 'wrapping inside a column frame happens because the frame stretches its children' }] }] }, { presets: PRESETS, fonts: FONTS }).document, { measure, assets: {}, fonts: FONTS })
 check('a column frame wraps its children', byPathOf(nested, 'layers.0.children.0').lines > 1, true)
 check('the frame hugged its content', byPathOf(nested, 'layers.0').box.h > 40, true)

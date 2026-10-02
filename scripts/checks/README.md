@@ -345,6 +345,32 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
   that the whole sandbox is deleted. `DSH_HOME`, `USERPROFILE`, `HOME` and
   `XDG_CONFIG_HOME` all point into one temp tree, so no run can touch the real
   profile.
+- `check-canvas-browser.mjs` is the other half of the canvas checks, and the only
+  one that needs a browser: `check-canvas-node.mjs` drives the engine with a
+  SYNTHETIC measurer (which is what makes the layout arithmetic verifiable
+  anywhere), so it deliberately proves nothing about real font metrics, about
+  `createImageBitmap` or about what a canvas encoder emits. This file serves the
+  plugin's own `lib/engine.js` and its vendored WOFF2 subsets over loopback, loads
+  them in a throwaway headless Chromium (a temp profile under a temp directory,
+  `--headless=new`, no network beyond that server), and runs one archetype
+  document end to end: the engine is fetched and imported **from a blob URL**
+  (exactly how the client loads it), the faces are awaited before anything is
+  measured, the document is validated and laid out with REAL metrics, the op list
+  is painted onto a real canvas, and the PNG is encoded. What it asserts is what
+  only a browser can answer: the two families load, the bundled face measures
+  DIFFERENTLY from a bare `sans-serif` stack (three widths are printed - bundled,
+  fallback, synthetic - so a face that silently did not load cannot pass), the
+  painted canvas has ink and more than one colour, **the PNG's own IHDR is exactly
+  the preset size** (1280x640) and the feed thumbnail is exactly 25% (320x160), the
+  SVG export parses as XML, and a clean archetype produces no text warnings. It
+  also POSTs the rendered design back, so the check leaves behind the REAL picture
+  it verified (`--keep` writes it to `.scratch/canvas-browser.png`) - and that
+  picture is what found two bugs the Node half could not: whitespace at a `runs`
+  boundary was dropped ("Shipplugins"), and `wrapText` joined each word with the
+  NEXT word's trailing space, which ate the space before the last word of every
+  paragraph ("noforks"). Both now have Node-side regression assertions too. With no
+  Chromium-family browser installed it SKIPS LOUDLY and exits 0; `DSH_CANVAS_BROWSER`
+  points it at a binary.
 - `check-media-examples.mjs` is the same idea for the two families whose examples
   are TOOL CALLS rather than source: it walks both media skills **and their
   reference files** plus `pdf-analysis`, and holds them to two tiers. **Shape**

@@ -1164,20 +1164,26 @@ export function wrapText(text, font, maxWidth, opts) {
       continue
     }
     const words = splitWords(paragraph)
+    // A word carries the space that FOLLOWS it, so the line is grown by appending
+    // `word` to what is already there and then its own space. (The first cut
+    // appended `current + space + word` - the NEXT word's space - which ate the
+    // space before the last word of every paragraph: "One row per tool, noforks."
+    // in a rendered banner is how this was found.)
     let current = ''
     for (const { word, space } of words) {
-      const candidate = current === '' ? word : current + space + word
+      const candidate = current === '' ? word : current + word
       if (current !== '' && widthOf(candidate) > maxWidth) {
-        lines.push(current)
-        current = word
+        lines.push(current.replace(/\s+$/, ''))
+        current = word + space
       } else {
-        current = candidate
+        current = candidate + space
       }
       // A single word wider than the box is broken at the character that fits,
       // so a long URL cannot push a headline off the canvas.
-      if (current !== '' && widthOf(current) > maxWidth) {
+      const solid = current.replace(/\s+$/, '')
+      if (solid !== '' && widthOf(solid) > maxWidth) {
         let chunk = ''
-        for (const char of current) {
+        for (const char of solid) {
           if (chunk !== '' && widthOf(chunk + char) > maxWidth) {
             lines.push(chunk)
             chunk = char
@@ -1185,10 +1191,10 @@ export function wrapText(text, font, maxWidth, opts) {
             chunk += char
           }
         }
-        current = chunk
+        current = chunk + ' '
       }
     }
-    lines.push(current)
+    lines.push(current.replace(/\s+$/, ''))
   }
   if (opts.maxLines && lines.length > opts.maxLines) {
     truncated = true
@@ -1523,42 +1529,60 @@ function wrapRunsOrText(node, font, width, ctx) {
   const maxWidth = width !== undefined ? width : Infinity
   const wrap = node.wrap !== false
   if (node.runs && node.runs.length > 0) {
-    const lines = [[]]
-    const push = (run, text, runFont) => lines[lines.length - 1].push({ text, font: runFont, color: run.color ?? node.color })
+    // ONE token stream across ALL runs, so whitespace at a run boundary survives:
+    // `runs: [{text:'Ship '},{text:'plugins'}]` and `[{text:'Ship'},{text:' plugins'}]`
+    // are the same words, and the first cut of this function dropped the space in
+    // both - "Shipplugins" in the render was how that was found. A token is styled
+    // by the run its FIRST character came from.
+    const styled = []
     for (const run of node.runs) {
-      const runFont = { ...font, weight: run.weight ?? font.weight, size: run.size ?? font.size, letterSpacing: font.letterSpacing }
+      const runFont = { ...font, weight: run.weight ?? font.weight, size: run.size ?? font.size }
       const text = applyTransform(run.text, node.transform)
-      const words = splitWords(text)
-      let current = ''
-      for (const { word, space } of words) {
-        const candidate = current === '' ? word : current + space + word
-        const widthNow = lineWidth(lines[lines.length - 1], ctx.measure)
-        const candidateWidth = ctx.measure(candidate, runFont) + (runFont.letterSpacing ?? 0) * Math.max(0, candidate.length - 1)
-        if (wrap && current !== '' && widthNow + candidateWidth > maxWidth) {
-          push(run, current, runFont)
-          lines.push([])
-          current = word
-        } else {
-          current = candidate
-        }
-        if (wrap && current !== '' && ctx.measure(current, runFont) > maxWidth) {
-          let chunk = ''
-          for (const char of current) {
-            if (chunk !== '' && ctx.measure(chunk + char, runFont) > maxWidth) {
-              push(run, chunk, runFont)
-              lines.push([])
-              chunk = char
-            } else {
-              chunk += char
-            }
-          }
-          current = chunk
-        }
+      for (const piece of text.split(/(\s+)/)) {
+        if (piece === '') continue
+        styled.push({ text: piece, font: runFont, color: run.color ?? node.color, space: /^\s+$/.test(piece) })
       }
-      if (current !== '') push(run, current, runFont)
     }
-    let result = lines.filter((line) => line.length > 0)
-    if (result.length === 0) result = [[{ text: '', font, color: node.color }]]
+    const lines = []
+    let current = []
+    let currentWidth = 0
+    const closeLine = () => {
+      if (current.length > 0) lines.push(current)
+      current = []
+      currentWidth = 0
+    }
+    for (const token of styled) {
+      // A line never starts with a space.
+      if (token.space && current.length === 0) continue
+      const width = runWidth({ text: token.text, font: token.font }, ctx.measure)
+      if (!token.space && current.length > 0 && currentWidth + width > maxWidth) closeLine()
+      if (!token.space && width > maxWidth && current.length === 0) {
+        // One word wider than the box is broken at the character that fits, so a
+        // long URL cannot push a headline off the canvas.
+        let chunk = ''
+        let chunkWidth = 0
+        for (const char of token.text) {
+          const charWidth = runWidth({ text: char, font: token.font }, ctx.measure)
+          if (chunk !== '' && chunkWidth + charWidth > maxWidth) {
+            current.push({ text: chunk, font: token.font, color: token.color })
+            closeLine()
+            chunk = ''
+            chunkWidth = 0
+          }
+          chunk += char
+          chunkWidth += charWidth
+        }
+        if (chunk !== '') {
+          current.push({ text: chunk, font: token.font, color: token.color })
+          currentWidth = chunkWidth
+        }
+        continue
+      }
+      current.push({ text: token.text, font: token.font, color: token.color })
+      currentWidth += width
+    }
+    closeLine()
+    let result = lines.length > 0 ? lines : [[{ text: '', font, color: node.color }]]
     let truncated = false
     if (node.maxLines && result.length > node.maxLines) {
       truncated = true
