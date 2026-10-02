@@ -1180,7 +1180,25 @@ check('and it is stored as failed', storeModule.verificationOf(new storeModule.C
 
 // No page answers: the tool says so rather than hanging forever.
 const lonely = await renderTool.execute({ id: 'starter-one', scope: 'conversation' }, exec)
-check('a render with no page says so', lonely.text.includes('no page answered the render'), true)
+// With no page listening, the HOST paints it - and says so, because where the pixels
+// came from is the one thing a caller cannot see for itself. On a machine with no
+// Chromium the sentence names the page it needs instead.
+{
+  const hostStatus = hostModule.hostRenderStatus ? hostModule.hostRenderStatus() : { available: false }
+  if (hostStatus.available) {
+    check('a render with no page is painted on the host', /Rendered .* at \d+\u00d7\d+/.test(lonely.text), true)
+    check('and the file really exists', Boolean(lonely.path && existsSync(lonely.path)), true)
+    const storedStarter = new storeModule.CanvasStore({ home, scope: 'conversation', sessionId: 'session-tools' }).get('starter-one')
+    const starterPreset = PRESETS[storedStarter.preset]
+    check(
+      'and its own header is exactly the preset size',
+      lonely.path ? readFileSync(lonely.path).readUInt32BE(16) + 'x' + readFileSync(lonely.path).readUInt32BE(20) : 'none',
+      starterPreset.width + 'x' + starterPreset.height,
+    )
+  } else {
+    check('a render with no page says so', lonely.text.includes('no page answered the render'), true)
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 12. Exports

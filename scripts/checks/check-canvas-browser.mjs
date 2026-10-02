@@ -24,6 +24,11 @@ export {} // (import-free: ESM for the dynamic imports below)
 const { promises: fsp } = await import('node:fs')
 const { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = await import('node:fs')
 const { createServer } = await import('node:http')
+const { pathToFileURL } = await import('node:url')
+/** A repo-relative module URL, for a check that reaches into a package. */
+function pageUrl(relative) {
+  return pathToFileURL(path.join(repo, relative)).href
+}
 const { spawn } = await import('node:child_process')
 const os = await import('node:os')
 const path = (await import('node:path')).default
@@ -440,6 +445,39 @@ run()
       console.log('note: could not remove ' + sandbox + ' (' + (err && err.code ? err.code : 'error') + ') - delete it by hand')
     }
   }
+  // -------------------------------------------------------------------------
+  // THE UNATTENDED HOST RENDERER: the package's own headless path, with no app page
+  // involved at all. Same engine, same faces, same paint call - so the file must come
+  // out at exactly the preset size at 1x and exactly twice it at 2x, and its feed
+  // thumbnail must be exactly a quarter.
+  // -------------------------------------------------------------------------
+  {
+    const { renderOnHost } = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/host-render.js')).href)
+    // The same archetype the page just drew, built here so the host path is driven
+    // from the package's own modules rather than from anything the page produced.
+    const canvasEngine = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/engine.js')).href)
+    const { ARCHETYPES } = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/archetypes/index.js')).href)
+    const { PRESETS } = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/presets.js')).href)
+    const { fontTable } = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/fonts.js')).href)
+    const hostArchetype = ARCHETYPES.find((entry) => entry.id === 'editorial-split') || ARCHETYPES[0]
+    const hostVerdict = canvasEngine.normalizeDocument(hostArchetype.document, { presets: PRESETS, fonts: fontTable() })
+    const hostDocument = { document: hostVerdict.document, preset: PRESETS[hostArchetype.presets[0]] ?? null }
+    const one = await renderOnHost({ document: hostDocument.document, preset: hostDocument.preset, scale: 1, timeoutMs: 90000 })
+    check('the host renderer answered with no page open', one.ok, true)
+    if (one.ok) {
+      const size = (buffer) => buffer.readUInt32BE(16) + 'x' + buffer.readUInt32BE(20)
+      check('the host render is EXACTLY the preset size at 1x', size(one.png), '1280x640')
+      check('the host render wrote a quarter-size feed', one.feed ? size(one.feed) : 'none', '320x160')
+      check('the host render reported the lints it took', Array.isArray(one.lints), true)
+      check('the host render used a real browser', typeof one.browser === 'string' && one.browser.length > 0, true)
+      const two = await renderOnHost({ document: hostDocument.document, preset: hostDocument.preset, scale: 2, timeoutMs: 90000 })
+      check('the host render doubles at 2x', two.ok ? size(two.png) : 'failed', '2560x1280')
+      const svg = await renderOnHost({ document: hostDocument.document, preset: hostDocument.preset, scale: 1, format: 'svg', timeoutMs: 90000 })
+      check('the host render can serialize SVG', svg.ok && typeof svg.svg === 'string' && svg.svg.startsWith('<svg'), true)
+      if (keep) writeFileSync(path.join(repo, '.scratch', 'canvas-host-render.png'), one.png)
+    }
+  }
+
   console.log('')
   console.log(failures === 0 ? 'all canvas browser checks passed' : failures + ' canvas browser check(s) FAILED')
   process.exitCode = failures === 0 ? 0 : 1

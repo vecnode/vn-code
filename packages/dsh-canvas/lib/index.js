@@ -48,6 +48,7 @@ import { ARCHETYPES, archetypeById } from './archetypes/index.js'
 import { applyStyle, styleById, styleGallery, styleIds, styleTable } from './styles/index.js'
 import { AssetStore, CanvasStore, ID_PATTERN, SCOPES, MAX_ASSET_BYTES, MAX_DOCUMENT_BYTES, renderPath, resolveHome, summarize, verificationOf } from './store.js'
 import { desktopDirectory, humanBytes, resolveNewInside, sanitizeName, writeCreateExclusive } from './export.js'
+import { hostRenderStatus, renderOnHost } from './host-render.js'
 
 export const name = 'dsh-canvas'
 
@@ -75,6 +76,7 @@ const MAX_POLL_MS = 25_000
 /** A request older than this is dead and is dropped rather than answered late. */
 const REQUEST_TTL_MS = 120_000
 /** The largest render the REPORT path asks for (the export path is larger). */
+const REPORT_FEED_SCALE = 0.25
 const REPORT_MAX_SIDE = 2048
 /** The largest JSON body a route accepts: an export at 2x can be a big PNG. */
 const MAX_BODY_BYTES = 64 * 1024 * 1024
@@ -88,6 +90,10 @@ const SKILL_FILES = [
 
 /** Every tool name, in the order the conversation cards register. */
 export const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
+// The unattended renderer is part of the row's interface, not an implementation
+// detail: a check, the health route and a person all need to ask this machine whether
+// a render can happen with no page open.
+export { hostRenderStatus } from './host-render.js'
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -507,6 +513,82 @@ function styleLines() {
   return styleGallery()
     .map((entry) => '  - ' + entry.id + '  ' + entry.name + '  (' + entry.swatch.display + ')  ' + entry.intent)
     .join('\n')
+}
+
+/**
+ * The pictures a document names, as data URLs, for the unattended renderer.
+ *
+ * The tab gets its bitmaps from its own routes; a render with no page open has to be
+ * handed the bytes, or an image-led design would come out with a hole in it. Only the
+ * assets the document actually references are read, and a name that is not in the
+ * store is simply absent - which the MISSING_ASSET lint then reports by name.
+ */
+async function assetPayload(row, document) {
+  const wanted = new Set()
+  const walk = (node) => {
+    if (node && node.kind === 'image' && typeof node.src === 'string') wanted.add(node.src)
+    for (const child of (node && node.children) ?? []) walk(child)
+  }
+  for (const layer of document.layers ?? []) walk(layer)
+  const out = {}
+  for (const name of wanted) {
+    const file = row.assets.path(name)
+    if (!file) continue
+    try {
+      const bytes = await fsp.readFile(file)
+      const extension = path.extname(file).toLowerCase()
+      const mime = extension === '.jpg' || extension === '.jpeg' ? 'image/jpeg' : extension === '.gif' ? 'image/gif' : extension === '.webp' ? 'image/webp' : 'image/png'
+      out[name] = 'data:' + mime + ';base64,' + bytes.toString('base64')
+    } catch (err) {
+      row.log?.warn?.('[dsh-canvas] could not read the asset ' + name + ': ' + (err && err.message ? err.message : err))
+    }
+  }
+  return out
+}
+
+/**
+ * Render a design ON THE HOST, with no app page involved.
+ *
+ * Same outputs as the tab's render report - the full picture, the 25% feed thumbnail,
+ * the metrics and the lints - written to the same paths, so nothing downstream can
+ * tell which painter answered. This is what makes `canvas_render` and `canvas_export`
+ * work with the app closed, and it is used as the FALLBACK: when a page is open it
+ * does the work, because a person watching the render happen is worth more than a
+ * fast answer.
+ */
+async function renderUnattended(row, sessionId, scopeKey, entry, options = {}) {
+  const scale = options.scale === 2 ? 2 : 1
+  const preset = entry.preset ? presetById(entry.preset) : null
+  const result = await renderOnHost({
+    document: entry.document,
+    preset,
+    scale,
+    assets: await assetPayload(row, entry.document),
+    timeoutMs: options.timeoutMs ?? 90000,
+  })
+  if (!result.ok) return { ok: false, error: result.error, by: 'host' }
+  const file = renderPath(row.home, sessionId, entry.id, entry.revision, scale)
+  const feedFile = renderPath(row.home, sessionId, entry.id, entry.revision, REPORT_FEED_SCALE)
+  // The same create-exclusive writer the tab's report goes through, with `overwrite`
+  // because a revision is a picture: re-rendering it replaces its own file.
+  await writeCreateExclusive({ directory: path.dirname(file), baseName: path.basename(file, '.png'), ext: 'png', bytes: result.png, overwrite: true })
+  if (result.feed) {
+    await writeCreateExclusive({ directory: path.dirname(feedFile), baseName: path.basename(feedFile, '.png'), ext: 'png', bytes: result.feed, overwrite: true })
+  }
+  return {
+    ok: true,
+    by: 'host',
+    path: file,
+    feedPath: result.feed ? feedFile : null,
+    feedScale: REPORT_FEED_SCALE,
+    width: result.width,
+    height: result.height,
+    scale: result.scale,
+    lints: result.lints ?? [],
+    metrics: result.metrics ?? null,
+    browser: result.browser,
+    ms: result.ms,
+  }
 }
 
 /** The browser-visible summary of one design, with its document. */function viewOf(scopeKey, entry) {
@@ -1053,7 +1135,7 @@ export function buildTools(row, ctx) {
       const preset = found.entry.preset ? presetById(found.entry.preset) : null
       const maxSide = preset ? Math.max(preset.width, preset.height, 1) : 1280
       const scale = maxSide > REPORT_MAX_SIDE ? REPORT_MAX_SIDE / maxSide : 1
-      const answer = await row.queue.request(
+      const queued = await row.queue.request(
         sessionId,
         {
           id: found.entry.id,
@@ -1066,6 +1148,13 @@ export function buildTools(row, ctx) {
         },
         REPORT_TIMEOUT_MS,
       )
+      // NO PAGE AT ALL? The host paints it instead. The fallback is for SILENCE, not
+      // for a failure: when a page is open and its render fails, that failure is the
+      // truth about the design and is reported as one - only nobody-answered means
+      // there was no painter, and then a headless Chromium on this machine becomes the
+      // painter. Same engine, same faces, same paint call.
+      const silent = !queued.ok && typeof queued.error === 'string' && queued.error.startsWith('no page answered the render')
+      const answer = silent && hostRenderStatus().available ? await renderUnattended(row, sessionId, found.scopeKey, found.entry, { scale: 1 }) : queued
       if (!answer.ok) {
         row.storeFor(found.scopeKey).recordRender(found.entry.id, { revision: found.entry.revision, ok: false, error: String(answer.error ?? 'the render failed') })
         const failed = row.storeFor(found.scopeKey).get(found.entry.id)
@@ -1158,7 +1247,34 @@ export function buildTools(row, ctx) {
         EXPORT_TIMEOUT_MS,
       )
       if (!answer.ok) {
-        return { text: 'The export FAILED: ' + String(answer.error ?? 'unknown error') }
+        // NO PAGE OPEN? The host writes the file. png, jpg and svg are all encoded by
+        // the same engine in the headless browser; anything the host cannot do is
+        // answered in a sentence that says which machine must be awake.
+        const status = hostRenderStatus()
+        if (!status.available) return { text: 'The export FAILED: ' + String(answer.error ?? 'unknown error') }
+        const rendered = await renderOnHost({
+          document: found.entry.document,
+          preset,
+          scale: scale === 2 ? 2 : 1,
+          format,
+          assets: await assetPayload(row, found.entry.document),
+          timeoutMs: 90000,
+        })
+        if (!rendered.ok) return { text: 'The export FAILED: ' + String(rendered.error) }
+        const directory = target === 'workspace' ? sessionRoot(sessionId) : desktopDirectory()
+        if (!directory) return { text: 'There is no folder to write into on this host.' }
+        const extension = rendered.format === 'svg' ? 'svg' : rendered.format === 'jpg' ? 'jpg' : 'png'
+        const stem = sanitizeName(name ?? found.entry.id)
+        const suffix = scale === 2 && extension !== 'svg' ? '@2x' : ''
+        const written = await writeCreateExclusive({ directory, baseName: stem + suffix, ext: extension, bytes: rendered.svg ?? rendered.png })
+        const file = written.path
+        const bytes = written.bytes ?? (rendered.svg ?? rendered.png).length
+        const lines = ['Wrote ' + file + ' (' + humanBytes(bytes) + ', ' + rendered.width + '\u00d7' + rendered.height + ', painted on the host - no app page was needed).']
+        if (preset) {
+          if (bytes > preset.maxBytes) lines.push('NOTE: that file is larger than ' + preset.label + '\u2019s ' + humanBytes(preset.maxBytes) + ' ceiling - export a JPG or a smaller scale.')
+          lines.push('Where it goes: ' + preset.destination.where)
+        }
+        return { text: lines.join('\n'), path: file, bytes }
       }
       const sizeLine = 'Wrote ' + answer.path + ' (' + humanBytes(answer.bytes ?? 0) + (answer.width ? ', ' + answer.width + '\u00d7' + answer.height : '') + ').'
       const lines = [sizeLine]
@@ -1497,6 +1613,10 @@ export function registerRoutes(ctx, row) {
       fonts,
       presets: Object.keys(PRESETS),
       styles: styleIds(),
+      // Whether a render can happen with NO app page open, and which browser would do
+      // it: a fact about this machine, and the reason a tool answer can say where its
+      // pixels came from.
+      unattended: hostRenderStatus(),
       archetypes: ARCHETYPES.map((entry) => entry.id),
       limits: LIMITS,
       queue: row.queue.status(),
