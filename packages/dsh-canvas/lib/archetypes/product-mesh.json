@@ -2,7 +2,11 @@
   "id": "product-mesh",
   "title": "Product mesh",
   "description": "A procedural mesh panel on the right reserves the product screenshot (the `image` node names assets/product.png, so that asset must be imported before export), with the headline and subhead low-left.",
-  "presets": ["github-social", "og", "linkedin-post"],
+  "presets": [
+    "github-social",
+    "og",
+    "linkedin-post"
+  ],
   "document": {
     "title": "Product mesh",
     "preset": "github-social",
@@ -49,7 +53,7 @@
         "kind": "art",
         "id": "mesh",
         "style": "mesh",
-        "x": 632,
+        "x": 664,
         "y": 104,
         "w": 560,
         "h": 400,
@@ -57,7 +61,11 @@
         "seed": 8842,
         "density": 0.7,
         "scale": 1.2,
-        "colors": ["accent", "surface", "ink"]
+        "colors": [
+          "accent",
+          "surface",
+          "ink"
+        ]
       },
       {
         "kind": "text",
@@ -133,7 +141,10 @@
             "w": "fill",
             "h": "fill",
             "fit": "cover",
-            "focus": { "x": 0.5, "y": 0.2 }
+            "focus": {
+              "x": 0.5,
+              "y": 0.2
+            }
           }
         ]
       }

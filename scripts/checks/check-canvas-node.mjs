@@ -701,16 +701,14 @@ for (const folder of skillFolders) {
     const laid = engine.layout(verdict.document, { measure: measureFor, assets: {}, fonts: FONTS })
     const found = engine
       .lintLayout(laid, verdict.document, PRESETS[archetype.presets[0]], { assets: {} })
-      .filter((lint) => ['SIBLING_EDGE', 'TEXT_ON_IMAGE'].includes(lint.code))
-    check('the ' + archetype.id + ' archetype has no near-miss edges or type over a picture', found.map((lint) => lint.code + ' ' + lint.path).join(', '), '')
+      .filter((lint) => ['OFFGRID', 'SIBLING_EDGE', 'TEXT_ON_IMAGE'].includes(lint.code))
+    check('the ' + archetype.id + ' archetype is aligned, with every panel on the grid', found.map((lint) => lint.code + ' ' + lint.path).join(', '), '')
   }
-  // OFFGRID is deliberately NOT asserted clean on the shipped archetypes yet: it fires
-  // on several of them (a centred rule 9px off the canvas centre, panels anchored to
-  // one edge and floating on the other), and that is the lint doing its job rather
-  // than a false positive - the compositions were drawn before the rule existed and
-  // the snap pass that fixes them is the next piece of work. What IS asserted is that
-  // the lint FIRES when it should (below), because a rule that never fires would make
-  // every "clean" claim meaningless.
+  // The SNAP PASS is what made that true: every top-level panel in the shipped
+  // compositions now lands on the design's own grid - a text layer's edge, the canvas
+  // edge, or the preset margin - so the rule that judges a look is one the library
+  // itself satisfies. The lint still has to FIRE when it should (below), because a
+  // rule that never fires would make every "clean" claim meaningless.
   // A chip hugs its label with EVEN padding, so the padding is right for any string
   // rather than for the one the width happened to be measured for.
   const chips = []

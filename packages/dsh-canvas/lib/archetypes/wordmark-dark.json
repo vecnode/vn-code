@@ -2,7 +2,11 @@
   "id": "wordmark-dark",
   "title": "Wordmark dark",
   "description": "A near-black surface with one huge typographic wordmark, a thin accent rule under it and a single caption line at the bottom - reaches for a repository header or a cover where the name is the whole design.",
-  "presets": ["github-social", "github-readme", "og"],
+  "presets": [
+    "github-social",
+    "github-readme",
+    "og"
+  ],
   "document": {
     "title": "Wordmark dark",
     "preset": "github-social",

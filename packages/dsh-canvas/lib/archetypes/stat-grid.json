@@ -2,7 +2,11 @@
   "id": "stat-grid",
   "title": "Stat grid",
   "description": "A row of framed cells with one big number and one caption each, sharing a single baseline - reaches for a release note or a summary where the numbers are the argument.",
-  "presets": ["github-social", "og", "linkedin-post"],
+  "presets": [
+    "github-social",
+    "og",
+    "linkedin-post"
+  ],
   "document": {
     "title": "Stat grid",
     "preset": "github-social",
@@ -88,7 +92,10 @@
             "padding": 28,
             "background": "#111725",
             "radius": "card",
-            "border": { "width": 1, "color": "#94A3B833" },
+            "border": {
+              "width": 1,
+              "color": "#94A3B833"
+            },
             "children": [
               {
                 "kind": "text",
@@ -121,7 +128,10 @@
             "padding": 28,
             "background": "#111725",
             "radius": "card",
-            "border": { "width": 1, "color": "#94A3B833" },
+            "border": {
+              "width": 1,
+              "color": "#94A3B833"
+            },
             "children": [
               {
                 "kind": "text",
@@ -154,7 +164,10 @@
             "padding": 28,
             "background": "#111725",
             "radius": "card",
-            "border": { "width": 1, "color": "#94A3B833" },
+            "border": {
+              "width": 1,
+              "color": "#94A3B833"
+            },
             "children": [
               {
                 "kind": "text",

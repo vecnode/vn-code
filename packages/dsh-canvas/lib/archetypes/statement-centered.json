@@ -2,7 +2,11 @@
   "id": "statement-centered",
   "title": "Statement centered",
   "description": "One centred sentence at display size under a small eyebrow and a hairline rule, with the rest of the canvas left empty - reaches for an announcement that has nothing to show yet.",
-  "presets": ["og", "github-social", "linkedin-post"],
+  "presets": [
+    "og",
+    "github-social",
+    "linkedin-post"
+  ],
   "document": {
     "title": "Statement centered",
     "preset": "og",
