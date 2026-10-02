@@ -1535,8 +1535,28 @@ function placeFrameChildren(node, box, path, ctx, clip, measured) {
   for (const entry of sizes) {
     const { child, size, childPath: childPathNow } = entry
     const mainSize = entry.fill ? fillSize : entry.mainSize
-    let crossSize = isNum(child[cross]) ? child[cross] : child[cross] === 'hug' ? size[cross] : inner[cross]
     const align = node.align ?? 'start'
+    /**
+     * The CROSS size, and the rule that makes centring possible at all.
+     *
+     * A named size wins, then `fill`, then - and this is the part that was missing -
+     * the child's own MEASURED size when the frame centres or ends it. The old code
+     * fell straight through to `inner[cross]`, i.e. it stretched every unnamed child
+     * across the frame even when the frame said `align: center`, so a centred label
+     * was stretched to the full height and then "centred" onto itself: the chip's
+     * label sat at the frame's top edge at every height (measured, 36.65px whatever
+     * the frame was), which is exactly what a person reads as "the link is not
+     * aligned with its background".
+     *
+     * `stretch` stays the default for an unnamed child at `start` - that is what makes
+     * a column frame's text fill the frame and wrap - so this changes only the two
+     * alignments that could never work before.
+     */
+    let crossSize
+    if (isNum(child[cross])) crossSize = child[cross]
+    else if (child[cross] === 'fill') crossSize = inner[cross]
+    else if (child[cross] === 'hug' || align === 'center' || align === 'end') crossSize = size[cross]
+    else crossSize = inner[cross]
     if (align === 'stretch' && child[cross] === undefined) crossSize = inner[cross]
     let crossOffset = direction === 'column' ? inner.x : inner.y
     if (align === 'center') crossOffset += Math.max(0, (inner[cross] - crossSize) / 2)
@@ -2804,24 +2824,36 @@ export function lintLayout(layoutResult, document, preset, opts = {}) {
     const margin = preset.margin
     // Only TOP-LEVEL layers: a chip's label is inset inside its chip by the chip's own
     // padding, and demanding that a child line up with the canvas would be nonsense.
-    const panels = boxes.filter(
-      (entry) => ['frame', 'shape', 'art', 'image'].includes(entry.kind) && entry.path.split('.').length === 2 && !coversCanvas(entry.box, layoutResult),
-    )
-    const edges = new Set([0, margin, layoutResult.width, layoutResult.width - margin].map((value) => Math.round(value)))
-    for (const entry of panels) {
-      edges.add(Math.round(entry.box.x))
-      edges.add(Math.round(entry.box.x + entry.box.w))
-    }
+    // And only the layers that CARRY something: a decorative shape or a wash (under
+    // half opacity, or smaller than 64px) is composed freely - a dot or a ring is not
+    // a panel, and judging it as one would forbid every orbital figure.
+    const panels = boxes.filter((entry) => {
+      if (!['frame', 'shape', 'art', 'image'].includes(entry.kind)) return false
+      if (entry.path.split('.').length !== 2) return false
+      if (coversCanvas(entry.box, layoutResult)) return false
+      const decorative = (entry.opacity ?? 1) < 0.5 || Math.min(entry.box.w, entry.box.h) < 64
+      return !decorative
+    })
+    const grid = [0, margin, layoutResult.width, layoutResult.width - margin].map((value) => Math.round(value))
     const near = (value, candidates) => candidates.some((candidate) => Math.abs(candidate - value) <= 1)
     for (const entry of panels) {
       const left = Math.round(entry.box.x)
       const right = Math.round(entry.box.x + entry.box.w)
-      // A panel's OWN edges are removed from the set before it is judged, or every
-      // panel would be perfectly aligned with itself and the check could never fire.
-      const others = [...edges].filter((value) => value !== left && value !== right)
-      // ONE edge is enough: a panel anchored to the margin on one side and floating on
-      // the other is how a designer spans a column. A panel that lines up on NEITHER
-      // side is what the eye reads as "not aligned".
+      // A layer that runs off the canvas is a deliberate BLEED: it is aligned with the
+      // edge it crosses, so there is nothing to line up.
+      if (left < 0 || right > layoutResult.width) continue
+      // Every OTHER box contributes its edges - and that includes the text layers,
+      // whose own left edge is the grid a composition actually sits on. The exclusion
+      // is by BOX, not by value: filtering out the number 64 would also discard a text
+      // layer that genuinely starts at 64, which is the alignment being looked for.
+      const others = grid.slice()
+      for (const source of boxes) {
+        if (source.path === entry.path) continue
+        others.push(Math.round(source.box.x), Math.round(source.box.x + source.box.w))
+      }
+      // ONE edge is enough: a panel anchored on one side and floating on the other is
+      // how a designer spans a column. A panel that lines up on NEITHER side is what
+      // the eye reads as "not aligned".
       const leftOk = left === 0 || left === layoutResult.width || near(left, others)
       const rightOk = right === 0 || right === layoutResult.width || near(right, others)
       if (!leftOk && !rightOk) {
@@ -2875,7 +2907,14 @@ export function lintLayout(layoutResult, document, preset, opts = {}) {
   //        check can only sample a FLAT colour behind a text op, so a picture is
   //        exactly the case it cannot judge - and the answer is the same one a
   //        designer gives: the layer needs a scrim, or the text needs to move.
-  const pictures = boxes.filter((entry) => entry.kind === 'image' || entry.kind === 'art')
+  const pictures = boxes.filter((entry) => {
+    if (entry.kind === 'image') return true
+    // A WASH is not a picture. A generated art layer at low opacity is a background
+    // the design was composed over - a glow, a mesh, a grain - and demanding a scrim
+    // before type may sit on it would forbid the whole technique. A dense art layer
+    // carries detail, and then the same rule as a photograph applies.
+    return entry.kind === 'art' && (entry.opacity ?? 1) > 0.6
+  })
   for (const text of textBoxes) {
     for (const picture of pictures) {
       if (!intersects(text.box, picture.box)) continue
