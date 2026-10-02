@@ -94,6 +94,34 @@ look like `layers.2`, `layers.0.children.1`, `layers.0.children.1.color`,
   document, so a patch that pushes type past the canvas or deletes a required
   field comes back as the validator's own code, not a broken design.
 
+## Layers: the person and the model edit the same nodes
+
+The tab shows a **Layers** list beside the artboard: every node of the design in
+paint order, nested by frame, named by its `id` (else a snippet of its text, else
+its `src`, else its shape or art style). Clicking a row selects that node, and the
+artboard draws its box with four handles. That list is a view of the SAME paths
+`canvas_patch` addresses, which is the point - a person dragging on the canvas and
+a model patching JSON are editing one document, through one validator.
+
+- **Dragging** a selected layer writes two pointer operations, `set x` and
+  `set y`, in design pixels:
+  ```json
+  [{ "op": "set", "at": "layers.2.x", "value": 96 },
+   { "op": "set", "at": "layers.2.y", "value": 320 }]
+  ```
+- Dragging a node that lives in a frame's **flow** gives it the position it already
+  occupies and so TAKES IT OUT OF THE FLOW (that is the layout rule, not a side
+  effect). Prefer moving nodes that already carry `x`/`y`; if a drag has to move
+  text, check the frame's `gap`/`justify` afterwards, because the remaining flow
+  children close the gap it left.
+- The arrows on a row are a **reorder** inside that node's own array: a `remove`
+  followed by an `insert`, which is also how you bring a background forward or push
+  a chip behind a panel. The last layer in `layers` paints on TOP, so z-order is
+  array order.
+- Refinement is a loop, exactly like the first draft: move or reorder ONE thing,
+  render, look, then move the next. Ten small patches with a render between them
+  beat one large patch nobody looked at.
+
 ## Sizing: the whole layout language
 
 | Value | Meaning |

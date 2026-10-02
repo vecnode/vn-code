@@ -5282,6 +5282,30 @@ check('a long path is shortened for the side panel', canvasInternals.shortPath('
 check('base64 survives a round trip', canvasInternals.toBase64(new TextEncoder().encode('canvas').buffer), 'Y2FudmFz')
 check('the feed scale is a quarter', canvasInternals.FEED_SCALE, 0.25)
 check('the zoom ladder starts at fit', canvasInternals.ZOOM_STEPS[0], 'fit')
+// THE LAYER MODEL: a design's nodes as a flat, nested, selectable list, and the
+// path arithmetic the drag and the layer rows both address.
+const layerDoc = { layers: [{ kind: 'art', id: 'backdrop' }, { kind: 'frame', id: 'stack', children: [{ kind: 'text', text: 'Ship plugins' }, { kind: 'shape', id: 'rule', x: 4, y: 8, w: 10, h: 2 }] }] }
+const canvasLayerTree = canvasInternals.layerTree(layerDoc)
+check('the layer tree walks every node in paint order', canvasLayerTree.map((row) => row.path).join(','), 'layers.0,layers.1,layers.1.children.0,layers.1.children.1')
+check('the layer tree carries depth for the indent', canvasLayerTree.map((row) => row.depth).join(','), '0,0,1,1')
+check('a node resolves by its path', canvasInternals.nodeAtPath(layerDoc, 'layers.1.children.1').id, 'rule')
+check('a missing path answers null', canvasInternals.nodeAtPath(layerDoc, 'layers.9.children.0'), null)
+check('a node with x/y is absolute', canvasInternals.isAbsolutePath(layerDoc, 'layers.1.children.1'), true)
+check('a flow child is not', canvasInternals.isAbsolutePath(layerDoc, 'layers.1.children.0'), false)
+check('a layer is named by its id', canvasInternals.layerLabel({ kind: 'shape', id: 'rule' }, 'layers.0'), 'rule')
+check('a text layer is named by its words', canvasInternals.layerLabel({ kind: 'text', text: 'Ship plugins' }, 'layers.0'), '"Ship plugins"')
+check('a run layer is named by its runs', canvasInternals.layerLabel({ kind: 'text', runs: [{ text: 'a' }, { text: 'b' }] }, 'layers.0'), '"ab"')
+check('a bare layer falls back to its own style', canvasInternals.layerLabel({ kind: 'art', style: 'mesh' }, 'layers.0'), 'mesh')
+// The composer seam and the layer dress live in the stylesheet, not inline: a tab
+// the composer floats over has to draw the hairline at the composer's own edge.
+check('the composer seam is drawn at the composer height', canvasCss.includes('bottom:var(--dsh-composer-height,152px)') && canvasCss.includes('.dsc-root:after{'), true)
+check('the artboard reserves the composer clearance', canvasCss.includes('padding-bottom:var(--dsc-composer-clearance'), true)
+check('the layer list is styled', canvasCss.includes('.dsc-layers{') && canvasCss.includes('.dsc-layer[data-selected=true]'), true)
+check('the layer rows indent by depth', canvasSource.includes('paddingLeft: 6 + row.depth * 10'), true)
+check('a selection draws a box and handles', canvasSource.includes("'data-canvas-selection'") && canvasSource.includes('handle-'), true)
+check('a drag sends x and y as pointer ops', canvasSource.includes("path + '.x'") && canvasSource.includes("path + '.y'"), true)
+check('a reorder is a remove plus an insert', canvasSource.includes('Reordered the layers') && canvasSource.includes("{ op: 'remove', at: path }"), true)
+check('dragging is a pointer gesture', canvasSource.includes('pointermove') && canvasSource.includes("element.setAttribute('data-dragging'"), true)
 // Unload the row: the renderer's own effect returned a stopper, which is what the
 // shell calls when the plugin goes away (and what lets this process exit).
 for (const dispose of canvasDisposers) dispose()

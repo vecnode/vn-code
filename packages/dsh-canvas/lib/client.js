@@ -70,7 +70,12 @@ window.__ModuleLoader__.load({
     // Styles
     // -----------------------------------------------------------------------
     const CSS = `
-.dsc-root{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:13px/1.45 var(--dsw-font-family,inherit)}
+/* The composer floats over this view (data-conversation-composer-overlay), so the
+   view draws the seam the shell would otherwise not: a hairline at the composer's
+   own top edge, on the token the app's own column separators use. The clearance
+   keeps the artboard's controls off the input box. */
+.dsc-root{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:13px/1.45 var(--dsw-font-family,inherit);--dsc-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)}
+.dsc-root:after{content:"";position:absolute;left:0;right:0;bottom:var(--dsh-composer-height,152px);height:1px;background:var(--dsw-alias-border-l3);pointer-events:none;z-index:2}
 .dsc-bar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l3);min-height:38px}
 .dsc-barGroup{display:flex;align-items:center;gap:4px}
 .dsc-spacer{flex:1}
@@ -97,10 +102,22 @@ window.__ModuleLoader__.load({
 .dsc-rowMeta{font-size:10.5px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsc-stage{flex:1;min-width:0;min-height:0;overflow:auto;position:relative;background:repeating-conic-gradient(from 0deg,var(--dsw-alias-bg-layer-1) 0% 25%,transparent 0% 50%) 0 0/16px 16px}
 .dsc-stage[data-panning=true]{cursor:grabbing}
-.dsc-pad{min-width:100%;min-height:100%;display:flex;align-items:center;justify-content:center;padding:28px}
-.dsc-art{position:relative;flex:none;box-shadow:0 18px 44px rgba(0,0,0,.28);border-radius:2px;overflow:hidden;cursor:grab}
+.dsc-pad{min-width:100%;min-height:100%;display:flex;align-items:center;justify-content:center;padding:28px;padding-bottom:var(--dsc-composer-clearance,168px)}
+.dsc-art{position:relative;flex:none;box-shadow:0 18px 44px rgba(0,0,0,.28);border-radius:2px;overflow:hidden;cursor:grab;touch-action:none}
 .dsc-art canvas{display:block;width:100%;height:100%}
+.dsc-art[data-dragging=true]{cursor:grabbing}
 .dsc-art[data-empty=true]{box-shadow:none}
+.dsc-layers{display:flex;flex-direction:column;gap:2px;margin:0 0 10px;padding:0;list-style:none}
+.dsc-layer{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;cursor:pointer;font-size:11.5px;color:var(--dsw-alias-label-secondary);border:.5px solid transparent}
+.dsc-layer:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsc-layer[data-selected=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3);color:var(--dsw-alias-label-primary)}
+.dsc-layerKind{flex:none;font:10px/16px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);text-transform:uppercase;min-width:42px}
+.dsc-layerName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsc-layerTools{flex:none;display:flex;gap:2px;opacity:0}
+.dsc-layer:hover .dsc-layerTools,.dsc-layer[data-selected=true] .dsc-layerTools{opacity:1}
+.dsc-mini{width:18px;height:18px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:4px;font-size:12px;line-height:1;padding:0}
+.dsc-mini:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsc-mini:disabled{opacity:.35;cursor:default}
 .dsc-empty{max-width:520px;text-align:center;color:var(--dsw-alias-label-secondary);display:flex;flex-direction:column;gap:12px;align-items:center}
 .dsc-empty h3{margin:0;font-size:15px;color:var(--dsw-alias-label-primary)}
 .dsc-empty p{margin:0;font-size:12.5px;color:var(--dsw-alias-label-tertiary)}
@@ -814,7 +831,7 @@ window.__ModuleLoader__.load({
      * zoomed design stays scrollable to its edge (this pack's rule from the image,
      * audio, video, PDF and diagram surfaces).
      */
-    function Artboard({ engine, document_, preset, sessionId, fonts, zoom, overlays, onLints, onMetrics, feedRef }) {
+    function Artboard({ engine, document_, preset, sessionId, fonts, zoom, overlays, onLints, onMetrics, onPrepared, selectedPath, onSelect, onMove, feedRef }) {
       const canvasRef = useRef(null)
       const preparedRef = useRef(null)
       const [preparedVersion, setPreparedVersion] = useState(0)
@@ -857,6 +874,7 @@ window.__ModuleLoader__.load({
             setPreparedVersion((value) => value + 1)
             if (onLints) onLints(prepared.lints)
             if (onMetrics) onMetrics(prepared.metrics)
+            if (onPrepared) onPrepared(prepared)
           } catch (err) {
             if (!cancelled) setNote(err && err.message ? err.message : 'the design could not be laid out')
           }
@@ -865,7 +883,7 @@ window.__ModuleLoader__.load({
         return () => {
           cancelled = true
         }
-      }, [engine, document_, preset, sessionId, fonts, onLints, onMetrics])
+      }, [engine, document_, preset, sessionId, fonts, onLints, onMetrics, onPrepared])
 
       // Paint at the current zoom (and into the feed thumbnail) whenever either
       // the prepared design or the zoom changes.
@@ -876,10 +894,65 @@ window.__ModuleLoader__.load({
         if (feedRef && feedRef.current) paintInto(engine, feedRef.current, prepared, FEED_SCALE)
       }, [engine, preparedVersion, zoom, fit, feedRef])
 
-      // Safety areas and node boxes are drawn as an SVG overlay in DESIGN pixels
-      // scaled by the same factor, so they line up whatever the zoom is.
+      // Safety areas, node boxes and THE SELECTION are drawn as an SVG overlay in
+      // DESIGN pixels scaled by the same factor, so they line up at any zoom.
       const overlay = overlays && (overlays.safe || overlays.boxes)
       const prepared = preparedRef.current
+
+      /**
+       * Pointer down on the artboard: pick the topmost MOVABLE node under the
+       * cursor and, if it moves before the pointer comes up, hand the delta back
+       * in DESIGN pixels.
+       *
+       * Hit testing uses the boxes the layout already produced, so what the person
+       * clicks is what they can see. A node is movable when it (or its parent
+       * chain) can carry an `x`/`y`: a top-level layer always can, and a child of a
+       * frame that names x/y is already out of the flow. A flow child CAN still be
+       * dragged - setting x/y is exactly what takes it out of the flow - but only
+       * the nodes the report already shows as absolute are offered first, so a
+       * stray drag inside a text block does not silently unfix its layout.
+       */
+      const onArtPointerDown = (event) => {
+        const current = preparedRef.current
+        if (!current || event.button !== 0) return
+        const rect = event.currentTarget.getBoundingClientRect()
+        const pointX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * document_.canvas.width
+        const pointY = ((event.clientY - rect.top) / Math.max(1, rect.height)) * document_.canvas.height
+        const layers = new Set((document_.layers ?? []).map((node, index) => 'layers.' + index))
+        const candidates = current.boxes.filter((entry) => {
+          const box = entry.box
+          return pointX >= box.x && pointX <= box.x + box.w && pointY >= box.y && pointY <= box.y + box.h
+        })
+        // Topmost first: the last painted box that contains the point, preferring a
+        // node that is already absolute (a top-level layer, or a child with x/y).
+        const chosen = [...candidates].reverse().find((entry) => layers.has(entry.path) || isAbsolutePath(document_, entry.path)) ?? [...candidates].reverse()[0]
+        if (!chosen) return
+        if (onSelect) onSelect(chosen.path)
+        const startX = event.clientX
+        const startY = event.clientY
+        let moved = false
+        const element = event.currentTarget
+        const move = (moveEvent) => {
+          const dx = ((moveEvent.clientX - startX) / Math.max(1, rect.width)) * document_.canvas.width
+          const dy = ((moveEvent.clientY - startY) / Math.max(1, rect.height)) * document_.canvas.height
+          if (!moved && Math.abs(dx) + Math.abs(dy) < 2) return
+          moved = true
+          element.setAttribute('data-dragging', 'true')
+          moveEvent.preventDefault()
+        }
+        const up = (upEvent) => {
+          window.removeEventListener('pointermove', move)
+          window.removeEventListener('pointerup', up)
+          element.removeAttribute('data-dragging')
+          if (!moved) return
+          const dx = ((upEvent.clientX - startX) / Math.max(1, rect.width)) * document_.canvas.width
+          const dy = ((upEvent.clientY - startY) / Math.max(1, rect.height)) * document_.canvas.height
+          if (onMove) onMove(chosen.path, Math.round(dx), Math.round(dy))
+        }
+        window.addEventListener('pointermove', move)
+        window.addEventListener('pointerup', up)
+      }
+
       return h(
         'div',
         { className: 'dsc-pad', ref: wrapRef, 'data-canvas-stage': 'true' },
@@ -888,19 +961,69 @@ window.__ModuleLoader__.load({
           {
             className: 'dsc-art',
             'data-canvas-artboard': document_.preset ?? 'freeform',
+            onPointerDown: onArtPointerDown,
             style: { width: Math.max(1, Math.round(document_.canvas.width * scale)) + 'px', height: Math.max(1, Math.round(document_.canvas.height * scale)) + 'px' },
           },
           h('canvas', { ref: canvasRef, 'data-canvas-art': 'true' }),
-          overlay && prepared
-            ? h(Overlay, { prepared, preset, width: document_.canvas.width, height: document_.canvas.height, scale, showSafe: overlays.safe, showBoxes: overlays.boxes })
+          (overlay || selectedPath) && prepared
+            ? h(Overlay, {
+                prepared,
+                preset,
+                width: document_.canvas.width,
+                height: document_.canvas.height,
+                scale,
+                showSafe: Boolean(overlays && overlays.safe),
+                showBoxes: Boolean(overlays && overlays.boxes),
+                selectedPath: selectedPath ?? null,
+              })
             : null,
         ),
         note ? h('div', { className: 'dsc-note' }, note) : null,
       )
     }
 
-    /** The safe-area and node-box overlay, in design pixels. */
-    function Overlay({ prepared, preset, width, height, scale, showSafe, showBoxes }) {
+    /** Whether a node path names something the document already positions with x/y. */
+    function isAbsolutePath(document_, path) {
+      const node = nodeAtPath(document_, path)
+      return Boolean(node && typeof node === 'object' && (node.x !== undefined || node.y !== undefined))
+    }
+
+    /** The node at a document path, or null. */
+    function nodeAtPath(document_, path) {
+      const segments = String(path ?? '').split('.')
+      let cursor = document_
+      for (const segment of segments) {
+        if (cursor === null || cursor === undefined || typeof cursor !== 'object') return null
+        cursor = Array.isArray(cursor) ? cursor[Number(segment)] : cursor[segment]
+        if (cursor === undefined) return null
+      }
+      return cursor ?? null
+    }
+
+    /** A layer's readable name: its id, else a snippet of its text, else its kind. */
+    function layerLabel(node, path) {
+      if (!node) return String(path)
+      if (typeof node.id === 'string' && node.id.length > 0) return node.id
+      if (typeof node.text === 'string' && node.text.length > 0) return '"' + node.text.slice(0, 28) + '"'
+      if (Array.isArray(node.runs) && node.runs.length > 0) return '"' + node.runs.map((run) => run.text).join('').slice(0, 28) + '"'
+      if (typeof node.src === 'string') return node.src
+      return node.shape ?? node.style ?? node.kind
+    }
+
+    /** Every node of a document as a flat list of `{ path, node, depth }`, in paint order. */
+    function layerTree(document_) {
+      const rows = []
+      const walk = (node, path, depth) => {
+        rows.push({ path, node, depth })
+        for (let index = 0; index < (node.children ?? []).length; index += 1) walk(node.children[index], path + '.children.' + index, depth + 1)
+      }
+      const layers = document_ && Array.isArray(document_.layers) ? document_.layers : []
+      for (let index = 0; index < layers.length; index += 1) walk(layers[index], 'layers.' + index, 0)
+      return rows
+    }
+
+    /** The safe-area, node-box and SELECTION overlay, in design pixels. */
+    function Overlay({ prepared, preset, width, height, scale, showSafe, showBoxes, selectedPath }) {
       const children = []
       if (showSafe && preset && Array.isArray(preset.safeAreas)) {
         for (const area of preset.safeAreas) {
@@ -933,6 +1056,35 @@ window.__ModuleLoader__.load({
               strokeWidth: 1,
             }),
           )
+        }
+      }
+      // The selection is always drawn when something is selected: it is the only
+      // way to know which layer a drag will move.
+      if (selectedPath) {
+        const entry = prepared.boxes.find((box) => box.path === selectedPath)
+        if (entry) {
+          const handle = Math.max(4, Math.round(6 / Math.max(0.2, scale)))
+          children.push(
+            h('rect', {
+              key: 'selection',
+              'data-canvas-selection': selectedPath,
+              x: entry.box.x - 1,
+              y: entry.box.y - 1,
+              width: entry.box.w + 2,
+              height: entry.box.h + 2,
+              fill: 'none',
+              stroke: 'rgba(77,107,254,0.95)',
+              strokeWidth: Math.max(1, Math.round(1.5 / Math.max(0.2, scale))),
+            }),
+          )
+          for (const [cx, cy] of [
+            [entry.box.x, entry.box.y],
+            [entry.box.x + entry.box.w, entry.box.y],
+            [entry.box.x, entry.box.y + entry.box.h],
+            [entry.box.x + entry.box.w, entry.box.y + entry.box.h],
+          ]) {
+            children.push(h('rect', { key: 'handle-' + cx + '-' + cy, x: cx - handle / 2, y: cy - handle / 2, width: handle, height: handle, fill: 'rgba(77,107,254,0.95)' }))
+          }
         }
       }
       return h(
@@ -971,6 +1123,8 @@ window.__ModuleLoader__.load({
       const [lints, setLints] = useState(null)
       const [metrics, setMetrics] = useState(null)
       const [newOpen, setNewOpen] = useState(false)
+      /** The node the layer list and the drag both address, as a document path. */
+      const [selectedPath, setSelectedPath] = useState(null)
       const feedRef = useRef(null)
       const stageRef = useRef(null)
 
@@ -1006,7 +1160,92 @@ window.__ModuleLoader__.load({
         if (selectedDocument) setDraft(JSON.stringify(selectedDocument, null, 2))
       }, [drawer, selectedRevision, selectedDocument])
 
+      // The selection belongs to ONE design: switching designs clears it.
+      useEffect(() => {
+        setSelectedPath(null)
+      }, [selectedId])
+
       const preset = selected && state && state.presets ? state.presets[selected.preset] ?? null : null
+
+      /**
+       * Send pointer operations to the host.
+       *
+       * The SAME route the source drawer and the agent's `canvas_write` go
+       * through, so a drag is validated exactly like a model write and cannot put
+       * a document the validator would refuse into the store. `by: 'person'`
+       * marks who did it.
+       */
+      const applyOps = useCallback(
+        async (ops, label) => {
+          if (!selected || !sessionId || !Array.isArray(ops) || ops.length === 0) return null
+          setBusy(true)
+          setNote(null)
+          try {
+            const answer = await api(DOCUMENT_ROUTE, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ session: sessionId, id: selected.id, scope: selected.scope, ops, by: 'person' }),
+            })
+            if (answer && answer.design) mergeDesign(storeFor(sessionId), answer.design)
+            setNote({ kind: 'info', text: (label ?? 'Edited') + ' (revision ' + (answer && answer.design ? answer.design.revision : '?') + ')' })
+            return answer
+          } catch (err) {
+            const problems = err && err.body && Array.isArray(err.body.problems) ? err.body.problems : null
+            setNote({ kind: 'error', text: problems ? problems.map((entry) => entry.message).join('\n') : err && err.message ? err.message : 'the edit was refused' })
+            return null
+          } finally {
+            setBusy(false)
+          }
+        },
+        [selected, sessionId],
+      )
+
+      /** A drag on the artboard: move one node by a delta in design pixels. */
+      const moveLayer = useCallback(
+        (path, dx, dy) => {
+          if (!selected || (!dx && !dy)) return
+          const boxes = lastPreparedRef.current
+          const entry = boxes ? boxes.boxes.find((box) => box.path === path) : null
+          const node = nodeAtPath(selected.document, path)
+          if (!node) return
+          // A node that is positioned by x/y keeps its own values; one that is in a
+          // frame's flow is given the position it already has on screen, which is
+          // exactly what takes it out of the flow (a documented rule of the
+          // language, not a side effect).
+          const startX = typeof node.x === 'number' ? node.x : entry ? Math.round(entry.box.x) : 0
+          const startY = typeof node.y === 'number' ? node.y : entry ? Math.round(entry.box.y) : 0
+          applyOps(
+            [
+              { op: 'set', at: path + '.x', value: Math.max(0, Math.round(startX + dx)) },
+              { op: 'set', at: path + '.y', value: Math.max(0, Math.round(startY + dy)) },
+            ],
+            'Moved ' + layerLabel(node, path),
+          )
+        },
+        [selected, applyOps],
+      )
+
+      /** Move one node one step up or down inside its own array. */
+      const reorderLayer = useCallback(
+        (path, direction) => {
+          if (!selected) return
+          const segments = String(path).split('.')
+          const index = Number(segments[segments.length - 1])
+          const parentPath = segments.slice(0, -1).join('.')
+          const target = index + (direction === 'up' ? 1 : -1)
+          if (target < 0) return
+          const node = nodeAtPath(selected.document, path)
+          if (!node) return
+          applyOps(
+            [
+              { op: 'remove', at: path },
+              { op: 'insert', at: parentPath + '.' + target, value: node },
+            ],
+            'Reordered the layers',
+          )
+        },
+        [selected, applyOps],
+      )
 
       // Panning: a drag on the stage moves its own scroll offsets.
       const onPointerDown = useCallback((event) => {
@@ -1113,6 +1352,11 @@ window.__ModuleLoader__.load({
 
       const onLints = useCallback((value) => setLints(value), [])
       const onMetrics = useCallback((value) => setMetrics(value), [])
+      /** The last laid-out design, kept so a drag can read the box it started on. */
+      const lastPreparedRef = useRef(null)
+      const onPrepared = useCallback((value) => {
+        lastPreparedRef.current = value
+      }, [])
 
       if (!sessionId) {
         return h('div', { className: 'dsc-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true' },
@@ -1183,16 +1427,48 @@ window.__ModuleLoader__.load({
               overlays,
               onLints,
               onMetrics,
+              onPrepared,
+              selectedPath,
+              onSelect: setSelectedPath,
+              onMove: moveLayer,
               feedRef,
             })
           : h('div', { className: 'dsc-pad' }, h(EmptyState, { engineNote, error, state, onCreate: createDesign, onOpenNew: () => setNewOpen(true) })),
       )
 
+      const layers = selected ? layerTree(selected.document) : []
       const side = h(
         'aside',
         { className: 'dsc-side', 'data-canvas-side': 'true' },
-        h('div', { className: 'dsc-sideHead' }, h('span', null, 'Report'), h('span', null, selected ? 'rev ' + selected.revision : '')),
+        h('div', { className: 'dsc-sideHead' }, h('span', null, 'Layers'), h('span', null, selected ? layers.length + ' · rev ' + selected.revision : '')),
         h('div', { className: 'dsc-sideBody' },
+          // THE LAYER LIST: every node of the design, in paint order, nested. A row
+          // selects the node the drag will move; the arrows reorder it inside its
+          // own array; the values are the design's own, in design pixels.
+          layers.length > 0
+            ? h('ul', { className: 'dsc-layers', 'data-canvas-layers': 'true' },
+                layers.map((row) =>
+                  h('li', {
+                    key: row.path,
+                    className: 'dsc-layer',
+                    'data-selected': row.path === selectedPath ? 'true' : 'false',
+                    'data-layer-path': row.path,
+                    style: { paddingLeft: 6 + row.depth * 10 + 'px' },
+                    onClick: () => setSelectedPath(row.path),
+                    title: row.path,
+                  },
+                    h('span', { className: 'dsc-layerKind' }, row.node.kind),
+                    h('span', { className: 'dsc-layerName' }, layerLabel(row.node, row.path)),
+                    h('span', { className: 'dsc-layerTools' },
+                      h('button', { type: 'button', className: 'dsc-mini', title: 'Move up in this array', disabled: busy || row.path.endsWith('.0'), onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'up') } }, '↑'),
+                      h('button', { type: 'button', className: 'dsc-mini', title: 'Move down in this array', disabled: busy, onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'down') } }, '↓'),
+                    ),
+                  ),
+                ),
+              )
+            : h('p', { className: 'dsc-rowMeta' }, selected ? 'This design has no layers yet.' : 'No design selected.'),
+          h('p', { className: 'dsc-rowMeta', style: { margin: '10px 0 6px' } }, 'Drag a layer on the artboard to move it (a node inside a frame\u2019s flow is given the position it has, which takes it out of the flow).'),
+          h('div', { className: 'dsc-sideHead', style: { borderTop: '.5px solid var(--dsw-alias-border-l2)', margin: '0 -10px', padding: '8px 10px' } }, h('span', null, 'Report'), h('span', null, metrics ? '' : 'laying out…')),
           metrics ? h('pre', { className: 'dsc-metrics' }, metricsText(metrics)) : h('p', { className: 'dsc-rowMeta' }, 'No measurements yet.'),
           selected && selected.verification && selected.verification.path
             ? h('p', { className: 'dsc-rowMeta', title: selected.verification.path }, 'Last picture: ' + shortPath(selected.verification.path))
@@ -1480,6 +1756,10 @@ window.__ModuleLoader__.load({
       flattenContent,
       metricsText,
       shortPath,
+      nodeAtPath,
+      layerTree,
+      layerLabel,
+      isAbsolutePath,
       toBase64,
       textToBase64,
       createMeasurer,

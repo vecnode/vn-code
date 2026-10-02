@@ -263,13 +263,19 @@ Both are registered at runtime through `ctx.skills.register` **and** copied into
   generators, and the composition carries the design.
 - **No HTML/CSS.** A design is JSON, not a document — nothing to sandbox, no
   external fetch, and an export story that does not need a headless browser.
-- **No direct manipulation yet.** The tab's source drawer edits the same canonical
-  document the model edits, and both go through the same validator; dragging
-  elements is a later alpha.
+- **Direct manipulation is LAYER-level, not freeform.** The tab lists every node of
+  the design and lets a person drag it on the artboard - writing the same
+  `set x`/`set y` pointer ops a model patch writes, through the same validator -
+  and reorder it inside its own array; resize handles, multi-select, snapping and
+  undo are not there yet.
 - **No unattended host renderer.** A render needs the app page (the tab does not
   have to be in front).
 - **One artboard per design.** A "set" (banner + square + OG exported together)
   is a later alpha.
+- **A starter library, not a design-system library.** Eight archetypes and ten
+  destination presets ship as data; the wider registry of design *systems* - style
+  packs with their own token sets, the shape the `awesome-design-skills` registry
+  publishes - is the next thing to add.
 
 ## Layout
 
