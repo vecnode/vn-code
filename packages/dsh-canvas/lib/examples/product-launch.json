@@ -1,0 +1,183 @@
+{
+  "id": "product-launch",
+  "title": "Product launch",
+  "intent": "A playful product launch with room for a screenshot: plum ground, saturated accents, pills, a full-bleed ring figure.",
+  "preset": "github-social",
+  "archetype": "product-mesh",
+  "style": "vibrant",
+  "copy": {
+    "eyebrow": "LAUNCH",
+    "headline": "Meet the new thing.",
+    "subhead": "What it does, for whom.",
+    "cta": "you.example/product"
+  },
+  "document": {
+    "title": "Product launch",
+    "preset": "github-social",
+    "canvas": {
+      "width": 1280,
+      "height": 640,
+      "background": {
+        "type": "solid",
+        "color": "#150b2e"
+      }
+    },
+    "tokens": {
+      "color": {
+        "ink": "#ffffff",
+        "muted": "#c6b6e8",
+        "accent": "#ff4d6d",
+        "surface": "#150b2e",
+        "panel": "#241247",
+        "accent-ink": "#2a0011",
+        "line": "#3a1f6b",
+        "warm": "#ffc93c"
+      },
+      "font": {
+        "display": "Space Grotesk",
+        "text": "Inter",
+        "mono": "system"
+      },
+      "scale": {
+        "display": 78,
+        "title": 45,
+        "subtitle": 26,
+        "body": 27,
+        "caption": 17
+      },
+      "space": 8,
+      "radius": {
+        "card": 24,
+        "pill": 999,
+        "chip": 999
+      }
+    },
+    "layers": [
+      {
+        "kind": "shape",
+        "id": "backdrop",
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 640,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#150b2e"
+        }
+      },
+      {
+        "kind": "art",
+        "id": "mesh",
+        "x": 664,
+        "y": 104,
+        "w": 560,
+        "h": 400,
+        "opacity": 0.5,
+        "radius": 24,
+        "style": "rings",
+        "colors": [
+          "#ff4d6d",
+          "#150b2e",
+          "#ffffff"
+        ],
+        "seed": 8842,
+        "density": 0.7,
+        "scale": 1.2
+      },
+      {
+        "kind": "text",
+        "id": "eyebrow",
+        "x": 64,
+        "y": 160,
+        "w": 300,
+        "text": "the plugin pack",
+        "style": "caption",
+        "weight": 600,
+        "family": "text",
+        "color": "#c6b6e8",
+        "letterSpacing": 2,
+        "transform": "upper"
+      },
+      {
+        "kind": "text",
+        "id": "headline",
+        "x": 64,
+        "y": 200,
+        "w": 520,
+        "text": "Every surface, one install.",
+        "style": "display",
+        "weight": 700,
+        "family": "display",
+        "color": "#ffffff",
+        "lineHeight": 1.1,
+        "letterSpacing": -1
+      },
+      {
+        "kind": "text",
+        "id": "subhead",
+        "x": 64,
+        "y": 400,
+        "w": 520,
+        "text": "Tools your agent can drive.",
+        "style": "body",
+        "family": "text",
+        "color": "#c6b6e8"
+      },
+      {
+        "kind": "shape",
+        "id": "rule",
+        "x": 64,
+        "y": 468,
+        "w": 72,
+        "h": 4,
+        "radius": 24,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#ff4d6d"
+        }
+      },
+      {
+        "kind": "frame",
+        "id": "shot",
+        "x": 664,
+        "y": 144,
+        "w": 496,
+        "h": 320,
+        "shadow": {
+          "x": 0,
+          "y": 20,
+          "blur": 48,
+          "color": "#ff4d6d59"
+        },
+        "radius": 999,
+        "border": {
+          "width": 0,
+          "color": "#3a1f6b"
+        },
+        "direction": "column",
+        "children": [
+          {
+            "kind": "image",
+            "id": "screenshot",
+            "w": "fill",
+            "h": "fill",
+            "blend": "overlay",
+            "radius": 24,
+            "src": "assets/product.png",
+            "fit": "cover",
+            "focus": {
+              "x": 0.5,
+              "y": 0.2
+            },
+            "scrim": "bottom",
+            "scrimColor": "#ff4d6d",
+            "scrimStrength": 0.3
+          }
+        ]
+      }
+    ],
+    "style": "vibrant"
+  }
+}

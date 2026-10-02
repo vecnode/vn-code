@@ -1,0 +1,124 @@
+{
+  "id": "wordmark-page",
+  "title": "Wordmark page",
+  "intent": "The name is the whole design: one huge wordmark on warm stock, a thin accent rule, a single caption line.",
+  "preset": "og",
+  "archetype": "wordmark-dark",
+  "style": "paper",
+  "copy": {
+    "eyebrow": "YOUR NAME",
+    "headline": "yourname",
+    "subhead": "What you do, in one line.",
+    "cta": "you.example"
+  },
+  "document": {
+    "title": "Wordmark page",
+    "preset": "og",
+    "canvas": {
+      "width": 1200,
+      "height": 630,
+      "background": {
+        "type": "solid",
+        "color": "#faf7f0"
+      }
+    },
+    "tokens": {
+      "color": {
+        "ink": "#1b1917",
+        "muted": "#5c564c",
+        "accent": "#8a5a2b",
+        "surface": "#faf7f0",
+        "panel": "#ffffff",
+        "accent-ink": "#fff8ee",
+        "line": "#e0d8c8",
+        "warm": "#c98b4b"
+      },
+      "font": {
+        "display": "Space Grotesk",
+        "text": "Inter",
+        "mono": "system"
+      },
+      "scale": {
+        "display": 157,
+        "title": 39,
+        "subtitle": 26,
+        "body": 22,
+        "caption": 16
+      },
+      "space": 10,
+      "radius": {
+        "card": 3,
+        "pill": 999,
+        "chip": 3
+      }
+    },
+    "layers": [
+      {
+        "kind": "shape",
+        "id": "backdrop",
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 640,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#faf7f0"
+        }
+      },
+      {
+        "kind": "text",
+        "id": "wordmark",
+        "x": 64,
+        "y": 208,
+        "w": 1152,
+        "text": "Fieldnotes",
+        "style": "display",
+        "weight": 600,
+        "family": "display",
+        "color": "#1b1917",
+        "lineHeight": 1.25,
+        "letterSpacing": 0
+      },
+      {
+        "kind": "shape",
+        "id": "rule",
+        "x": 64,
+        "y": 408,
+        "w": 1152,
+        "h": 3,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#8a5a2b"
+        }
+      },
+      {
+        "kind": "text",
+        "id": "caption",
+        "x": 64,
+        "y": 488,
+        "w": 700,
+        "text": "A plugin pack for the DeepSeek Harness.",
+        "style": "caption",
+        "family": "text",
+        "color": "#5c564c"
+      },
+      {
+        "kind": "shape",
+        "id": "mark",
+        "x": 1160,
+        "y": 496,
+        "w": 56,
+        "h": 8,
+        "radius": 3,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#8a5a2b"
+        }
+      }
+    ],
+    "style": "paper"
+  }
+}

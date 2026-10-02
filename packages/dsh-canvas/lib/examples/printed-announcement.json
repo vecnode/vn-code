@@ -1,0 +1,127 @@
+{
+  "id": "printed-announcement",
+  "title": "Printed announcement",
+  "intent": "An announcement that wants to feel printed: warm stock, two inks, hard little offsets instead of shadows.",
+  "preset": "linkedin-post",
+  "archetype": "statement-centered",
+  "style": "retro",
+  "copy": {
+    "eyebrow": "EST. 2026",
+    "headline": "Now in print.",
+    "subhead": "The story behind the release.",
+    "cta": "you.example/story"
+  },
+  "document": {
+    "title": "Printed announcement",
+    "preset": "linkedin-post",
+    "canvas": {
+      "width": 1200,
+      "height": 627,
+      "background": {
+        "type": "solid",
+        "color": "#f5ecd9"
+      }
+    },
+    "tokens": {
+      "color": {
+        "ink": "#221a10",
+        "muted": "#5f5138",
+        "accent": "#c2451e",
+        "surface": "#f5ecd9",
+        "panel": "#fff8e8",
+        "accent-ink": "#fff3e2",
+        "line": "#c9b79a",
+        "warm": "#e8a33d"
+      },
+      "font": {
+        "display": "Space Grotesk",
+        "text": "Inter",
+        "mono": "system"
+      },
+      "scale": {
+        "display": 94,
+        "title": 41,
+        "subtitle": 26,
+        "body": 24,
+        "caption": 15
+      },
+      "space": 8,
+      "radius": {
+        "card": 2,
+        "pill": 999,
+        "chip": 2
+      }
+    },
+    "layers": [
+      {
+        "kind": "shape",
+        "id": "backdrop",
+        "x": 0,
+        "y": 0,
+        "w": 1200,
+        "h": 630,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#f5ecd9"
+        }
+      },
+      {
+        "kind": "text",
+        "id": "eyebrow",
+        "x": 480,
+        "y": 152,
+        "w": 240,
+        "text": "Canvas",
+        "style": "caption",
+        "weight": 600,
+        "family": "text",
+        "color": "#5f5138",
+        "letterSpacing": 4,
+        "align": "center",
+        "transform": "upper"
+      },
+      {
+        "kind": "shape",
+        "id": "rule",
+        "x": 555,
+        "y": 204,
+        "w": 90,
+        "h": 2,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#c2451e"
+        }
+      },
+      {
+        "kind": "text",
+        "id": "statement",
+        "x": 200,
+        "y": 236,
+        "w": 800,
+        "text": "Compose, don't patch.",
+        "style": "display",
+        "weight": 700,
+        "family": "display",
+        "color": "#221a10",
+        "lineHeight": 1.15,
+        "letterSpacing": 0,
+        "align": "center"
+      },
+      {
+        "kind": "text",
+        "id": "footnote",
+        "x": 400,
+        "y": 486,
+        "w": 400,
+        "text": "Every surface is a row you can replace.",
+        "style": "body",
+        "family": "text",
+        "color": "#5f5138",
+        "align": "center"
+      }
+    ],
+    "style": "retro"
+  }
+}

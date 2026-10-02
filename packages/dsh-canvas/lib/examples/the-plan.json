@@ -1,0 +1,343 @@
+{
+  "id": "the-plan",
+  "title": "The plan",
+  "intent": "A plan or migration path: four numbered steps joined by a hairline, white ground, one confident blue.",
+  "preset": "linkedin-post",
+  "archetype": "roadmap-strip",
+  "style": "corporate",
+  "copy": {
+    "eyebrow": "ROADMAP",
+    "headline": "Four steps to done.",
+    "subhead": "Where this is going, and when.",
+    "cta": "See the plan"
+  },
+  "document": {
+    "title": "The plan",
+    "preset": "linkedin-post",
+    "canvas": {
+      "width": 1200,
+      "height": 627,
+      "background": {
+        "type": "solid",
+        "color": "#ffffff"
+      }
+    },
+    "tokens": {
+      "color": {
+        "ink": "#0f1b2d",
+        "muted": "#4a5a73",
+        "accent": "#1f5fd0",
+        "surface": "#ffffff",
+        "panel": "#f4f7fb",
+        "accent-ink": "#ffffff",
+        "line": "#d8e0ea",
+        "warm": "#f2a93b"
+      },
+      "font": {
+        "display": "Inter",
+        "text": "Inter",
+        "mono": "system"
+      },
+      "scale": {
+        "display": 60,
+        "title": 40,
+        "subtitle": 26,
+        "body": 22,
+        "caption": 15
+      },
+      "space": 8,
+      "radius": {
+        "card": 10,
+        "pill": 999,
+        "chip": 8
+      }
+    },
+    "layers": [
+      {
+        "kind": "shape",
+        "id": "backdrop",
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 640,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#ffffff"
+        }
+      },
+      {
+        "kind": "text",
+        "id": "title",
+        "x": 64,
+        "y": 128,
+        "w": 900,
+        "text": "Four steps to shipped.",
+        "style": "title",
+        "weight": 600,
+        "family": "display",
+        "color": "#0f1b2d",
+        "lineHeight": 1.22,
+        "letterSpacing": -0.5
+      },
+      {
+        "kind": "shape",
+        "id": "rule",
+        "x": 64,
+        "y": 208,
+        "w": 72,
+        "h": 4,
+        "radius": 8,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#1f5fd0"
+        }
+      },
+      {
+        "kind": "shape",
+        "id": "rail-1",
+        "x": 308,
+        "y": 367,
+        "w": 74,
+        "h": 2,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#94A3B859"
+        }
+      },
+      {
+        "kind": "shape",
+        "id": "rail-2",
+        "x": 602,
+        "y": 367,
+        "w": 74,
+        "h": 2,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#94A3B859"
+        }
+      },
+      {
+        "kind": "shape",
+        "id": "rail-3",
+        "x": 896,
+        "y": 367,
+        "w": 74,
+        "h": 2,
+        "shape": "rect",
+        "fill": {
+          "type": "solid",
+          "color": "#94A3B859"
+        }
+      },
+      {
+        "kind": "frame",
+        "id": "step-1",
+        "x": 64,
+        "y": 348,
+        "w": 220,
+        "h": 120,
+        "direction": "column",
+        "children": [
+          {
+            "kind": "frame",
+            "id": "chip-1",
+            "w": 48,
+            "h": 48,
+            "background": {
+              "type": "solid",
+              "color": "#111725"
+            },
+            "radius": 8,
+            "border": {
+              "width": 1,
+              "color": "#d8e0ea"
+            },
+            "direction": "row",
+            "justify": "center",
+            "align": "center",
+            "children": [
+              {
+                "kind": "text",
+                "id": "num-1",
+                "w": "hug",
+                "text": "01",
+                "size": 20,
+                "weight": 700,
+                "family": "display",
+                "color": "#0f1b2d"
+              }
+            ]
+          },
+          {
+            "kind": "text",
+            "id": "label-1",
+            "y": 68,
+            "w": "fill",
+            "text": "Add the bundle",
+            "style": "body",
+            "family": "text",
+            "color": "#0f1b2d"
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "id": "step-2",
+        "x": 358,
+        "y": 348,
+        "w": 220,
+        "h": 120,
+        "direction": "column",
+        "children": [
+          {
+            "kind": "frame",
+            "id": "chip-2",
+            "w": 48,
+            "h": 48,
+            "background": {
+              "type": "solid",
+              "color": "#111725"
+            },
+            "radius": 8,
+            "border": {
+              "width": 1,
+              "color": "#d8e0ea"
+            },
+            "direction": "row",
+            "justify": "center",
+            "align": "center",
+            "children": [
+              {
+                "kind": "text",
+                "id": "num-2",
+                "w": "hug",
+                "text": "02",
+                "size": 20,
+                "weight": 700,
+                "family": "display",
+                "color": "#0f1b2d"
+              }
+            ]
+          },
+          {
+            "kind": "text",
+            "id": "label-2",
+            "y": 68,
+            "w": "fill",
+            "text": "Register one row",
+            "style": "body",
+            "family": "text",
+            "color": "#0f1b2d"
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "id": "step-3",
+        "x": 652,
+        "y": 348,
+        "w": 220,
+        "h": 120,
+        "direction": "column",
+        "children": [
+          {
+            "kind": "frame",
+            "id": "chip-3",
+            "w": 48,
+            "h": 48,
+            "background": {
+              "type": "solid",
+              "color": "#111725"
+            },
+            "radius": 8,
+            "border": {
+              "width": 1,
+              "color": "#d8e0ea"
+            },
+            "direction": "row",
+            "justify": "center",
+            "align": "center",
+            "children": [
+              {
+                "kind": "text",
+                "id": "num-3",
+                "w": "hug",
+                "text": "03",
+                "size": 20,
+                "weight": 700,
+                "family": "display",
+                "color": "#0f1b2d"
+              }
+            ]
+          },
+          {
+            "kind": "text",
+            "id": "label-3",
+            "y": 68,
+            "w": "fill",
+            "text": "Export a canvas",
+            "style": "body",
+            "family": "text",
+            "color": "#0f1b2d"
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "id": "step-4",
+        "x": 946,
+        "y": 348,
+        "w": 220,
+        "h": 120,
+        "direction": "column",
+        "children": [
+          {
+            "kind": "frame",
+            "id": "chip-4",
+            "w": 48,
+            "h": 48,
+            "background": {
+              "type": "solid",
+              "color": "#111725"
+            },
+            "radius": 8,
+            "border": {
+              "width": 1,
+              "color": "#d8e0ea"
+            },
+            "direction": "row",
+            "justify": "center",
+            "align": "center",
+            "children": [
+              {
+                "kind": "text",
+                "id": "num-4",
+                "w": "hug",
+                "text": "04",
+                "size": 20,
+                "weight": 700,
+                "family": "display",
+                "color": "#0f1b2d"
+              }
+            ]
+          },
+          {
+            "kind": "text",
+            "id": "label-4",
+            "y": 68,
+            "w": "fill",
+            "text": "Ship it to the pack",
+            "style": "body",
+            "family": "text",
+            "color": "#0f1b2d"
+          }
+        ]
+      }
+    ],
+    "style": "corporate"
+  }
+}

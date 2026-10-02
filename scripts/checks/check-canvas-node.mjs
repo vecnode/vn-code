@@ -910,6 +910,32 @@ for (const pack of STYLE_LIST) {
   check('a theme may leave a photo raw', brutalShot.scrim === undefined && brutalShot.radius === 0, true)
 }
 
+// THE HOUSE GALLERY: twelve proven preset + archetype + style combinations, generated
+// from the library so they cannot drift, each of which must validate, sit on its grid
+// and stay legible - the same bar the archetypes and the styles are held to.
+section('house gallery')
+{
+  const examplesModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-canvas/lib/examples/index.js')).href)
+  const generated = spawnSync(process.execPath, [path.join(repo, 'packages/dsh-canvas/vendor/examples.mjs'), '--check'], { encoding: 'utf8' })
+  check('the gallery is what the table would generate', generated.status === 0 ? '' : ((generated.stdout ?? '') + (generated.stderr ?? '')).trim().slice(0, 240), '')
+  check('the gallery carries twelve examples', examplesModule.EXAMPLE_LIST.length, 12)
+  check('one example per style', new Set(examplesModule.EXAMPLE_LIST.map((entry) => entry.style)).size, 12)
+  for (const example of examplesModule.EXAMPLE_LIST) {
+    const verdict = engine.normalizeDocument(example.document, { presets: PRESETS, fonts: FONTS, styles: STYLE_TABLE })
+    check('example ' + example.id + ' validates', verdict.problems.map((problem) => problem.code).join(','), '')
+    if (!verdict.document) continue
+    const laid = engine.layout(verdict.document, { measure, assets: {}, fonts: FONTS })
+    const found = engine
+      .lintLayout(laid, verdict.document, PRESETS[example.preset], { assets: {} })
+      .filter((lint) => ['OFFGRID', 'SIBLING_EDGE', 'TEXT_ON_IMAGE', 'LOW_CONTRAST'].includes(lint.code))
+    check('example ' + example.id + ' is aligned and legible', found.map((lint) => lint.code + ' ' + lint.path).join(', '), '')
+    check('example ' + example.id + ' says when to reach for it', typeof example.intent === 'string' && example.intent.length >= 20, true)
+    check('example ' + example.id + ' carries the copy to write', Boolean(example.copy && example.copy.headline), true)
+  }
+  check('an example builds a document by id', Boolean(hostModule.documentFor({ example: 'night-launch' }).document), true)
+  check('an unknown example is refused by name', hostModule.documentFor({ example: 'no-such-example' }).error.code, 'UNKNOWN_EXAMPLE')
+}
+
 section('host row: tools')
 /** A stub cordis context with the two services the row needs. */
 function makeCtx() {

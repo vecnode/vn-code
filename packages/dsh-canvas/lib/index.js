@@ -46,6 +46,7 @@ import { PRESETS, exportProblems, presetById } from './presets.js'
 import { FONT_ROUTE_PREFIX, fontFileFor, fontStatus, fontTable } from './fonts.js'
 import { ARCHETYPES, archetypeById } from './archetypes/index.js'
 import { applyStyle, styleById, styleGallery, styleIds, styleTable } from './styles/index.js'
+import { EXAMPLE_LIST, exampleById, exampleGallery, exampleIds, exampleLines } from './examples/index.js'
 import { AssetStore, CanvasStore, ID_PATTERN, SCOPES, MAX_ASSET_BYTES, MAX_DOCUMENT_BYTES, renderPath, resolveHome, summarize, verificationOf } from './store.js'
 import { desktopDirectory, humanBytes, resolveNewInside, sanitizeName, writeCreateExclusive } from './export.js'
 import { hostRenderStatus, renderOnHost } from './host-render.js'
@@ -460,6 +461,20 @@ function starterDocument(preset, title) {
  * @returns `{ document }` or `{ error: { code, message } }`.
  */
 export function documentFor(request) {
+  // AN EXAMPLE FIRST: it names its own preset, archetype and style, so it is the one
+  // entry point that needs none of them - the whole point of a gallery row is that the
+  // choice has already been made well.
+  if (typeof request.example === 'string' && request.example.length > 0) {
+    const example = exampleById(request.example)
+    if (!example) {
+      return { error: { code: 'UNKNOWN_EXAMPLE', message: 'unknown example ' + JSON.stringify(request.example) + '; the gallery carries:\n' + exampleLines() } }
+    }
+    const document = clone(example.document)
+    if (typeof request.title === 'string' && request.title.length > 0) document.title = request.title
+    // A style named BESIDE an example switches its look; without one it keeps the look
+    // it was built with, which is recorded on the document, so re-applying is a no-op.
+    return withStyle(document, request.style ?? null)
+  }
   const preset = presetById(request.preset)
   if (!preset) {
     return { error: { code: 'UNKNOWN_PRESET', message: 'unknown preset ' + JSON.stringify(request.preset) + '; known presets:\n' + presetLines() } }
@@ -513,6 +528,11 @@ function styleLines() {
   return styleGallery()
     .map((entry) => '  - ' + entry.id + '  ' + entry.name + '  (' + entry.swatch.display + ')  ' + entry.intent)
     .join('\n')
+}
+
+/** The house gallery as text, for the index a model reads first. */
+function exampleLinesForIndex() {
+  return exampleLines()
 }
 
 /**
@@ -734,6 +754,7 @@ export function buildTools(row, ctx) {
         preset: { type: 'string', description: 'The destination preset id (see canvas_read for the table).' },
         archetype: { type: 'string', description: 'An archetype id whose composition to start from; canvas_read lists them.' },
         style: { type: 'string', description: 'A style id from the look library (editorial, brutalist, neon, ...); canvas_read lists them.' },
+        example: { type: 'string', description: 'A house example id: a proven preset + archetype + style combination to start from instead of a blank canvas; canvas_read lists them.' },
         title: { type: 'string', description: 'A short human title; the tab chip and the design list show it.' },
         id: ID_SCHEMA,
         scope: SCOPE_SCHEMA,
@@ -753,7 +774,7 @@ export function buildTools(row, ctx) {
       if (!preset) {
         return { text: 'Unknown preset ' + JSON.stringify(args.preset) + '. Known presets:\n' + presetLines() }
       }
-      const built = documentFor({ preset: args.preset, archetype: args.archetype, title: args.title, style: args.style })
+      const built = documentFor({ preset: args.preset, archetype: args.archetype, title: args.title, style: args.style, example: args.example })
       if (built.error) return { text: built.error.message }
       const verdict = validateDocument(row, built.document)
       if (!verdict.document) {
@@ -1474,6 +1495,9 @@ function indexText(row, sessionId) {
   lines.push('Presets:')
   lines.push(presetLines())
   lines.push('')
+  lines.push('Examples (a proven preset + archetype + style, with the copy to write - start here):')
+  lines.push(exampleLinesForIndex())
+  lines.push('')
   lines.push('Styles (a look to apply to any composition):')
   lines.push(styleLines())
   lines.push('')
@@ -1644,6 +1668,7 @@ export function registerRoutes(ctx, row) {
         archetypes: ARCHETYPES.map((entry) => ({ id: entry.id, title: entry.title, description: entry.description, presets: entry.presets })),
         designs: own,
         styles: styleGallery(),
+        examples: exampleGallery(),
         library,
         assets: row.assets.table(),
         assetList: row.assets.list(),
