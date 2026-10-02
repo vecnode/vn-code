@@ -383,14 +383,29 @@ bytes live):
 |---|---|---|
 | `excalidraw.min.js` | 3.07 MiB | one classic script, iife, `globalThis.DSHExcalidraw`; React 18.3.1 inlined |
 | `excalidraw.css` | 141 KiB | Excalidraw's own stylesheet — not optional: `--color-primary` and every layout rule live here |
+| `fonts/<Family>/*.woff2` | 429 KiB, 25 files | the **eight Latin faces**, one immutable route per file |
 | `LICENSE-*.txt` | 1–2 KiB | Excalidraw's (fetched from the pinned tag, hash-pinned in the build) and React's |
-| `VERSION.json` | — | the pins, the trims, the patches, a sha256 per file and a digest |
+| `VERSION.json` | — | the pins, the trims, the patches, a sha256 per file **and per face**, and what is skipped |
 
-**Two routes**, because the connection's registry matches exact paths:
+**The faces, and why they are a subset.** Excalidraw fetches its faces at runtime
+and builds each URL as `new URL('fonts/<Family>/<file>', EXCALIDRAW_ASSET_PATH)` — so
+the client points that base at the **editor's own namespace**
+(`/api/dsh-canvas/vendor/excalidraw/`, trailing slash included) and this package
+serves one exact route per file there. What ships is every **Latin** family: eight
+families, 25 files, 429 KiB. What does not is the CJK face — Xiaolai, **209 of the
+234 published files and 12.1 MiB** — and it is *declared* skipped in
+`VERSION.json.unshipped.cjkFonts` rather than quietly absent, because a missing face
+is a 404 the editor swallows as a fallback: the text draws as boxes and nothing says
+why. The check enforces exactly that distinction — every face the bundle can name is
+either vendored or in a declared-skipped family, and one missing outside a
+declaration fails the check.
+
+**Three route families**, because the connection's registry matches exact paths:
 `GET /api/dsh-canvas/vendor/excalidraw.js` and `…/excalidraw.css` — both
 `cache-control: no-cache` with the recorded sha256 as their ETag (a 3 MiB artifact
-must never be served stale), both answering `304` and `HEAD`, and a missing
-artifact is a `503` that names the rebuild command.
+must never be served stale), both answering `304` and `HEAD`, and a missing artifact
+is a `503` that names the rebuild command — plus one **immutable** route per face
+under `…/vendor/excalidraw/fonts/<Family>/<file>`.
 
 **Rebuilding it** (a build root the distribution skips, like the CodeMirror,
 pdf.js and mermaid trees):

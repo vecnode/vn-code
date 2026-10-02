@@ -275,15 +275,17 @@ window.__ModuleLoader__.load({
     const EXCALIDRAW_JS_ROUTE = '/api/dsh-canvas/vendor/excalidraw.js'
     const EXCALIDRAW_CSS_ROUTE = '/api/dsh-canvas/vendor/excalidraw.css'
     /**
-     * Excalidraw builds its own runtime asset URLs as `<base> + 'fonts/…'` and
-     * `<base> + 'locales/…'`, and reads the global below ONCE. Those routes do not
-     * exist yet (VERSION.json's `unshipped` says so), so the fetches 404 and the
-     * editor falls back to the faces its bundle already carries - which is
-     * measured, not hoped for: the spike rendered text before any font was served.
-     * The prefix is still set, because the day those routes exist this line is the
-     * only thing that has to be true.
+     * Excalidraw builds its own runtime asset URLs as
+     * `new URL('fonts/<Family>/<file>', EXCALIDRAW_ASSET_PATH)`, and reads the global
+     * below ONCE, before the first mount. The base is the EDITOR'S OWN namespace
+     * rather than the vendor root: this package's own vendored faces live at
+     * `/api/dsh-canvas/vendor/fonts/<file>` (flat), so keeping Excalidraw's nested
+     * tree under `/vendor/excalidraw/fonts/...` stops the two from sharing a prefix -
+     * they would collide on a route count, and one day on a cache key. The locale
+     * modules are still stubbed (VERSION.json's `unshipped` says so), so a face is
+     * the only thing reached through here today.
      */
-    const EXCALIDRAW_ASSET_PATH = '/api/dsh-canvas/vendor/'
+    const EXCALIDRAW_ASSET_PATH = '/api/dsh-canvas/vendor/excalidraw/'
     /**
      * The house examples become Excalidraw LIBRARY items, and these two numbers
      * are the whole policy: a stable id prefix (so re-seeding MERGES instead of

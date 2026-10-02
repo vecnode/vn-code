@@ -81,12 +81,58 @@ check('...and the stylesheet first', clientSource.includes("const EXCALIDRAW_CSS
 check('...as a CLASSIC script, not a module import', clientSource.includes("script.setAttribute('src', EXCALIDRAW_JS_ROUTE + '?v=' + PLUGIN_VERSION)") && clientSource.includes('window.DSHExcalidraw'))
 check('...and it sets the asset path Excalidraw reads once', clientSource.includes("window.EXCALIDRAW_ASSET_PATH = EXCALIDRAW_ASSET_PATH"))
 check(
+  '...which is the editor\u2019s OWN namespace, with the trailing slash `new URL` needs',
+  clientSource.includes("const EXCALIDRAW_ASSET_PATH = '/api/dsh-canvas/vendor/excalidraw/'"),
+)
+check(
   'the host registers both routes with the registry\u2019s own shape',
   nodeSource.includes("const EXCALIDRAW_JS_ROUTE = API_ROOT + '/vendor/excalidraw.js'") &&
     nodeSource.includes("register(EXCALIDRAW_JS_ROUTE, ['GET', 'HEAD']") &&
     nodeSource.includes("register(EXCALIDRAW_CSS_ROUTE, ['GET', 'HEAD']"),
 )
 check('...and answers 304 over the recorded hash', nodeSource.includes("cache-control': 'no-cache'") && nodeSource.includes('if-none-match'))
+
+// THE FACES. Excalidraw resolves every one it fetches as
+// `new URL('fonts/<Family>/<file>', EXCALIDRAW_ASSET_PATH)`, so the question worth
+// pinning is not "were some fonts copied" but "is every face this bundle can ask
+// for either vendored or DECLARED skipped". The second half is the load-bearing
+// one: the bundle names 230 files and this package deliberately ships 25 of them,
+// and without the declaration a missing face is a 404 the editor swallows as a
+// silent fallback - the CJK text simply draws as boxes and nothing says why.
+const referencedFaces = new Set()
+for (const match of readFileSync(path.join(vendorDir, 'excalidraw.min.js'), 'utf8').matchAll(/\.\/fonts\/([A-Za-z]+)\/([A-Za-z0-9._-]+\.woff2)/g)) {
+  referencedFaces.add(match[1] + '/' + match[2])
+}
+const skippedFamilies = new Set(record.fonts?.skipped ?? [])
+const vendoredFaces = new Set()
+for (const [family, entries] of Object.entries(record.fonts?.families ?? {})) for (const name of Object.keys(entries)) vendoredFaces.add(family + '/' + name)
+const facesMissing = []
+const skippedReached = new Set()
+for (const face of referencedFaces) {
+  if (vendoredFaces.has(face)) continue
+  const family = face.split('/')[0]
+  if (skippedFamilies.has(family)) skippedReached.add(family)
+  else facesMissing.push(face)
+}
+check('the vendor tree ships the LATIN faces', vendoredFaces.size, 25)
+check('...and the bundle can reach them', referencedFaces.size > 20)
+check('...while NOTHING it can ask for is missing outside a DECLARED skip', facesMissing.length, 0)
+if (facesMissing.length > 0) console.log('     missing: ' + facesMissing.slice(0, 6).join(', '))
+console.log(
+  '     faces: ' +
+    String(vendoredFaces.size) +
+    ' vendored of ' +
+    String(referencedFaces.size) +
+    ' referenced \u00b7 skipped: ' +
+    (skippedFamilies.size === 0 ? 'none' : [...skippedFamilies].join(', ') + ' (' + String(skippedReached.size) + ' reached by the bundle)'),
+)
+{
+  const sample = Object.entries(record.fonts?.families ?? {})[0]
+  if (sample !== undefined) {
+    const bytes = readFileSync(path.join(vendorDir, 'fonts', sample[0], Object.keys(sample[1])[0]))
+    check('a vendored face is a real woff2 file, at the recorded size', bytes.subarray(0, 4).toString('latin1') + ':' + String(bytes.length), 'wOF2:' + String(Object.values(sample[1])[0].bytes))
+  }
+}
 
 // ---------------------------------------------------------------------------
 // The artifact, in a browser.
@@ -142,7 +188,11 @@ if (browser === null) {
     })
     document.head.appendChild(script)
     await loaded
-    window.EXCALIDRAW_ASSET_PATH = '/vendor/'
+    // THE ASSET BASE THE CLIENT SETS, to the letter: the editor resolves
+    // './fonts/<Family>/<file>' against it, and a base without its trailing slash
+    // would resolve to the wrong directory - so the check uses the client's own
+    // constant rather than a hand-typed copy.
+    window.EXCALIDRAW_ASSET_PATH = '/excalidraw/'
     const surface = window.DSHExcalidraw
     report.surfaceKeys = Object.keys(surface).join(',')
     report.version = surface.version
@@ -250,6 +300,8 @@ if (browser === null) {
 
   const sandbox = mkdtempSync(path.join(os.tmpdir(), 'dsh-canvas-excalidraw-'))
   let reported = null
+  /** Every face the editor asked for, in order: the end-to-end font evidence. */
+  const fontRequests = []
   const server = createServer((request, response) => {
     const url = new URL(request.url, 'http://127.0.0.1')
     if (request.method === 'POST' && url.pathname === '/report') {
@@ -269,6 +321,23 @@ if (browser === null) {
     if (url.pathname === '/' || url.pathname === '/index.html') {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
       response.end(PAGE)
+      return
+    }
+    if (url.pathname.startsWith('/excalidraw/fonts/')) {
+      // A FACE, on the path the editor builds for it: './fonts/<Family>/<file>'
+      // resolved against '/excalidraw/'. Every request is COUNTED, because "the
+      // editor really fetched a face" is the end-to-end fact this check exists for.
+      const relative = url.pathname.slice('/excalidraw/fonts/'.length).split('/')
+      const file = path.join(vendorDir, 'fonts', ...relative.map((part) => decodeURIComponent(part)))
+      fontRequests.push(relative.join('/'))
+      if (!existsSync(file)) {
+        response.writeHead(404, { 'content-type': 'text/plain' })
+        response.end('no such face')
+        return
+      }
+      const bytes = readFileSync(file)
+      response.writeHead(200, { 'content-type': 'font/woff2', 'cache-control': 'public, max-age=31536000, immutable', 'content-length': String(bytes.length) })
+      response.end(bytes)
       return
     }
     if (url.pathname === '/excalidraw.js' || url.pathname === '/excalidraw.css') {
@@ -359,6 +428,14 @@ if (browser === null) {
     check('a library handed over as initialData is loaded', reported.seededFromInitialData, true)
     check('...and an item merged in later reaches the change callback', reported.libraryHasProbe, true)
     console.log('     the library reported ' + String(reported.libraryCount) + ' item(s)')
+    // THE FACES, end to end: the editor resolved one through EXCALIDRAW_ASSET_PATH
+    // and this server answered it from the vendored tree. Nothing is asserted about
+    // WHICH face (that is the editor's business, and it depends on the glyphs on
+    // screen) - only that the path it builds is the path this package serves, which
+    // is the fact that would otherwise be a silent fallback.
+    check('the editor fetched a face through its asset path', fontRequests.length > 0, true)
+    check('...on the vendored path, not a 404', fontRequests.every((face) => vendoredFaces.has(face)), true)
+    console.log('     faces fetched: ' + (fontRequests.length === 0 ? 'none' : [...new Set(fontRequests)].join(', ')))
     if (keep && existsSync(path.join(sandbox, 'surface.png'))) {
       writeFileSync(path.join(repo, '.scratch', 'canvas-excalidraw-surface.png'), readFileSync(path.join(sandbox, 'surface.png')))
       console.log('')
