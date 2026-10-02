@@ -4431,7 +4431,51 @@ check('audio claims exactly the three families', JSON.stringify(audioTypes[0].pa
 // this type adds no guide capsule - it only ever claims a real file address.
 check('the audio type adds no guide entry', audioTypes[0].guide === undefined)
 check('the audio chip title is the file name', audioTypes[0].title('dsh-resource://file/session/s1/takes/take%2001.wav'), 'take 01.wav')
-check('audio seats', Object.keys(audioSeats).sort().join(','), 'sidebar.right.pane.tab#dsh-audio,sidebar.right.pane.tab.title#dsh-audio')
+// The tab seats, AND (alpha.3) the two registrations the left column's Audio
+// button needs: the panel ROW the shell draws, and the `main` SEAT its click
+// selects. Both are asserted by shape below, because the row is useless without
+// the seat (layout.selectPanel throws for an id with no panel behind it) and the
+// seat is unreachable without the row.
+check(
+  'audio seats',
+  Object.keys(audioSeats).sort().join(','),
+  'main#audio,sidebar.panellist,sidebar.right.pane.tab#dsh-audio,sidebar.right.pane.tab.title#dsh-audio',
+)
+check(
+  'the Audio row is a panel row of this package, above Plugins',
+  audioSeats['sidebar.panellist'] !== undefined &&
+    audioSeats['sidebar.panellist'].spec.name === 'sidebar.panellist' &&
+    audioSeats['sidebar.panellist'].spec.id === A.PANEL_ID &&
+    audioSeats['sidebar.panellist'].spec.order === A.PANEL_ORDER &&
+    audioSeats['sidebar.panellist'].spec.label === 'Audio',
+)
+check('...and the seat its click selects is keyed by the same id', audioSeats['main#audio'] !== undefined && audioSeats['main#audio'].spec.key === A.PANEL_ID)
+// Plugins is the row this one must sit ON TOP OF, and `order` is the whole
+// mechanism: the list sorts ascending. Pinned against the SHIPPED bundle rather
+// than against a comment, and skipped loudly on a host with no harness install.
+{
+  const pluginManagerFile = findCoreFile(path.join('@deepseek-ai', 'dsh-client-ui-plugin-manager', 'lib', 'client.js'))
+  if (pluginManagerFile === null) {
+    console.log('skip the shipped Plugins row order                      (no core bundle on this host)')
+  } else {
+    const pluginManager = readFileSync(pluginManagerFile, 'utf8')
+    const at = pluginManager.indexOf('"sidebar.panellist"')
+    const registration = at === -1 ? '' : pluginManager.slice(at, at + 420)
+    check('the shipped Plugins row still registers at order 0', registration.includes('order: 0'), true)
+    check('...so an order below zero is above it', A.PANEL_ORDER < 0, true)
+    // The label is what the shell prints in the row AND in its tooltip, so it
+    // has to be the plain product name and nothing else.
+    check('the row is labelled exactly "Audio"', audioSeats['sidebar.panellist'].spec.label === 'Audio', true)
+  }
+}
+// The glyph is drawn here (the shipped primitives have no speaker icon) and it
+// is the ONLY thing the row's registrant owns: the shell draws the button, its
+// hover, its active state and the label.
+check(
+  'the row draws a speaker glyph and nothing else',
+  renderToStaticMarkup(h(A.AudioPanelRow, { size: 16, active: false })).indexOf('<svg') !== -1 &&
+    renderToStaticMarkup(h(A.AudioPanelRow, { size: 16, active: false })).indexOf('Audio') === -1,
+)
 const AudioBody = audioSeats['sidebar.right.pane.tab#dsh-audio'].component
 const audioTab = { id: 'tab11', contentId: 'dsh-resource://file/session/s1/takes/take%2001.wav', title: 'take 01.wav' }
 const audioMarkup = renderToStaticMarkup(h(AudioBody, { useTabInfo: () => ({ tab: audioTab }), sessionId: 's1' }))
@@ -4512,6 +4556,331 @@ check(
     audioViewerInfoMarkup.includes('Take 1') &&
     audioViewerInfoMarkup.includes('Test') &&
     audioViewerInfoMarkup.includes('256 samples/bucket'),
+)
+
+// --- the audio console (alpha.3): this machine's devices, the output the page
+// plays through, and the tone that proves it
+//
+// The console is the pack's first surface about the MACHINE rather than about a
+// file: which outputs and inputs this computer has, which one this page plays
+// through, and a tone that verifies the pick by ear. None of that is reachable
+// from a server render - enumeration, routing and playback are all effects - so
+// this section splits it the way the rest of this file does: the NUMBERS are
+// pure and driven here, and the MARKUP is rendered from hand-built devices.
+
+// The three shapes a browser can have, as environment objects: the branch that
+// decides whether a pick can be honoured AT ALL, and the sentence each branch
+// owes the reader. Only Chromium 110+ routes a page's Web Audio graph, and
+// Firefox/Safari route nothing - so the "no" branch has to name the way out.
+check('a browser with AudioContext.setSinkId routes the app\u2019s own engine', A.pickOutputStrategy({ contextSetSinkId: true, elementSetSinkId: true }).kind, 'context')
+check('a browser with only HTMLMediaElement.setSinkId routes the tone', A.pickOutputStrategy({ elementSetSinkId: true }).kind, 'element')
+const noRouting = A.pickOutputStrategy({})
+check('a browser with neither says so instead of pretending', noRouting.kind === 'none' && noRouting.sentence.includes('system mixer'))
+
+// The device list: the default alias is folded onto the EMPTY id, the two kinds
+// are separated, the browser's own order is replaced by default-then-label, a
+// device with no name is KEPT (it is a real device) and the list reports that a
+// name is missing, and a camera is not audio.
+const rawDeviceList = [
+  { kind: 'audioinput', deviceId: 'mic1', label: 'USB Microphone', groupId: 'g1' },
+  { kind: 'audiooutput', deviceId: 'default', label: 'Default', groupId: 'g2' },
+  { kind: 'audiooutput', deviceId: 'spk1', label: 'Speakers (Realtek)', groupId: 'g2' },
+  { kind: 'audiooutput', deviceId: 'hdmi1', label: '', groupId: 'g3' },
+  { kind: 'videoinput', deviceId: 'cam1', label: 'Webcam', groupId: 'g4' },
+]
+const devices = A.normalizeDevices(rawDeviceList)
+check(
+  'the device list splits the two kinds, default first',
+  devices.outputs.length === 3 && devices.inputs.length === 1 && devices.outputs[0].id === '' && devices.outputs[0].isDefault === true,
+)
+check('...sorts the rest by label', devices.outputs[1].id === 'hdmi1' && devices.outputs[2].id === 'spk1', true)
+check('...keeps an unnamed device and says a name is missing', devices.unnamed === true && devices.outputs[1].label === '')
+check('...and drops a camera', devices.outputs.every((device) => device.kind === 'output') && devices.inputs[0].id === 'mic1')
+check(
+  'a nameless device is named by its position instead',
+  A.deviceTitle({ label: '', kind: 'output' }, 1) === 'Output 2' && A.deviceTitle({ label: '', kind: 'input' }, 0) === 'Input 1' && A.deviceTitle({ label: 'Speakers' }, 0) === 'Speakers',
+)
+check('an id is a hash, so a card shows six characters of it', A.shortId('0123456789abcdef') === '012345\u2026' && A.shortId('') === 'system default' && A.shortId('ab') === 'ab')
+// Where the system default GOES. Chromium gives the alias and the device it
+// resolves to the SAME groupId, which is the only way to show it rather than
+// leave a person to find out by ear.
+check('the default card can name the device it points at', A.defaultTargetOf(devices.outputs), 'Speakers (Realtek)')
+check('...and says nothing when the browser does not group them', A.defaultTargetOf([{ kind: 'output', id: '', label: 'Default', groupId: '', isDefault: true }]), '')
+check(
+  'a picked device is named, and a device that has gone says so',
+  A.nameOfId(devices.outputs, 'spk1') === 'Speakers (Realtek)' &&
+    A.nameOfId(devices.outputs, '') === 'system default' &&
+    A.nameOfId(devices.outputs, 'gone') === 'a device that is no longer connected',
+)
+
+// The tone's numbers. The level is a SQUARE law so the slider's middle is -12 dB
+// (a linear slider spends nine tenths of its travel in the top 20 dB) and the
+// frequency is clamped to what a listener can hear.
+check('the level slider is a square law, so half of it is -12 dB', A.gainForLevel(50) === 0.25 && A.gainForLevel(100) === 1 && A.gainForLevel(0) === 0, true)
+check('...and the label beside it says the same thing', A.dbForLevel(50).toFixed(1), '-12.0')
+check('a typed frequency is clamped to the audible band', A.clampFrequency(0) === 440 && A.clampFrequency(999999) === 20000 && A.clampFrequency(3) === 20 && A.clampFrequency(440.4) === 440)
+check('the channel picker has three positions', A.panForChannel('left') === -1 && A.panForChannel('right') === 1 && A.panForChannel('both') === 0)
+check('a steady tone stops itself', A.TONE_MAX_SECONDS === 30)
+
+// The tone as samples, which is what the `element` path plays and what the WAV
+// encoder writes: silent at BOTH ends (a click is not a speaker test), and a
+// channel choice has to be SILENT on the side it is not testing - an equal-power
+// pan law would leave a "left" tone audible on the right.
+const toneLeft = A.toneChannels({ frequency: 250, level: 100, channel: 'both', sampleRate: 1000, seconds: 1 })
+check('a generated tone is two channels of a sine', toneLeft.length === 2 && toneLeft[0].length === 1000 && toneLeft[1].length === 1000)
+check('...silent at both ends', toneLeft[0][0] === 0 && toneLeft[0][999] === 0 && toneLeft[1][0] === 0)
+let tonePeak = 0
+for (let index = 100; index < 900; index += 1) tonePeak = Math.max(tonePeak, Math.abs(toneLeft[0][index]))
+check('...at the level the slider asked for', tonePeak > 0.999 && tonePeak <= 1)
+check('...and equal in both channels for "both"', toneLeft[0][400] === toneLeft[1][400] && toneLeft[0][400] !== 0)
+// A mono choice is the same signal on ONE side only, which is what makes the
+// channel picker a speaker check at all.
+const monoChoice = A.toneChannels({ frequency: 250, level: 100, channel: 'left', sampleRate: 1000, seconds: 0.01 })
+check('...and a left-only tone is exactly that', monoChoice[0][5] !== 0 && monoChoice[1][5] === 0)
+
+// THE WAV ENCODER, against the decoder that sits next to it in the same file:
+// the tone is encoded, parsed back as a container and decoded as PCM, and the
+// numbers that come out have to be the numbers that went in. That is the only
+// way the `element` path's sound is verified without a browser to play it.
+const encodedTone = A.encodeWav(toneLeft, 1000)
+const encodedFacts = A.parseWav(encodedTone, encodedTone.length)
+check(
+  'the generated tone is a real RIFF/WAVE the package\u2019s own parser accepts',
+  encodedFacts.ok === true && encodedFacts.format.kind === 's16' && encodedFacts.sampleRate === 1000 && encodedFacts.channels === 2 && encodedFacts.frames === 1000,
+)
+const decodedTone = A.decodePcm(encodedFacts.format, encodedTone.subarray(encodedFacts.dataOffset))
+let roundTripWorst = 0
+for (let index = 0; index < 1000; index += 1) {
+  roundTripWorst = Math.max(roundTripWorst, Math.abs(decodedTone.channels[0][index] - toneLeft[0][index]), Math.abs(decodedTone.channels[1][index] - toneLeft[1][index]))
+}
+check('...and 16-bit round-trips to within one LSB', roundTripWorst <= 1 / 32767 + 1e-9)
+
+// The meter. `getByteTimeDomainData` hands back unsigned bytes about 128, so the
+// reading is an amplitude and the bar is a dB scale - a linear bar would sit at
+// zero for every room a microphone is actually used in.
+check('the meter reads silence as silence', A.rmsOfWaveform(new Uint8Array(64).fill(128)) === 0)
+const halfScaleWave = new Uint8Array(64)
+for (let index = 0; index < 64; index += 1) halfScaleWave[index] = index % 2 === 0 ? 192 : 64
+check('...and a half-scale square wave as a half-scale amplitude', Math.abs(A.rmsOfWaveform(halfScaleWave) - 0.5) < 1e-12)
+check('the bar is a 60 dB scale', A.levelBar(1) === 1 && A.levelBar(0) === 0 && Math.abs(A.levelBar(0.5) - (60 - 20 * Math.log10(2)) / 60) < 1e-12)
+check('a camel-case setting reads as words', A.camelWords('echoCancellation') === 'echo cancellation' && A.camelWords('autoGainControl') === 'auto gain control')
+const described = A.describeStream({
+  getSettings: () => ({ sampleRate: 48000, channelCount: 1, latency: 0.01, echoCancellation: false, noiseSuppression: true }),
+  getCapabilities: () => ({ sampleRate: { min: 8000, max: 48000 } }),
+})
+check(
+  'the input test reports what the browser actually opened',
+  JSON.stringify(described),
+  JSON.stringify([
+    ['sample rate', '48000 Hz'],
+    ['channels', '1'],
+    ['latency', '10.0 ms'],
+    ['echo cancellation', 'off'],
+    ['noise suppression', 'on'],
+    ['device rates', '8000\u201348000 Hz'],
+  ]),
+)
+// A track with no `getSettings` at all is not a crash: the meter still runs.
+check('a track that reports nothing describes nothing', A.describeStream({}).length === 0 && A.describeStream(null).length === 0)
+check('a chosen input is opened EXACTLY, and the default is left to the system', JSON.stringify(A.captureConstraints('mic1')), JSON.stringify({ audio: { deviceId: { exact: 'mic1' } } }))
+check('...and the default asks for nothing in particular', JSON.stringify(A.captureConstraints('')), JSON.stringify({ audio: true }))
+
+// The remembered choice, driven with a storage double - including the two shapes
+// a real browser hands back: a BLOCKED store (which THROWS on access rather than
+// answering null) and a value that is not the JSON this package wrote.
+const storageDouble = { map: {}, getItem(key) { return Object.prototype.hasOwnProperty.call(this.map, key) ? this.map[key] : null }, setItem(key, value) { this.map[key] = String(value) } }
+check('an unset choice is the system default', JSON.stringify(A.readChoice(storageDouble)), JSON.stringify({ outputId: '', inputId: '' }))
+A.writeChoice(storageDouble, { outputId: 'spk1', inputId: 'mic1' })
+check('a choice round-trips through storage', JSON.stringify(A.readChoice(storageDouble)), JSON.stringify({ outputId: 'spk1', inputId: 'mic1' }))
+storageDouble.map[A.STORAGE_KEY] = '{ not json'
+check('...and corrupt storage is the default rather than a crash', A.readChoice(storageDouble).outputId === '')
+const throwingStorage = { getItem() { throw new Error('blocked') }, setItem() { throw new Error('blocked') } }
+check('...and a BLOCKED store is survivable in both directions', A.readChoice(throwingStorage).outputId === '' && A.writeChoice(throwingStorage, { outputId: 'x', inputId: '' }) === undefined)
+check('no storage at all is survivable too', A.readChoice(null).outputId === '' && A.writeChoice(null, { outputId: 'x', inputId: '' }) === undefined)
+
+// THE CONSOLE, RENDERED. One ready state with both kinds of device, a default
+// that points somewhere, a chosen output, and a routing verdict - which is as
+// much as a static render can see, and enough to catch a card that lost its
+// selection test or a control that lost its label.
+const consoleReady = {
+  phase: 'ready',
+  error: '',
+  unnamed: true,
+  outputs: [
+    { kind: 'output', id: '', label: 'Default', groupId: 'g2', isDefault: true },
+    { kind: 'output', id: 'hdmi1', label: '', groupId: 'g3', isDefault: false },
+    { kind: 'output', id: 'spk1', label: 'Speakers (Realtek)', groupId: 'g2', isDefault: false },
+  ],
+  inputs: [{ kind: 'input', id: 'mic1', label: 'USB Microphone', groupId: 'g1', isDefault: false }],
+}
+const consoleMarkup = renderToStaticMarkup(
+  h(A.AudioConsoleView, {
+    state: consoleReady,
+    choice: { outputId: 'spk1', inputId: 'mic1' },
+    routing: A.pickOutputStrategy({ contextSetSinkId: true }),
+    tone: { playing: false, frequency: 440, level: 50, channel: 'both' },
+    meter: { phase: 'idle', error: '', level: 0, peak: 0, rows: [] },
+    status: { tone: 'ok', message: 'The device names are visible now.' },
+    naming: false,
+    engineState: 'running',
+    engineRate: '48000 Hz',
+    onSelectOutput: () => {},
+    onSelectInput: () => {},
+    onFrequency: () => {},
+    onLevel: () => {},
+    onChannel: () => {},
+    onToggle: () => {},
+    onInputStart: () => {},
+    onInputStop: () => {},
+    onNames: () => {},
+    onReload: () => {},
+    onClose: () => {},
+  }),
+)
+check('the console draws its bar, its version and both columns', consoleMarkup.includes('data-audio-console="true"') && consoleMarkup.includes('v' + '0.1.0-alpha.3') && consoleMarkup.includes('data-audio-section="output"') && consoleMarkup.includes('data-audio-section="input"'))
+check('every device is a card, named as the browser named it', consoleMarkup.includes('Speakers (Realtek)') && consoleMarkup.includes('USB Microphone') && consoleMarkup.includes('data-audio-device="spk1"'))
+check('...a nameless device is a card too', consoleMarkup.includes('Output 2') && consoleMarkup.includes('data-audio-device="hdmi1"'))
+check('...and the default card says where it points', consoleMarkup.includes('system default \u2192 Speakers (Realtek)'))
+check('the picked output and input are the marked ones', (consoleMarkup.match(/data-audio-device="(spk1|mic1)"[^>]*data-active="true"/g) || []).length === 2 && !/data-audio-device="hdmi1"[^>]*data-active/.test(consoleMarkup))
+check('the tone offers a frequency, a level, a channel and Play', consoleMarkup.includes('aria-label="Tone frequency in hertz"') && consoleMarkup.includes('aria-label="Tone level"') && consoleMarkup.includes('data-audio-channel="left"') && consoleMarkup.includes('-12.0 dB') && consoleMarkup.includes('data-audio-action="tone"'))
+check('the input side offers the meter and the names', consoleMarkup.includes('data-audio-meter="true"') && consoleMarkup.includes('data-audio-action="names"') && consoleMarkup.includes('Listen to this input'))
+check('the engine section reports the engine\u2019s own state', consoleMarkup.includes('data-audio-section="engine"') && consoleMarkup.includes('48000 Hz'))
+check('a status message is drawn with its own tone', consoleMarkup.includes('data-audio-status="ok"'))
+
+// A browser that cannot route draws the SAME cards, disabled and with the
+// reason on them: the machine has those devices, and knowing the list is what
+// makes the "choose it in the system mixer" sentence actionable.
+const noRouteMarkup = renderToStaticMarkup(
+  h(A.AudioConsoleView, {
+    state: consoleReady,
+    choice: { outputId: '', inputId: '' },
+    routing: A.pickOutputStrategy({}),
+    tone: { playing: false, frequency: 440, level: 50, channel: 'both' },
+    meter: { phase: 'idle', error: '', level: 0, peak: 0, rows: [] },
+    status: null,
+    naming: false,
+    engineState: 'not started',
+    engineRate: '',
+    onSelectOutput: () => {},
+    onSelectInput: () => {},
+    onFrequency: () => {},
+    onLevel: () => {},
+    onChannel: () => {},
+    onToggle: () => {},
+    onInputStart: () => {},
+    onInputStop: () => {},
+    onNames: () => {},
+    onReload: () => {},
+    onClose: () => {},
+  }),
+)
+check('an unrouteable browser still lists the devices', noRouteMarkup.includes('Speakers (Realtek)') && noRouteMarkup.includes('data-audio-device="spk1"'))
+check('...with the output cards disabled and the reason on them', noRouteMarkup.includes('cannot route a page\u2019s audio to a chosen output') && (noRouteMarkup.match(/data-device-kind="output"[^>]*disabled/g) || []).length >= 3)
+
+// The playing state: the button becomes Stop and the settings FREEZE - which is
+// the honest shape, because the generated-WAV path bakes them in and a control
+// that works on one browser and not another is worse than one that is disabled.
+const playingMarkup = renderToStaticMarkup(
+  h(A.ToneSection, {
+    tone: { playing: true, frequency: 1000, level: 50, channel: 'right' },
+    live: false,
+    target: 'Speakers (Realtek)',
+    onFrequency: () => {},
+    onLevel: () => {},
+    onChannel: () => {},
+    onToggle: () => {},
+  }),
+)
+check('a playing tone offers Stop and freezes its settings', playingMarkup.includes('Stop') && playingMarkup.includes('data-audio-note="frozen"') && (playingMarkup.match(/aria-label="Tone frequency in hertz"[^>]*disabled/g) || []).length === 1)
+check('...and the level slider freezes with it', (playingMarkup.match(/aria-label="Tone level"[^>]*disabled/g) || []).length === 1)
+
+// The meter, live and failed: the bar carries the level, the peak is printed,
+// and a refusal is a sentence rather than a silent zero.
+const meterMarkup = renderToStaticMarkup(
+  h(A.InputTestSection, {
+    meter: { phase: 'live', error: '', level: 0.5, peak: 0.9, rows: [['sample rate', '48000 Hz']] },
+    sentence: 'A live meter off the chosen input.',
+    onStart: () => {},
+    onStop: () => {},
+  }),
+)
+check('a live meter draws a bar, a reading and the capture\u2019s facts', meterMarkup.includes('data-audio-meter="true"') && meterMarkup.includes('-6.0 dBFS') && meterMarkup.includes('peak -0.9 dBFS') && meterMarkup.includes('48000 Hz'))
+check('...and offers the stop', meterMarkup.includes('Stop listening'))
+const meterFailed = renderToStaticMarkup(
+  h(A.InputTestSection, {
+    meter: { phase: 'error', error: 'The microphone could not be opened: NotAllowedError', level: 0, peak: 0, rows: [] },
+    sentence: 'A live meter off the chosen input.',
+    onStart: () => {},
+    onStop: () => {},
+  }),
+)
+check('a refused microphone is a sentence', meterFailed.includes('NotAllowedError') && meterFailed.includes('Listen to this input'))
+
+// The seat, with NO dialog service in the profile (the stub context answers
+// every service name with an object that has no `open`): the console is drawn
+// INLINE, which is the whole point of the degradation - a working surface
+// instead of an unhandled exception, and no dead end either way.
+const seatInline = renderToStaticMarkup(h(A.AudioSeat, {}))
+check('without the dialog service the console is a page, not a crash', seatInline.includes('data-audio-console="true"') && seatInline.includes('data-audio-seat="inline"'))
+// ...and WITH one, the seat defers to it and draws the reopen control instead of
+// a second copy of the console - activated against a context that HAS `modals`,
+// because that is the only difference between the two profiles.
+audio.exports.apply({
+  slots: { inject: (name, fn) => fn(), register: () => () => {} },
+  sidebarRightTabs: { register: () => () => {}, entries: () => [] },
+  get: (name) => (name === 'modals' ? { open: () => Promise.resolve(null) } : undefined),
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+const seatDialog = renderToStaticMarkup(h(A.AudioSeat, {}))
+check('with the dialog service the seat opens it and offers it again', seatDialog.includes('data-audio-seat="dialog"') && seatDialog.includes('data-audio-action="open-console"') && seatDialog.includes('data-audio-console="true"') === false)
+check('...and can still be forced inline', renderToStaticMarkup(h(A.AudioSeat, { inline: true })).includes('data-audio-seat="inline"'))
+
+// The wiring that a render cannot see, pinned as source because each of these is
+// a decision that would quietly stop working if it were dropped.
+check('the dialog surface is resolved lazily, never injected', audioSource.includes("const MODAL_SERVICE = 'modals'") && audioSource.includes('serviceNow(MODAL_SERVICE)'))
+check('the pick is remembered per browser', audioSource.includes("const STORAGE_KEY = 'dsh-audio.devices'"))
+check(
+  'the output is routed through the shared engine AND the page\u2019s media elements',
+  audioSource.includes('await audioContext.setSinkId(id)') && audioSource.includes("querySelectorAll('audio,video')") && audioSource.includes('await element.setSinkId(id)'),
+)
+// A context created AFTER the choice was made is pointed at it at the one moment
+// it exists: otherwise a reload would silently play through the system default.
+check('a context created later honours the remembered output', audioSource.includes('applyChosenSink(audioContext)'))
+// ...and a player mounted later is caught by the CAPTURE listener, because
+// `play` does not bubble: one listener catches every element the page will ever
+// start, instead of a sweep that only ever sees what is already mounted.
+check('a media element mounted later joins the chosen output', audioSource.includes("document.addEventListener('play', onPlay, true)"))
+check('the sink APIs are feature-detected, never assumed', audioSource.includes("typeof proto.setSinkId === 'function'") && audioSource.includes("'setSinkId' in elementProto"))
+// The meter is a SINK: nothing may connect an analyser to the destination, or
+// the microphone would feed the room back into it.
+check('the input meter is never played back', audioSource.includes('source.connect(analyser)') && audioSource.includes('analyser.connect(') === false)
+check('the tone stops itself and is ramped, never cut', audioSource.includes('oscillator.stop(endsAt)') && audioSource.includes('linearRampToValueAtTime(0.0001'))
+// THE CONSOLE STAYS SMALL, and it is pinned by ABSENCE so it cannot grow back one
+// button at a time: no frequency ladder, no left-right sweep, and no sentence
+// about the tone - the routing caveat lives once, in the output section, and the
+// status line is reserved for what went wrong.
+check(
+  'the console keeps ONE frequency control and no sweep',
+  audioSource.includes('TONE_PRESETS') === false &&
+    audioSource.includes('SWEEP_PLAN') === false &&
+    audioSource.includes('sweepSeconds') === false &&
+    audioSource.includes("'data-audio-action': 'sweep'") === false &&
+    audioSource.includes('Left \u2192 right') === false &&
+    audioSource.includes('stops itself after') === false &&
+    audioSource.includes('which is the graph the output pick moves') === false,
+)
+check('the panel list is asked for the row above Plugins', audioSource.includes("ctx.slots.register({ name: PANEL_SLOT, id: PANEL_ID, order: PANEL_ORDER, label: 'Audio'"))
+// The dialog is opened ON MOUNT, and `version` is the only thing that re-opens
+// it: the service lives in a ref precisely so a provider answering a fresh
+// wrapper cannot turn one press into a queue of dialogs.
+check('the seat opens the dialog on mount and can reopen it', audioSource.includes("'data-audio-action': 'open-console'") && audioSource.includes('[hasModal, version])') && audioSource.includes('modalsRef.current = modals'))
+check('the column is handed back only when it is still this package\u2019s', audioSource.includes('if (active !== PANEL_ID) return'))
+check('...and never to a panel that has gone', audioSource.includes('layout.selectPanel(panelBeforeAudio)') && audioSource.includes('layout.selectPanel(null)'))
+check('the console keeps the package client-only', audioSource.includes('fetch(') === false && audioSource.includes("'/api/") === false)
+check(
+  'the stylesheet carries the console\u2019s own dress',
+  audioCss.includes('.dsa-console{') && audioCss.includes('.dsa-card[') && audioCss.includes('.dsa-meterFill{') && audioCss.includes('.dsa-panelGlyph{'),
 )
 
 // ----------------------------------------------------------- dsh-ui-state

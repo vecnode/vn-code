@@ -1,6 +1,7 @@
-# dsh-audio (alpha.2)
+# dsh-audio (alpha.3)
 
-**Audio opens as a waveform, not as a file whose bytes happen to be sound.**
+**Audio opens as a waveform, not as a file whose bytes happen to be sound - and
+the machine's own audio devices live one click away in the left column.**
 
 The shipped preview gives an audio file a browser `<audio>` element and nothing
 else: no waveform, no time ruler, no zoom - and for AIFF, in Chrome, not even
@@ -10,6 +11,13 @@ recording is actually looked at through: **one track per channel, in rows, a tim
 ruler, a min/max envelope with the RMS band inside it, zoom down to individual
 samples, drag-to-select, and playback with a playhead that follows the audio
 clock.**
+
+Alpha.3 adds the other half of "audio in this app": an **Audio** row in the left
+column's global-panel list, immediately **above Plugins**, that opens a modal
+listing **this machine's audio devices** - output and input, one card each, with
+the one you picked marked, a tone to prove the pick by ear, and a live level
+meter off the chosen microphone. See
+[The Audio console](#the-audio-console-alpha3).
 
 It is a **client-only** package: bytes come from the harness's own
 `workspaceFiles` remote, so there is no route, no host-side state, and no path
@@ -30,6 +38,27 @@ policy of its own to get wrong.
 | **Details panel** | Container, codec, sample rate, channels, bit depth, frame count, duration, size, which decoder drew it, the peak pyramid's levels, and any metadata the file carries: RIFF `LIST/INFO`, BWF `bext` (description, originator, date), AIFF `NAME`/`AUTH`/`ANNO`, FLAC's Vorbis comment. |
 | **Honest failure** | A codec this viewer cannot decode is **named** (`IMA ADPCM`, `MACE 3:1`, `GSM 6.10`, `ima4`; A-law and mu-law are decoded); a `fmt ` chunk that declares a **block align narrower than one frame** is refused **by name**, with the frame size and the declared stride in the sentence, instead of believing a stride that would read each channel out of the next frame's bytes; a file that simply ends before its chunks do is answered by the **parser's own verdict**, not by the 8 MiB ceiling sentence a prefix earns; a truncated file draws what exists and says the rest is **UNKNOWN** rather than silence; a FLAC too big to hand the browser says how big it is and why. |
 
+## The Audio console (alpha.3)
+
+**A browser plays its audio wherever the OPERATING SYSTEM sends it** - and a
+machine with a headset, a monitor with speakers and a USB interface has three
+answers to that. Nothing in the harness answered the question before this, so the
+left column's global-panel list (the one **Plugins** is in) now carries an
+**Audio** row immediately **above** Plugins, and it opens this:
+
+| | |
+|---|---|
+| **The devices, as cards** | One card per device the browser reports - outputs and inputs - with the browser's own label, the six characters of its id, and the **system default** card naming the device it actually points at (read off the shared `groupId` Chromium reports for the alias and its target, which is the only way to *show* it). A device the browser gives no name for is still a real device: it is drawn, named by its position (`Output 2`), and the section says that the names are hidden until this page is allowed to capture audio - with a **Show device names** control that asks for exactly that and nothing else. A headset plugged in **re-enumerates live** (`devicechange`). |
+| **Output routing** | Pick an output and press the tone: `AudioContext.setSinkId` (Chromium 110+/Opera 96+) moves **the one AudioContext this package plays through**, which is the graph the waveform player's own playback uses too - so the choice is the app's choice, not the console's. `HTMLMediaElement.setSinkId` moves **every media element in the document**, including the shipped preview's own MP3 player, and one **capture** `play` listener catches every element the page starts *later* (`play` does not bubble). A context created after the choice was made is pointed at it at creation, so a reload does not silently fall back to the system default. |
+| **Test tone** | A sine on that engine, with as little around it as possible: **one frequency** (typed, in Hz, clamped to 20 Hz - 20 kHz), **one level** on a square law (its middle is -12 dB, where a linear slider would spend nine tenths of its travel in the top 20 dB), **`Both`/`Left`/`Right`**, and Play/Stop. Both ends are faded over 5 ms, because a click is not a speaker test, and a steady tone **stops itself after 30 seconds** so a forgotten one cannot drone on. |
+| **Input test** | **Listen to this input** opens the chosen microphone and draws a live level meter with a peak hold - and the browser's own account of the capture: sample rate, channels, latency, whether echo cancellation / noise suppression / auto gain are on, and the device's rate range. The analyser is a **sink and is never connected to the destination**, so the room cannot feed back through it. |
+| **What it cannot do, said plainly** | Firefox and older Safari expose neither sink API, so there the cards are **disabled with the reason on them** and the console says the system mixer is where the choice has to be made. A browser that routes media elements but not the audio engine gets the tone as a **generated 16-bit WAV** in an `<audio>` element (the WAV encoder is the other direction of this package's own decoder) while its Web Audio keeps the default. |
+| **Remembered** | The pick is stored per browser (`localStorage`, guarded - a blocked store throws), and published as the **`audioDevices`** service (`snapshot`, `subscribe`, `sinkId`, `applyTo`, `refresh`) for a plugin that owns its own audio graph. It is read-only: the output is a device the person is sitting next to, so choosing it happens in the console and nowhere else. |
+
+The tone's controls **freeze while it plays**, because the generated-WAV path
+bakes the settings into the sound and a control that works on one browser and not
+another is worse than one that is honestly disabled.
+
 ## How it plugs in
 
 | Piece | Value |
@@ -37,13 +66,22 @@ policy of its own to get wrong.
 | `id` / slot key | `dsh-audio` |
 | `kind` | `audio` |
 | `patterns` / `priority` | `['*.wav','*.wave','*.aif','*.aiff','*.aifc','*.flac']` / `extension` |
-| seats | keyed `sidebar.right.pane.tab` and `sidebar.right.pane.tab.title` |
-| services | `slots`, the bar's `sidebarRightTabs`, and `remote.workspaceFiles` |
+| seats | keyed `sidebar.right.pane.tab` and `sidebar.right.pane.tab.title`; the console's **`sidebar.panellist` row** (`id` and `label` `audio` / `Audio`, `order: -1`, above Plugins) and its **`main` seat** (same id) |
+| services read | `slots`, the bar's `sidebarRightTabs`, `remote.workspaceFiles`, and - **lazily, never injected** - `modals` (dsh-modal) and `layout` |
+| service provided | `audioDevices` (skipped, not fatal, on a context with no `reflect`) |
 | guide entry | **none** - a blank audio file is not a document the "+" control should offer |
 | core rows disabled | **none** |
 | npm dependencies | **none** |
 | host routes | **none** |
 | vendored engines | **none** |
+
+The row is registered **with** its seat because the shell's own panel button
+calls `layout.selectPanel(<id>)` and that **throws** for an id with no `main`
+panel behind it - so the button keeps the shell's own full-width hit area (no
+hashed class name pinned, no click intercepted inside another plugin's button)
+and the *seat* is what opens the modal. Without dsh-modal the seat draws the same
+console **inline**, and its own **Open the console** control means a dismissed
+dialog is never a dead end.
 
 It replaces nothing by patching. The bar's tab registry ranks by band
 (`extension` 3, `builtin` 2, `fallback` 1) and then by the length of the pattern
@@ -145,7 +183,17 @@ way a CSS animation can.
 ```
 node --check packages/dsh-audio/lib/client.js
 node scripts/checks/check-client-bundles.mjs
+node scripts/checks/check-audio-browser.mjs
 ```
+
+The second is the tracked check; the third needs a Chromium-family browser (and
+skips loudly without one) and is the half no Node check can do: it loads this
+bundle in a real headless Chromium, React stubbed, and asserts that
+`setSinkId` really moves an `AudioContext` and a media element, that the browser's
+own device list comes back through `normalizeDevices` with its labels revealed
+once the page may capture, that a real analyser frame goes through the meter's
+arithmetic, and that **this package's own WAV encoder produces a file the browser
+really plays** at the duration its samples state.
 
 The tracked check **builds its own audio** - a RIFF/WAVE, an IFF FORM, a FLAC,
 byte by byte, in the check itself - and drives the bundle's pure half through
@@ -177,6 +225,34 @@ envelope and the RMS core cannot be handed the same colour.
 PCM decoder, the peak pyramid and the ruler math - and it exists **only for that
 check**: nothing in the app reads it, and it is there so the decoder's arithmetic
 cannot quietly drift.
+
+Alpha.3's half of the check is the same bargain for the console. The device list
+is driven with a hand-built `enumerateDevices` result (the two kinds split, the
+default folded onto the empty id, a nameless device kept and reported, a camera
+dropped, and the default card naming the device Chromium's `groupId` ties it to);
+the **three browser shapes** are driven through `pickOutputStrategy` as
+environment objects, including the refusal that has to name the system mixer; the
+tone's numbers are asserted (the square-law level, the clamp, the three stereo
+positions, the 30 s self-stop) and its **samples** are checked silent at both
+ends, at the level asked for, equal across the channels for `Both` and *silent on
+the side a single-channel tone is not playing*; the generated tone is
+**encoded and read back**
+through this package's own `parseWav`/`decodePcm` (a 16-bit round trip to within
+one LSB, which is what the `element` path's sound is verified by); the meter is
+driven with a synthetic analyser frame and a track double; `readChoice` /
+`writeChoice` are driven against a storage double **and against a store that
+throws**; the console's own SMALLNESS is **pinned by absence** (no frequency
+ladder, no sweep, no sentence about the tone) so a button cannot grow back one at
+a time; and the console is **rendered as markup** in four states - a routing
+browser, an unrouteable one whose cards are disabled with the reason on them, a
+playing tone whose controls are frozen, and a live and a refused meter - plus the
+seat in both profiles (with the dialog service, and without it). The wiring a
+render cannot see is pinned as source: the dialog resolved lazily and never
+injected, the panel row's `order: -1` (against the **shipped** Plugins row's own
+`order: 0`, read out of the harness bundle), the two `setSinkId` calls, the
+capture-phase `play` listener, `applyChosenSink` at context creation, the
+analyser that is never connected to the destination, and the fact that the bundle
+still contains no `fetch` and no `/api/` path.
 
 ## Install
 

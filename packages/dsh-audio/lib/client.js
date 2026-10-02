@@ -1,9 +1,11 @@
 /**
  * dsh-audio — browser half.
  *
- * An audio TAB TYPE for the pack's right bar (dsh-rightbar): WAV/RIFF,
- * AIFF/AIFC and FLAC open as a WAVEFORM instead of the shipped preview's bare
- * `<audio>` element - which for AIFF is not even a player in Chrome.
+ * TWO SURFACES, one package.
+ *
+ * 1. THE TAB TYPE for the pack's right bar (dsh-rightbar): WAV/RIFF, AIFF/AIFC
+ *    and FLAC open as a WAVEFORM instead of the shipped preview's bare `<audio>`
+ *    element - which for AIFF is not even a player in Chrome.
  *
  * The type registers at the `extension` band with the audio patterns, which is
  * what wins the address: the shipped document preview claims
@@ -55,9 +57,40 @@
  * parsed here, so rate, channels, bit depth and length are known either way)
  * and says what the limit is.
  *
+ * 2. THE AUDIO CONSOLE (alpha.3, section 13), which is not a tab at all: an
+ *    **Audio** row in the left column's global-panel list, immediately ABOVE
+ *    Plugins, that opens a modal listing this MACHINE's audio devices.
+ *
+ * A browser plays its audio wherever the OPERATING SYSTEM sends it, and a
+ * machine with a headset, a monitor with speakers and a USB interface has three
+ * answers to that - which is a question no browser surface in the harness
+ * answered before this one. The console enumerates the devices
+ * (`navigator.mediaDevices.enumerateDevices`), draws one CARD per device with
+ * the browser's own label, marks where the system default actually points (from
+ * the shared `groupId` Chromium reports for the alias and its target), lets a
+ * person pick an output and an input, ROUTES the page's audio there where the
+ * browser allows it, and plays a TEST TONE through the pick so the choice is
+ * verified by ear rather than by faith - one frequency, one level, one channel.
+ * The input side gets the same treatment: a live level meter off the chosen
+ * microphone - analysed and never played back - with the browser's own report of
+ * the capture it opened.
+ *
+ * THE ROUTING IS BEST EFFORT, AND THE UI SAYS SO - ONCE. Only Chromium 110+/
+ * Opera 96+ expose `AudioContext.setSinkId`, which is the call that moves THIS
+ * package's own playback (the waveform player and the tone share one
+ * AudioContext); Chromium 49-109 and Safari 17.4+ route a media ELEMENT only, so
+ * there the tone becomes a generated WAV in an `<audio>` element (the WAV ENCODER
+ * in section 13 is the other direction of the decoder in section 3) and every
+ * element already in the page follows the pick through
+ * `HTMLMediaElement.setSinkId`; Firefox and older Safari expose neither, and
+ * there the list is INFORMATION and the output section says in one sentence that
+ * the system mixer is where the choice has to be made. The pick is remembered per
+ * browser (`localStorage`), and a plugin that owns its own audio graph can read
+ * it from the `audioDevices` service this package provides.
+ *
  * Module-table format of every client bundle here; no build step.
  */
-/* global window, document, URL, Blob, atob */
+/* global window, document, URL, Blob, atob, navigator, Audio */
 window.__ModuleLoader__.load({
   id: 'dsh-audio',
   factory: (require) => {
@@ -77,7 +110,7 @@ window.__ModuleLoader__.load({
     /** The tab kind this package owns. */
     const KIND = 'audio'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.2'
+    const PLUGIN_VERSION = '0.1.0-alpha.3'
     /** Address grammar owned by @deepseek-ai/dsh-util-workspace-path. */
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
@@ -224,6 +257,59 @@ window.__ModuleLoader__.load({
 .dsa-infoRow{display:flex;gap:10px;min-width:0}
 .dsa-infoKey{flex:none;width:104px;color:var(--dsw-alias-label-tertiary,#999)}
 .dsa-infoVal{flex:1;min-width:0;color:var(--dsw-alias-label-secondary,#666);word-break:break-word;font-variant-numeric:tabular-nums}
+/* --- the audio console (section 13): the left column's row, its seat, and the
+   device console the pack's dialog frame puts on screen.
+
+   The ROW draws only the glyph: the shell owns the button, its hover, its
+   active state and its label, so this is one flex box and nothing else - which
+   is what makes the row measure and behave exactly like the shipped Plugins row
+   above/below it instead of roughly like it. */
+.dsa-panelGlyph{display:inline-flex;align-items:center;justify-content:center}
+/* The seat: the panel the row selects. It is behind the dialog, and it is also
+   the whole surface when the pack's dialog bundle is not installed. */
+.dsa-seat{height:100%;min-height:0;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;background:var(--dsw-alias-bg-l1,rgba(127,127,127,.055))}
+/* The console fills whatever holds it: the pack's lg dialog (1120x800 with no
+   padding of its own) or the central column, inline. */
+.dsa-console{flex:1;min-height:0;display:flex;flex-direction:column;box-sizing:border-box;color:var(--dsw-alias-label-primary,#ececec);font-size:13px;line-height:1.5}
+.dsa-consoleBar{flex:none;height:46px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 12px 0 16px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.22))}
+.dsa-consoleTitle{font-size:14px;font-weight:600;white-space:nowrap}
+.dsa-consoleStatus{flex:none;padding:8px 16px 0}
+.dsa-consoleBody{flex:1;min-height:0;display:flex}
+.dsa-consoleCol{flex:1;min-width:0;min-height:0;overflow:auto;box-sizing:border-box;padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px}
+.dsa-consoleCol + .dsa-consoleCol{border-left:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.22))}
+/* One section: a heading, an optional note, and whatever it draws. */
+.dsa-devSection{display:flex;flex-direction:column;gap:8px;min-width:0}
+.dsa-devHead{display:flex;align-items:center;gap:8px;min-width:0}
+.dsa-devTitle{flex:none;font-size:12.5px;font-weight:600}
+.dsa-devCount{flex:none;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#8f8f8f)}
+.dsa-devNote{margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary,#b8b8b8);overflow-wrap:anywhere}
+.dsa-warnState{color:var(--dsw-alias-state-error-primary,#e5534b)}
+/* The cards. A grid that reflows, so a machine with eight outputs and a laptop
+   with one both read as a list of things rather than a wall or a stripe. */
+.dsa-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;min-width:0}
+.dsa-card{display:flex;flex-direction:column;gap:2px;min-width:0;box-sizing:border-box;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:10px;background:0 0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dsa-card:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
+.dsa-card[data-active="true"]{border-color:var(--dsw-alias-brand-primary,#4f8cff);background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
+.dsa-card:disabled{cursor:default;opacity:.6}
+.dsa-cardName{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsa-cardMeta{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#8f8f8f);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsa-devEmpty{grid-column:1/-1;padding:10px;border:.5px dashed var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:10px;color:var(--dsw-alias-label-tertiary,#8f8f8f);font-size:11.5px;text-align:center}
+/* The tone's controls, and the meter's bar. */
+.dsa-toneRow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.dsa-toneLabel{flex:none;width:72px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#8f8f8f)}
+.dsa-toneHz{width:76px;height:24px;box-sizing:border-box;padding:0 6px;text-align:right;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:12px}
+.dsa-toneHz:disabled{opacity:.5}
+.dsa-toneRange{flex:1;min-width:110px;max-width:240px;accent-color:var(--dsw-alias-brand-primary,#4f8cff)}
+.dsa-toneRange:disabled{opacity:.5}
+.dsa-toneUnit{flex:none;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#8f8f8f);font-variant-numeric:tabular-nums}
+.dsa-btn.dsa-primary{border-color:transparent;background:var(--dsw-alias-brand-primary,#4f8cff);color:#fff;font-weight:500}
+.dsa-btn.dsa-primary:hover:not(:disabled){filter:brightness(1.08)}
+.dsa-meter{flex:none;height:10px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));overflow:hidden}
+.dsa-meterFill{height:100%;background:var(--dsw-alias-brand-primary,#4f8cff);transition:width .06s linear}
+.dsa-facts{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dsa-factRow{display:flex;gap:10px;min-width:0;font-size:11.5px;line-height:17px}
+.dsa-factKey{flex:none;width:104px;color:var(--dsw-alias-label-tertiary,#8f8f8f)}
+.dsa-factVal{flex:1;min-width:0;color:var(--dsw-alias-label-secondary,#b8b8b8);word-break:break-word;font-variant-numeric:tabular-nums}
 `
     const CSS_TAG = 'dsh-audio/audio.css'
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
@@ -1480,13 +1566,23 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /** The AudioContext, created on first use (a `suspended` one decodes fine). */
+    /**
+     * The AudioContext, created on first use (a `suspended` one decodes fine).
+     *
+     * ONE context for the whole package, which is what makes the audio console's
+     * output pick apply to the waveform player's playback as well as to its own
+     * test tone: `AudioContext.setSinkId` moves this graph, and section 13 is the
+     * only code that ever calls it on it. A context created AFTER the person
+     * chose an output is pointed at it here, at the one moment it exists and the
+     * console may not be on screen.
+     */
     let audioContext = null
     function audioContextNow() {
       if (audioContext === null) {
         const Ctor = window.AudioContext === undefined ? window.webkitAudioContext : window.AudioContext
         if (Ctor === undefined) throw new Error('this browser exposes no Web Audio implementation')
         audioContext = new Ctor()
+        applyChosenSink(audioContext)
       }
       return audioContext
     }
@@ -2972,7 +3068,1644 @@ window.__ModuleLoader__.load({
     }
 
     // =====================================================================
-    // 13. The tab body
+    // 13. The audio console: this machine's devices, the output this page is
+    //     told to play through, and a tone that proves it
+    // =====================================================================
+    //
+    // WHERE THE BUTTON LIVES, AND WHY IT TAKES TWO REGISTRATIONS. The button
+    // belongs in the left column's GLOBAL PANEL ROWS - `sidebar.panellist`, the
+    // list whose one shipped occupant is "Plugins" - one row ABOVE Plugins. That
+    // list renders in ASCENDING `order` and the shipped Plugins row registers at
+    // 0, so this package asks for -1.
+    //
+    // The row itself is the SHELL's button: a registrant supplies a glyph and a
+    // `label`, and the click calls `layout.selectPanel(<id>)`, which THROWS for
+    // an id with no `main` panel behind it. So the row is registered WITH a seat
+    // - a `main` panel keyed `audio` - and the seat is what opens this console in
+    // the pack's shared dialog (dsh-modal), handing the central column back to
+    // the panel the person came from when the dialog closes.
+    //
+    // That is the whole reason for the two halves: a left-bar button that opens
+    // a MODAL, with the row keeping the shell's own full-width hit area. Nothing
+    // here pins a hashed class name, intercepts a click inside another plugin's
+    // button, or forks a core bundle. The seat also DEGRADES rather than fails: a
+    // profile without dsh-modal draws the same console INLINE as an ordinary
+    // page, which is a working surface instead of an unhandled exception.
+    //
+    // WHAT THE CONSOLE IS FOR. A browser plays its audio wherever the OPERATING
+    // SYSTEM sends it, and a machine with a headset, a monitor with speakers and
+    // a USB interface has three answers to that. The console lists what the
+    // machine actually has (`enumerateDevices`), lets a person pick an output and
+    // an input, ROUTES the page's audio there where the browser allows it
+    // (`AudioContext.setSinkId` on the engine every player in this package shares,
+    // `HTMLMediaElement.setSinkId` on the media elements in the document), and
+    // plays a tone through the pick so the choice is verified by EAR rather than
+    // by faith. The input side gets the same treatment: a live level meter off
+    // the chosen microphone, with the browser's own report of what it opened.
+    //
+    // IT IS DELIBERATELY SMALL: a card per device, one frequency, one level, one
+    // channel, Play. Every sentence the console does not have to say is one it
+    // does not say - the routing caveat lives ONCE, in the output section, and
+    // the status line is reserved for what went wrong.
+    //
+    // WHY THE OUTPUT PICK IS A BEST EFFORT, SAID PLAINLY IN THE UI: only
+    // Chromium 110+ (and Opera 96+) exposes `AudioContext.setSinkId`, Chromium
+    // 49-109 and Safari 17.4+ route a media ELEMENT only, and Firefox exposes
+    // neither - so there the list is INFORMATION (what the machine has, where the
+    // system default points) and the console says so in one sentence instead of
+    // pretending the pick took effect.
+    /** The left column's global-panel rows, and this package's seat in it. */
+    const PANEL_SLOT = 'sidebar.panellist'
+    /** The central column's keyed panels: the seat the row above needs. */
+    const MAIN_SLOT = 'main'
+    /** The id shared by the sidebar row, the main seat and layout.selectPanel. */
+    const PANEL_ID = 'audio'
+    /** The panel list sorts ASCENDING and Plugins registers at 0: this is above it. */
+    const PANEL_ORDER = -1
+    /** The pack's shared dialog surface (dsh-modal), resolved lazily at click time. */
+    const MODAL_SERVICE = 'modals'
+    /** The service other bundles read this page's choice through. */
+    const SERVICE_NAME = 'audioDevices'
+    /** Where the choice is remembered. Per browser, like the theme. */
+    const STORAGE_KEY = 'dsh-audio.devices'
+    /** The tone's own band, and the note a fresh console starts on. */
+    const TONE_MIN_HZ = 20
+    const TONE_MAX_HZ = 20000
+    const TONE_DEFAULT_HZ = 440
+    /** The level is a 0-100 slider on a SQUARE law, so half of it is -12 dB. */
+    const TONE_LEVEL_DEFAULT = 50
+    /** A fade at each end of a tone: a click is not a speaker test. */
+    const TONE_FADE_MS = 5
+    /** A steady tone stops itself here, so a forgotten one cannot drone on. */
+    const TONE_MAX_SECONDS = 30
+    /** The meter's analyser window, and how often the bar is redrawn. */
+    const METER_FFT = 2048
+    const METER_INTERVAL_MS = 60
+    /** The meter's scale, in dB: below this the reading is the floor. */
+    const METER_RANGE_DB = 60
+
+    // ---------------------------------------------------------------------
+    // The device list, as this package reads it
+    // ---------------------------------------------------------------------
+    /**
+     * The device list the browser will hand over, or null where it will not.
+     *
+     * `navigator.mediaDevices` is ABSENT outside a secure context, and
+     * `http://127.0.0.1` - what the harness serves - counts as one. So this is
+     * about a deployment reached over a plain-HTTP LAN address, where the honest
+     * answer is a sentence and not an empty list.
+     */
+    function mediaDevicesNow() {
+      if (typeof navigator === 'undefined') return null
+      const devices = navigator.mediaDevices
+      return devices && typeof devices.enumerateDevices === 'function' ? devices : null
+    }
+
+    /**
+     * One device list, in the shape the console reads.
+     *
+     * The default alias is folded onto the EMPTY id, so `''` always means
+     * "wherever the system sends it" and every card's selection test is one
+     * string comparison. A device the browser gives no name for is still a real
+     * device, so it is kept with an empty label and the list reports that SOME
+     * name is missing - which is what the "Show device names" control is for.
+     */
+    function normalizeDevices(list) {
+      const outputs = []
+      const inputs = []
+      let unnamed = false
+      const raw = Array.isArray(list) ? list : []
+      for (const entry of raw) {
+        if (entry === null || entry === undefined || typeof entry !== 'object') continue
+        const kind = entry.kind === 'audiooutput' ? 'output' : entry.kind === 'audioinput' ? 'input' : ''
+        if (kind === '') continue
+        const label = typeof entry.label === 'string' ? entry.label.trim() : ''
+        if (label === '') unnamed = true
+        const id = typeof entry.deviceId === 'string' && entry.deviceId !== 'default' ? entry.deviceId : ''
+        const device = {
+          kind: kind,
+          id: id,
+          label: label,
+          groupId: typeof entry.groupId === 'string' ? entry.groupId : '',
+          isDefault: id === '',
+        }
+        if (kind === 'output') outputs.push(device)
+        else inputs.push(device)
+      }
+      const byDefaultThenLabel = (left, right) => {
+        if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1
+        return left.label.localeCompare(right.label)
+      }
+      return { outputs: outputs.sort(byDefaultThenLabel), inputs: inputs.sort(byDefaultThenLabel), unnamed: unnamed }
+    }
+
+    /** One card's name: the browser's label, or its position when there is none. */
+    function deviceTitle(device, index) {
+      const entry = device === null || device === undefined ? null : device
+      if (entry !== null && typeof entry.label === 'string' && entry.label !== '') return entry.label
+      return (entry !== null && entry.kind === 'input' ? 'Input ' : 'Output ') + String(index + 1)
+    }
+
+    /** A device id is a 64-character hash; six characters tell two cards apart. */
+    function shortId(id) {
+      const text = typeof id === 'string' ? id : ''
+      if (text === '') return 'system default'
+      return text.length > 8 ? text.slice(0, 6) + '\u2026' : text
+    }
+
+    /**
+     * Where the "system default" card actually points, when the browser says so.
+     *
+     * Chromium reports the alias AND the real device it resolves to with the
+     * SAME `groupId`, which is the only way to SHOW a person where the default
+     * goes instead of leaving them to find out by ear.
+     */
+    function defaultTargetOf(devices) {
+      const list = Array.isArray(devices) ? devices : []
+      let alias = null
+      for (const device of list) {
+        if (device.isDefault === true && device.groupId !== '') {
+          alias = device
+          break
+        }
+      }
+      if (alias === null) return ''
+      for (const device of list) {
+        if (device.isDefault !== true && device.groupId === alias.groupId && device.label !== '') return device.label
+      }
+      return ''
+    }
+
+    /** The label the person picked, or the words for a device that has gone. */
+    function nameOfId(devices, id) {
+      if (typeof id !== 'string' || id === '') return 'system default'
+      const list = Array.isArray(devices) ? devices : []
+      for (let index = 0; index < list.length; index += 1) {
+        if (list[index].id === id) return deviceTitle(list[index], index)
+      }
+      return 'a device that is no longer connected'
+    }
+
+    /**
+     * Which way this page can send its audio to a CHOSEN output, from the two
+     * facts that decide it. An environment object rather than the globals, so
+     * every branch is a unit test instead of a browser matrix:
+     *
+     *   - `context` - `AudioContext.setSinkId` exists, which routes the Web Audio
+     *     graph: the test tone AND the waveform player's own playback, because
+     *     both play through the context this package shares;
+     *   - `element` - only `HTMLMediaElement.setSinkId` exists, so the tone is
+     *     played as a generated WAV through an `<audio>` element while the Web
+     *     Audio graph keeps the system default;
+     *   - `none` - neither exists, so the list is information and the tone plays
+     *     wherever the system sends it.
+     */
+    function pickOutputStrategy(facts) {
+      const source = facts === null || facts === undefined ? {} : facts
+      if (source.contextSetSinkId === true) {
+        return { kind: 'context', sentence: 'The tone and this app\u2019s own playback go to the output you pick.' }
+      }
+      if (source.elementSetSinkId === true) {
+        return {
+          kind: 'element',
+          sentence:
+            'This browser can route a media element but not its audio engine, so the TEST TONE follows your pick while the app\u2019s own Web Audio playback keeps the system default.',
+        }
+      }
+      return {
+        kind: 'none',
+        sentence:
+          'This browser gives a page no way to choose an output device, so a pick here is remembered and shown but the sound still goes wherever the system sends it \u2014 choose the output in the system mixer instead.',
+      }
+    }
+
+    /** The strategy THIS page supports, read off the two prototypes. */
+    function outputStrategyNow() {
+      const scope = typeof window === 'undefined' ? {} : window
+      const Ctor = scope.AudioContext === undefined ? scope.webkitAudioContext : scope.AudioContext
+      const proto = Ctor === undefined || Ctor === null ? null : Ctor.prototype
+      const elementCtor = scope.HTMLMediaElement
+      const elementProto = elementCtor === undefined || elementCtor === null ? null : elementCtor.prototype
+      return pickOutputStrategy({
+        contextSetSinkId: proto !== null && typeof proto.setSinkId === 'function',
+        elementSetSinkId: elementProto !== null && 'setSinkId' in elementProto,
+      })
+    }
+
+    // ---------------------------------------------------------------------
+    // The tone's numbers (pure)
+    // ---------------------------------------------------------------------
+    /** A level slider position as a gain: a SQUARE law, so half of it is -12 dB. */
+    function gainForLevel(level) {
+      const value = Number(level)
+      const position = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0)) / 100
+      return position * position
+    }
+
+    /** ...and the same position in dBFS, for the label beside the slider. */
+    function dbForLevel(level) {
+      const gain = gainForLevel(level)
+      return gain <= 0 ? -Infinity : 20 * Math.log10(gain)
+    }
+
+    /** A frequency a person typed, clamped to what a listener can hear. */
+    function clampFrequency(value) {
+      const hz = Math.round(Number(value))
+      if (!Number.isFinite(hz) || hz <= 0) return TONE_DEFAULT_HZ
+      return Math.max(TONE_MIN_HZ, Math.min(TONE_MAX_HZ, hz))
+    }
+
+    /** The stereo position one channel choice asks for. */
+    function panForChannel(channel) {
+      if (channel === 'left') return -1
+      if (channel === 'right') return 1
+      return 0
+    }
+
+    /**
+     * The tone as SAMPLES, for the path where an `<audio>` element is the only
+     * thing the browser will route: a sine at the chosen frequency and level,
+     * placed where the channel choice asks for it.
+     *
+     * The ends are faded over `TONE_FADE_MS` because a waveform that starts at
+     * full amplitude CLICKS, and a click at the start of a test tone reads as a
+     * fault in the speaker being tested. The pan law is written out here rather
+     * than taken from `StereoPannerNode`: left-only must be SILENT on the right,
+     * and both must be full on both sides, which is what a channel check needs
+     * and not what an equal-power law gives.
+     */
+    function toneChannels(options) {
+      const source = options === null || options === undefined ? {} : options
+      const rate = Number(source.sampleRate)
+      const sampleRate = Number.isFinite(rate) && rate > 0 ? rate : 48000
+      const frequency = clampFrequency(source.frequency)
+      const gain = gainForLevel(source.level === undefined ? TONE_LEVEL_DEFAULT : source.level)
+      const seconds = Number(source.seconds) > 0 ? Number(source.seconds) : TONE_MAX_SECONDS
+      const frames = Math.max(1, Math.round(seconds * sampleRate))
+      const fade = Math.max(1, Math.round((TONE_FADE_MS / 1000) * sampleRate))
+      const pan = panForChannel(source.channel)
+      const leftGain = pan <= 0 ? 1 : 1 - pan
+      const rightGain = pan >= 0 ? 1 : 1 + pan
+      const left = new Float32Array(frames)
+      const right = new Float32Array(frames)
+      for (let frame = 0; frame < frames; frame += 1) {
+        // Exactly ZERO at the first and the last sample: a waveform that starts
+        // or ends anywhere else in its cycle is a click, and a click at the
+        // start of a test tone reads as a fault in the speaker being tested.
+        const head = Math.min(1, frame / fade)
+        const tail = Math.min(1, (frames - 1 - frame) / fade)
+        const envelope = Math.max(0, Math.min(head, tail))
+        const sample = Math.sin((2 * Math.PI * frequency * frame) / sampleRate) * gain * envelope
+        left[frame] = sample * leftGain
+        right[frame] = sample * rightGain
+      }
+      return [left, right]
+    }
+
+    /**
+     * One RIFF/WAVE file from Float32 channels - 16-bit PCM, interleaved.
+     *
+     * The OTHER DIRECTION of section 3, and it is here rather than in a helper
+     * module because exactly one caller needs it: the `element` strategy, where
+     * the test tone has to exist as a FILE for an `<audio>` element to route it.
+     * The tracked check builds a tone with it, reads it back with `parseWav` and
+     * decodes it with `decodePcm`, which is how the encoder is kept honest
+     * against the decoder sitting next to it.
+     */
+    function encodeWav(channels, sampleRate) {
+      const list = Array.isArray(channels) ? channels : []
+      const count = list.length
+      const frames = count === 0 ? 0 : list[0].length
+      const rate = Number(sampleRate) > 0 ? Number(sampleRate) : 48000
+      const bytes = new Uint8Array(44 + frames * count * 2)
+      const view = new DataView(bytes.buffer)
+      const ascii = (offset, text) => {
+        for (let index = 0; index < text.length; index += 1) bytes[offset + index] = text.charCodeAt(index)
+      }
+      ascii(0, 'RIFF')
+      view.setUint32(4, bytes.length - 8, true)
+      ascii(8, 'WAVE')
+      ascii(12, 'fmt ')
+      view.setUint32(16, 16, true)
+      view.setUint16(20, 1, true)
+      view.setUint16(22, count, true)
+      view.setUint32(24, rate, true)
+      view.setUint32(28, rate * count * 2, true)
+      view.setUint16(32, count * 2, true)
+      view.setUint16(34, 16, true)
+      ascii(36, 'data')
+      view.setUint32(40, frames * count * 2, true)
+      let at = 44
+      for (let frame = 0; frame < frames; frame += 1) {
+        for (let channel = 0; channel < count; channel += 1) {
+          const value = Math.max(-1, Math.min(1, list[channel][frame]))
+          view.setInt16(at, Math.round(value * 32767), true)
+          at += 2
+        }
+      }
+      return bytes
+    }
+
+    // ---------------------------------------------------------------------
+    // The meter's numbers (pure)
+    // ---------------------------------------------------------------------
+    /**
+     * The RMS of one analyser frame. `AnalyserNode.getByteTimeDomainData` writes
+     * the waveform as unsigned bytes about 128, so 128 is what the subtraction
+     * takes back out - what comes out is an AMPLITUDE in 0..1, not a dB reading.
+     */
+    function rmsOfWaveform(values) {
+      const data = values !== null && values !== undefined && typeof values.length === 'number' ? values : []
+      if (data.length === 0) return 0
+      let sum = 0
+      for (let index = 0; index < data.length; index += 1) {
+        const value = (data[index] - 128) / 128
+        sum += value * value
+      }
+      return Math.sqrt(sum / data.length)
+    }
+
+    /** A meter bar's width for one amplitude, on a dB scale, so a quiet room still moves it. */
+    function levelBar(level) {
+      const db = amplitudeToDb(level)
+      if (db === null) return 0
+      return Math.max(0, Math.min(1, (db + METER_RANGE_DB) / METER_RANGE_DB))
+    }
+
+    /** `echoCancellation` as words a person reads. */
+    function camelWords(text) {
+      const value = typeof text === 'string' ? text : ''
+      const spaced = value.replace(/([a-z0-9])([A-Z])/g, (match, head, tail) => head + ' ' + tail.toLowerCase())
+      return spaced === '' ? '' : spaced.charAt(0).toLowerCase() + spaced.slice(1)
+    }
+
+    /**
+     * What the browser says the live capture IS, straight off the track: which
+     * microphone matters less than whether it opened at 48 kHz with echo
+     * cancellation on - and `getSettings` and `getCapabilities` are both recent
+     * enough to need their own guards.
+     */
+    function describeStream(track) {
+      const rows = []
+      if (track === null || track === undefined) return rows
+      let settings = null
+      let capabilities = null
+      try {
+        settings = typeof track.getSettings === 'function' ? track.getSettings() : null
+      } catch (err) {
+        settings = null
+      }
+      try {
+        capabilities = typeof track.getCapabilities === 'function' ? track.getCapabilities() : null
+      } catch (err) {
+        capabilities = null
+      }
+      if (settings !== null && typeof settings === 'object') {
+        if (typeof settings.sampleRate === 'number') rows.push(['sample rate', settings.sampleRate + ' Hz'])
+        if (typeof settings.channelCount === 'number') rows.push(['channels', String(settings.channelCount)])
+        if (typeof settings.latency === 'number') rows.push(['latency', (settings.latency * 1000).toFixed(1) + ' ms'])
+        for (const key of ['echoCancellation', 'noiseSuppression', 'autoGainControl']) {
+          if (typeof settings[key] === 'boolean') rows.push([camelWords(key), settings[key] ? 'on' : 'off'])
+        }
+      }
+      if (capabilities !== null && typeof capabilities === 'object') {
+        const rates = capabilities.sampleRate
+        if (rates !== null && rates !== undefined && typeof rates === 'object' && typeof rates.min === 'number' && typeof rates.max === 'number') {
+          rows.push(['device rates', rates.min + '\u2013' + rates.max + ' Hz'])
+        }
+      }
+      return rows
+    }
+
+    /** The constraints for one chosen input: that exact device, or the system default. */
+    function captureConstraints(inputId) {
+      return typeof inputId === 'string' && inputId !== '' ? { audio: { deviceId: { exact: inputId } } } : { audio: true }
+    }
+
+    // ---------------------------------------------------------------------
+    // The remembered choice
+    // ---------------------------------------------------------------------
+    /**
+     * The choice as stored, guarded twice: the storage object is passed IN (so a
+     * check drives it with a double) and every access is wrapped, because
+     * `localStorage` THROWS rather than returning null when a browser blocks
+     * storage for the page.
+     */
+    function readChoice(storage) {
+      const empty = { outputId: '', inputId: '' }
+      if (storage === null || storage === undefined || typeof storage.getItem !== 'function') return empty
+      let raw = null
+      try {
+        raw = storage.getItem(STORAGE_KEY)
+      } catch (err) {
+        return empty
+      }
+      if (typeof raw !== 'string' || raw === '') return empty
+      let parsed = null
+      try {
+        parsed = JSON.parse(raw)
+      } catch (err) {
+        return empty
+      }
+      if (parsed === null || typeof parsed !== 'object') return empty
+      return {
+        outputId: typeof parsed.outputId === 'string' ? parsed.outputId : '',
+        inputId: typeof parsed.inputId === 'string' ? parsed.inputId : '',
+      }
+    }
+
+    function writeChoice(storage, choice) {
+      if (storage === null || storage === undefined || typeof storage.setItem !== 'function') return
+      const source = choice === null || choice === undefined ? {} : choice
+      const value = {
+        outputId: typeof source.outputId === 'string' ? source.outputId : '',
+        inputId: typeof source.inputId === 'string' ? source.inputId : '',
+      }
+      try {
+        storage.setItem(STORAGE_KEY, JSON.stringify(value))
+      } catch (err) {
+        /* a blocked or full store is not a failure of anything this console does */
+      }
+    }
+
+    function storageNow() {
+      if (typeof window === 'undefined') return null
+      try {
+        return window.localStorage
+      } catch (err) {
+        return null
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // This page's own state, and the service that publishes it
+    // ---------------------------------------------------------------------
+    /** The activated context, for the two services this section resolves lazily. */
+    let pluginCtx = null
+
+    /** Resolve one client service, or null when this profile has no such plugin. */
+    function serviceNow(name) {
+      const ctx = pluginCtx
+      if (ctx === null || typeof ctx.get !== 'function') return null
+      try {
+        const service = ctx.get(name)
+        return service === undefined ? null : service
+      } catch (err) {
+        return null
+      }
+    }
+
+    function messageOf(error) {
+      if (error === null || error === undefined) return 'Something went wrong.'
+      if (typeof error === 'string') return error
+      if (typeof error.message === 'string' && error.message !== '') return error.message
+      return String(error)
+    }
+
+    /**
+     * The output this page plays through, as the session knows it.
+     *
+     * `null` until the storage is read for the first time, so a bundle load in a
+     * document with no storage cannot fail - which is exactly the fake DOM the
+     * tracked check loads this bundle into.
+     */
+    let sessionOutputId = null
+    function chosenOutputId() {
+      if (sessionOutputId === null) sessionOutputId = readChoice(storageNow()).outputId
+      return sessionOutputId
+    }
+
+    /** What the `audioDevices` service answers: the last thing the console saw. */
+    const seenDevices = { phase: 'idle', strategy: 'none', outputId: '', inputId: '', outputs: [], inputs: [], unnamed: false }
+    const seenListeners = new Set()
+
+    function seenSnapshot() {
+      return {
+        phase: seenDevices.phase,
+        strategy: seenDevices.strategy,
+        outputId: seenDevices.outputId,
+        inputId: seenDevices.inputId,
+        outputs: seenDevices.outputs.slice(),
+        inputs: seenDevices.inputs.slice(),
+        unnamed: seenDevices.unnamed,
+      }
+    }
+
+    /** Publish one patch to the service's subscribers, never letting one break the rest. */
+    function publishSeen(patch) {
+      if (patch !== null && patch !== undefined && typeof patch === 'object') {
+        if (Array.isArray(patch.outputs)) seenDevices.outputs = patch.outputs
+        if (Array.isArray(patch.inputs)) seenDevices.inputs = patch.inputs
+        for (const key of ['phase', 'strategy', 'outputId', 'inputId']) {
+          if (typeof patch[key] === 'string') seenDevices[key] = patch[key]
+        }
+        if (typeof patch.unnamed === 'boolean') seenDevices.unnamed = patch.unnamed
+      }
+      const snapshot = seenSnapshot()
+      for (const listener of Array.from(seenListeners)) {
+        try {
+          listener(snapshot)
+        } catch (err) {
+          /* a subscriber's own failure is not this console's */
+        }
+      }
+    }
+
+    /**
+     * The service another bundle reads: what this page can see, what it is set
+     * to, and the one call a plugin that owns its own audio graph needs.
+     *
+     * READ-ONLY ON PURPOSE. The output is a device the PERSON is sitting next
+     * to, so choosing it happens in the console and nowhere else; a bundle that
+     * wants a different output asks the person. `applyTo` is the exception,
+     * because a plugin with its own `AudioContext` (or its own `<audio>` element)
+     * has to be told where this page is playing.
+     */
+    function audioDevicesFace() {
+      return {
+        snapshot: seenSnapshot,
+        subscribe(listener) {
+          if (typeof listener !== 'function') return () => {}
+          seenListeners.add(listener)
+          return () => {
+            seenListeners.delete(listener)
+          }
+        },
+        sinkId: chosenOutputId,
+        applyTo(target) {
+          if (target === null || target === undefined || typeof target.setSinkId !== 'function') return Promise.resolve([])
+          try {
+            const pending = target.setSinkId(chosenOutputId())
+            return pending !== null && pending !== undefined && typeof pending.then === 'function' ? pending.then(() => [], (err) => [messageOf(err)]) : Promise.resolve([])
+          } catch (err) {
+            return Promise.resolve([messageOf(err)])
+          }
+        },
+        refresh() {
+          return enumerateNow()
+        },
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Enumerating, routing, and following the machine's own changes
+    // ---------------------------------------------------------------------
+    /**
+     * Ask the browser for the device list, as `{ ok, outputs, inputs, unnamed }`
+     * or `{ ok: false, message }` - never a throw, because the caller is a React
+     * effect and an effect that throws takes the surface down with it.
+     */
+    async function enumerateNow() {
+      const devices = mediaDevicesNow()
+      if (devices === null) {
+        return {
+          ok: false,
+          message:
+            'This page is not a secure context, so the browser exposes no device list at all. The harness serves http://127.0.0.1, which counts as secure; a LAN address over plain HTTP does not.',
+        }
+      }
+      try {
+        const normalized = normalizeDevices(await devices.enumerateDevices())
+        return { ok: true, outputs: normalized.outputs, inputs: normalized.inputs, unnamed: normalized.unnamed }
+      } catch (err) {
+        return { ok: false, message: 'The browser refused to list the audio devices: ' + messageOf(err) }
+      }
+    }
+
+    /** Re-enumerate when the machine's devices change: a headset plugged in is a new list. */
+    function subscribeDeviceChange(onChange) {
+      const devices = mediaDevicesNow()
+      if (devices === null || typeof devices.addEventListener !== 'function') return () => {}
+      const listener = () => {
+        onChange()
+      }
+      devices.addEventListener('devicechange', listener)
+      return () => {
+        try {
+          devices.removeEventListener('devicechange', listener)
+        } catch (err) {
+          /* the list went away with the plugin */
+        }
+      }
+    }
+
+    /**
+     * Send this page's audio to one output, everywhere the page can: the shared
+     * AudioContext (the test tone AND the waveform player, which play through
+     * it) and every media element already mounted, which is how the shipped
+     * preview's own MP3 player follows the pick.
+     *
+     * Best effort by construction: `setSinkId` rejects when the device has gone
+     * away or the page is not allowed to pick, and the returned refusals are what
+     * the console REPORTS instead of leaving a silent no-op. A context is never
+     * created here to set a sink on - opening an audio device to change where
+     * nothing is playing is a cost with no benefit.
+     */
+    async function applySinkEverywhere(sinkId) {
+      const failures = []
+      const id = typeof sinkId === 'string' ? sinkId : ''
+      if (audioContext !== null && typeof audioContext.setSinkId === 'function') {
+        try {
+          await audioContext.setSinkId(id)
+        } catch (err) {
+          failures.push('the audio engine refused: ' + messageOf(err))
+        }
+      }
+      const elements =
+        typeof document === 'undefined' || typeof document.querySelectorAll !== 'function' ? [] : Array.from(document.querySelectorAll('audio,video'))
+      for (const element of elements) {
+        if (element === null || element === undefined || typeof element.setSinkId !== 'function') continue
+        try {
+          await element.setSinkId(id)
+        } catch (err) {
+          failures.push('a media player refused: ' + messageOf(err))
+        }
+      }
+      return failures
+    }
+
+    /** A context created AFTER the choice was made still honours it. */
+    function applyChosenSink(context) {
+      if (context === null || context === undefined || typeof context.setSinkId !== 'function') return
+      const id = chosenOutputId()
+      if (id === '') return
+      try {
+        const pending = context.setSinkId(id)
+        if (pending !== null && pending !== undefined && typeof pending.catch === 'function') pending.catch(() => {})
+      } catch (err) {
+        /* the console reports a refusal when a PERSON makes the choice; this is a restore */
+      }
+    }
+
+    /**
+     * Every media element that starts playing joins the chosen output.
+     *
+     * WHY A LISTENER AND NOT A SWEEP: a player mounted AFTER the choice was made
+     * (any tab that opens a file) has never heard about it, and `play` does not
+     * bubble - but it does CAPTURE, so one listener on the document catches every
+     * media element the page will ever start. The device check keeps a player
+     * that is already on the right output from being re-routed, and a refusal is
+     * swallowed because this is a restore, not a request a person just made.
+     */
+    function watchMediaElements() {
+      if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return () => {}
+      const onPlay = (event) => {
+        const element = event.target
+        if (element === null || element === undefined || typeof element.setSinkId !== 'function') return
+        const id = chosenOutputId()
+        if (id === '') return
+        let current = ''
+        try {
+          current = typeof element.sinkId === 'string' ? element.sinkId : ''
+        } catch (err) {
+          current = ''
+        }
+        if (current === id) return
+        try {
+          const pending = element.setSinkId(id)
+          if (pending !== null && pending !== undefined && typeof pending.catch === 'function') pending.catch(() => {})
+        } catch (err) {
+          /* a refusal here is not something a person asked for */
+        }
+      }
+      document.addEventListener('play', onPlay, true)
+      return () => {
+        try {
+          document.removeEventListener('play', onPlay, true)
+        } catch (err) {
+          /* the document went away first */
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // The tone itself
+    // ---------------------------------------------------------------------
+    /**
+     * A tone on the app's own AudioContext: one oscillator through a gain that
+     * fades in and out. This is the path that reaches a CHOSEN output, because
+     * `AudioContext.setSinkId` moves this whole graph - and it is the graph the
+     * waveform player already plays through, which is why the choice made in the
+     * console is the choice the rest of this package obeys.
+     *
+     * The oscillator stops ITSELF after `TONE_MAX_SECONDS`, so a forgotten test
+     * tone cannot drone on in a meeting. `onended` is what tells the console the
+     * sound stopped.
+     */
+    function contextTone(options) {
+      const context = audioContextNow()
+      if (typeof context.resume === 'function') context.resume()
+      const now = context.currentTime
+      const oscillator = context.createOscillator()
+      oscillator.type = 'sine'
+      oscillator.frequency.value = clampFrequency(options.frequency)
+      const gain = context.createGain()
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, gainForLevel(options.level)), now + TONE_FADE_MS / 1000)
+      let tail = gain
+      if (typeof context.createStereoPanner === 'function') {
+        const panner = context.createStereoPanner()
+        panner.pan.value = panForChannel(options.channel)
+        gain.connect(panner)
+        tail = panner
+      }
+      tail.connect(context.destination)
+      oscillator.connect(gain)
+      const endsAt = now + TONE_MAX_SECONDS
+      oscillator.start(now)
+      oscillator.stop(endsAt)
+      oscillator.onended = () => {
+        if (typeof options.onEnded === 'function') options.onEnded()
+      }
+      let stopped = false
+      return {
+        via: 'webaudio',
+        stop() {
+          if (stopped) return
+          stopped = true
+          const at = context.currentTime
+          try {
+            gain.gain.cancelScheduledValues(at)
+            gain.gain.setValueAtTime(Math.max(0.0001, gain.gain.value), at)
+            gain.gain.linearRampToValueAtTime(0.0001, at + TONE_FADE_MS / 1000)
+            oscillator.stop(at + TONE_FADE_MS / 1000 + 0.02)
+          } catch (err) {
+            /* already stopped */
+          }
+        },
+      }
+    }
+
+    /**
+     * The same tone as a generated WAV through an `<audio>` element - the path
+     * for a browser that routes media elements but not the audio engine.
+     *
+     * The frequency, the level and the channel are BAKED IN, which is why the
+     * console freezes its controls while this path plays: there is no live graph
+     * to turn a knob on, and pretending otherwise would be a control that does
+     * nothing.
+     */
+    function elementTone(options) {
+      // The rate this page already plays at, when it has an engine - and 48 kHz,
+      // a legal rate everywhere, when it does not. A context is NEVER created
+      // here just to read this number: the element path does not play through
+      // one, so opening an audio device for it would be a cost with no benefit.
+      let sampleRate = 48000
+      const existing = audioContext
+      if (existing !== null && typeof existing.sampleRate === 'number' && existing.sampleRate > 0) sampleRate = existing.sampleRate
+      const channels = toneChannels({
+        frequency: options.frequency,
+        level: options.level,
+        channel: options.channel,
+        sampleRate: sampleRate,
+      })
+      const url = URL.createObjectURL(new Blob([encodeWav(channels, sampleRate)], { type: 'audio/wav' }))
+      const element = new Audio()
+      element.loop = true
+      element.src = url
+      let stopped = false
+      const finish = (ended) => {
+        if (stopped) return
+        stopped = true
+        try {
+          element.pause()
+        } catch (err) {
+          /* already paused */
+        }
+        try {
+          URL.revokeObjectURL(url)
+        } catch (err) {
+          /* already revoked */
+        }
+        if (ended === true && typeof options.onEnded === 'function') options.onEnded()
+      }
+      element.onended = () => {
+        finish(true)
+      }
+      const begin = async () => {
+        try {
+          const id = chosenOutputId()
+          if (id !== '' && typeof element.setSinkId === 'function') await element.setSinkId(id)
+          await element.play()
+        } catch (err) {
+          finish(false)
+          if (typeof options.onError === 'function') options.onError('The tone could not start: ' + messageOf(err))
+        }
+      }
+      begin()
+      return {
+        via: 'element',
+        stop() {
+          finish(false)
+        },
+      }
+    }
+
+    /**
+     * Start the test tone by whichever route this page has, as
+     * `{ ok: true, handle }` or `{ ok: false, message }`.
+     */
+    function startTone(options) {
+      const source = options === null || options === undefined ? {} : options
+      try {
+        return { ok: true, handle: source.strategy === 'element' ? elementTone(source) : contextTone(source) }
+      } catch (err) {
+        return { ok: false, message: 'The tone could not start: ' + messageOf(err) }
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // The console, drawn
+    // ---------------------------------------------------------------------
+    /** The speaker glyph: the left column's row, and every section's mark. */
+    function SpeakerGlyph(props) {
+      const size = props !== null && props !== undefined && typeof props.size === 'number' ? props.size : 16
+      return h(
+        'svg',
+        {
+          width: size,
+          height: size,
+          viewBox: '0 0 16 16',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.2,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+          focusable: 'false',
+        },
+        h('path', { d: 'M2.4 6.1h2.1l3-2.5v8.8l-3-2.5H2.4z' }),
+        h('path', { d: 'M10.2 6a2.8 2.8 0 0 1 0 4' }),
+        h('path', { d: 'M12.3 4.1a5.4 5.4 0 0 1 0 7.8' }),
+      )
+    }
+
+    /**
+     * The left column's row: the glyph the shell draws inside its own button,
+     * plus the ONE subscription this feature needs from a component.
+     *
+     * WHY THE WATCHER LIVES HERE. `layout.selectPanel('audio')` is what the row's
+     * click does, so by the time the seat mounts the store already says `audio`
+     * and the value that was there BEFORE it is gone - and only `layout` knows,
+     * because it owns `panelInfo`. `layout` may also not be applied yet when this
+     * bundle applies (client plugins arrive in boot-graph order), so this cannot
+     * be done once at activation. The row is the one component that is mounted
+     * from boot, long after the sidebar (and therefore layout) exists, and it is
+     * exactly the thing whose click changes the answer.
+     */
+    function AudioPanelRow(props) {
+      useEffect(() => watchPanels(), [])
+      return h('span', { className: 'dsa-panelGlyph' }, h(SpeakerGlyph, { size: props !== null && props !== undefined && typeof props.size === 'number' ? props.size : 16 }))
+    }
+
+    /** One section's heading: a title, the count, and room for one control. */
+    function SectionHead(props) {
+      return h(
+        'div',
+        { className: 'dsa-devHead' },
+        h('span', { className: 'dsa-devTitle' }, props.title),
+        h('span', { className: 'dsa-devCount' }, props.count),
+        h('span', { className: 'dsa-spacer' }),
+        props.children === undefined ? null : props.children,
+      )
+    }
+
+    /** One key/value line of the console's own facts. */
+    function FactRow(props) {
+      return h('div', { className: 'dsa-factRow' }, h('span', { className: 'dsa-factKey' }, props.label), h('span', { className: 'dsa-factVal' }, props.value))
+    }
+
+    /**
+     * ONE KIND OF DEVICE, as cards.
+     *
+     * Every card is a button, because picking one is the point, and the card that
+     * is picked wears the accent border. A card this browser will not let a page
+     * route is still DRAWN - the machine has that device, and knowing the list is
+     * what makes the system-mixer advice actionable - but it is disabled, with the
+     * reason in its title.
+     */
+    function DeviceSection(props) {
+      const devices = Array.isArray(props.devices) ? props.devices : []
+      const target = defaultTargetOf(devices)
+      const noun = props.kind === 'input' ? 'input' : 'output'
+      return h(
+        'section',
+        { className: 'dsa-devSection', 'data-audio-section': props.kind },
+        h(
+          SectionHead,
+          { title: props.title, count: devices.length === 0 ? 'none reported' : devices.length + (devices.length === 1 ? ' device' : ' devices') },
+          props.head === undefined || props.head === null ? null : props.head,
+        ),
+        props.note === undefined || props.note === '' ? null : h('p', { className: 'dsa-devNote' }, props.note),
+        h(
+          'div',
+          { className: 'dsa-cards', role: 'list' },
+          devices.length === 0 ? h('div', { className: 'dsa-devEmpty' }, props.empty) : null,
+          devices.map((device, index) =>
+            h(
+              'button',
+              {
+                key: device.id === '' ? 'default' : device.id + '#' + String(index),
+                type: 'button',
+                role: 'listitem',
+                className: 'dsa-card',
+                'data-audio-device': device.id === '' ? 'default' : device.id,
+                'data-device-kind': props.kind,
+                'data-active': device.id === props.selectedId ? 'true' : undefined,
+                disabled: props.disabled === true,
+                title: props.disabled === true ? props.disabledReason : 'Send this app\u2019s ' + noun + ' here',
+                onClick: () => props.onSelect(device.id),
+              },
+              h('span', { className: 'dsa-cardName' }, deviceTitle(device, index)),
+              h(
+                'span',
+                { className: 'dsa-cardMeta' },
+                device.isDefault ? (target === '' ? 'system default' : 'system default \u2192 ' + target) : shortId(device.id),
+              ),
+            ),
+          ),
+        ),
+      )
+    }
+
+    /**
+     * The test tone's controls: one frequency, one level, one channel.
+     *
+     * The controls FREEZE while the tone plays (and the note says why) rather
+     * than pretending to be live: on the Web Audio path the parameters could be
+     * changed under a running oscillator, but on the generated-WAV path they are
+     * baked into the sound, and a control that works on one browser and not
+     * another is worse than one that is honestly disabled.
+     */
+    function ToneSection(props) {
+      const tone = props.tone
+      const frozen = tone.playing === true && props.live !== true
+      const level = dbForLevel(tone.level)
+      return h(
+        'section',
+        { className: 'dsa-devSection', 'data-audio-section': 'tone' },
+        h(SectionHead, { title: 'Test tone', count: props.target }, null),
+        h(
+          'div',
+          { className: 'dsa-toneRow' },
+          h('span', { className: 'dsa-toneLabel' }, 'Frequency'),
+          h('input', {
+            className: 'dsa-toneHz',
+            type: 'number',
+            min: TONE_MIN_HZ,
+            max: TONE_MAX_HZ,
+            step: 1,
+            value: String(tone.frequency),
+            'aria-label': 'Tone frequency in hertz',
+            disabled: frozen === true,
+            onChange: (event) => props.onFrequency(clampFrequency(event.target.value)),
+          }),
+          h('span', { className: 'dsa-toneUnit' }, 'Hz'),
+        ),
+        h(
+          'div',
+          { className: 'dsa-toneRow' },
+          h('span', { className: 'dsa-toneLabel' }, 'Level'),
+          h('input', {
+            className: 'dsa-toneRange',
+            type: 'range',
+            min: 0,
+            max: 100,
+            step: 1,
+            value: String(tone.level),
+            'aria-label': 'Tone level',
+            disabled: frozen === true,
+            onChange: (event) => props.onLevel(Number(event.target.value)),
+          }),
+          h('span', { className: 'dsa-toneUnit' }, level <= -100 ? 'silent' : level.toFixed(1) + ' dB'),
+        ),
+        h(
+          'div',
+          { className: 'dsa-toneRow' },
+          h('span', { className: 'dsa-toneLabel' }, 'Channel'),
+          ['both', 'left', 'right'].map((channel) =>
+            h(
+              'button',
+              {
+                key: channel,
+                type: 'button',
+                className: 'dsa-btn',
+                'data-audio-channel': channel,
+                'data-active': tone.channel === channel ? 'true' : undefined,
+                disabled: frozen === true,
+                onClick: () => props.onChannel(channel),
+              },
+              channel === 'both' ? 'Both' : channel === 'left' ? 'Left' : 'Right',
+            ),
+          ),
+          h('span', { className: 'dsa-spacer' }),
+          h(
+            'button',
+            { type: 'button', className: 'dsa-btn dsa-primary', 'data-audio-action': 'tone', onClick: props.onToggle },
+            tone.playing ? 'Stop' : 'Play tone',
+          ),
+        ),
+        frozen === true
+          ? h('p', { className: 'dsa-devNote', 'data-audio-note': 'frozen' }, 'This browser applies the tone\u2019s settings when it starts, so Stop it to change them.')
+          : null,
+      )
+    }
+
+    /**
+     * The input side: a live meter off the chosen microphone, and the browser's
+     * own account of the capture it opened.
+     *
+     * The meter is an EXTRA sink on its own audio graph and is never connected to
+     * a destination, so the room can never feed back through it.
+     */
+    function InputTestSection(props) {
+      const meter = props.meter
+      const live = meter.phase === 'live'
+      const starting = meter.phase === 'starting'
+      return h(
+        'section',
+        { className: 'dsa-devSection', 'data-audio-section': 'meter' },
+        h(SectionHead, { title: 'Input level', count: live ? formatDb(meter.level) : starting ? 'opening\u2026' : 'not open' }, null),
+        h('div', { className: 'dsa-meter', 'data-audio-meter': 'true' }, h('div', { className: 'dsa-meterFill', style: { width: String(Math.round(levelBar(meter.level) * 100)) + '%' } })),
+        h('p', { className: 'dsa-devNote' }, props.sentence),
+        meter.error === '' ? null : h('p', { className: 'dsa-devNote dsa-warnState' }, meter.error),
+        h(
+          'div',
+          { className: 'dsa-facts' },
+          meter.rows.map((row) =>
+            h('div', { className: 'dsa-factRow', key: row[0] }, h('span', { className: 'dsa-factKey' }, row[0]), h('span', { className: 'dsa-factVal' }, row[1])),
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dsa-toneRow' },
+          h(
+            'button',
+            {
+              type: 'button',
+              className: live || starting ? 'dsa-btn' : 'dsa-btn dsa-primary',
+              'data-audio-action': 'input-test',
+              disabled: starting === true,
+              onClick: live ? props.onStop : props.onStart,
+            },
+            live ? 'Stop listening' : starting ? 'Opening\u2026' : 'Listen to this input',
+          ),
+          h('span', { className: 'dsa-toneUnit' }, 'peak ' + formatDb(meter.peak)),
+        ),
+      )
+    }
+
+    /**
+     * The console as MARKUP: every number, list and sentence arrives as a prop.
+     *
+     * That is what makes it verifiable - the tracked check renders THIS with
+     * hand-built devices and asserts the cards, the marks, the frozen controls
+     * and the sentences, with no browser, no microphone and no audio device
+     * anywhere near the run. The stateful half below owns everything else.
+     */
+    function AudioConsoleView(props) {
+      const state = props.state
+      const choice = props.choice
+      const routing = props.routing
+      const count = state.phase === 'ready' ? String(state.outputs.length) + ' out \u00b7 ' + String(state.inputs.length) + ' in' : ''
+      return h(
+        'div',
+        { className: 'dsa-console', 'data-audio-console': 'true' },
+        h(
+          'div',
+          { className: 'dsa-consoleBar' },
+          h('span', { className: 'dsa-consoleTitle' }, 'Audio'),
+          h('span', { className: 'dsa-devCount' }, count),
+          h('span', { className: 'dsa-spacer' }),
+          // The bundle's version, in plain sight for the same reason the skills
+          // browser prints its own: after a reload it is the one way to tell "the
+          // fix is live" from "the harness is still serving the old bundle".
+          h('span', { className: 'dsa-ver', title: 'dsh-audio client bundle version' }, 'v' + PLUGIN_VERSION),
+          h('button', { type: 'button', className: 'dsa-btn', 'data-audio-action': 'reload', disabled: state.phase === 'loading', onClick: props.onReload }, 'Reload'),
+          h('button', { type: 'button', className: 'dsa-btn', 'data-audio-action': 'close', onClick: props.onClose }, 'Close'),
+        ),
+        props.status === null || props.status === undefined
+          ? null
+          : h('div', { className: 'dsa-consoleStatus' }, h('p', { className: 'dsa-devNote', 'data-audio-status': props.status.tone }, props.status.message)),
+        h(
+          'div',
+          { className: 'dsa-consoleBody' },
+          h(
+            'div',
+            { className: 'dsa-consoleCol' },
+            state.phase === 'error' ? h('p', { className: 'dsa-devNote dsa-warnState' }, state.error) : null,
+            state.phase === 'loading' ? h('p', { className: 'dsa-devNote' }, 'Asking the browser what this machine has\u2026') : null,
+            h(DeviceSection, {
+              kind: 'output',
+              title: 'Audio output',
+              devices: state.outputs,
+              selectedId: choice.outputId,
+              empty: 'The browser reported no audio output on this machine.',
+              note: routing.sentence,
+              disabled: routing.kind === 'none',
+              disabledReason: 'This browser cannot route a page\u2019s audio to a chosen output.',
+              onSelect: props.onSelectOutput,
+            }),
+            h(ToneSection, {
+              tone: props.tone,
+              live: routing.kind !== 'element',
+              target: nameOfId(state.outputs, choice.outputId),
+              onFrequency: props.onFrequency,
+              onLevel: props.onLevel,
+              onChannel: props.onChannel,
+              onToggle: props.onToggle,
+            }),
+          ),
+          h(
+            'div',
+            { className: 'dsa-consoleCol' },
+            h(DeviceSection, {
+              kind: 'input',
+              title: 'Audio input',
+              devices: state.inputs,
+              selectedId: choice.inputId,
+              empty: 'The browser reported no audio input on this machine.',
+              note:
+                state.unnamed === true
+                  ? 'The browser hides device names until this page is allowed to capture audio. Press "Show device names" to ask \u2014 the permission is used for nothing else.'
+                  : 'Picked for this browser. The live test below opens exactly this device.',
+              disabled: false,
+              disabledReason: '',
+              onSelect: props.onSelectInput,
+              head:
+                state.unnamed === true
+                  ? h(
+                      'button',
+                      { type: 'button', className: 'dsa-btn', 'data-audio-action': 'names', disabled: props.naming === true, onClick: props.onNames },
+                      props.naming === true ? 'Asking\u2026' : 'Show device names',
+                    )
+                  : null,
+            }),
+            h(InputTestSection, {
+              meter: props.meter,
+              sentence: 'A live meter off the chosen input. It is analysed and never played back, so nothing loops.',
+              onStart: props.onInputStart,
+              onStop: props.onInputStop,
+            }),
+            h(
+              'section',
+              { className: 'dsa-devSection', 'data-audio-section': 'engine' },
+              h(SectionHead, { title: 'Engine', count: props.engineState }, null),
+              h('div', { className: 'dsa-facts' }, h(FactRow, { label: 'sample rate', value: props.engineRate === '' ? 'not running' : props.engineRate })),
+            ),
+          ),
+        ),
+      )
+    }
+
+    /**
+     * The console, stateful half: enumerate, remember, route, play, listen.
+     *
+     * @param props - `{ close }` from the dialog, or from the seat when there is
+     *   no dialog to close.
+     */
+    function AudioConsole(props) {
+      const close = props !== null && props !== undefined && typeof props.close === 'function' ? props.close : () => {}
+      const [state, setState] = useState({ phase: 'loading', error: '', unnamed: false, outputs: [], inputs: [] })
+      const [choice, setChoice] = useState(() => readChoice(storageNow()))
+      const [tone, setTone] = useState({ playing: false, frequency: TONE_DEFAULT_HZ, level: TONE_LEVEL_DEFAULT, channel: 'both' })
+      const [meter, setMeter] = useState({ phase: 'idle', error: '', level: 0, peak: 0, rows: [] })
+      const [status, setStatus] = useState(null)
+      const [naming, setNaming] = useState(false)
+      const [engine, setEngine] = useState({ state: 'not started', rate: '' })
+      const routing = useMemo(() => outputStrategyNow(), [])
+      // Refs mirror the two pieces of state a callback needs without becoming a
+      // dependency of it: a callback that re-created itself on every slider step
+      // would rebuild the tone's own handlers under the running tone.
+      const choiceRef = useRef(choice)
+      const toneSettings = useRef({ frequency: TONE_DEFAULT_HZ, level: TONE_LEVEL_DEFAULT, channel: 'both' })
+      const toneRef = useRef(null)
+      const toneToken = useRef(0)
+      const streamRef = useRef(null)
+      const frameRef = useRef(0)
+      choiceRef.current = choice
+      toneSettings.current = { frequency: tone.frequency, level: tone.level, channel: tone.channel }
+
+      const refresh = useCallback(async () => {
+        const result = await enumerateNow()
+        if (result.ok !== true) {
+          setState({ phase: 'error', error: result.message, unnamed: false, outputs: [], inputs: [] })
+          return
+        }
+        setState({ phase: 'ready', error: '', unnamed: result.unnamed, outputs: result.outputs, inputs: result.inputs })
+      }, [])
+
+      /**
+       * The engine's own state, so a person can tell "no sound because the
+       * context is suspended" from "no sound because the output is wrong" - the
+       * first question anyone asks a silent page.
+       *
+       * It reads the context this package ALREADY has and never creates one:
+       * opening an audio device to fill in a table row would light up the
+       * machine's audio session the moment the console is opened.
+       */
+      const refreshEngine = useCallback(() => {
+        const context = audioContext
+        if (context === null) {
+          setEngine({ state: 'not started', rate: '' })
+          return
+        }
+        setEngine({
+          state: typeof context.state === 'string' ? context.state : 'unknown',
+          rate: typeof context.sampleRate === 'number' && context.sampleRate > 0 ? context.sampleRate + ' Hz' : '',
+        })
+      }, [])
+
+      // The list, and every change the MACHINE makes to it.
+      useEffect(() => {
+        refresh()
+      }, [refresh])
+      useEffect(() => subscribeDeviceChange(refresh), [refresh])
+
+      // What the service answers, so another bundle sees the same list the
+      // console does rather than a second enumeration of its own.
+      useEffect(() => {
+        publishSeen({
+          phase: state.phase,
+          strategy: routing.kind,
+          outputId: choice.outputId,
+          inputId: choice.inputId,
+          outputs: state.outputs,
+          inputs: state.inputs,
+          unnamed: state.unnamed,
+        })
+      }, [state, choice, routing.kind])
+
+      // The pick is applied where the page can apply it, and a refusal is said
+      // OUT LOUD instead of leaving a person to wonder why nothing moved.
+      useEffect(() => {
+        if (routing.kind === 'none') return undefined
+        let live = true
+        applySinkEverywhere(choice.outputId).then((failures) => {
+          if (live && failures.length > 0) setStatus({ tone: 'error', message: failures[0] })
+        })
+        return () => {
+          live = false
+        }
+      }, [choice.outputId, routing.kind])
+
+      const selectOutput = useCallback((id) => {
+        const next = { outputId: id, inputId: choiceRef.current.inputId }
+        choiceRef.current = next
+        sessionOutputId = id
+        writeChoice(storageNow(), next)
+        setChoice(next)
+        setStatus(null)
+      }, [])
+
+      const selectInput = useCallback((id) => {
+        const next = { outputId: choiceRef.current.outputId, inputId: id }
+        choiceRef.current = next
+        writeChoice(storageNow(), next)
+        setChoice(next)
+        setStatus(null)
+      }, [])
+
+      const stopTone = useCallback(() => {
+        const handle = toneRef.current
+        toneRef.current = null
+        toneToken.current += 1
+        if (handle !== null && handle !== undefined) handle.stop()
+        setTone((previous) => (previous.playing ? { ...previous, playing: false } : previous))
+      }, [])
+
+      const playTone = useCallback(() => {
+        const previous = toneRef.current
+        if (previous !== null && previous !== undefined) previous.stop()
+        toneRef.current = null
+        toneToken.current += 1
+        const token = toneToken.current
+        const settings = toneSettings.current
+        // The status line is for what went WRONG (and for the one confirmation a
+        // permission earns): starting a tone is not news, so nothing is said.
+        setStatus(null)
+        const started = startTone({
+          strategy: routing.kind,
+          frequency: settings.frequency,
+          level: settings.level,
+          channel: settings.channel,
+          onEnded: () => {
+            if (toneToken.current !== token) return
+            toneRef.current = null
+            setTone((value) => (value.playing ? { ...value, playing: false } : value))
+          },
+          onError: (message) => {
+            if (toneToken.current !== token) return
+            setStatus({ tone: 'error', message: message })
+          },
+        })
+        if (started.ok !== true) {
+          setTone((value) => (value.playing ? { ...value, playing: false } : value))
+          setStatus({ tone: 'error', message: started.message })
+          return
+        }
+        toneRef.current = started.handle
+        setTone((value) => ({ ...value, playing: true }))
+        refreshEngine()
+      }, [refreshEngine, routing.kind])
+
+      const toggleTone = useCallback(() => {
+        if (toneRef.current !== null && toneRef.current !== undefined) {
+          stopTone()
+          return
+        }
+        playTone()
+      }, [playTone, stopTone])
+
+      const stopCapture = useCallback(() => {
+        if (frameRef.current !== 0 && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(frameRef.current)
+        frameRef.current = 0
+        const stream = streamRef.current
+        streamRef.current = null
+        if (stream !== null && stream !== undefined && typeof stream.getTracks === 'function') {
+          for (const track of stream.getTracks()) {
+            try {
+              track.stop()
+            } catch (err) {
+              /* already stopped */
+            }
+          }
+        }
+        setMeter((previous) => (previous.phase === 'idle' ? previous : { phase: 'idle', error: '', level: 0, peak: 0, rows: [] }))
+      }, [])
+
+      const startCapture = useCallback(async () => {
+        const devices = mediaDevicesNow()
+        if (devices === null) {
+          setMeter({ phase: 'error', error: 'This page is not a secure context, so the browser will not open a microphone for it.', level: 0, peak: 0, rows: [] })
+          return
+        }
+        setMeter({ phase: 'starting', error: '', level: 0, peak: 0, rows: [] })
+        let stream = null
+        try {
+          stream = await devices.getUserMedia(captureConstraints(choiceRef.current.inputId))
+        } catch (err) {
+          setMeter({ phase: 'error', error: 'The microphone could not be opened: ' + messageOf(err), level: 0, peak: 0, rows: [] })
+          return
+        }
+        const track = typeof stream.getAudioTracks === 'function' ? stream.getAudioTracks()[0] : null
+        streamRef.current = stream
+        let analyser = null
+        try {
+          const context = audioContextNow()
+          if (typeof context.resume === 'function') context.resume()
+          const source = context.createMediaStreamSource(stream)
+          analyser = context.createAnalyser()
+          analyser.fftSize = METER_FFT
+          // A SINK: nothing here is ever connected to the context's destination,
+          // which is what keeps the meter from feeding the room back into it.
+          source.connect(analyser)
+        } catch (err) {
+          analyser = null
+        }
+        setMeter({
+          phase: 'live',
+          error: analyser === null ? 'The browser opened the microphone, but this page has no audio engine to analyse it with.' : '',
+          level: 0,
+          peak: 0,
+          rows: describeStream(track),
+        })
+        // Opening the microphone is also what REVEALS the device names, so the
+        // list is asked again - a person who granted the permission should not
+        // have to press Reload to see what they got.
+        refresh()
+        refreshEngine()
+        if (analyser === null) return
+        const data = new Uint8Array(analyser.fftSize)
+        let last = 0
+        const tick = (time) => {
+          if (streamRef.current === null) return
+          if (time - last >= METER_INTERVAL_MS) {
+            last = time
+            try {
+              analyser.getByteTimeDomainData(data)
+            } catch (err) {
+              /* the stream went away between frames */
+            }
+            const level = rmsOfWaveform(data)
+            setMeter((previous) => (previous.phase === 'live' ? { ...previous, level: level, peak: Math.max(previous.peak, level) } : previous))
+          }
+          frameRef.current = window.requestAnimationFrame(tick)
+        }
+        frameRef.current = window.requestAnimationFrame(tick)
+      }, [refresh, refreshEngine])
+
+      const askForNames = useCallback(async () => {
+        const devices = mediaDevicesNow()
+        if (devices === null) {
+          setStatus({ tone: 'error', message: 'This page is not a secure context, so the browser exposes no device list at all.' })
+          return
+        }
+        setNaming(true)
+        setStatus(null)
+        let refused = ''
+        try {
+          const stream = await devices.getUserMedia({ audio: true })
+          if (stream !== null && stream !== undefined && typeof stream.getTracks === 'function') {
+            for (const track of stream.getTracks()) {
+              try {
+                track.stop()
+              } catch (err) {
+                /* already stopped */
+              }
+            }
+          }
+        } catch (err) {
+          refused = messageOf(err)
+        }
+        setNaming(false)
+        await refresh()
+        setStatus(
+          refused === ''
+            ? { tone: 'ok', message: 'The device names are visible now.' }
+            : { tone: 'error', message: 'The browser refused: ' + refused },
+        )
+      }, [refresh])
+
+      // A console that goes away takes its sound and its microphone with it.
+      useEffect(
+        () => () => {
+          const handle = toneRef.current
+          toneRef.current = null
+          if (handle !== null && handle !== undefined) handle.stop()
+          stopCapture()
+        },
+        [stopCapture],
+      )
+
+      // The chosen output is applied to the app's audio engine as soon as the
+      // console opens, so a context that was created BEFORE the last choice (or
+      // after a reload) is brought back to it.
+      useEffect(() => {
+        refreshEngine()
+      }, [refreshEngine])
+
+      return h(AudioConsoleView, {
+        state: state,
+        choice: choice,
+        routing: routing,
+        tone: tone,
+        meter: meter,
+        status: status,
+        naming: naming,
+        engineState: engine.state,
+        engineRate: engine.rate,
+        onSelectOutput: selectOutput,
+        onSelectInput: selectInput,
+        onFrequency: useCallback((value) => setTone((previous) => ({ ...previous, frequency: clampFrequency(value) })), []),
+        onLevel: useCallback((value) => setTone((previous) => ({ ...previous, level: Math.max(0, Math.min(100, Math.round(Number(value) || 0))) })), []),
+        onChannel: useCallback((value) => setTone((previous) => ({ ...previous, channel: value === 'left' || value === 'right' ? value : 'both' })), []),
+        onToggle: toggleTone,
+        onInputStart: startCapture,
+        onInputStop: stopCapture,
+        onNames: askForNames,
+        onReload: refresh,
+        onClose: () => close(null),
+      })
+    }
+
+    /**
+     * The panel the person was on before this one.
+     *
+     * See `AudioPanelRow` for why this is WATCHED rather than read at mount.
+     */
+    let panelBeforeAudio = null
+
+    /** Start (and stop) the watcher over `layout`'s panel selection. */
+    function watchPanels() {
+      const ctx = pluginCtx
+      if (ctx === null || typeof ctx.get !== 'function') return () => {}
+      let info = null
+      try {
+        const layout = ctx.get('layout')
+        info = layout === null || layout === undefined ? null : layout.panelInfo
+      } catch (err) {
+        info = null
+      }
+      if (info === null || info === undefined || typeof info.getSnapshot !== 'function' || typeof info.subscribe !== 'function') return () => {}
+      const read = () => {
+        let active = null
+        try {
+          const snapshot = info.getSnapshot()
+          active = snapshot === null || snapshot === undefined ? null : snapshot.activePanelId
+        } catch (err) {
+          active = null
+        }
+        if (typeof active === 'string' && active !== '' && active !== PANEL_ID) panelBeforeAudio = active
+      }
+      read()
+      const off = info.subscribe(read)
+      return typeof off === 'function' ? off : () => {}
+    }
+
+    /**
+     * Hand the central column back to the panel the person came from.
+     *
+     * The guard is the point: if they have since moved to ANOTHER panel, that is
+     * their choice and this leaves it alone - only a column still showing this
+     * package's own seat is handed back.
+     */
+    function restorePanel() {
+      const ctx = pluginCtx
+      if (ctx === null || typeof ctx.get !== 'function') return
+      let layout = null
+      try {
+        layout = ctx.get('layout')
+      } catch (err) {
+        layout = null
+      }
+      if (layout === null || layout === undefined || typeof layout.selectPanel !== 'function') return
+      let active = null
+      try {
+        const info = layout.panelInfo
+        const snapshot = info !== null && info !== undefined && typeof info.getSnapshot === 'function' ? info.getSnapshot() : null
+        active = snapshot === null || snapshot === undefined ? null : snapshot.activePanelId
+      } catch (err) {
+        active = null
+      }
+      if (active !== PANEL_ID) return
+      try {
+        layout.selectPanel(panelBeforeAudio)
+      } catch (err) {
+        // The panel this came from is gone (a plugin was unloaded): the
+        // Conversation is the answer that always exists.
+        try {
+          layout.selectPanel(null)
+        } catch (inner) {
+          /* nothing to hand back to */
+        }
+      }
+    }
+
+    /**
+     * The main column's seat: the panel the sidebar row selects, and the only
+     * door to the console.
+     *
+     * The dialog is opened ON MOUNT, which is what makes the left-bar row behave
+     * like a modal button. The seat underneath is not a dead end either: it
+     * carries its own "Open the console" control, so a dialog dismissed without
+     * the column being handed back can always be reopened.
+     */
+    function AudioSeat(props) {
+      const inline = props !== null && props !== undefined && props.inline === true
+      const modals = serviceNow(MODAL_SERVICE)
+      const hasModal = inline !== true && modals !== null && modals !== undefined && typeof modals.open === 'function'
+      const [version, setVersion] = useState(0)
+      // The service goes in a REF rather than in the effect's dependencies.
+      // `version` is what re-opens the dialog, and a service whose identity
+      // changed between renders (a provider that answers a fresh wrapper) would
+      // make this effect re-open the dialog on EVERY render - a queue of dialogs
+      // from a button that was pressed once.
+      const modalsRef = useRef(modals)
+      modalsRef.current = modals
+      useEffect(() => {
+        const service = modalsRef.current
+        if (!hasModal || service === null) return undefined
+        let live = true
+        let pending = null
+        try {
+          pending = service.open({ title: '', size: 'lg', content: (helpers) => h(AudioConsole, { close: helpers.close }) })
+        } catch (err) {
+          restorePanel()
+          return undefined
+        }
+        if (pending !== null && pending !== undefined && typeof pending.then === 'function') {
+          pending.then(
+            () => {
+              if (live) restorePanel()
+            },
+            () => {
+              if (live) restorePanel()
+            },
+          )
+        }
+        return () => {
+          live = false
+        }
+      }, [hasModal, version])
+      if (!hasModal) {
+        return h('div', { className: 'dsa-seat', 'data-audio-seat': 'inline' }, h(AudioConsole, { close: () => restorePanel() }))
+      }
+      return h(
+        'div',
+        { className: 'dsa-seat', 'data-audio-seat': 'dialog' },
+        h(
+          'div',
+          { className: 'dsa-state' },
+          h('div', { className: 'dsa-stateTitle' }, 'The audio console opens in a dialog'),
+          h('div', { className: 'dsa-stateNote' }, 'Devices, the output this page plays through, and a tone that proves it.'),
+          h('button', { type: 'button', className: 'dsa-btn', 'data-audio-action': 'open-console', onClick: () => setVersion((value) => value + 1) }, 'Open the console'),
+        ),
+      )
+    }
+
+    // =====================================================================
+    // 14. The tab body
     // =====================================================================
     /** Which decoder a path will take, for the loading sentence. */
     function decoderLabel(path) {
@@ -3065,7 +4798,7 @@ window.__ModuleLoader__.load({
     }
 
     // =====================================================================
-    // 14. The tab type
+    // 15. The tab type
     // =====================================================================
     /**
      * The `audio` type: an `extension`-band type for the audio suffixes, which
@@ -3089,17 +4822,25 @@ window.__ModuleLoader__.load({
     }
 
     // =====================================================================
-    // 15. Plugin entry
+    // 16. Plugin entry
     // =====================================================================
     /** Services activation waits for: the seats, the tab registry, and the bytes. */
     const inject = ['slots', 'sidebarRightTabs', REMOTE_NAMESPACE]
 
     /**
      * Activate the browser half.
+     *
+     * `layout` and `modals` are NOT in `inject` on purpose: this package's tab is
+     * its primary surface and must keep working in a profile that installed it
+     * without the pack's dialog bundle, so both are resolved through `ctx.get`
+     * where they are used - the seat degrades to an inline page without one, and
+     * the row degrades to a plain panel without the other.
+     *
      * @param ctx - cordis context (inject: slots, sidebarRightTabs,
      *   remote.workspaceFiles).
      */
     function apply(ctx) {
+      pluginCtx = ctx
       try {
         workspaceFiles = ctx && typeof ctx.get === 'function' ? ctx.get(REMOTE_NAMESPACE) : null
       } catch (err) {
@@ -3115,6 +4856,34 @@ window.__ModuleLoader__.load({
           () => ctx.slots.inject(TITLE_SLOT, () => ctx.slots.register({ name: TITLE_SLOT, key: TYPE_ID }, AudioTitle)),
           'dsh-audio: audio tab title',
         )
+        // The left column's row, ONE ABOVE Plugins, and the seat its click needs.
+        ctx.effect(
+          () => ctx.slots.inject(PANEL_SLOT, () => ctx.slots.register({ name: PANEL_SLOT, id: PANEL_ID, order: PANEL_ORDER, label: 'Audio', inject: () => ({}) }, AudioPanelRow)),
+          'dsh-audio: the left column row',
+        )
+        ctx.effect(
+          () => ctx.slots.inject(MAIN_SLOT, () => ctx.slots.register({ name: MAIN_SLOT, key: PANEL_ID, inject: () => ({}) }, AudioSeat)),
+          'dsh-audio: the panel seat',
+        )
+        // Every media element the page starts joins the chosen output, whether or
+        // not the console has been opened in this session.
+        ctx.effect(() => watchMediaElements(), 'dsh-audio: media elements follow the chosen output')
+        // The service is the one thing here that needs `reflect`, and a context
+        // without it still gets the row, the seat and the tab: the publish is
+        // skipped rather than taking the whole activation down with it.
+        const reflect = ctx.reflect
+        if (reflect !== null && reflect !== undefined && typeof reflect.provide === 'function') {
+          ctx.effect(
+            () => {
+              const dispose = reflect.provide(SERVICE_NAME, audioDevicesFace())
+              return () => {
+                if (typeof dispose === 'function') dispose()
+                seenListeners.clear()
+              }
+            },
+            'dsh-audio: audioDevices service',
+          )
+        }
         ctx.logger?.debug?.('[dsh-audio] client half active (' + PLUGIN_VERSION + ')')
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -3132,8 +4901,15 @@ window.__ModuleLoader__.load({
      * take bytes and return numbers, with no DOM, no Remote and no React in
      * sight - so the check can build a WAV/AIFF/FLAC in memory and assert what
      * they decode to, which is the only way a browser-only bundle's arithmetic
-     * gets verified at all. NOT part of the plugin's contract: nothing in the
-     * app reads it, and it exists so the numbers cannot quietly drift.
+     * gets verified at all.
+     *
+     * Section 13's half is the same bargain: the device list, the output strategy
+     * for each browser shape, the tone's numbers, the WAV ENCODER behind the
+     * `element` path and the meter's arithmetic are all pure, and the console
+     * itself is exported as its presentational half so a render can assert the
+     * cards, the marks and the sentences. NOT part of the plugin's contract:
+     * nothing in the app reads it, and it exists so the numbers cannot quietly
+     * drift.
      */
     exports.__internals = {
       BASE_BUCKET: BASE_BUCKET,
@@ -3165,6 +4941,41 @@ window.__ModuleLoader__.load({
       baseNameOf: baseNameOf,
       AudioViewer: AudioViewer,
       InfoPanel: InfoPanel,
+      // --- the audio console (section 13)
+      PANEL_SLOT: PANEL_SLOT,
+      MAIN_SLOT: MAIN_SLOT,
+      PANEL_ID: PANEL_ID,
+      PANEL_ORDER: PANEL_ORDER,
+      STORAGE_KEY: STORAGE_KEY,
+      TONE_MAX_SECONDS: TONE_MAX_SECONDS,
+      normalizeDevices: normalizeDevices,
+      deviceTitle: deviceTitle,
+      shortId: shortId,
+      defaultTargetOf: defaultTargetOf,
+      nameOfId: nameOfId,
+      pickOutputStrategy: pickOutputStrategy,
+      outputStrategyNow: outputStrategyNow,
+      startTone: startTone,
+      gainForLevel: gainForLevel,
+      dbForLevel: dbForLevel,
+      clampFrequency: clampFrequency,
+      panForChannel: panForChannel,
+      toneChannels: toneChannels,
+      encodeWav: encodeWav,
+      rmsOfWaveform: rmsOfWaveform,
+      levelBar: levelBar,
+      camelWords: camelWords,
+      describeStream: describeStream,
+      captureConstraints: captureConstraints,
+      readChoice: readChoice,
+      writeChoice: writeChoice,
+      AudioConsoleView: AudioConsoleView,
+      AudioConsole: AudioConsole,
+      DeviceSection: DeviceSection,
+      ToneSection: ToneSection,
+      InputTestSection: InputTestSection,
+      AudioPanelRow: AudioPanelRow,
+      AudioSeat: AudioSeat,
     }
     return module.exports
   },

@@ -14,6 +14,7 @@ node scripts/checks/check-media-node.mjs        # the media tools + the routes, 
 node scripts/checks/check-skill-examples.mjs    # every fenced example in the diagram skills, parsed or compiled
 node scripts/checks/check-media-examples.mjs    # every media/PDF example, shaped and then really RUN
 node scripts/checks/check-dist-layout.mjs       # the distribution: ship list, bundles, half-to-half parity
+node scripts/checks/check-audio-browser.mjs     # the audio console's device/routing/tone claims, in a real browser
 DSH_CHECK_LAUNCH=1 node scripts/checks/check-node-routes.mjs   # also opens a real file browser
 ```
 
@@ -379,6 +380,37 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
   paragraph ("noforks"). Both now have Node-side regression assertions too. With no
   Chromium-family browser installed it SKIPS LOUDLY and exits 0; `DSH_CANVAS_BROWSER`
   points it at a binary.
+- `check-audio-browser.mjs` is the audio console's other half, and it exists for the
+  same reason: `check-client-bundles.mjs` drives the console's numbers with
+  hand-built fixtures and renders its markup from hand-built state, which is what
+  makes the arithmetic verifiable anywhere - but it proves nothing about the APIs
+  the feature is BUILT ON, and those are exactly where a design like this can be
+  wrong. `AudioContext.setSinkId` exists only from Chromium 110, a media element has
+  its own `setSinkId`, a device list carries NO labels until the page may capture
+  audio, and `enumerateDevices` answers nothing at all outside a secure context. So
+  this file serves the package's own `lib/client.js` over loopback, loads it in a
+  throwaway headless Chromium through the same module-table loader the shell uses
+  (**React stubbed**: nothing here renders, the bundle only needs `react` to define
+  its components), and drives everything the console drives. What it asserts is what
+  only a browser can answer: the **routing verdict follows the two prototypes that
+  browser actually has** (a `context` host, an `element` host and a `none` host are
+  all correct, and the branch is what is pinned - so this check is honest on an
+  older Chromium and on Firefox), a real `AudioContext` reaches `running` and
+  **`setSinkId` really moves it**, the browser's own device list comes back through
+  `normalizeDevices` with the default card's groupId target read off it, the capture
+  the check opens is IN that list and the **labels appear once the page may capture**
+  (which is the claim the console's "Show device names" control rests on), a real
+  analyser frame read off a real capture goes through `rmsOfWaveform`/`levelBar` and
+  the track describes itself through `describeStream`, the remembered pick
+  round-trips through the browser's own `localStorage` - and, the one claim no Node
+  check can make because Node has no media pipeline: **the package's OWN WAV encoder
+  produces a file the browser really loads and really PLAYS**, at the duration its
+  samples state, through a media element that really takes a sink. It runs with
+  `--use-fake-ui-for-media-stream`, `--use-fake-device-for-media-stream` and
+  `--autoplay-policy=no-user-gesture-required` (a headless browser has no microphone
+  and no click), skips the capture-derived checks loudly when even those flags get no
+  microphone, and with no Chromium-family browser installed it SKIPS LOUDLY and exits
+  0; `DSH_AUDIO_BROWSER` (or `DSH_CANVAS_BROWSER`) points it at a binary.
 - `check-media-examples.mjs` is the same idea for the two families whose examples
   are TOOL CALLS rather than source: it walks both media skills **and their
   reference files** plus `pdf-analysis`, and holds them to two tiers. **Shape**
