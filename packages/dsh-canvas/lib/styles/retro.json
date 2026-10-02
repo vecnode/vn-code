@@ -3,7 +3,12 @@
   "name": "Retro",
   "rank": 80,
   "intent": "Printed ephemera: a warm cream stock, two inks, small hard offsets instead of shadows, and a texture that admits it was printed - the palette of a 1970s poster rather than a screen.",
-  "bestFor": ["poster-a3", "linkedin-square", "github-social", "x-post"],
+  "bestFor": [
+    "poster-a3",
+    "linkedin-square",
+    "github-social",
+    "x-post"
+  ],
   "color": {
     "surface": "#F5ECD9",
     "panel": "#FFF8E8",
@@ -46,8 +51,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": "chip",
+    "scrim": "full",
+    "scrimColor": "warm",
+    "scrimStrength": 0.28,
+    "blend": "multiply",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["grain", "stripes"],
+    "preferred": [
+      "grain",
+      "stripes"
+    ],
     "opacity": 0.3
   },
   "rules": {

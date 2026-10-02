@@ -703,6 +703,9 @@ for (const pack of STYLE_LIST) {
   check('style ' + pack.id + ' names only shipped families', Object.values(pack.font).every((family) => family === 'system' || Object.keys(FONTS).includes(family)), true)
   const usesArt = pack.art && Array.isArray(pack.art.preferred) ? pack.art.preferred : []
   check('style ' + pack.id + ' names only real art generators', usesArt.every((style) => engine.ART_STYLES.includes(style)), true)
+  // The space a photo gets, declared by the pack and checked like everything else.
+  check('style ' + pack.id + ' says how an image is treated', Boolean(pack.image && typeof pack.image === 'object'), true)
+  check('style ' + pack.id + ' image treatment is legal', stylesModule.styleProblems(pack).filter((problem) => problem.includes('image')).join('; '), '')
 }
 {
   let pairs = 0
@@ -826,6 +829,29 @@ for (const pack of STYLE_LIST) {
   walk(path.join(repo, 'packages/dsh-canvas'))
   check('no dsh-canvas source file carries a byte-order mark', bomFiles.join(', '), '')
   check('no dsh-canvas source file is mojibake', mangled.join(', '), '')
+}
+
+{
+  // AN IMAGE BELONGS TO THE THEME IT LANDS IN. The treatment is the mechanism: a
+  // photo dropped into a neon banner takes the neon light, the same photo in paper
+  // takes a warm printed wash, and in brutalist it is left raw. Asserted on the
+  // document, because that is what the painter and the exporter both read.
+  const imageDoc = engine.normalizeDocument(
+    { preset: 'og', canvas: { width: 600, height: 400 }, layers: [{ kind: 'image', id: 'shot', x: 40, y: 40, w: 300, h: 200, src: 'shot.png', crop: { x: 0, y: 0, w: 1, h: 0.5 } }] },
+    { presets: PRESETS, fonts: FONTS, styles: STYLE_TABLE },
+  )
+  const treated = (id) => stylesModule.applyStyle(imageDoc.document, stylesModule.styleById(id), { styles: STYLE_TABLE }).document.layers[0]
+  const neonShot = treated('neon')
+  check('an image takes the style radius', neonShot.radius, STYLE_TABLE.neon.radius.card)
+  check('an image takes the style scrim', neonShot.scrim + '/' + neonShot.blend, 'full/screen')
+  check('an image takes a palette role as its tint', String(neonShot.scrimColor).toLowerCase(), String(STYLE_TABLE.neon.color.accent).toLowerCase())
+  // A document never carries a crop RECTANGLE: `fit` is what decides how the picture
+  // is cropped into the box the layout gave it, and the asset's own size is the input.
+  check('and the style decides how it is cropped', neonShot.fit, 'cover')
+  const paperShot = treated('paper')
+  check('and another theme tints the same photo differently', paperShot.scrimColor !== neonShot.scrimColor && paperShot.blend === 'multiply', true)
+  const brutalShot = treated('brutalist')
+  check('a theme may leave a photo raw', brutalShot.scrim === undefined && brutalShot.radius === 0, true)
 }
 
 section('host row: tools')

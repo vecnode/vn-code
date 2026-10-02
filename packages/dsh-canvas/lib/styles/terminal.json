@@ -3,7 +3,12 @@
   "name": "Terminal",
   "rank": 90,
   "intent": "A phosphor screen: black-green ground, one luminous accent, everything monospaced, and a faint grid that reads as scanlines without drawing any.",
-  "bestFor": ["github-readme", "og", "github-social", "linkedin-post"],
+  "bestFor": [
+    "github-readme",
+    "og",
+    "github-social",
+    "linkedin-post"
+  ],
   "color": {
     "surface": "#0B0F0B",
     "panel": "#101710",
@@ -42,8 +47,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": 0,
+    "scrim": "full",
+    "scrimColor": "accent",
+    "scrimStrength": 0.18,
+    "blend": "screen",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["grid", "circuit"],
+    "preferred": [
+      "grid",
+      "circuit"
+    ],
     "opacity": 0.25
   },
   "rules": {

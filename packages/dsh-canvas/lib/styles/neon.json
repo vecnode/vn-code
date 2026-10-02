@@ -3,7 +3,12 @@
   "name": "Neon",
   "rank": 40,
   "intent": "Night-city signage: a near-black surface, one electric accent that glows, display type set tight and loud, and a procedural light source behind the composition rather than a photograph.",
-  "bestFor": ["github-social", "x-post", "linkedin-square", "poster-a3"],
+  "bestFor": [
+    "github-social",
+    "x-post",
+    "linkedin-square",
+    "poster-a3"
+  ],
   "color": {
     "surface": "#05060A",
     "panel": "#0D1020",
@@ -45,8 +50,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": "card",
+    "scrim": "full",
+    "scrimColor": "accent",
+    "scrimStrength": 0.22,
+    "blend": "screen",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["glow", "stars"],
+    "preferred": [
+      "glow",
+      "stars"
+    ],
     "opacity": 0.5
   },
   "rules": {

@@ -3,7 +3,12 @@
   "name": "Bento",
   "rank": 70,
   "intent": "A light page of rounded cards in a grid, each holding one idea with its own label: the composition reads as a set of tidy boxes, and the design's job is to decide which box is biggest.",
-  "bestFor": ["github-readme", "og", "linkedin-square", "linkedin-carousel-page"],
+  "bestFor": [
+    "github-readme",
+    "og",
+    "linkedin-square",
+    "linkedin-carousel-page"
+  ],
   "color": {
     "surface": "#F6F7F9",
     "panel": "#FFFFFF",
@@ -46,8 +51,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": "card",
+    "scrim": "none",
+    "scrimColor": "surface",
+    "scrimStrength": 0,
+    "blend": "normal",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["grid", "mesh"],
+    "preferred": [
+      "grid",
+      "mesh"
+    ],
     "opacity": 0.2
   },
   "rules": {

@@ -3,7 +3,12 @@
   "name": "Vibrant",
   "rank": 110,
   "intent": "Loud, playful and generous with colour: a deep plum ground, two saturated accents that can share the canvas, pill shapes everywhere, and a full-bleed ring pattern behind the words.",
-  "bestFor": ["linkedin-square", "github-social", "x-post", "linkedin-carousel-page"],
+  "bestFor": [
+    "linkedin-square",
+    "github-social",
+    "x-post",
+    "linkedin-carousel-page"
+  ],
   "color": {
     "surface": "#150B2E",
     "panel": "#241247",
@@ -46,8 +51,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": "card",
+    "scrim": "bottom",
+    "scrimColor": "accent",
+    "scrimStrength": 0.3,
+    "blend": "overlay",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["rings", "mesh"],
+    "preferred": [
+      "rings",
+      "mesh"
+    ],
     "opacity": 0.5
   },
   "rules": {

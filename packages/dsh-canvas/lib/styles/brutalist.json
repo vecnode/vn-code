@@ -3,7 +3,12 @@
   "name": "Brutalist",
   "rank": 20,
   "intent": "Raw structure on show: paper-white or ink-black surfaces, thick rules instead of shadows, no rounding, and type set so large it becomes the layout rather than sitting in it.",
-  "bestFor": ["github-social", "poster-a3", "linkedin-square", "x-post"],
+  "bestFor": [
+    "github-social",
+    "poster-a3",
+    "linkedin-square",
+    "x-post"
+  ],
   "color": {
     "surface": "#F4F1EC",
     "panel": "#FFFFFF",
@@ -46,8 +51,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": 0,
+    "scrim": "none",
+    "scrimColor": "ink",
+    "scrimStrength": 0,
+    "blend": "normal",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["grid", "blueprint"],
+    "preferred": [
+      "grid",
+      "blueprint"
+    ],
     "opacity": 0.18
   },
   "rules": {

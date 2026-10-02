@@ -3,7 +3,12 @@
   "name": "Gradient",
   "rank": 50,
   "intent": "A saturated two-stop wash as the whole background: the composition sits on colour rather than in a frame, with generous rounding and white type that holds against the darkest part of the wash.",
-  "bestFor": ["github-social", "linkedin-post", "linkedin-carousel-page", "og"],
+  "bestFor": [
+    "github-social",
+    "linkedin-post",
+    "linkedin-carousel-page",
+    "og"
+  ],
   "color": {
     "surface": "#1B0B3A",
     "panel": "#2A1257",
@@ -56,8 +61,19 @@
       }
     ]
   },
+  "image": {
+    "radius": "card",
+    "scrim": "bottom",
+    "scrimColor": "surface",
+    "scrimStrength": 0.5,
+    "blend": "multiply",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["mesh", "rings"],
+    "preferred": [
+      "mesh",
+      "rings"
+    ],
     "opacity": 0.45
   },
   "rules": {

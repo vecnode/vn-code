@@ -42,6 +42,12 @@ function sectionFor(style) {
     '| type | factor ' + style.scale.factor + ', weight ' + style.scale.displayWeight + ', tracking ' + style.scale.displayTracking + ', line-height ' + style.scale.lineHeight + ' |',
   )
   lines.push('| shape | radius card ' + style.radius.card + ' / chip ' + style.radius.chip + ' / pill ' + style.radius.pill + ', border ' + (style.border ? style.border.weight : 0) + 'px, shadow ' + (style.shadow ? style.shadow.kind : 'none') + ' |')
+  if (style.image) {
+    const tint = style.image.scrim && style.image.scrim !== 'none'
+      ? (style.image.scrimColor ?? 'surface') + ' at ' + (style.image.scrimStrength ?? 0.4) + ' (' + style.image.scrim + ' scrim, ' + (style.image.blend ?? 'normal') + ')'
+      : 'none'
+    lines.push('| image | radius ' + (style.image.radius ?? style.radius.card) + ', crop ' + (style.image.fit ?? 'cover') + ', tint ' + tint + ' |')
+  }
   if (style.art && style.art.preferred && style.art.preferred.length > 0) lines.push('| art | ' + style.art.preferred.join(', ') + ' at ' + (style.art.opacity ?? 0.5) + ' opacity |')
   if (style.bestFor && style.bestFor.length > 0) lines.push('| best for | ' + style.bestFor.join(', ') + ' |')
   lines.push('')
@@ -82,6 +88,11 @@ function render() {
   lines.push('  same style twice is a no-op and switching back restores the original sizes exactly.')
   lines.push('- **Shape and surface.** The radius scale, the border weight and colour, the shadow, the canvas')
   lines.push('  background, and which art generator the design prefers.')
+  lines.push('- **The space a photo gets.** A pack says how an image is rounded, cropped, tinted and')
+  lines.push('  blended, so a photograph dropped into a theme belongs to it instead of looking borrowed.')
+  lines.push('  The treatment sets the radius, the `fit` (which is what decides how the picture is cropped')
+  lines.push('  into its box - a document never carries a crop rectangle, that is derived from the asset),')
+  lines.push('  the scrim (which side, which palette role, how strong) and the blend mode.')
   lines.push('- **Never geometry.** No style moves, resizes or reorders a single node: that is what archetypes')
   lines.push('  are for, and it is asserted for every (style x archetype) pair by `check-canvas-node.mjs`.')
   lines.push('- **Never text.** A style cannot rewrite your words.')

@@ -63,6 +63,8 @@ window.__ModuleLoader__.load({
     const ZOOM_STEPS = ['fit', 0.25, 0.5, 1, 2]
     /** The feed-size factor a report carries, so the model can judge a phone feed. */
     const FEED_SCALE = 0.25
+    /** How close to an edge, in SCREEN pixels, a handle is grabbed. */
+    const HANDLE_HIT = 9
     /** How long one long-poll hangs before the poller re-issues it. */
     const POLL_WAIT_MS = 20_000
 
@@ -105,7 +107,8 @@ window.__ModuleLoader__.load({
 .dsc-pad{min-width:100%;min-height:100%;display:flex;align-items:center;justify-content:center;padding:28px;padding-bottom:var(--dsc-composer-clearance,168px)}
 .dsc-art{position:relative;flex:none;box-shadow:0 18px 44px rgba(0,0,0,.28);border-radius:2px;overflow:hidden;cursor:grab;touch-action:none}
 .dsc-art canvas{display:block;width:100%;height:100%}
-.dsc-art[data-dragging=true]{cursor:grabbing}
+.dsc-art[data-dragging=move]{cursor:grabbing}
+.dsc-art[data-dragging=resize]{cursor:nwse-resize}
 .dsc-art[data-empty=true]{box-shadow:none}
 .dsc-layers{display:flex;flex-direction:column;gap:2px;margin:0 0 10px;padding:0;list-style:none}
 .dsc-layer{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;cursor:pointer;font-size:11.5px;color:var(--dsw-alias-label-secondary);border:.5px solid transparent}
@@ -855,7 +858,7 @@ window.__ModuleLoader__.load({
      * zoomed design stays scrollable to its edge (this pack's rule from the image,
      * audio, video, PDF and diagram surfaces).
      */
-    function Artboard({ engine, document_, preset, sessionId, fonts, zoom, overlays, onLints, onMetrics, onPrepared, selectedPath, onSelect, onMove, feedRef }) {
+    function Artboard({ engine, document_, preset, sessionId, fonts, zoom, overlays, onLints, onMetrics, onPrepared, selectedPath, onSelect, onMove, onResize, feedRef }) {
       const canvasRef = useRef(null)
       const preparedRef = useRef(null)
       const [preparedVersion, setPreparedVersion] = useState(0)
@@ -924,17 +927,52 @@ window.__ModuleLoader__.load({
       const prepared = preparedRef.current
 
       /**
-       * Pointer down on the artboard: pick the topmost MOVABLE node under the
-       * cursor and, if it moves before the pointer comes up, hand the delta back
-       * in DESIGN pixels.
+       * Which edge of the selection is under a point, in DESIGN pixels.
+       *
+       * A handle is grabbed within `HANDLE_HIT` screen pixels of an edge of the
+       * selected box, which is the same box the overlay draws its squares on - so the
+       * person grabs what they can see, at any zoom. Corners win over edges, because
+       * a corner is the more useful gesture and the two overlap there.
+       */
+      const edgesAt = (entry, pointX, pointY, rect) => {
+        const box = entry.box
+        const tolX = (HANDLE_HIT / Math.max(1, rect.width)) * document_.canvas.width
+        const tolY = (HANDLE_HIT / Math.max(1, rect.height)) * document_.canvas.height
+        const near = {
+          left: Math.abs(pointX - box.x) <= tolX,
+          right: Math.abs(pointX - (box.x + box.w)) <= tolX,
+          top: Math.abs(pointY - box.y) <= tolY,
+          bottom: Math.abs(pointY - (box.y + box.h)) <= tolY,
+        }
+        const insideX = pointX >= box.x - tolX && pointX <= box.x + box.w + tolX
+        const insideY = pointY >= box.y - tolY && pointY <= box.y + box.h + tolY
+        if (!insideX || !insideY) return null
+        const edges = { left: near.left, right: near.right, top: near.top, bottom: near.bottom }
+        if (!edges.left && !edges.right && !edges.top && !edges.bottom) return null
+        return edges
+      }
+
+      /** The cursor an edge pair deserves. */
+      const cursorFor = (edges) => {
+        if (!edges) return null
+        if ((edges.left || edges.right) && (edges.top || edges.bottom)) return (edges.left ? 'nesw' : 'nwse') + '-resize'
+        if (edges.left || edges.right) return 'ew-resize'
+        return 'ns-resize'
+      }
+
+      /**
+       * Pointer down on the artboard. A HANDLE of the current selection wins over
+       * everything: dragging it RESIZES that node. Anywhere else, the topmost movable
+       * node under the cursor is picked and dragging it MOVES the node, and the delta
+       * is handed back in DESIGN pixels.
        *
        * Hit testing uses the boxes the layout already produced, so what the person
-       * clicks is what they can see. A node is movable when it (or its parent
-       * chain) can carry an `x`/`y`: a top-level layer always can, and a child of a
-       * frame that names x/y is already out of the flow. A flow child CAN still be
-       * dragged - setting x/y is exactly what takes it out of the flow - but only
-       * the nodes the report already shows as absolute are offered first, so a
-       * stray drag inside a text block does not silently unfix its layout.
+       * clicks is what they can see. A node is movable when it (or its parent chain)
+       * can carry an `x`/`y`: a top-level layer always can, and a child of a frame
+       * that names x/y is already out of the flow. A flow child CAN still be dragged
+       * - setting x/y is exactly what takes it out of the flow - but only the nodes
+       * the report already shows as absolute are offered first, so a stray drag inside
+       * a text block does not silently unfix its layout.
        */
       const onArtPointerDown = (event) => {
         const current = preparedRef.current
@@ -943,15 +981,18 @@ window.__ModuleLoader__.load({
         const pointX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * document_.canvas.width
         const pointY = ((event.clientY - rect.top) / Math.max(1, rect.height)) * document_.canvas.height
         const layers = new Set((document_.layers ?? []).map((node, index) => 'layers.' + index))
+        // THE SELECTION'S OWN HANDLES FIRST.
+        const selectedEntry = selectedPath ? current.boxes.find((entry) => entry.path === selectedPath) : null
+        const handle = selectedEntry ? edgesAt(selectedEntry, pointX, pointY, rect) : null
         const candidates = current.boxes.filter((entry) => {
           const box = entry.box
           return pointX >= box.x && pointX <= box.x + box.w && pointY >= box.y && pointY <= box.y + box.h
         })
         // Topmost first: the last painted box that contains the point, preferring a
         // node that is already absolute (a top-level layer, or a child with x/y).
-        const chosen = [...candidates].reverse().find((entry) => layers.has(entry.path) || isAbsolutePath(document_, entry.path)) ?? [...candidates].reverse()[0]
+        const chosen = handle ? selectedEntry : [...candidates].reverse().find((entry) => layers.has(entry.path) || isAbsolutePath(document_, entry.path)) ?? [...candidates].reverse()[0]
         if (!chosen) return
-        if (onSelect) onSelect(chosen.path)
+        if (!handle && onSelect) onSelect(chosen.path)
         const startX = event.clientX
         const startY = event.clientY
         let moved = false
@@ -961,7 +1002,7 @@ window.__ModuleLoader__.load({
           const dy = ((moveEvent.clientY - startY) / Math.max(1, rect.height)) * document_.canvas.height
           if (!moved && Math.abs(dx) + Math.abs(dy) < 2) return
           moved = true
-          element.setAttribute('data-dragging', 'true')
+          element.setAttribute('data-dragging', handle ? 'resize' : 'move')
           moveEvent.preventDefault()
         }
         const up = (upEvent) => {
@@ -971,10 +1012,27 @@ window.__ModuleLoader__.load({
           if (!moved) return
           const dx = ((upEvent.clientX - startX) / Math.max(1, rect.width)) * document_.canvas.width
           const dy = ((upEvent.clientY - startY) / Math.max(1, rect.height)) * document_.canvas.height
-          if (onMove) onMove(chosen.path, Math.round(dx), Math.round(dy))
+          if (handle && onResize) onResize(chosen.path, handle, Math.round(dx), Math.round(dy))
+          else if (onMove) onMove(chosen.path, Math.round(dx), Math.round(dy))
         }
         window.addEventListener('pointermove', move)
         window.addEventListener('pointerup', up)
+      }
+
+      /** Hover feedback: the cursor names the gesture the pointer would start. */
+      const onArtPointerMove = (event) => {
+        const current = preparedRef.current
+        const element = event.currentTarget
+        if (!current || !selectedPath) {
+          element.style.cursor = ''
+          return
+        }
+        const rect = element.getBoundingClientRect()
+        const pointX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * document_.canvas.width
+        const pointY = ((event.clientY - rect.top) / Math.max(1, rect.height)) * document_.canvas.height
+        const entry = current.boxes.find((candidate) => candidate.path === selectedPath)
+        const edges = entry ? edgesAt(entry, pointX, pointY, rect) : null
+        element.style.cursor = cursorFor(edges) ?? ''
       }
 
       return h(
@@ -986,6 +1044,7 @@ window.__ModuleLoader__.load({
             className: 'dsc-art',
             'data-canvas-artboard': document_.preset ?? 'freeform',
             onPointerDown: onArtPointerDown,
+            onPointerMove: onArtPointerMove,
             style: { width: Math.max(1, Math.round(document_.canvas.width * scale)) + 'px', height: Math.max(1, Math.round(document_.canvas.height * scale)) + 'px' },
           },
           h('canvas', { ref: canvasRef, 'data-canvas-art': 'true' }),
@@ -1087,7 +1146,6 @@ window.__ModuleLoader__.load({
       if (selectedPath) {
         const entry = prepared.boxes.find((box) => box.path === selectedPath)
         if (entry) {
-          const handle = Math.max(4, Math.round(6 / Math.max(0.2, scale)))
           children.push(
             h('rect', {
               key: 'selection',
@@ -1101,13 +1159,25 @@ window.__ModuleLoader__.load({
               strokeWidth: Math.max(1, Math.round(1.5 / Math.max(0.2, scale))),
             }),
           )
-          for (const [cx, cy] of [
-            [entry.box.x, entry.box.y],
-            [entry.box.x + entry.box.w, entry.box.y],
-            [entry.box.x, entry.box.y + entry.box.h],
-            [entry.box.x + entry.box.w, entry.box.y + entry.box.h],
+          // EIGHT handles: four corners and four edge midpoints, which is the
+          // vocabulary a person already knows from every other design tool, and the
+          // ones the resize gesture grabs (in this order: corners first, so the
+          // middle of a short edge is still reachable on a small node).
+          const midX = entry.box.x + entry.box.w / 2
+          const midY = entry.box.y + entry.box.h / 2
+          const box = { x: entry.box.x, y: entry.box.y, w: entry.box.w, h: entry.box.h }
+          const size = Math.max(5, Math.round(7 / Math.max(0.2, scale)))
+          for (const [key, cx, cy] of [
+            ['nw', box.x, box.y],
+            ['n', midX, box.y],
+            ['ne', box.x + box.w, box.y],
+            ['e', box.x + box.w, midY],
+            ['se', box.x + box.w, box.y + box.h],
+            ['s', midX, box.y + box.h],
+            ['sw', box.x, box.y + box.h],
+            ['w', box.x, midY],
           ]) {
-            children.push(h('rect', { key: 'handle-' + cx + '-' + cy, x: cx - handle / 2, y: cy - handle / 2, width: handle, height: handle, fill: 'rgba(77,107,254,0.95)' }))
+            children.push(h('rect', { key: 'handle-' + key, 'data-canvas-handle': key, x: cx - size / 2, y: cy - size / 2, width: size, height: size, fill: 'rgba(77,107,254,0.95)' }))
           }
         }
       }
@@ -1245,6 +1315,51 @@ window.__ModuleLoader__.load({
             ],
             'Moved ' + layerLabel(node, path),
           )
+        },
+        [selected, applyOps],
+      )
+
+      /**
+       * A drag on a selection handle: RESIZE one node, keeping the opposite edge
+       * where it is.
+       *
+       * The same route, validator and store as a move and as the agent's patch, so
+       * stretching a layer cannot produce a document the validator would refuse. Two
+       * rules are worth stating:
+       *
+       *   - A node that was `hug` gets a NUMBER, taken from the box it already had.
+       *     Dragging is how you take a label off its content and give it a width.
+       *   - A TEXT node is stretched in WIDTH only: its height is what the words
+       *     measure, and setting it would be a lie the layout then ignores. Every
+       *     other kind takes both.
+       */
+      const resizeLayer = useCallback(
+        (path, edges, dx, dy) => {
+          if (!selected || !edges) return
+          const node = nodeAtPath(selected.document, path)
+          if (!node || typeof node !== 'object') return
+          const prepared = lastPreparedRef.current
+          const entry = prepared ? prepared.boxes.find((box) => box.path === path) : null
+          const baseX = typeof node.x === 'number' ? node.x : entry ? Math.round(entry.box.x) : 0
+          const baseY = typeof node.y === 'number' ? node.y : entry ? Math.round(entry.box.y) : 0
+          const baseW = typeof node.w === 'number' ? node.w : entry ? Math.round(entry.box.w) : 0
+          const baseH = typeof node.h === 'number' ? node.h : entry ? Math.round(entry.box.h) : 0
+          const minW = node.kind === 'text' ? 40 : 8
+          const minH = 8
+          const ops = []
+          if (edges.left || edges.right) {
+            const want = Math.max(minW, Math.round(edges.left ? baseW - dx : baseW + dx))
+            ops.push({ op: 'set', at: path + '.w', value: want })
+            if (edges.left) ops.push({ op: 'set', at: path + '.x', value: Math.max(0, Math.round(baseX + (baseW - want))) })
+          }
+          if (node.kind !== 'text' && (edges.top || edges.bottom)) {
+            const want = Math.max(minH, Math.round(edges.top ? baseH - dy : baseH + dy))
+            ops.push({ op: 'set', at: path + '.h', value: want })
+            if (edges.top) ops.push({ op: 'set', at: path + '.y', value: Math.max(0, Math.round(baseY + (baseH - want))) })
+          }
+          if (ops.length === 0) return
+          const corner = (edges.left || edges.right) && (edges.top || edges.bottom)
+          applyOps(ops, (corner ? 'Resized ' : 'Stretched ') + layerLabel(node, path))
         },
         [selected, applyOps],
       )
@@ -1491,6 +1606,7 @@ window.__ModuleLoader__.load({
               selectedPath,
               onSelect: setSelectedPath,
               onMove: moveLayer,
+              onResize: resizeLayer,
               feedRef,
             })
           : h('div', { className: 'dsc-pad' }, h(EmptyState, { engineNote, error, state, onCreate: createDesign, onOpenNew: () => setNewOpen(true) })),
@@ -1544,7 +1660,7 @@ window.__ModuleLoader__.load({
                 ),
               )
             : h('p', { className: 'dsc-rowMeta' }, selected ? 'This design has no layers yet.' : 'No design selected.'),
-          h('p', { className: 'dsc-rowMeta', style: { margin: '10px 0 6px' } }, 'Drag a layer on the artboard to move it (a node inside a frame\u2019s flow is given the position it has, which takes it out of the flow).'),
+          h('p', { className: 'dsc-rowMeta', style: { margin: '10px 0 6px' } }, 'Drag a layer to move it, or a handle of the selection to stretch it. A node inside a frame\u2019s flow is given the position it has (which takes it out of the flow), and a text layer stretches in width.'),
           h('div', { className: 'dsc-sideHead', style: { borderTop: '.5px solid var(--dsw-alias-border-l2)', margin: '0 -10px', padding: '8px 10px' } }, h('span', null, 'Report'), h('span', null, metrics ? '' : 'laying out…')),
           metrics ? h('pre', { className: 'dsc-metrics' }, metricsText(metrics)) : h('p', { className: 'dsc-rowMeta' }, 'No measurements yet.'),
           selected && selected.verification && selected.verification.path

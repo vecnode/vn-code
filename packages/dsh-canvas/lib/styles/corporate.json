@@ -3,7 +3,12 @@
   "name": "Corporate",
   "rank": 100,
   "intent": "The safe, competent look a serious announcement wants: white ground, a confident blue, a cool grey for the second voice, blueprint texture at the edge, and nothing that could date.",
-  "bestFor": ["linkedin-company-banner", "linkedin-post", "og", "github-readme"],
+  "bestFor": [
+    "linkedin-company-banner",
+    "linkedin-post",
+    "og",
+    "github-readme"
+  ],
   "color": {
     "surface": "#FFFFFF",
     "panel": "#F4F7FB",
@@ -46,8 +51,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": "chip",
+    "scrim": "none",
+    "scrimColor": "surface",
+    "scrimStrength": 0,
+    "blend": "normal",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["blueprint", "grid"],
+    "preferred": [
+      "blueprint",
+      "grid"
+    ],
     "opacity": 0.22
   },
   "rules": {

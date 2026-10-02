@@ -3,7 +3,12 @@
   "name": "Glass",
   "rank": 60,
   "intent": "Layered translucent panels on a dark surface with thin light hairlines and soft shadows. This language has no blur, so the glass is honesty rather than a filter: translucency, a hairline and a shadow do the work, and nothing pretends to be frosted.",
-  "bestFor": ["github-social", "og", "linkedin-post", "linkedin-company-banner"],
+  "bestFor": [
+    "github-social",
+    "og",
+    "linkedin-post",
+    "linkedin-company-banner"
+  ],
   "color": {
     "surface": "#0A1018",
     "panel": "#16202C",
@@ -46,8 +51,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": "card",
+    "scrim": "bottom",
+    "scrimColor": "surface",
+    "scrimStrength": 0.35,
+    "blend": "normal",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["waves", "mesh"],
+    "preferred": [
+      "waves",
+      "mesh"
+    ],
     "opacity": 0.3
   },
   "rules": {

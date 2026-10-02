@@ -3,7 +3,12 @@
   "name": "Editorial",
   "rank": 10,
   "intent": "The authority of a printed magazine: one large, tightly tracked display line, a warm accent used once, generous margins and a great deal of quiet space around the words.",
-  "bestFor": ["github-social", "og", "linkedin-post", "poster-a3"],
+  "bestFor": [
+    "github-social",
+    "og",
+    "linkedin-post",
+    "poster-a3"
+  ],
   "color": {
     "surface": "#0B0E14",
     "panel": "#141A24",
@@ -42,8 +47,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": "card",
+    "scrim": "bottom",
+    "scrimColor": "surface",
+    "scrimStrength": 0.42,
+    "blend": "normal",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["grain", "grid"],
+    "preferred": [
+      "grain",
+      "grid"
+    ],
     "opacity": 0.28
   },
   "rules": {

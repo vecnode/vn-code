@@ -3,7 +3,12 @@
   "name": "Paper",
   "rank": 120,
   "intent": "A written page rather than a screen: warm off-white stock, near-black ink, one earthy accent, small radii and a texture that reads as fibre - the calmest style in the library.",
-  "bestFor": ["poster-a3", "og", "linkedin-carousel-page", "github-readme"],
+  "bestFor": [
+    "poster-a3",
+    "og",
+    "linkedin-carousel-page",
+    "github-readme"
+  ],
   "color": {
     "surface": "#FAF7F0",
     "panel": "#FFFFFF",
@@ -42,8 +47,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": "chip",
+    "scrim": "bottom",
+    "scrimColor": "warm",
+    "scrimStrength": 0.3,
+    "blend": "multiply",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["grain", "waves"],
+    "preferred": [
+      "grain",
+      "waves"
+    ],
     "opacity": 0.22
   },
   "rules": {

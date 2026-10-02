@@ -3,7 +3,12 @@
   "name": "Minimal",
   "rank": 30,
   "intent": "One idea, a great deal of air, and hairlines instead of boxes: the surface is almost empty, the type is one step smaller than you expect, and nothing decorative is allowed to compete with the words.",
-  "bestFor": ["og", "linkedin-post", "github-readme", "linkedin-carousel-page"],
+  "bestFor": [
+    "og",
+    "linkedin-post",
+    "github-readme",
+    "linkedin-carousel-page"
+  ],
   "color": {
     "surface": "#FFFFFF",
     "panel": "#FAFAFA",
@@ -46,8 +51,19 @@
     "type": "solid",
     "color": "surface"
   },
+  "image": {
+    "radius": "chip",
+    "scrim": "none",
+    "scrimColor": "surface",
+    "scrimStrength": 0,
+    "blend": "normal",
+    "fit": "cover"
+  },
   "art": {
-    "preferred": ["grain", "grid"],
+    "preferred": [
+      "grain",
+      "grid"
+    ],
     "opacity": 0.1
   },
   "rules": {

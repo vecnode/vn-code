@@ -5303,6 +5303,16 @@ check('the artboard reserves the composer clearance', canvasCss.includes('paddin
 check('the layer list is styled', canvasCss.includes('.dsc-layers{') && canvasCss.includes('.dsc-layer[data-selected=true]'), true)
 check('the layer rows indent by depth', canvasSource.includes('paddingLeft: 6 + row.depth * 10'), true)
 check('a selection draws a box and handles', canvasSource.includes("'data-canvas-selection'") && canvasSource.includes('handle-'), true)
+// RESIZE, the other half of direct manipulation: eight handles, a handle that wins
+// over the node under it, and a stretch written as width/height pointer ops.
+check('the selection draws eight named handles', ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].every((key) => canvasSource.includes("['" + key + "'")), true)
+check('a handle is grabbed within a screen-pixel tolerance', canvasSource.includes('const HANDLE_HIT = 9') && canvasSource.includes('HANDLE_HIT / Math.max(1, rect.width)'), true)
+check('a handle wins over the node under it', canvasSource.includes('handle ? selectedEntry :'), true)
+check('a stretch writes width and height ops', canvasSource.includes("path + '.w'") && canvasSource.includes("path + '.h'"), true)
+check('a text layer stretches in width only', canvasSource.includes("node.kind === 'text' ? 40 : 8") && canvasSource.includes("node.kind !== 'text' && (edges.top || edges.bottom)"), true)
+check('a drag reports which gesture it is', canvasSource.includes("handle ? 'resize' : 'move'"), true)
+check('the cursor names the edge pair', canvasSource.includes("'ew-resize'") && canvasSource.includes("'ns-resize'"), true)
+check('the resize dress is styled', canvasCss.includes('.dsc-art[data-dragging=resize]'), true)
 check('a drag sends x and y as pointer ops', canvasSource.includes("path + '.x'") && canvasSource.includes("path + '.y'"), true)
 check('a reorder is a remove plus an insert', canvasSource.includes('Reordered the layers') && canvasSource.includes("{ op: 'remove', at: path }"), true)
 check('dragging is a pointer gesture', canvasSource.includes('pointermove') && canvasSource.includes("element.setAttribute('data-dragging'"), true)

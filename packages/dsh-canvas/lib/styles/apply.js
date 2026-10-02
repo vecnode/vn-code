@@ -42,7 +42,7 @@
  * `surface` note says that is telling the truth rather than pretending. The same
  * goes for gradients on text and for anything else the node kinds do not have.
  */
-import { clone, formatColor, parseColor } from '../engine.js'
+import { BLEND_MODES, clone, formatColor, parseColor } from '../engine.js'
 
 /** The colour roles a style may set, in the order a swatch shows them. */
 export const STYLE_ROLES = ['surface', 'panel', 'ink', 'muted', 'accent', 'accent-ink', 'line', 'warm']
@@ -272,6 +272,7 @@ export function applyStyle(document, style, options = {}) {
   const preferredArt = Array.isArray(style.art && style.art.preferred) ? style.art.preferred : null
   const artOpacity = style.art && typeof style.art.opacity === 'number' ? style.art.opacity : null
   let restyledArt = 0
+  let treatedImages = 0
   let replacedSurface = 0
 
   const restyleNode = (node, depth) => {
@@ -330,10 +331,41 @@ export function applyStyle(document, style, options = {}) {
       if (artOpacity !== null) node.opacity = artOpacity
       restyledArt += 1
     }
+    if (node.kind === 'image') {
+      /**
+       * THE SPACE A PHOTO GETS, per theme.
+       *
+       * An image arrives from the workspace or a paste, so it knows nothing about
+       * the look it is landing in - and a photograph dropped into a neon banner
+       * unchanged is the fastest way to make a design look borrowed. A pack may
+       * therefore describe its own image treatment: how it is rounded, how it is
+       * cropped, which way it is tinted and with which palette role, at what
+       * strength, and with which blend mode. Resolved straight from the palette (not
+       * re-tinted - it IS the palette), so the treatment is exactly what the pack
+       * declares.
+       */
+      const image = style.image
+      if (image) {
+        if (image.radius !== undefined) {
+          const wanted = typeof image.radius === 'number' ? image.radius : (style.radius ?? {})[image.radius]
+          if (typeof wanted === 'number') node.radius = wanted
+        }
+        if (typeof image.fit === 'string' && ['cover', 'contain', 'fill'].includes(image.fit)) node.fit = image.fit
+        if (typeof image.blend === 'string' && BLEND_MODES.includes(image.blend)) node.blend = image.blend
+        if (typeof image.scrim === 'string' && image.scrim !== 'none') {
+          node.scrim = image.scrim
+          const colour = resolveRef(image.scrimColor, palette)
+          if (typeof colour === 'string' && literal(colour)) node.scrimColor = colour
+          if (typeof image.scrimStrength === 'number') node.scrimStrength = image.scrimStrength
+        }
+        treatedImages += 1
+      }
+    }
     for (const child of node.children ?? []) restyleNode(child, depth + 1)
   }
   for (const layer of out.layers ?? []) restyleNode(layer, 0)
   if (restyledArt > 0) notes.push(restyledArt + ' art layer(s) switched to the style\u2019s own generator')
+  if (treatedImages > 0) notes.push(treatedImages + ' image layer(s) given the style\u2019s own treatment (radius, crop, tint, blend)')
   if (replacedSurface > 0) notes.push(replacedSurface + ' top-level panel(s) given the style\u2019s border and shadow')
 
   out.style = style.id
@@ -419,5 +451,19 @@ export function styleProblems(style) {
   if (!style.scale || typeof style.scale.factor !== 'number') problems.push('scale.factor is required')
   if (!style.rules || !Array.isArray(style.rules.do) || !Array.isArray(style.rules.dont)) problems.push('rules.do and rules.dont are required')
   if (!Array.isArray(style.gates) || style.gates.length === 0) problems.push('at least one quality gate is required')
+  // The image treatment is how a photo belongs to the theme, so it is checked like
+  // everything else: legal roles, legal crop, legal scrim, legal blend.
+  if (style.image !== undefined) {
+    const image = style.image
+    if (!image || typeof image !== 'object') problems.push('image must be an object')
+    else {
+      if (image.radius !== undefined && typeof image.radius !== 'number' && !(style.radius && typeof style.radius[image.radius] === 'number')) problems.push('image.radius must be a number or a radius token name')
+      if (image.fit !== undefined && !['cover', 'contain', 'fill'].includes(image.fit)) problems.push('image.fit must be cover, contain or fill')
+      if (image.blend !== undefined && !BLEND_MODES.includes(image.blend)) problems.push('image.blend must be one of ' + BLEND_MODES.join(', '))
+      if (image.scrim !== undefined && !['none', 'bottom', 'top', 'left', 'right', 'full', 'circle'].includes(image.scrim)) problems.push('image.scrim must be none, bottom, top, left, right, full or circle')
+      if (image.scrimColor !== undefined && !literal(image.scrimColor) && !(style.color && style.color[image.scrimColor])) problems.push('image.scrimColor must be a colour or a palette role name')
+      if (image.scrimStrength !== undefined && (typeof image.scrimStrength !== 'number' || image.scrimStrength < 0 || image.scrimStrength > 1)) problems.push('image.scrimStrength must be between 0 and 1')
+    }
+  }
   return problems
 }

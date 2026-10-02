@@ -17,6 +17,11 @@ fails when it is stale - so what follows is exactly the library the host will ap
   same style twice is a no-op and switching back restores the original sizes exactly.
 - **Shape and surface.** The radius scale, the border weight and colour, the shadow, the canvas
   background, and which art generator the design prefers.
+- **The space a photo gets.** A pack says how an image is rounded, cropped, tinted and
+  blended, so a photograph dropped into a theme belongs to it instead of looking borrowed.
+  The treatment sets the radius, the `fit` (which is what decides how the picture is cropped
+  into its box - a document never carries a crop rectangle, that is derived from the asset),
+  the scrim (which side, which palette role, how strong) and the blend mode.
 - **Never geometry.** No style moves, resizes or reorders a single node: that is what archetypes
   are for, and it is asserted for every (style x archetype) pair by `check-canvas-node.mjs`.
 - **Never text.** A style cannot rewrite your words.
@@ -59,6 +64,7 @@ The authority of a printed magazine: one large, tightly tracked display line, a 
 | display / text | Space Grotesk / Inter (mono: system) |
 | type | factor 1, weight 700, tracking -1.5, line-height 1.08 |
 | shape | radius card 4 / chip 4 / pill 999, border 0px, shadow none |
+| image | radius card, crop cover, tint surface at 0.42 (bottom scrim, normal) |
 | art | grain, grid at 0.28 opacity |
 | best for | github-social, og, linkedin-post, poster-a3 |
 
@@ -91,6 +97,7 @@ Raw structure on show: paper-white or ink-black surfaces, thick rules instead of
 | display / text | Space Grotesk / Inter (mono: system) |
 | type | factor 1.05, weight 700, tracking -2, line-height 1.05 |
 | shape | radius card 0 / chip 0 / pill 0, border 4px, shadow hard |
+| image | radius 0, crop cover, tint none |
 | art | grid, blueprint at 0.18 opacity |
 | best for | github-social, poster-a3, linkedin-square, x-post |
 
@@ -123,6 +130,7 @@ One idea, a great deal of air, and hairlines instead of boxes: the surface is al
 | display / text | Inter / Inter (mono: system) |
 | type | factor 0.95, weight 600, tracking -1, line-height 1.2 |
 | shape | radius card 8 / chip 6 / pill 999, border 1px, shadow soft |
+| image | radius chip, crop cover, tint none |
 | art | grain, grid at 0.1 opacity |
 | best for | og, linkedin-post, github-readme, linkedin-carousel-page |
 
@@ -155,6 +163,7 @@ Night-city signage: a near-black surface, one electric accent that glows, displa
 | display / text | Space Grotesk / Inter (mono: system) |
 | type | factor 1.1, weight 700, tracking -1, line-height 1.05 |
 | shape | radius card 14 / chip 10 / pill 999, border 1px, shadow glow |
+| image | radius card, crop cover, tint accent at 0.22 (full scrim, screen) |
 | art | glow, stars at 0.5 opacity |
 | best for | github-social, x-post, linkedin-square, poster-a3 |
 
@@ -187,6 +196,7 @@ A saturated two-stop wash as the whole background: the composition sits on colou
 | display / text | Space Grotesk / Inter (mono: system) |
 | type | factor 1.08, weight 700, tracking -1.5, line-height 1.1 |
 | shape | radius card 22 / chip 14 / pill 999, border 0px, shadow soft |
+| image | radius card, crop cover, tint surface at 0.5 (bottom scrim, multiply) |
 | art | mesh, rings at 0.45 opacity |
 | best for | github-social, linkedin-post, linkedin-carousel-page, og |
 
@@ -219,6 +229,7 @@ Layered translucent panels on a dark surface with thin light hairlines and soft 
 | display / text | Inter / Inter (mono: system) |
 | type | factor 1, weight 600, tracking -0.5, line-height 1.2 |
 | shape | radius card 18 / chip 12 / pill 999, border 1px, shadow soft |
+| image | radius card, crop cover, tint surface at 0.35 (bottom scrim, normal) |
 | art | waves, mesh at 0.3 opacity |
 | best for | github-social, og, linkedin-post, linkedin-company-banner |
 
@@ -251,6 +262,7 @@ A light page of rounded cards in a grid, each holding one idea with its own labe
 | display / text | Inter / Inter (mono: system) |
 | type | factor 1, weight 600, tracking -0.8, line-height 1.25 |
 | shape | radius card 16 / chip 10 / pill 999, border 1px, shadow soft |
+| image | radius card, crop cover, tint none |
 | art | grid, mesh at 0.2 opacity |
 | best for | github-readme, og, linkedin-square, linkedin-carousel-page |
 
@@ -283,6 +295,7 @@ Printed ephemera: a warm cream stock, two inks, small hard offsets instead of sh
 | display / text | Space Grotesk / Inter (mono: system) |
 | type | factor 1.02, weight 700, tracking 0, line-height 1.15 |
 | shape | radius card 2 / chip 2 / pill 999, border 2px, shadow hard |
+| image | radius chip, crop cover, tint warm at 0.28 (full scrim, multiply) |
 | art | grain, stripes at 0.3 opacity |
 | best for | poster-a3, linkedin-square, github-social, x-post |
 
@@ -315,6 +328,7 @@ A phosphor screen: black-green ground, one luminous accent, everything monospace
 | display / text | system / Inter (mono: system) |
 | type | factor 1, weight 700, tracking 0, line-height 1.3 |
 | shape | radius card 0 / chip 0 / pill 2, border 1px, shadow none |
+| image | radius 0, crop cover, tint accent at 0.18 (full scrim, screen) |
 | art | grid, circuit at 0.25 opacity |
 | best for | github-readme, og, github-social, linkedin-post |
 
@@ -347,6 +361,7 @@ The safe, competent look a serious announcement wants: white ground, a confident
 | display / text | Inter / Inter (mono: system) |
 | type | factor 1, weight 600, tracking -0.5, line-height 1.22 |
 | shape | radius card 10 / chip 8 / pill 999, border 1px, shadow soft |
+| image | radius chip, crop cover, tint none |
 | art | blueprint, grid at 0.22 opacity |
 | best for | linkedin-company-banner, linkedin-post, og, github-readme |
 
@@ -379,6 +394,7 @@ Loud, playful and generous with colour: a deep plum ground, two saturated accent
 | display / text | Space Grotesk / Inter (mono: system) |
 | type | factor 1.12, weight 700, tracking -1, line-height 1.1 |
 | shape | radius card 24 / chip 999 / pill 999, border 0px, shadow soft |
+| image | radius card, crop cover, tint accent at 0.3 (bottom scrim, overlay) |
 | art | rings, mesh at 0.5 opacity |
 | best for | linkedin-square, github-social, x-post, linkedin-carousel-page |
 
@@ -411,6 +427,7 @@ A written page rather than a screen: warm off-white stock, near-black ink, one e
 | display / text | Space Grotesk / Inter (mono: system) |
 | type | factor 0.98, weight 600, tracking 0, line-height 1.25 |
 | shape | radius card 3 / chip 3 / pill 999, border 1px, shadow none |
+| image | radius chip, crop cover, tint warm at 0.3 (bottom scrim, multiply) |
 | art | grain, waves at 0.22 opacity |
 | best for | poster-a3, og, linkedin-carousel-page, github-readme |
 
