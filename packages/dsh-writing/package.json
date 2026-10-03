@@ -1,0 +1,29 @@
+{
+  "name": "dsh-writing",
+  "version": "0.1.0-alpha.3",
+  "description": "Writing: a page tab for the conversation's own documents - a paged WYSIWYG surface over a persistent store, with the .docx codec this package owns and the harness's own LibreOffice as the proof renderer. See packages/dsh-writing/README.md.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./page": "./lib/page.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "license": "MIT"
+}

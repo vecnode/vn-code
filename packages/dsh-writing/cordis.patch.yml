@@ -1,0 +1,25 @@
+# dsh-writing bundle layer (alpha).
+#
+# Applied on top of the shipped web bundle rows. This plugin registers ONE extra
+# row ('writing') that owns the plugin's Node half - the authenticated
+# /api/dsh-writing/* routes: the document store, the .docx codec's import and
+# export, and the page breaker the browser half imports - and therefore ships its
+# browser half (dsh.client) with the Loader entry.
+#
+# Nothing else is patched, and nothing is disabled or forked:
+#   - the Writing tab is a `conversation.view` entry at order 30, which puts it
+#     to the right of Canvas (20), Trajectory (10) and Chat (0) - the chat
+#     panel's own view ring, not the right bar;
+#   - the right bar gains three pane types through its own registry: a .docx
+#     opened EDITABLE (where the shipped preview keeps every other file), a
+#     .xlsx opened as a grid, and a Headings navigator;
+#   - the shipped office preview keeps its surface. "Proof" writes a real .docx
+#     or .xlsx into the conversation folder and hands that address to the
+#     preview by name, so the LibreOffice the harness already ships
+#     (@deepseek-ai/libreoffice-kit, behind @deepseek-ai/dsh-office-to-pdf) is
+#     what renders it. This package renders and computes nothing itself: a
+#     workbook's formulas are written with no cached value beside
+#     `fullCalcOnLoad`, so LibreOffice is what evaluates them.
+- insert:
+    - id: writing
+      name: 'dsh-writing'

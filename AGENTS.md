@@ -57,6 +57,7 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   `dsh-rightbar-files` (the right bar and its Files tab), `dsh-editor`,
   `dsh-gittree` (History), `dsh-image`, `dsh-audio`, `dsh-video`, `dsh-media`
   (the only owner of ffmpeg), `dsh-diagrams`, `dsh-pdf`, `dsh-canvas`,
+  `dsh-writing` (the Writing page tab and the pack's only `.docx` codec),
   `dsh-browser`, `dsh-themes`, `dsh-cmdbar`, `dsh-modal`, `dsh-skills`,
   `dsh-ui-state`, `dsh-open-in-app`.
 - `scripts/` — the launchers, the installer workers, the shared console layer and

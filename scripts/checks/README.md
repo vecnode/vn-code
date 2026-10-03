@@ -13,6 +13,7 @@ node scripts/checks/check-dist-layout.mjs       # the distribution, the console 
 node scripts/checks/check-media-node.mjs        # dsh-media: tools, routes, the ffmpeg pin
 node scripts/checks/check-pdf-node.mjs          # dsh-pdf: the five tools and the routes
 node scripts/checks/check-canvas-node.mjs       # dsh-canvas: engine, painters, store, tools, routes
+node scripts/checks/check-writing-node.mjs      # dsh-writing: model, page breaker, ZIP/XML, .docx + .xlsx codecs, fonts, store, routes, and LibreOffice reading what it writes
 node scripts/checks/check-canvas-scene.mjs      # the scene/design language and its validator
 node scripts/checks/check-skill-examples.mjs    # every fenced example in the shipped skills
 node scripts/checks/check-media-examples.mjs    # every media/PDF example, shaped and really RUN
@@ -34,6 +35,7 @@ Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-r
 | `check-media-node.mjs` | `dsh-media`'s pin against a **synthetic archive** built and served over loopback (download, hash verification, mismatch refusal, atomic install, resolution order), plus the ffmpeg-dependent half, which skips loudly without ffmpeg |
 | `check-pdf-node.mjs` | the five `pdf_*` tools and the PDF routes against documents the check builds itself, including the engine's buffer semantics |
 | `check-canvas-node.mjs` | the canvas host half hermetically in a temp `DSH_HOME`: engine, both painters, store, assets, all tools, every route, and the whole render round trip with a synthetic browser |
+| `check-writing-node.mjs` | `dsh-writing`: the block model and Markdown round trip, the page breaker (splits, breaks, overflow, landscape), the ZIP and XML containers (CRC, corruption, refusals), the `.docx` codec both ways with fonts and sizes and its loss report, the `.xlsx` codec and its single-cell boundary against the sheet document, the machine's font reader against a **synthetic TrueType font it builds itself** (name table, OS/2 styles, truncated-file refusals), the document store with both kinds and every budget, all twelve routes — and, last and most important, the pinned `@deepseek-ai/libreoffice-kit` opening the `.docx` AND the `.xlsx` this package writes (the page break makes a page; the formula cell reaches a PDF) — loud skip when the kit is absent |
 | `check-canvas-scene.mjs` | the scene language and its host-side validator, including the canonical form re-validating unchanged |
 | `check-skill-examples.mjs` | every fenced example in the shipped skills parses or compiles (Mermaid, TikZ, PDF, canvas, media) |
 | `check-media-examples.mjs` | every media/PDF example is a well-formed tool call and, where this host can run one, actually runs |

@@ -6302,6 +6302,414 @@ check('the renderer stopped with its row', canvasEffects.length >= 11, true)
 // dock took it (its toolbar wears 88 classes; five were shared: dsc-bar, dsc-btn,
 // dsc-pill, dsc-body, dsc-spacer). A prefix is the namespace a package owns; this
 // reads every `lib/client.js` in the pack and fails on any class two of them define.
+// -------------------------------------------------------------- dsh-writing
+// The Writing tab: the view-ring registration, the shell a person actually
+// types into, and the run/mark algebra that the whole formatting path rests on.
+// That algebra is PURE on purpose - `applyMarkToRuns` takes runs and a character
+// range and returns runs - so it is driven here with no browser, which is where
+// the "Ctrl+B on a half-bold selection" rule can actually be pinned.
+{
+  const writing = loadBundle('packages/dsh-writing/lib/client.js', {})
+  check('writing bundle id', writing.id, 'dsh-writing')
+  check('writing bundle name', writing.exports.name, 'dsh-writing')
+  const writingVersion = JSON.parse(readFileSync(path.join(repo, 'packages/dsh-writing/package.json'), 'utf8')).version
+  check('writing version marker matches package.json', writing.exports.__internals.PLUGIN_VERSION, writingVersion)
+  const io = writing.exports.__internals
+
+  // The registrations, against stub slots AND a stub tab-type registry.
+  const registrations = []
+  const paneTypes = []
+  const writingCtx = {
+    effect: (fn) => fn(),
+    logger: { debug() {}, warn() {} },
+    get: (name) => {
+      if (name === 'sidebarRightTabs') {
+        return {
+          register: (definition) => {
+            paneTypes.push(definition)
+            return () => {}
+          },
+          entries: () => paneTypes,
+        }
+      }
+      return undefined
+    },
+    slots: {
+      inject: (name, fn) => fn(),
+      register: (definition, component) => {
+        registrations.push({ definition, component })
+        return () => {}
+      },
+    },
+  }
+  writing.exports.apply(writingCtx)
+  const views = registrations.filter((entry) => entry.definition.name === 'conversation.view')
+  const panes = registrations.filter((entry) => entry.definition.name === 'sidebar.right.pane.tab')
+  check('writing registers one conversation view', views.length, 1)
+  const view = views[0]
+  check('writing view id', view.definition.id, 'writing')
+  check('writing sits to the RIGHT of Canvas (order 20)', view.definition.order > 20, true)
+  check('writing view label', view.definition.label(), 'Writing')
+  check('writing view is a conversation view', view.definition.name, 'conversation.view')
+  check('writing learns its session through inject', view.definition.inject('session-writing').writingSession, 'session-writing')
+  // THE RIGHT BAR: three pane types and three bodies, in the keyed seats their
+  // definitions name - a page, a workbook grid, and the headings navigator.
+  check('writing registers three right-bar pane types', paneTypes.length, 3)
+  const typeById = new Map(paneTypes.map((definition) => [definition.id, definition]))
+  check('the document pane type is registered', Boolean(typeById.get(io.DOC_TYPE_ID)), true)
+  check('the outline pane type is registered', Boolean(typeById.get(io.OUTLINE_TYPE_ID)), true)
+  check('the sheet pane type is registered', Boolean(typeById.get(io.SHEET_TYPE_ID)), true)
+  check('the document pane claims a .docx', typeById.get(io.DOC_TYPE_ID).canOpen('dsh-resource://file/session/s/report.docx'), true)
+  check('the document pane refuses a .png', typeById.get(io.DOC_TYPE_ID).canOpen('dsh-resource://file/session/s/picture.png'), false)
+  check('the document pane refuses an address outside a session', typeById.get(io.DOC_TYPE_ID).canOpen('dsh-resource://file/absolute/report.docx'), false)
+  check('the sheet pane claims a .xlsx', typeById.get(io.SHEET_TYPE_ID).canOpen('dsh-resource://file/session/s/books.xlsx'), true)
+  check('the sheet pane refuses a .docx', typeById.get(io.SHEET_TYPE_ID).canOpen('dsh-resource://file/session/s/report.docx'), false)
+  check('every pane type carries its guide entry', paneTypes.every((definition) => Array.isArray(definition.guide) && definition.guide.length === 1), true)
+  check(
+    'every pane body is registered in its own seat',
+    panes.map((entry) => entry.definition.key).sort().join(','),
+    [io.DOC_TYPE_ID, io.OUTLINE_TYPE_ID, io.SHEET_TYPE_ID].sort().join(','),
+  )
+  check('a file address parses into a session and a path', io.filePathOf('dsh-resource://file/session/abc/dir/a.docx'), 'dir/a.docx')
+  check('an address with no session is not a file', String(io.filePathOf('dsh-resource://canvas/session/abc/one')), 'null')
+  check('writing view renders with a session', renderToStaticMarkup(h(view.component, { writingSession: 'session-writing', ctx: writingCtx })).includes('data-dsh-writing-view'), true)
+  check('writing view renders WITHOUT a session too', renderToStaticMarkup(h(view.component, { ctx: writingCtx })).includes('data-dsh-writing-view'), true)
+  const markup = renderToStaticMarkup(h(view.component, { writingSession: 'session-writing', ctx: writingCtx }))
+  // The surface a person needs, by the attribute the tab itself sets - and one
+  // page drawn for a document that has no blocks yet, which is the state a
+  // first-time tab is in.
+  for (const marker of [
+    'data-writing-bar',
+    'data-writing-rail',
+    'data-action="save"',
+    'data-action="proof"',
+    'data-action="mark-b"',
+    'data-action="mark-code"',
+    'data-action="page-break"',
+    'data-action="align-justify"',
+    'data-writing-margin="top"',
+    'data-writing-orientation',
+    'data-writing-blocktype',
+    'data-writing-zoom',
+    'data-writing-import',
+    'data-export="docx"',
+    'data-export="md"',
+  ]) {
+    check('writing shell carries ' + marker, markup.includes(marker), true)
+  }
+  check('writing status starts at zero words', markup.includes('0 words'), true)
+  // NEW is the LEFTMOST control on the bar, before the title and every
+  // formatting control - which is where a document tab keeps it, and where the
+  // owner of this tab asked for it after finding it in the middle.
+  {
+    const newAt = markup.indexOf('data-writing-new')
+    const titleAt = markup.indexOf('data-writing-title')
+    const formattingAt = markup.indexOf('data-writing-marks')
+    check('writing puts New on the bar', newAt >= 0, true)
+    check('writing puts New before the title', newAt >= 0 && titleAt > newAt, true)
+    check('writing puts New before the formatting controls', newAt >= 0 && formattingAt > newAt, true)
+  }
+  // With no document open yet (the state a first paint is in), there is no page
+  // to draw and the tab says what it is doing rather than drawing a blank one.
+  check('writing draws no page before a document is open', markup.includes('data-writing-page='), false)
+  check('writing says it is opening', markup.includes('Opening'), true)
+  check('writing phase starts at loading', markup.includes('data-writing-phase="loading"'), true)
+
+  // THE PAGE SURFACE, rendered from a document and a page list this check makes
+  // itself: `pagesElement` is a pure element builder, so the paper, the margins,
+  // the editable blocks and the page-break markers are all provable with no
+  // browser (which is what a tab that exists to be typed into most needs).
+  const pageDoc = {
+    id: 'check-doc',
+    title: 'Check',
+    page: { size: 'a4', orientation: 'portrait', margins: { top: 25.4, right: 25.4, bottom: 25.4, left: 25.4 } },
+    blocks: [
+      { type: 'heading', level: 1, runs: [{ text: 'Title', marks: [] }] },
+      { type: 'paragraph', align: 'center', runs: [{ text: 'body ', marks: [] }, { text: 'bold', marks: ['b'] }] },
+      { type: 'pageBreak', runs: [{ text: '', marks: [] }] },
+      { type: 'listItem', ordered: true, level: 1, runs: [{ text: 'item', marks: [] }] },
+      { type: 'paragraph', runs: [{ text: 'tall', marks: [] }] },
+    ],
+  }
+  const pageGeometry = { widthMm: 210, heightMm: 297, margins: pageDoc.page.margins, contentWidthMm: 159.2, footerMm: 10 }
+  const noop = () => () => {}
+  const pageHandlers = { refFor: noop, onInput: noop, onKeyDown: noop, onFocus: noop, onEmptyPage: () => {} }
+  const pageMarkup = renderToStaticMarkup(
+    h(
+      React.Fragment,
+      null,
+      io.pagesElement({
+        doc: pageDoc,
+        pages: [
+          { index: 0, blocks: [{ index: 0, topMm: 25.4, heightMm: 10, overflow: false }, { index: 1, topMm: 40, heightMm: 8, overflow: false }] },
+          { index: 1, blocks: [{ index: 3, topMm: 25.4, heightMm: 6, overflow: false }, { index: 4, topMm: 31, heightMm: 400, overflow: true }] },
+          { index: 2, blocks: [] },
+        ],
+        geometry: pageGeometry,
+        renderedHtml: pageDoc.blocks.map((block) => io.blockHtmlString(block)),
+        handlers: pageHandlers,
+      }),
+    ),
+  )
+  check('writing draws one element per page', (pageMarkup.match(/data-writing-page="/g) || []).length, 3)
+  check('writing numbers the pages', pageMarkup.includes('>1</div>') && pageMarkup.includes('>3</div>'), true)
+  // A4 at 96 dpi is 793.7 x 1122.52 CSS pixels and a 25.4mm margin is exactly
+  // 96px: the numbers come from the model's millimetres, asserted as the pixels
+  // the page actually wears.
+  check('writing sizes the page in pixels from millimetres', pageMarkup.includes('width:793.7px') && pageMarkup.includes('height:1122.52px'), true)
+  check('writing turns the margins into the page padding', pageMarkup.includes('padding:96px 96px 96px 96px'), true)
+  check('writing sizes the text column to the content width', pageMarkup.includes('width:601.7px'), true)
+  check('writing makes every block editable', (pageMarkup.match(/contenteditable="true"/g) || []).length, 4)
+  check('writing marks a heading with its level', pageMarkup.includes('data-type="heading"') && pageMarkup.includes('data-level="1"'), true)
+  check('writing marks a list with its kind and level', pageMarkup.includes('data-ordered="true"'), true)
+  check('writing carries alignment onto the block', pageMarkup.includes('data-align="center"'), true)
+  check('writing renders the marks inside the block', pageMarkup.includes('<strong>bold</strong>'), true)
+  check('writing flags a block taller than its page', pageMarkup.includes('data-overflow="true"'), true)
+  check('writing gives an empty page something to click', pageMarkup.includes('data-writing-empty-page="2"'), true)
+  check('writing draws one editable block per block it was given', (pageMarkup.match(/data-type=/g) || []).length, 4)
+  check('writing draws the page menu apart from the pages', markup.includes('data-writing-pagemenu'), true)
+  // A page break is a marker element when one is placed. The paginator never
+  // places one (a break only starts the next page), so the branch is driven
+  // directly rather than through a page list that cannot contain it.
+  check(
+    'writing draws a page break as its own marker',
+    renderToStaticMarkup(
+      io.blockElement({ block: io.PAGE_BREAK_BLOCK, placed: { index: 2, from: 0, to: null, split: false }, handlers: pageHandlers, pageIndex: 0 }),
+    ).includes('data-page-break="true"'),
+    true,
+  )
+  // A FRAGMENT of a block: the page renders the character range it shows, which
+  // is what lets a paragraph continue on the next page.
+  const fragmentMarkup = renderToStaticMarkup(
+    io.blockElement({
+      block: { type: 'paragraph', runs: [{ text: 'one two three', marks: [] }] },
+      placed: { index: 5, from: 4, to: 7, split: true },
+      html: io.runsHtml(io.sliceRuns([{ text: 'one two three', marks: [] }], 4, 7)),
+      handlers: pageHandlers,
+      pageIndex: 1,
+    }),
+  )
+  check('a fragment carries the block it belongs to', fragmentMarkup.includes('data-block="5"'), true)
+  check('a fragment carries the range it shows', fragmentMarkup.includes('data-from="4"') && fragmentMarkup.includes('data-to="7"'), true)
+  check('a fragment is flagged as split', fragmentMarkup.includes('data-split="true"'), true)
+  check('a fragment renders only its own text', fragmentMarkup.includes('two'), true)
+  check('a fragment leaves the rest of the block out', fragmentMarkup.includes('one'), false)
+  // The slicing algebra the fragments rest on, driven directly.
+  const sliceSource = [{ text: 'abcdef', marks: [] }, { text: 'GHI', marks: ['b'] }]
+  check('writing slices runs by character range', JSON.stringify(io.sliceRuns(sliceSource, 2, 7)), JSON.stringify([{ text: 'cdef', marks: [] }, { text: 'G', marks: ['b'] }]))
+  check('writing slices to the end when asked for no end', JSON.stringify(io.sliceRuns(sliceSource, 4, null)), JSON.stringify([{ text: 'ef', marks: [] }, { text: 'GHI', marks: ['b'] }]))
+  check('writing slices an empty range to one empty run', JSON.stringify(io.sliceRuns(sliceSource, 3, 3)), JSON.stringify([{ text: '', marks: [] }]))
+  check('writing keeps a run\'s font through a slice', JSON.stringify(io.sliceRuns([{ text: 'abcd', marks: [], font: 'Georgia', size: 14 }], 1, 3)), JSON.stringify([{ text: 'bc', marks: [], font: 'Georgia', size: 14 }]))
+  // An edit inside a fragment goes back into the block at its own offset.
+  check(
+    'writing splices an edit back where the fragment was',
+    JSON.stringify(io.replaceRange([{ text: 'one two three', marks: [] }], 4, 7, [{ text: 'TWO', marks: ['b'] }])),
+    JSON.stringify([{ text: 'one ', marks: [] }, { text: 'TWO', marks: ['b'] }, { text: ' three', marks: [] }]),
+  )
+  check(
+    'writing splices a deletion back too',
+    JSON.stringify(io.replaceRange([{ text: 'one two three', marks: [] }], 3, 8, [{ text: '', marks: [] }])),
+    JSON.stringify([{ text: 'onethree', marks: [] }]),
+  )
+  check('writing renders plain text as one run', JSON.stringify(io.runsFromPlainText('hello')), JSON.stringify([{ text: 'hello', marks: [] }]))
+  // A menu CLOSES when its item is chosen: a `details` that stays open over the
+  // page reads as a menu that did not work, and the New flow depends on it.
+  {
+    const menu = { open: true }
+    io.closeMenus({ closest: () => menu })
+    check('writing closes the menu a chosen item lives in', menu.open, false)
+    io.closeMenus(null)
+    io.closeMenus({})
+    check('writing survives closing a menu that is not there', true, true)
+    check('writing shows no dialog until one is asked for', markup.includes('data-writing-dialog'), false)
+  }
+  // THE FONT AND FILE CONTROLS, and the headings toggle, which is what this
+  // round added to the shell.
+  for (const marker of [
+    'data-writing-font',
+    'dsw-fontFamilies',
+    'data-writing-fontsize',
+    'data-writing-docfont',
+    'data-writing-docsize',
+    'data-writing-new',
+    'data-new="docx"',
+    'data-new="xlsx"',
+    'data-new="page"',
+    'data-action="headings"',
+  ]) {
+    check('writing shell carries ' + marker, markup.includes(marker), true)
+  }
+  // The document's own typography is what the page column wears, and the px/mm
+  // arithmetic is the same one the page box uses.
+  const flow = io.flowStyle({ font: 'Georgia', fontSize: 14 }, 601.7)
+  check('writing sets the document font on the text column', flow.fontFamily, "'Georgia'")
+  check('writing sets the document size on the text column', flow.fontSize, '14pt')
+  check('writing falls back to 12pt when a document names no size', io.flowStyle({ font: '', fontSize: null }, 100).fontSize, '12pt')
+  // THE HEADINGS NAVIGATOR, as a pane: it renders its own chrome and its own
+  // empty state with no document open, which is the state a fresh page is in.
+  const outlinePane = renderToStaticMarkup(h(io.OutlinePane, { sessionId: 'session-writing', ctx: writingCtx }))
+  check('the headings pane renders', outlinePane.includes('data-writing-outline-pane'), true)
+  check('the headings pane says what it shows', outlinePane.includes('data-writing-pane-title'), true)
+  check('the headings pane with no document yet says so', outlinePane.includes('This document has no headings yet.'), true)
+  const outlinePaneBare = renderToStaticMarkup(h(io.OutlinePane, { ctx: writingCtx }))
+  check('the headings pane with no CONVERSATION asks for one', outlinePaneBare.includes('Open a document in the Writing tab'), true)
+  // THE SHEET PANE, likewise: its bar, its tabs and its cell address exist before
+  // any file is read, and no grid is drawn until there is a workbook.
+  const sheetPane = renderToStaticMarkup(h(io.SheetView, { file: { sessionId: 'session-writing', path: 'books.xlsx' }, ctx: writingCtx }))
+  check('the sheet pane renders', sheetPane.includes('data-dsh-sheet-view'), true)
+  check('the sheet pane has its toolbar', sheetPane.includes('data-action="sheet-save"') && sheetPane.includes('data-action="sheet-proof"'), true)
+  check('the sheet pane has sheet tabs', sheetPane.includes('data-sheet-tabs'), true)
+  check('the sheet pane names the active cell', sheetPane.includes('>A1<'), true)
+  check('the sheet pane draws no grid before a workbook is open', sheetPane.includes('data-sheet-grid'), false)
+  check('the sheet pane says it is opening', sheetPane.includes('Opening'), true)
+  // BOTH entry modes: the view ring (a conversation, no file) and a right-bar
+  // pane (a file, and the session it names). One component serves both, so the
+  // check drives both props.
+  check(
+    'the editor mounts for a FILE pane as well as a conversation view',
+    renderToStaticMarkup(h(view.component, { file: { sessionId: 'session-writing', path: 'report.docx' }, ctx: writingCtx })).includes('data-dsh-writing-view'),
+    true,
+  )
+  check(
+    'the sheet pane with no file says so rather than loading forever',
+    renderToStaticMarkup(h(io.SheetView, { sessionId: 'session-writing', ctx: writingCtx })).includes('No file to open.'),
+    true,
+  )
+  // The grid's own arithmetic: A..Z, AA.., and the address a cell prints as.
+  check('writing names columns past Z', io.columnName(0) + io.columnName(25) + io.columnName(26) + io.columnName(51) + io.columnName(52), 'AZAAAZBA')
+  check('writing names the far column', io.columnName(io.SHEET_MAX_COLUMNS - 1), 'BZ')
+  check('writing prints a cell address', io.cellAddress(0, 0) + ' ' + io.cellAddress(9, 27), 'A1 AB10')
+  // What a person typed, as the model holds it: a number IS a number, an empty
+  // cell is null and never '', and a formula keeps its text without the '='.
+  check(
+    'writing reads what was typed into a cell',
+    JSON.stringify([io.parseCellInput(''), io.parseCellInput('42'), io.parseCellInput('=SUM(A1:A2)'), io.parseCellInput('TRUE'), io.parseCellInput('hello')]),
+    JSON.stringify([null, 42, { value: '', formula: 'SUM(A1:A2)' }, true, 'hello']),
+  )
+  check('writing keeps leading zeros as text, not as a number', io.parseCellInput('007'), '007')
+  check('writing shows a formula with its =', io.cellDisplay({ value: '', formula: 'A1*2' }), '=A1*2')
+  check('writing shows a boolean the way a spreadsheet does', io.cellDisplay(true) + '/' + io.cellDisplay(false), 'TRUE/FALSE')
+  check('writing pads a ragged grid', JSON.stringify(io.sheetGrid({ rows: [[1], [2, 3, 4]] })), JSON.stringify([[1, null, null], [2, 3, 4]]))
+  check('writing never returns an empty grid', JSON.stringify(io.sheetGrid({ rows: [] })), JSON.stringify([[]]))
+
+  // The run algebra.
+  check(
+    'writing reads a DOM-shaped tree into runs',
+    JSON.stringify(io.runsFromNodes(['a', { tag: 'STRONG', children: ['b'] }, { tag: 'BR' }, { tag: 'EM', children: [{ tag: 'CODE', children: ['c'] }] }])),
+    JSON.stringify([{ text: 'a', marks: [] }, { text: 'b', marks: ['b'] }, { text: '\n', marks: [] }, { text: 'c', marks: ['i', 'code'] }]),
+  )
+  check('writing merges neighbouring runs with the same marks', JSON.stringify(io.runsFromNodes(['a', { tag: 'SPAN', children: ['b'] }])), JSON.stringify([{ text: 'ab', marks: [] }]))
+  check('writing never returns zero runs', JSON.stringify(io.runsFromNodes([])), JSON.stringify([{ text: '', marks: [] }]))
+  // A family and a size ride on the run, and an inner one REPLACES an outer one
+  // (what an inline style means) while marks ACCUMULATE.
+  check(
+    'writing reads a family and a size off the inline style',
+    JSON.stringify(io.runsFromNodes([{ tag: 'SPAN', font: 'Georgia', size: 14, children: ['hi'] }])),
+    JSON.stringify([{ text: 'hi', marks: [], font: 'Georgia', size: 14 }]),
+  )
+  check(
+    'writing lets an inner family replace an outer one',
+    JSON.stringify(io.runsFromNodes([{ tag: 'SPAN', font: 'Georgia', children: [{ tag: 'SPAN', font: 'Arial', children: ['x'] }] }])),
+    JSON.stringify([{ text: 'x', marks: [], font: 'Arial' }]),
+  )
+  check('writing merges only runs whose font and size agree', JSON.stringify(io.runsFromNodes([{ tag: 'SPAN', font: 'Arial', children: ['a'] }, { tag: 'SPAN', font: 'Georgia', children: ['b'] }])), JSON.stringify([{ text: 'a', marks: [], font: 'Arial' }, { text: 'b', marks: [], font: 'Georgia' }]))
+  check('writing reads a pt size as it was set', io.parseFontSize('14pt'), 14)
+  check('writing converts a px size to points', io.parseFontSize('16px'), 12)
+  check('writing refuses a size it cannot resolve', String(io.parseFontSize('1.2em')), 'null')
+  check('writing strips the quotes off a family name', io.unquoteFamily('"Times New Roman", serif'), 'Times New Roman')
+  check('writing wraps a family and a size in one span', io.runHtml({ text: 'x', marks: [], font: 'Georgia', size: 14 }), "<span style=\"font-family:'Georgia';font-size:14pt\">x</span>")
+  // Offset 3 is inside the SECOND run ('cd'), which carries bold and no font of
+  // its own - so the toolbar would show the document's family, not the first
+  // run's Arial.
+  check('writing reads the properties at a caret', JSON.stringify(io.propertiesAt([{ text: 'ab', marks: [], font: 'Arial', size: 9 }, { text: 'cd', marks: ['b'] }], 3)), JSON.stringify({ marks: ['b'], font: '', size: null }))
+  check('writing reads a run\'s own family at the caret', JSON.stringify(io.propertiesAt([{ text: 'ab', marks: [], font: 'Arial', size: 9 }], 1)), JSON.stringify({ marks: [], font: 'Arial', size: 9 }))
+  // Setting a family over a range splits the runs and CLEARING it puts the run
+  // back on the document's default - which is what an empty value means.
+  check(
+    'writing sets a family over part of a block',
+    JSON.stringify(io.applyAttributeToRuns([{ text: 'abcdef', marks: [] }], 2, 4, 'font', 'Georgia')),
+    JSON.stringify([{ text: 'ab', marks: [] }, { text: 'cd', marks: [], font: 'Georgia' }, { text: 'ef', marks: [] }]),
+  )
+  check(
+    'writing clears a family back to the document default',
+    JSON.stringify(io.applyAttributeToRuns([{ text: 'ab', marks: [] }, { text: 'cd', marks: [], font: 'Georgia' }, { text: 'ef', marks: [] }], 0, 6, 'font', '')),
+    JSON.stringify([{ text: 'abcdef', marks: [] }]),
+  )
+  check(
+    'writing sets a size over a range',
+    JSON.stringify(io.applyAttributeToRuns([{ text: 'one two', marks: [] }], 4, 7, 'size', 18.5)),
+    JSON.stringify([{ text: 'one ', marks: [] }, { text: 'two', marks: [], size: 18.5 }]),
+  )
+  const mixed = [{ text: 'plain ', marks: [] }, { text: 'bold', marks: ['b'] }, { text: ' tail', marks: [] }]
+  check('writing measures a block in characters', io.runsLength(mixed), 15)
+  check('writing reads the marks at a caret', io.marksAt(mixed, 7).join(','), 'b')
+  check('writing reads no marks at the start', io.marksAt(mixed, 0).join(','), '')
+  check('writing reads no marks at the end', io.marksAt(mixed, 15).join(','), '')
+  // Ctrl+B over the whole of a half-marked selection BOLDS all of it rather than
+  // flipping each half: the toggle is decided over the range, not per character.
+  const boldedAll = io.applyMarkToRuns(mixed, 0, 15, 'b')
+  check('writing bolds a whole half-bold selection', JSON.stringify(boldedAll), JSON.stringify([{ text: 'plain bold tail', marks: ['b'] }]))
+  check('writing unbolds it again', JSON.stringify(io.applyMarkToRuns(boldedAll, 0, 15, 'b')), JSON.stringify([{ text: 'plain bold tail', marks: [] }]))
+  check(
+    'writing adds a mark to a range that does not all carry it',
+    JSON.stringify(io.applyMarkToRuns(mixed, 6, 10, 'i')),
+    JSON.stringify([{ text: 'plain ', marks: [] }, { text: 'bold', marks: ['b', 'i'] }, { text: ' tail', marks: [] }]),
+  )
+  // Toggling a mark OFF over the one run that carries it removes it, and the
+  // three runs then merge - which is the observable difference between "the mark
+  // is gone" and "the mark is gone but the runs still remember it".
+  check(
+    'writing removes a mark when the whole range carries it',
+    JSON.stringify(io.applyMarkToRuns(mixed, 6, 10, 'b')),
+    JSON.stringify([{ text: 'plain bold tail', marks: [] }]),
+  )
+  check(
+    'writing splits a run to mark half of it',
+    JSON.stringify(io.applyMarkToRuns([{ text: 'abcdef', marks: [] }], 2, 4, 'i')),
+    JSON.stringify([{ text: 'ab', marks: [] }, { text: 'cd', marks: ['i'] }, { text: 'ef', marks: [] }]),
+  )
+  const [left, right] = io.splitRunsAt(mixed, 8)
+  check('writing splits a paragraph at the caret', JSON.stringify([left, right]), JSON.stringify([[{ text: 'plain ', marks: [] }, { text: 'bo', marks: ['b'] }], [{ text: 'ld', marks: ['b'] }, { text: ' tail', marks: [] }]]))
+  const [markLeft, markRight] = io.splitRunsAt(mixed, 7)
+  check('writing keeps the marks on both sides of a split', JSON.stringify([markLeft, markRight]), JSON.stringify([[{ text: 'plain ', marks: [] }, { text: 'b', marks: ['b'] }], [{ text: 'old', marks: ['b'] }, { text: ' tail', marks: [] }]]))
+  check('writing joins two blocks back together', JSON.stringify(io.mergeRuns([{ text: 'one', marks: ['b'] }], [{ text: 'two', marks: ['b'] }])), JSON.stringify([{ text: 'onetwo', marks: ['b'] }]))
+  check('writing escapes text into HTML', io.blockHtmlString({ type: 'paragraph', runs: [{ text: '<b> & </b>', marks: [] }] }), '&lt;b&gt; &amp; &lt;/b&gt;')
+  check('writing turns a soft break into a br', io.blockHtmlString({ type: 'paragraph', runs: [{ text: 'a\nb', marks: [] }] }), 'a<br>b')
+  // Marks nest in the order runHtml applies them: the LAST one wrapped is the
+  // outermost element, which is why code (the innermost) closes first.
+  check('writing wraps marks in elements', io.blockHtmlString({ type: 'paragraph', runs: [{ text: 'x', marks: ['b', 'i', 'u', 's', 'code'] }] }), '<s><u><em><strong><code>x</code></strong></em></u></s>')
+  check('writing gives an empty block a break to click into', io.blockHtmlString({ type: 'paragraph', runs: [{ text: '', marks: [] }] }), '<br>')
+  check('writing labels a block', io.describeBlock({ type: 'heading', level: 2 }), 'Heading 2')
+  check('writing retypes a paragraph into a list', JSON.stringify(io.retypeBlock({ type: 'paragraph', runs: [{ text: 'x', marks: [] }] }, 'listItem', 0, true)), JSON.stringify({ type: 'listItem', runs: [{ text: 'x', marks: [] }], ordered: true, level: 0 }))
+  check('writing drops list fields when it retypes back', JSON.stringify(io.retypeBlock({ type: 'listItem', ordered: true, level: 2, runs: [{ text: 'x', marks: [] }] }, 'paragraph', null, null)), JSON.stringify({ type: 'paragraph', runs: [{ text: 'x', marks: [] }] }))
+  check('writing keeps alignment across a retype', io.retypeBlock({ type: 'paragraph', align: 'center', runs: [] }, 'heading', 1, null).align, 'center')
+  check('writing never retypes a block into a page break', io.retypeBlock({ type: 'paragraph', runs: [] }, 'pageBreak', null, null).type, 'paragraph')
+  check('writing carries a heading level onto the element', io.blockAttributes({ type: 'heading', level: 3 }, {})['data-level'], '3')
+  check('writing carries the list kind onto the element', JSON.stringify([io.blockAttributes({ type: 'listItem', ordered: true, level: 1 }, {})['data-ordered'], io.blockAttributes({ type: 'listItem', ordered: true, level: 1 }, {})['data-level']]), JSON.stringify(['true', '1']))
+  check('writing carries alignment onto the element', io.blockAttributes({ type: 'paragraph', align: 'justify' }, {})['data-align'], 'justify')
+  check('writing counts the words of a document', io.wordCountOf({ blocks: [{ type: 'paragraph', runs: [{ text: 'one two', marks: [] }] }, { type: 'pageBreak', runs: [{ text: '', marks: [] }] }, { type: 'heading', level: 1, runs: [{ text: 'three', marks: [] }] }] }), 3)
+  // The fallback paginator is what runs when lib/page.js cannot be imported: it
+  // is a degradation, and it must still put every block somewhere.
+  const degraded = io.fallbackPaginate({ blocks: [{ type: 'paragraph', runs: [] }, { type: 'pageBreak', runs: [] }, { type: 'paragraph', runs: [] }] })
+  check('writing degrades to one page when the breaker is missing', degraded.pages.length, 1)
+  check('writing degrades without losing a block', degraded.pages[0].blocks.length, 2)
+  check('writing says so when it degraded', degraded.degraded, true)
+
+  // The client and the host must agree on every route: two hard-coded lists that
+  // a rename would otherwise silently desynchronise (this is the same agreement
+  // check dsh-canvas and dsh-editor carry). Both halves spell a route as
+  // `API_ROOT + '<suffix>'`, so the suffixes are what is compared.
+  const writingClientSource = readFileSync(path.join(repo, 'packages/dsh-writing/lib/client.js'), 'utf8')
+  const writingHostSource = readFileSync(path.join(repo, 'packages/dsh-writing/lib/index.js'), 'utf8')
+  const routeSuffixes = (source) => [...source.matchAll(/const [A-Z_]+_ROUTE = API_ROOT \+ '([^']+)'/g)].map((match) => match[1])
+  const hostRoutes = routeSuffixes(writingHostSource)
+  const clientRoutes = routeSuffixes(writingClientSource)
+  check('writing: the host registers routes at all', hostRoutes.length > 5, true)
+  check('writing: the client names every host route', hostRoutes.filter((route) => !clientRoutes.includes(route)).join(','), '')
+  check('writing: the client names no route the host does not register', clientRoutes.filter((route) => !hostRoutes.includes(route)).join(','), '')
+}
+
+// The pack's class namespace rule, last so it sees every bundle above.
 {
   const bundlesDir = path.join(repo, 'packages')
   const owners = new Map()
