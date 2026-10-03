@@ -62,3 +62,15 @@ packages/dsh-pdf/lib/vendor/wasm/*.js text eol=lf
 # binary and are never touched.
 packages/dsh-canvas/lib/vendor/fonts/*.txt text eol=lf
 packages/dsh-canvas/lib/vendor/fonts/VERSION.json text eol=lf
+
+# dsh-canvas's vendored Excalidraw surface is GENERATED and byte-hashed by
+# packages/dsh-canvas/vendor/excalidraw/build.mjs --check (a sha256 per artifact,
+# a licence hash and a digest, all recorded in lib/vendor/excalidraw/VERSION.json),
+# so its TEXT files are pinned to LF for exactly the reason the trees above are: a
+# Windows checkout would rewrite the 3 MiB bundle to CRLF and report phantom drift
+# on the one file whose entire point is that its bytes are pinned. The stylesheet,
+# the three licence texts and the record are the same contract.
+packages/dsh-canvas/lib/vendor/excalidraw/*.js text eol=lf
+packages/dsh-canvas/lib/vendor/excalidraw/*.css text eol=lf
+packages/dsh-canvas/lib/vendor/excalidraw/*.txt text eol=lf
+packages/dsh-canvas/lib/vendor/excalidraw/VERSION.json text eol=lf

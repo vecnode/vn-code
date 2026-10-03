@@ -69,19 +69,63 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React
 
+    /**
+     * The app's own pill chip, resolved ONCE and guarded.
+     *
+     * alpha.15 dresses the dock's controls as the chips every other panel in this
+     * app uses (`primitives.Pill`: a 24px rounded chip, interactive when it is
+     * given an `onClick`, raised while `active`). The guard is not decoration: a
+     * root-scoped slot ABDICATES the whole dock when its render throws, and
+     * `h(undefined, ...)` throws, so an engine without the export would cost the
+     * panel rather than one chip - the same reason the copy buttons guard
+     * `writeClipboard` and the hover card guards `HoverCard`.
+     */
+    const Pill = typeof primitives.Pill === 'function' ? primitives.Pill : null
+
+    /**
+     * One chip: the shipped pill, or a plain button that still names its state.
+     *
+     * The wrapper is the only thing this package adds around the app's chip, and
+     * it exists so the DOCK can size it (`.dsc-pillSeat>*`, see the stylesheet):
+     * the app's own class names are hashed by its bundler, and a rule keyed on one
+     * of those would break on the next harness release. The chip inside stays the
+     * shipped component, so its `active` dress and its interaction are the app's.
+     *
+     * @param props - `active`, plus whatever the underlying control takes.
+     * @param label - the chip's text.
+     * @returns the chip element, wrapped.
+     */
+    function chip(props, label) {
+      if (Pill !== null) return h('span', { className: 'dsc-pillSeat' }, h(Pill, props, label))
+      const rest = Object.assign({}, props)
+      const active = rest.active === true
+      delete rest.active
+      return h(
+        'span',
+        { className: 'dsc-pillSeat' },
+        h('button', Object.assign({ type: 'button', className: 'dsc-btn', 'data-on': active ? '' : undefined }, rest), label),
+      )
+    }
+
     // ---------------------------------------------------------------------
     // Constants
     // ---------------------------------------------------------------------
     /**
-     * Shown on the dock's bar so a freshly loaded bundle is easy to verify.
+     * Printed in the dock's brand tooltip, so a freshly loaded bundle is easy to
+     * verify.
      *
-     * alpha.14 is the RENAME (`dsh-terminal` -> `dsh-cmdbar`) plus the repair of
+     * alpha.14 was the RENAME (`dsh-terminal` -> `dsh-cmdbar`) plus the repair of
      * the alpha.13 crash: clicking a command line to expand it threw a
      * `ReferenceError` out of a free identifier, and the shell's slot error
      * boundary ABDICATED the dock for the life of the page - the panel
      * disappeared and would not come back (see `commandBody`).
+     *
+     * alpha.15 is the BAR: one header row instead of the two this panel used to
+     * stack (both of which restated the counts), the app's own chip for each
+     * control, a facts line that ellipsises instead of running over its
+     * neighbours, and the WHOLE command on hover (see `commandCard`).
      */
-    const PLUGIN_VERSION = '0.1.0-alpha.14'
+    const PLUGIN_VERSION = '0.1.0-alpha.15'
     /** The header list this control joins (Open In... is -10). */
     const HEADER_SLOT = 'conversation.session.header.utilities'
     /** The root-scoped overlay list the layout package renders inside the frame. */
@@ -225,7 +269,7 @@ window.__ModuleLoader__.load({
     // Styles — the pack's tab dress, under this package's own `dsc-` prefix.
     // ---------------------------------------------------------------------
     const css = `
-.dsc-dock{position:fixed;left:0;right:0;bottom:0;z-index:21;box-sizing:border-box;display:none;flex-direction:column;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);border-top:.5px solid var(--dsw-alias-border-l4,rgba(127,127,127,.34));box-shadow:0 -6px 18px rgba(0,0,0,.06);font-size:12.5px;line-height:1.5}
+.dsc-dock{position:fixed;left:0;right:0;bottom:0;z-index:21;box-sizing:border-box;display:none;flex-direction:column;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);border-top:.5px solid var(--dsw-alias-border-l4,rgba(127,127,127,.34));box-shadow:0 -6px 18px rgba(0,0,0,.06);font-size:12.5px;line-height:1.5;--dsc-control-h:20px}
 .dsc-dock[data-open]:not([data-suspended]){display:flex}
 .dsc-grip{flex:none;height:6px;cursor:row-resize;touch-action:none;background:transparent}
 .dsc-grip::after{content:'';display:block;width:44px;height:2px;margin:2px auto 0;border-radius:2px;background:var(--dsw-alias-border-l3,rgba(127,127,127,.3))}
@@ -235,18 +279,52 @@ window.__ModuleLoader__.load({
    stops selecting text - the pointer regularly leaves a 6px strip, and a drag
    that started selecting the log's text reads as "it broke". */
 body.dsc-dragging{cursor:row-resize;user-select:none}
-.dsc-bar{flex:none;display:flex;align-items:center;gap:8px;min-width:0;padding:2px 8px 6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.16))}
+/* ONE header row (alpha.15). The dock used to carry two - its own bar plus the
+   view's toolbar underneath - and both of them restated the counts, so 62px of a
+   280px panel was chrome and the two lines could describe the same log
+   differently. Every other panel in this app puts its title at the left and its
+   controls at the right of ONE row (the right bar's tab strip, the editor's file
+   bar), and that is the shape this one now wears.
+   THREE declarations are what keep it from breaking at a narrow width, and each
+   one is a defect alpha.15 repaired:
+     - flex-wrap:nowrap, so a crowded row never becomes a second line;
+     - white-space:nowrap + flex:none on everything that must not shrink, so the
+       title, the chips and the close button read as themselves;
+     - flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis on the
+       COUNT line ALONE, so the one item that can afford to give way is the one
+       that does. It was flex:none with no overflow rule, so it kept its full
+       width, ran over the version text beside it, and pushed the close button
+       past the panel's edge. */
+.dsc-bar{flex:none;display:flex;flex-wrap:nowrap;align-items:center;gap:8px;min-width:0;padding:2px 8px 2px 10px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.16))}
 /* The bar's flexible gap: with no chip strip to fill the row, this is what keeps
-   the facts and the version at the right end and the brand at the left. */
-.dsc-spacer{flex:1;min-width:0}
-.dsc-brand{flex:none;display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary,#666);font-weight:500}
+   the counts and the controls at the right end and the brand at the left. */
+.dsc-spacer{flex:1;min-width:8px}
+.dsc-brand{flex:none;display:inline-flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;color:var(--dsw-alias-label-secondary,#666);font-weight:500}
 .dsc-glyph{flex:none;display:inline-flex;color:var(--dsw-alias-label-tertiary,#999)}
-.dsc-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#1f1f1f);font:inherit;font-size:12px;padding:0 8px;cursor:pointer;white-space:nowrap;gap:5px}
+/* The view's controls, in the bar: the app's own pills, on one row - at the
+   app's own DENSE size rather than its panel size, because this is a log strip
+   under a conversation and not a settings page. --dsc-control-h (20px, on
+   .dsc-dock) is the single knob the whole row's height hangs on, and the two
+   declarations below are the only place the app's chip is resized: the wrapper
+   is OURS (dsc-pillSeat, no hashed class anywhere) and the chip inside it is
+   STILL the shipped primitives.Pill, so the interaction, the active dress and
+   the rounding are the app's - only the metric is this bar's. 20px is not
+   invented either: it is primitives.Tag's own density (11px text on a 17px line
+   plus 1px of padding), the app's own small-chip scale.
+   The wrapper is NOT named after the chip, and that is deliberate: alpha.12
+   pinned the ABSENCE of this package's terminal chip strip by SUBSTRING, so any
+   dsc- class name containing "chip" fails the tracked check - and that pin is
+   what keeps the emulator this package used to carry from coming back. Naming a
+   seat after its occupant would either fail the check or get the check relaxed,
+   which is a worse trade than one unusual class name. */
+.dsc-filters{flex:none;display:inline-flex;align-items:center;gap:6px}
+.dsc-pillSeat{flex:none;display:inline-flex;align-items:center;min-width:0}
+.dsc-pillSeat>*{height:var(--dsc-control-h,22px);padding:0 8px;font-size:11px;line-height:17px}
+.dsc-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;height:var(--dsc-control-h,22px);box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#1f1f1f);font:inherit;font-size:12px;padding:0 8px;cursor:pointer;white-space:nowrap;gap:5px}
 .dsc-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
 .dsc-btn:disabled{opacity:.45;cursor:default}
-.dsc-btnIcon{width:24px;padding:0}
-.dsc-facts{flex:none;display:inline-flex;align-items:center;gap:8px;min-width:0;color:var(--dsw-alias-label-tertiary,#999);font-size:11.5px}
-.dsc-ver{opacity:.7}
+.dsc-btnIcon{width:var(--dsc-control-h,22px);padding:0}
+.dsc-facts{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#999);font-size:11px}
 .dsc-body{flex:auto;min-height:0;position:relative;background:var(--dsw-alias-bg-base,#fff)}
 .dsc-notice{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;text-align:center;color:var(--dsw-alias-label-tertiary,#999);font-size:12.5px}
 .dsc-noticeTitle{color:var(--dsw-alias-label-secondary,#666);font-size:13px}
@@ -268,13 +346,11 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
 /* The view fills the body: the panel IS the log, and there is nothing to switch
    to, so this box is the whole content area. */
 .dsc-activity{position:absolute;inset:0;display:flex;flex-direction:column;box-sizing:border-box;background:var(--dsw-alias-bg-base,#fff)}
-.dsc-actBar{flex:none;display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.16));font-size:11.5px}
-.dsc-mini{flex:none;height:22px;box-sizing:border-box;padding:0 8px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
-.dsc-mini:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
-.dsc-mini[data-on]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));border-color:var(--dsw-alias-border-l3,rgba(127,127,127,.34));color:var(--dsw-alias-label-primary,#1f1f1f)}
-.dsc-actFacts{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#999)}
 /* Positioned so the shared .dsc-notice (absolute, inset 0) covers the BODY and
-   not the whole view - an unreadable conversation must not hide its own filters. */
+   not the whole view - an unreadable conversation must not hide the bar that
+   says so. The view's own toolbar row is GONE (alpha.15): its two filters and
+   the follow pill are chips in the dock's bar, because a second row that
+   restated the counts is most of why the header read as too big. */
 .dsc-actBody{position:relative;flex:auto;min-height:0;overflow:auto;font-family:ui-monospace,'Cascadia Code',Consolas,'SF Mono',Menlo,monospace;font-size:12px;line-height:1.45}
 .dsc-actList{padding:6px 10px 14px}
 .dsc-grp{margin:0 0 10px}
@@ -300,6 +376,15 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
 .dsc-cmd[data-expanded] .dsc-cmdMark{transform:rotate(90deg)}
 .dsc-cmdName{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:11px}
 .dsc-cmdLine{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary,#1f1f1f)}
+/* THE WHOLE COMMAND, on hover (alpha.15). The head clips its command to one
+   line, and the only way to read the rest was to expand the row - so the line a
+   reader naturally points at now answers with the command itself, wrapped and
+   scrollable, in the app's own HoverCard surface. The card is the SHIPPED
+   primitive (primitives.HoverCard, variant preview), portaled to the body, sized
+   from the log's own box through its widthAnchorRef, and it caps itself at 420px
+   - so this box only has to fill it and let the LONG case scroll instead of
+   growing past the screen. */
+.dsc-hoverCmd{flex:auto;min-height:0;margin:0;padding:10px 14px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,'Cascadia Code',Consolas,'SF Mono',Menlo,monospace;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary,#1f1f1f)}
 .dsc-cmdCwd{flex:none;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#999);font-size:11px;direction:rtl;text-align:left}
 .dsc-cmdDur{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:10.5px;font-variant-numeric:tabular-nums}
 .dsc-pill{flex:none;padding:0 5px;border-radius:8px;font-size:10.5px;line-height:15px;white-space:nowrap;background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));color:var(--dsw-alias-label-secondary,#666)}
@@ -1454,6 +1539,51 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
     }
 
     /**
+     * The hover card a command LINE wears: the whole command, wrapped.
+     *
+     * alpha.15. The head's own line is clipped to the command's FIRST line and
+     * ellipsised at whatever the panel's width allows, so before this the rest of
+     * a command was readable only by expanding the row - and the native `title`
+     * that used to sit there showed the agent's DESCRIPTION, not the command at
+     * all, which is not what a reader pointing at a command line is asking for.
+     *
+     * It is built on the SHIPPED card (`primitives.HoverCard`, `variant:
+     * 'preview'`), which is the same surface the transcript uses for previews: it
+     * waits for a real dwell before opening, portals itself to the body so the
+     * dock's own box cannot clip it, sizes itself from the log's box through
+     * `widthAnchorRef`, dismisses on a click (so expanding a row does not fight
+     * it), and lets the pointer rest on the card so a long command can be read and
+     * selected. The card caps its own height at 420px, and `.dsc-hoverCmd` fills
+     * that box and scrolls, so a 200-line command cannot push itself off screen.
+     *
+     * PURE - and it answers the ANCHOR UNCHANGED when there is no command to show
+     * (a non-command tool row) or when this engine has no `HoverCard` export. The
+     * guard is the same one the copy buttons carry and for the same reason: this
+     * row is rendered inside a ROOT-SCOPED slot, whose error boundary ABDICATES
+     * the whole dock on a crash - `h(undefined, ...)` here would not cost one row,
+     * it would take the panel away for the life of the page.
+     *
+     * @param entry - one folded command entry.
+     * @param head - the rendered command line, used as the card's anchor.
+     * @param widthAnchorRef - the log box the card takes its width from.
+     * @returns the anchor, wrapped in a card when there is a command to show.
+     */
+    function commandCard(entry, head, widthAnchorRef) {
+      if (entry === null || typeof entry !== 'object') return head
+      if (typeof entry.command !== 'string' || entry.command === '') return head
+      if (typeof primitives.HoverCard !== 'function') return head
+      return h(
+        primitives.HoverCard,
+        {
+          anchor: head,
+          content: h('pre', { className: 'dsc-hoverCmd' }, entry.command),
+          variant: 'preview',
+          widthAnchorRef,
+        },
+      )
+    }
+
+    /**
      * A duration short enough for a pill: 950ms and under is milliseconds, under
      * a minute is one decimal below ten seconds, and past that it is m/s. Pure.
      */
@@ -1480,33 +1610,41 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
      * the reader is at the bottom, stops the moment they scroll up, and the pill
      * in the bar is the way back.
      *
-     * @param props - `sessionId`, `model`.
+     * @param props - `sessionId`, `model`, and the three view choices the DOCK's
+     *   bar now owns: `allTools`, `failuresOnly` and `follow` (+ `onFollowChange`).
+     *   They moved up in alpha.15 with the controls that set them, because the
+     *   toolbar row they used to live in was the second row of chrome above the
+     *   log. Each has a default, so the view still renders on its own - with the
+     *   filters off and following on - which is what the tracked check does.
      */
-    function ActivityView({ sessionId, model }) {
-      const [allTools, setAllTools] = useState(false)
-      const [failuresOnly, setFailuresOnly] = useState(false)
+    function ActivityView({ sessionId, model, allTools, failuresOnly, follow, onFollowChange }) {
       const [open, setOpen] = useState({})
       const [copied, setCopied] = useState('')
-      const [follow, setFollow] = useState(true)
       const bodyRef = useRef(null)
-      const groups = useMemo(() => filterActivity(model.groups, { allTools, failuresOnly }), [model, allTools, failuresOnly])
+      const all = allTools === true
+      const failures = failuresOnly === true
+      const following = follow !== false
+      const setFollow = typeof onFollowChange === 'function' ? onFollowChange : () => {}
+      const groups = useMemo(() => filterActivity(model.groups, { allTools: all, failuresOnly: failures }), [model, all, failures])
 
       // The newest command is the point of a live log, so the box lands on it -
       // but only while the reader is already at the bottom. A fixed auto-scroll
       // would drag the view away from the output someone is reading.
       useEffect(() => {
-        if (!follow) return
+        if (!following) return
         const box = bodyRef.current
         if (box === null) return
         box.scrollTop = box.scrollHeight
-      }, [model.revision, follow, groups.length])
+      }, [model.revision, following, groups.length])
 
+      // React bails out of a state write that carries the value already in force,
+      // so reporting the position on every scroll frame costs one comparison and
+      // never a render.
       const onScroll = useCallback(() => {
         const box = bodyRef.current
         if (box === null) return
-        const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight <= 12
-        setFollow((prev) => (prev === atEnd ? prev : atEnd))
-      }, [])
+        setFollow(box.scrollHeight - box.scrollTop - box.clientHeight <= 12)
+      }, [setFollow])
 
       const toggle = useCallback((key) => {
         setOpen((prev) => {
@@ -1564,19 +1702,6 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
         }
       }
 
-      const facts = []
-      facts.push(String(model.counts.shell) + (model.counts.shell === 1 ? ' command' : ' commands'))
-      if (allTools && model.counts.other > 0) facts.push(String(model.counts.other) + ' other')
-      // alpha.11: the counts are the COMMANDS' (see the fold), so the other
-      // family's own running and failed rows are added back only while "All
-      // tools" can actually DRAW them - the line then describes what is on
-      // screen instead of counting rows this filter is hiding.
-      const running = model.counts.running + (allTools ? model.counts.otherRunning || 0 : 0)
-      const failed = model.counts.failed + (allTools ? model.counts.otherFailed || 0 : 0)
-      if (running > 0) facts.push(String(running) + ' running')
-      if (failed > 0) facts.push(String(failed) + ' failed')
-      if (model.hasMore) facts.push('older ones are outside this view')
-
       const hint = (title, text, code) =>
         h(
           'div',
@@ -1597,6 +1722,34 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
         // is open (see `commandBody`: a multi-line command is the only case with
         // anything left to show).
         const fullCommand = commandBody(entry, expanded)
+        // The line a reader points at. It CLIPS its command to one line, so the
+        // command itself is what the hover card carries - see `commandCard`.
+        const head = h(
+          'div',
+          {
+            className: 'dsc-cmdHead',
+            role: 'button',
+            tabIndex: 0,
+            'aria-expanded': expanded ? 'true' : 'false',
+            onClick: () => toggle(entry.key),
+            onKeyDown: (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                toggle(entry.key)
+              }
+            },
+          },
+          h('span', { className: 'dsc-cmdMark' }, '\u276f'),
+          entry.tool === ''
+            ? h('span', { className: 'dsc-cmdName' }, 'unknown tool')
+            : h('span', { className: 'dsc-cmdName' }, entry.tool),
+          entry.family === 'other'
+            ? h('span', { className: 'dsc-cmdLine', title: entry.summary }, entry.summary === '' ? '(no summary)' : entry.summary)
+            : h('span', { className: 'dsc-cmdLine' }, entry.command.split('\n')[0]),
+          entry.workdir === '' ? null : h('span', { className: 'dsc-cmdCwd', title: entry.workdir }, entry.workdir),
+          duration === '' ? null : h('span', { className: 'dsc-cmdDur' }, duration),
+          h('span', { className: 'dsc-pill', 'data-tone': info.tone }, info.label),
+        )
         return h(
           'div',
           {
@@ -1607,32 +1760,7 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
             'data-expanded': expanded ? '' : undefined,
             'data-dsh-cmdbar-cmd': entry.callId,
           },
-          h(
-            'div',
-            {
-              className: 'dsc-cmdHead',
-              role: 'button',
-              tabIndex: 0,
-              'aria-expanded': expanded ? 'true' : 'false',
-              onClick: () => toggle(entry.key),
-              onKeyDown: (event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  toggle(entry.key)
-                }
-              },
-            },
-            h('span', { className: 'dsc-cmdMark' }, '\u276f'),
-            entry.tool === ''
-              ? h('span', { className: 'dsc-cmdName' }, 'unknown tool')
-              : h('span', { className: 'dsc-cmdName' }, entry.tool),
-            entry.family === 'other'
-              ? h('span', { className: 'dsc-cmdLine', title: entry.summary }, entry.summary === '' ? '(no summary)' : entry.summary)
-              : h('span', { className: 'dsc-cmdLine', title: entry.description === '' ? entry.command : entry.description }, entry.command.split('\n')[0]),
-            entry.workdir === '' ? null : h('span', { className: 'dsc-cmdCwd', title: entry.workdir }, entry.workdir),
-            duration === '' ? null : h('span', { className: 'dsc-cmdDur' }, duration),
-            h('span', { className: 'dsc-pill', 'data-tone': info.tone }, info.label),
-          ),
+          commandCard(entry, head, bodyRef),
           fullCommand === null ? null : h('pre', { className: 'dsc-out dsc-outCmd' }, fullCommand),
           shown.length > 0
             ? h('pre', { className: 'dsc-out' }, shown.join('\n'))
@@ -1659,36 +1787,9 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
       return h(
         'div',
         { className: 'dsc-activity', 'data-dsh-cmdbar-activity-view': '', 'data-available': model.available ? '' : undefined },
-        h(
-          'div',
-          { className: 'dsc-actBar' },
-          h(
-            'button',
-            {
-              type: 'button',
-              className: 'dsc-mini',
-              'data-on': allTools ? '' : undefined,
-              'aria-pressed': allTools ? 'true' : 'false',
-              title: 'Show every tool call, not only the ones that run something',
-              onClick: () => setAllTools((prev) => !prev),
-            },
-            allTools ? 'All tools' : 'Commands',
-          ),
-          h(
-            'button',
-            {
-              type: 'button',
-              className: 'dsc-mini',
-              'data-on': failuresOnly ? '' : undefined,
-              'aria-pressed': failuresOnly ? 'true' : 'false',
-              title: 'Only show what failed',
-              onClick: () => setFailuresOnly((prev) => !prev),
-            },
-            'Failures',
-          ),
-          h('span', { className: 'dsc-actFacts' }, sessionId === null ? '' : facts.join(' \u00b7 ')),
-          follow ? null : h('button', { type: 'button', className: 'dsc-mini', onClick: () => setFollow(true), title: 'Follow the newest command' }, 'Follow \u2193'),
-        ),
+        // alpha.15: NO TOOLBAR ROW. The two filters and the follow pill are chips
+        // in the dock's bar (see `Dock`), and the line that used to sit here was
+        // the second row of chrome the bar was being blamed for.
         h(
           'div',
           { className: 'dsc-actBody', ref: bodyRef, onScroll },
@@ -1705,7 +1806,7 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
                 : groups.length === 0
                   ? hint(
                       'No commands yet',
-                      failuresOnly || !allTools
+                      failures || !all
                         ? 'Nothing here matches the filter.'
                         : 'When the agent runs something in this conversation, it appears here.',
                       '',
@@ -1821,6 +1922,45 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
       // so the bar wears it as well as the body.
       const activityUnreadable = activity.available !== true && activity.reason !== null
       const activityTone = activityBusy ? 'running' : activityUnreadable ? 'warning' : activityFailed ? 'failed' : 'idle'
+
+      // ---------------------------------------------------------------------
+      // The view's three choices live HERE (alpha.15), because the chips that set
+      // them are in the bar this component draws. They used to be `ActivityView`'s
+      // own state, set from its toolbar row - the second row of chrome.
+      // ---------------------------------------------------------------------
+      const [allTools, setAllTools] = useState(false)
+      const [failuresOnly, setFailuresOnly] = useState(false)
+      const [follow, setFollow] = useState(true)
+
+      // ... and they belong to the CONVERSATION they were set in (alpha.13), so a
+      // change resets them exactly as the view's own key resets its expanded rows.
+      useEffect(() => {
+        setAllTools(false)
+        setFailuresOnly(false)
+        setFollow(true)
+      }, [sessionId])
+
+      // The line the bar carries, and the line its tooltip carries. The counts are
+      // the COMMANDS' (alpha.11), and the other family's own running and failed
+      // rows are added back only while "All tools" can actually DRAW them - so the
+      // line describes what is on screen instead of counting rows the filter is
+      // hiding. This is the arithmetic the view's toolbar used to do, moved up
+      // with the chips; `activityFactsTitle` above stays the one-word-per-number
+      // spelling the header control's tooltip uses.
+      const facts = []
+      if (sessionId !== null) {
+        facts.push(String(activity.counts.shell) + (activity.counts.shell === 1 ? ' command' : ' commands'))
+        if (allTools && activity.counts.other > 0) facts.push(String(activity.counts.other) + ' other')
+        const running = activity.counts.running + (allTools ? activity.counts.otherRunning || 0 : 0)
+        const failed = activity.counts.failed + (allTools ? activity.counts.otherFailed || 0 : 0)
+        if (running > 0) facts.push(String(running) + ' running')
+        if (failed > 0) facts.push(String(failed) + ' failed')
+        if (activity.hasMore) facts.push('older ones are outside this view')
+      }
+      const factsTitle =
+        sessionId === null
+          ? ''
+          : activityFactsTitle(activity) + (activity.hasMore ? '. Older commands are outside this view' : '') + (activityUnreadable ? '. Not readable here: ' + String(activity.reason) : '')
 
       // Geometry, part one: PLACE the dock and take its room from the middle and
       // right columns ONLY - never from the frame, whose single grid row is
@@ -1973,22 +2113,34 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
         event.preventDefault()
       }, [])
 
-      // The bar says what the panel is and how the log is doing; the body draws
-      // the log itself. There is no second view to switch to, so the state that
-      // used to be a toggle's is now the brand's own.
+      // ONE header row (alpha.15), dressed the way every other panel in this app
+      // dresses its own: the title at the left, the controls as the app's own
+      // chips at the right, and one faint line of facts between them. The version
+      // moved into the brand's `title` - a 24-character build string was a third
+      // of the row's right-hand half, and it is still one hover away (and still in
+      // the markup the tracked check reads) - and it is ALSO on the dock root as
+      // `data-dsh-cmdbar-version`, because a build string a reader has to hover for
+      // is no way to answer the question this release made urgent: WHICH bundle is
+      // the running host actually serving?
+      //
+      // That is not a hypothetical. The host SNAPSHOTS each `client.js` at boot and
+      // republishes it only through its HMR hook (`dsh-client-modules`: "bundle
+      // content changes reach the graph only through rebuilt()"), so editing this
+      // file does NOT change what a running `dsh web` serves - a page refresh
+      // cannot, and only a host restart (or the dev watcher) can. The attribute
+      // makes the served revision answerable from the page instead of guessed at:
+      //   document.querySelector('[data-dsh-cmdbar-dock]').dataset.dshCmdbarVersion
       //
       // alpha.13: with NO conversation on screen there are no commands to count,
       // and "0 commands, nothing run yet" would be a claim about a conversation
       // that does not exist. The line goes quiet and the body says why.
-      const facts = sessionId === null ? '' : activityFactsTitle(activity)
-      const activityTitle =
-        sessionId === null ? '' : facts + (activityUnreadable ? '. Not readable here: ' + String(activity.reason) : '')
       return h(
         'div',
         {
           ref: rootRef,
           className: 'dsc-dock',
           'data-dsh-cmdbar-dock': '',
+          'data-dsh-cmdbar-version': PLUGIN_VERSION,
           'data-open': open ? '' : undefined,
           'data-state': activityTone,
           role: 'region',
@@ -2000,7 +2152,7 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
           { className: 'dsc-bar' },
           h(
             'span',
-            { className: 'dsc-brand', 'data-state': activityTone },
+            { className: 'dsc-brand', 'data-state': activityTone, title: 'dsh-cmdbar ' + PLUGIN_VERSION },
             h('span', { className: 'dsc-glyph' }, h(ActivityGlyph, { size: 14 })),
             'Agent',
           ),
@@ -2010,8 +2162,32 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
             ? h('span', { className: 'dsc-badge', 'data-tone': 'failed', title: String(activity.counts.failed) + ' failed' }, String(activity.counts.failed))
             : null,
           h('span', { className: 'dsc-spacer' }),
-          h('span', { className: 'dsc-facts', title: activityTitle }, facts),
-          h('span', { className: 'dsc-ver' }, 'dsh-cmdbar ' + PLUGIN_VERSION),
+          h('span', { className: 'dsc-facts', title: factsTitle }, facts.join(' \u00b7 ')),
+          h(
+            'span',
+            { className: 'dsc-filters', role: 'group', 'aria-label': 'Filters' },
+            chip(
+              {
+                active: allTools,
+                title: 'Show every tool call, not only the ones that run something',
+                'aria-pressed': allTools ? 'true' : 'false',
+                onClick: () => setAllTools((prev) => !prev),
+              },
+              'All tools',
+            ),
+            chip(
+              {
+                active: failuresOnly,
+                title: 'Only show what failed',
+                'aria-pressed': failuresOnly ? 'true' : 'false',
+                onClick: () => setFailuresOnly((prev) => !prev),
+              },
+              'Failures',
+            ),
+          ),
+          // Following is a scroll POSITION, not a mode: the chip is the way back
+          // to the tail and it is only there when the reader has left it.
+          follow ? null : chip({ active: true, title: 'Follow the newest command', onClick: () => setFollow(true) }, 'Follow \u2193'),
           h(
             'button',
             { type: 'button', className: 'dsc-btn dsc-btnIcon', title: 'Hide the panel', 'aria-label': 'Hide the panel', onClick: closeDock },
@@ -2019,14 +2195,15 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
           ),
         ),
         // keyed on the conversation (alpha.13): following a change must reset the
-        // view's own state too - the filters, the expanded rows and the follow
-        // pill belong to the conversation they were set in, and carrying them into
-        // a new one is exactly the "continues from the previous conversation" this
-        // release removes.
+        // view's own state too - the filters, the expanded rows and the follow pill
+        // belong to the conversation they were set in, and carrying them into a new
+        // one is exactly the "continues from the previous conversation" alpha.13
+        // removes. The three the bar sets are reset by the effect above it; the
+        // expanded rows are this key's.
         h(
           'div',
           { className: 'dsc-body' },
-          h(ActivityView, { key: sessionId === null ? 'none' : sessionId, sessionId, model: activity }),
+          h(ActivityView, { key: sessionId === null ? 'none' : sessionId, sessionId, model: activity, allTools, failuresOnly, follow, onFollowChange: setFollow }),
         ),
       )
     }
@@ -2135,6 +2312,12 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
       // single-line one and a collapsed row, because the crash it replaces was
       // invisible to every static render this check can make.
       commandBody,
+      // alpha.15: the hover card a command LINE wears. Pure, and driven by the
+      // tracked check, because the three cases that matter - a real command (the
+      // card, carrying the WHOLE command), a non-command row (no card) and an
+      // engine without the primitive (the bare anchor, never a crash) - are all
+      // decisions, and the crash it guards against is the abdicating one.
+      commandCard,
       // alpha.11: the counts the Agent control and the dock's bar wear as WORDS.
       // It is the one place those numbers reach a reader, and the bug that release
       // fixed was visible there first ("0 commands, 1 failed, nothing run yet" in

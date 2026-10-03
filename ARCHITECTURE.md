@@ -1347,6 +1347,37 @@ and the pack-wide primitive scan grades `writeClipboard` against the real pinned
 package. The second one was found by auditing every bundle here for identifiers it
 references but never declares.
 
+**alpha.15: one header row, and the whole command on hover.** The dock stacked
+**two** header rows — its own bar and the view's toolbar underneath — and both
+restated the counts. Measured in the pack's own browser harness against a
+358px-wide dock, the bar was **84px tall** and the two rows plus the grip took
+**121px of a 280px panel**, because the bar's count line carried `flex:none` and no
+overflow rule (so it kept its full width and ran over its neighbours) while the
+version — the only shrinkable item in the row — wrapped into a four-line stack.
+There is now ONE row, dressed the way every other panel in this app dresses its
+own: the title at the left, the app's own `primitives.Pill` chips at the right
+(**All tools**, **Failures**, and **Follow ↓** while the view is scrolled away from
+the tail), and the counts as the one faint, ellipsised, shrinkable line between
+them. The row's height is ONE knob — `--dsc-control-h: 20px` on `.dsc-dock`, which
+is `primitives.Tag`'s own density rather than an invented number — and the shipped
+chip is resized structurally through a wrapper this package owns (`.dsc-pillSeat >
+*`), never through one of the app's hashed class names. The first cut put the
+controls at the app's *panel* size and drew a 31px row; the reader said it was still
+too tall, so the dense scale is the shipped one: **the same dock now draws a 25px
+row and 31px of chrome**, against 84px and 121px before. The version string moved
+into the brand's tooltip. The view's toolbar row is gone, so the three
+choices it held moved UP into the dock with the chips that set them — and a
+conversation change resets them, exactly as it resets the view's expanded rows
+(alpha.13's rule, kept across the move).
+
+Hovering a highlighted command line now shows the **whole command**, in the shipped
+`primitives.HoverCard` (`variant: 'preview'`, portaled, sized from the log's own
+box, height-capped at 420px), where the native `title` it replaces held the agent's
+**description**. Both of alpha.15's new primitives are resolved once and GUARDED
+(`commandCard` answers the bare anchor when the engine has no `HoverCard`), for the
+same reason the copy buttons guard `writeClipboard`: `h(undefined, …)` in this
+root-scoped seat does not cost one chip, it abdicates the whole dock.
+
 **Why `shell.overlay` and not a second React root.** The dock has to escape the
 frame's `overflow:hidden` to sit at the very bottom of the window, and it has to
 live in the app's tree to inherit its React context. Both hold at once: the

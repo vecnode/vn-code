@@ -37,7 +37,7 @@
  */
 import { createHash } from 'node:crypto'
 import { promises as fsp } from 'node:fs'
-import { readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -69,6 +69,24 @@ const WORKSPACE_ASSET_ROUTE = API_ROOT + '/workspace-asset'
 const QUEUE_ROUTE = API_ROOT + '/render-queue'
 const REPORT_ROUTE = API_ROOT + '/render-report'
 const ENGINE_ROUTE = API_ROOT + '/vendor/engine.js'
+/**
+ * The vendored Excalidraw surface (see vendor/excalidraw/build.mjs): the bundle,
+ * the stylesheet it cannot run without, and the LATIN FACES it fetches at runtime.
+ * The bundle and the stylesheet are two routes because they have different lives -
+ * the bundle is one 3 MiB iife script that leaves `globalThis.DSHExcalidraw`
+ * behind, and the stylesheet is what makes that editor usable at all - and the
+ * faces are one route each, because the registry matches EXACT paths and this is
+ * the shape `FONT_ROUTE_PREFIX` already uses for this package's own fonts.
+ */
+const EXCALIDRAW_JS_ROUTE = API_ROOT + '/vendor/excalidraw.js'
+const EXCALIDRAW_CSS_ROUTE = API_ROOT + '/vendor/excalidraw.css'
+/**
+ * The faces' prefix, and it is NOT a choice: the editor resolves every face as
+ * `new URL('fonts/<Family>/<file>', EXCALIDRAW_ASSET_PATH)`, and the client sets
+ * that base to this package's vendor prefix - so these are exactly the paths
+ * Excalidraw asks for.
+ */
+const EXCALIDRAW_FONT_ROUTE_PREFIX = API_ROOT + '/vendor/excalidraw/fonts/'
 
 /** How long a tool waits for the browser before it gives up and says why. */
 const REPORT_TIMEOUT_MS = 20_000
@@ -2113,6 +2131,68 @@ export function registerRoutes(ctx, row) {
     }
   })
 
+  // ---- the vendored Excalidraw surface -----------------------------------
+  //
+  // The ETag is the sha256 VERSION.json already records, so answering a request
+  // costs no hashing; `cache-control: no-cache` (never `immutable`) is deliberate
+  // for a 3 MiB artifact: a rebuilt bundle must be picked up on the next load, and
+  // a stale copy of it would be the whole editor. A missing artifact is a 503 that
+  // NAMES the rebuild command instead of a bare 404, because the only way this
+  // file is absent is a checkout that skipped the committed tree.
+  const excalidrawDir = fileURLToPath(new URL('./vendor/excalidraw/', import.meta.url))
+  const vendorRecord = () => {
+    try {
+      return JSON.parse(readFileSync(path.join(excalidrawDir, 'VERSION.json'), 'utf8'))
+    } catch (err) {
+      return null
+    }
+  }
+  const serveVendor = (name, contentType) => async (request) => {
+    const file = path.join(excalidrawDir, name)
+    if (!existsSync(file)) {
+      throw httpError(
+        503,
+        'VENDOR_MISSING',
+        'the vendored Excalidraw artifact (' + name + ') is not in this checkout - rebuild it with `node packages/dsh-canvas/vendor/excalidraw/build.mjs`',
+      )
+    }
+    const record = vendorRecord()
+    const recorded = record !== null && record.files !== undefined ? record.files[name] : undefined
+    const etag = '"' + (recorded !== undefined && typeof recorded.sha256 === 'string' ? recorded.sha256.slice(0, 32) : String(statSync(file).mtimeMs)) + '"'
+    const headers = { 'content-type': contentType, 'cache-control': 'no-cache', etag }
+    if (request.headers.get('if-none-match') === etag) return new Response(null, { status: 304, headers: { etag } })
+    const size = statSync(file).size
+    if (request.method === 'HEAD') return new Response(null, { status: 200, headers: { ...headers, 'content-length': String(size) } })
+    return new Response(readFileSync(file), { status: 200, headers: { ...headers, 'content-length': String(size) } })
+  }
+  register(EXCALIDRAW_JS_ROUTE, ['GET', 'HEAD'], serveVendor('excalidraw.min.js', 'text/javascript; charset=utf-8'))
+  register(EXCALIDRAW_CSS_ROUTE, ['GET', 'HEAD'], serveVendor('excalidraw.css', 'text/css; charset=utf-8'))
+
+  // ---- the vendored Excalidraw faces (one exact route each) --------------
+  //
+  // Enumerated from VERSION.json rather than from the directory, because the record
+  // IS the authority on what this checkout claims to ship: a file that went missing
+  // is then a 404 with the hash it should have had, and `build.mjs --check` fails
+  // offline long before a person notices a face falling back. Immutable caching is
+  // right here (unlike the bundle): a face's bytes never change under its hash.
+  const excalidrawFontDir = path.join(excalidrawDir, 'fonts')
+  const recordedFonts = vendorRecord()?.fonts?.families ?? {}
+  let excalidrawFontRoutes = 0
+  for (const [family, entries] of Object.entries(recordedFonts)) {
+    for (const [name, meta] of Object.entries(entries)) {
+      register(EXCALIDRAW_FONT_ROUTE_PREFIX + family + '/' + name, ['GET', 'HEAD'], async (request) => {
+        const file = path.join(excalidrawFontDir, family, name)
+        if (!existsSync(file)) throw httpError(404, 'NOT_FOUND', 'no such font file')
+        const etag = '"' + String(meta.sha256).slice(0, 32) + '"'
+        if (request.headers.get('if-none-match') === etag) return new Response(null, { status: 304, headers: { etag } })
+        const headers = { 'content-type': 'font/woff2', 'content-length': String(meta.bytes), etag, 'cache-control': 'public, max-age=31536000, immutable' }
+        if (request.method === 'HEAD') return new Response(null, { status: 200, headers })
+        return new Response(readFileSync(file), { status: 200, headers })
+      })
+      excalidrawFontRoutes += 1
+    }
+  }
+
   // ---- the bundled font files (one exact route each) ---------------------
   let fontRoutes = 0
   for (const entry of Object.values(fontTable())) {
@@ -2140,8 +2220,16 @@ export function registerRoutes(ctx, row) {
       fontRoutes += 1
     }
   }
-  row.log.debug('[dsh-canvas] routes registered (' + (8 + fontRoutes) + ' including ' + fontRoutes + ' font file(s))')
-  return 8 + fontRoutes
+  row.log.debug(
+    '[dsh-canvas] routes registered (' +
+      (10 + excalidrawFontRoutes + fontRoutes) +
+      ' including ' +
+      fontRoutes +
+      ' font file(s) and ' +
+      excalidrawFontRoutes +
+      ' Excalidraw face(s))',
+  )
+  return 10 + excalidrawFontRoutes + fontRoutes
 }
 
 // ---------------------------------------------------------------------------

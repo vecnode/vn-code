@@ -130,7 +130,28 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
     to leave the last conversation's commands on screen, a closed panel only
     forgetting, the same conversation moving nothing, a missing state not
     crashing), with the source pinned so the panel is closed by the reader's own
-    control and by nothing else.
+    control and by nothing else. **alpha.15 pins the BAR in the three registers the
+    defect lived in**: the CSS as the fix (`flex-wrap:nowrap` on the row, the counts
+    as the ONE shrinkable item with an ellipsis, the brand and chips refusing to
+    shrink or wrap, and `.dsc-ver` / `.dsc-actBar` / `.dsc-mini` asserted GONE),
+    the markup as the app's own dress (one `dsc-bar`, both `primitives.Pill` chips
+    with their `active` and `aria-pressed`, no toolbar row in the view), and the
+    hover as a behaviour - `commandCard` answers the bare line for a non-command row
+    and for `null`, the whole command as the card's own `content` (in the app's
+    `preview` variant, anchored to the log's box) for a real one, and the ROW is
+    asserted to hand that card the whole command, read off the stub because the real
+    card is portaled. Both new primitives are ALSO dropped from a second load
+    (`withoutHoverCard` / `withoutPill`) and the fallback bar rendered, because
+    `h(undefined, …)` in this root-scoped seat abdicates the whole dock rather than
+    costing one chip. The version is pinned where it MOVED to - the brand's tooltip -
+    and asserted **not** to be text in the row again. The DENSITY pass on the same
+    row is pinned too, because the first cut measured 31px and the reader said that
+    was still too tall: `--dsc-control-h:20px` is asserted as the one knob, the
+    chips' resizing as a rule on a wrapper THIS package owns (`.dsc-pillSeat>*`,
+    never one of the app's hashed class names), and the shipped `Pill` as still the
+    thing being wrapped - so a future tidy-up cannot quietly turn the app's chip into
+    a lookalike, and cannot rename the wrapper into alpha.12's chip-strip absence
+    pin either.
   - The repo manifest and the master's pack-wide patches are checked by
     `check-node-routes.mjs`: `.dsh-version.json` must agree with every
     package.json, and `packages/dsh-vn-master/cordis.patch.yml` must keep the
@@ -380,6 +401,49 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
   paragraph ("noforks"). Both now have Node-side regression assertions too. With no
   Chromium-family browser installed it SKIPS LOUDLY and exits 0; `DSH_CANVAS_BROWSER`
   points it at a binary.
+- `check-canvas-scene.mjs` is the **scene language** - the vocabulary the Canvas
+  tab's agent tools are being moved onto - and it is exhaustive (100 assertions) for
+  a reason no browser check can be: the language lives on the HOST, in a file that
+  imports nothing, touches no DOM and reads no file, so every branch of it can be
+  driven directly rather than sampled through a page. An agent writes Excalidraw
+  SKELETONS; the host validates, normalises, patches and summarises them; the browser
+  materialises them with Excalidraw's own `convertToExcalidrawElements`, which is why
+  the split exists at all. What the check defends: every refusal carries a code the
+  model can act on, nothing is silently dropped (an unknown field is refused, and a
+  key the validator ACCEPTS is carried - that asymmetry is a bug either way, and it
+  caught `frameId` being allowed and then dropped), and the normalised scene
+  RE-VALIDATES byte-identically, because a patch re-validates the stored form and
+  without idempotence no stored scene could ever be patched. That property failed
+  twice while the file was being written, which is why it is pinned. The pointer ops
+  are driven too - `set`/`remove`/`insert`, `-` to append, out-of-range and unknown
+  paths, the op-count and path-depth caps, and a patch that would leave the scene
+  invalid being refused - as is the rule that `id`, `revision`, `createdAt` and
+  `updatedAt` belong to the STORE and cannot be rewritten through a patch (a model
+  that can rewrite a revision can defeat the check that a render belongs to the thing
+  it drew). It also pins what is deliberately absent, `image` by name with its
+  reason.
+- `check-canvas-excalidraw.mjs` covers the one thing in `dsh-canvas` whose bytes are
+  NOT written in this repository: the vendored **Excalidraw** surface (alpha.10,
+  preview). It checks it from both sides, because either half alone can be fooled -
+  `vendor/excalidraw/build.mjs --check` re-hashes the committed artifact against
+  `VERSION.json` **offline** (the pins, the trims, a sha256 per file, a digest and
+  the licence hash), and then a throwaway headless Chromium is served those very
+  bytes over loopback and loads them **exactly the way the client loader does** - a
+  stylesheet `link` and a classic `script` with a cache-busting query - so a loader
+  that only worked because of how the check fetched it would fail here. What it
+  asserts is what only a browser can see: the artifact leaves
+  `globalThis.DSHExcalidraw` behind, it MOUNTS in a pane, Excalidraw's own canvases
+  and UI are there, **its stylesheet applied** (`--color-primary` resolves to
+  `#6965db`, which is the difference between an editor and a broken grid), the
+  imperative API answers, a skeleton scene becomes four real elements of the kinds
+  asked for, it serializes as an `.excalidraw` document, and `exportToSvg` answers.
+  It also pins the contract across the halves - that the two route paths the client
+  asks for are the two the host registers (a typo on either side is a 404 nobody
+  sees until the surface is opened). Two of its own assertions failed on the first
+  run and were fixed rather than loosened: `exportToSvg` is ASYNC in this line of
+  Excalidraw, and the element ORDER is Excalidraw's (containers first, then the
+  bound text), so the kinds are asserted as a SET. With no Chromium-family browser
+  it SKIPS LOUDLY and exits 0; `DSH_CANVAS_BROWSER` points it at a binary.
 - `check-audio-browser.mjs` is the audio console's other half, and it exists for the
   same reason: `check-client-bundles.mjs` drives the console's numbers with
   hand-built fixtures and renders its markup from hand-built state, which is what

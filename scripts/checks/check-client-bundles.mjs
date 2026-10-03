@@ -106,6 +106,10 @@ let failures = 0
 // The last Menu the stand-in primitives rendered, so a check can read the props
 // a bundle handed it (its items and its onSelect) instead of only the markup.
 let lastMenuProps = null
+// ... and the same for the two primitives whose interesting half is a PORTAL the
+// server renderer cannot follow: the hover card (its `content` is the whole
+// command dsh-cmdbar shows) and dsh-canvas's own figures.
+let lastHoverCardProps = null
 function check(label, actual, expected) {
   const ok = expected === undefined ? Boolean(actual) : actual === expected
   if (!ok) failures += 1
@@ -314,6 +318,36 @@ function loadBundle(relative, extraRequire) {
       }
       // Button renders its children, so a footer's label reaches the markup.
       const Push = (props) => (props && props.children !== undefined ? props.children : null)
+      // Pill renders its label, and carries the `active` flag as an attribute so
+      // a check can read WHERE a chip is on or off (dsh-cmdbar's bar, alpha.15).
+      const Chip =
+        extraRequire && extraRequire.withoutPill === true
+          ? undefined
+          : (props) => {
+              const rest = Object.assign({}, props)
+              delete rest.children
+              delete rest.active
+              return React.createElement(
+                props && props.onClick ? 'button' : 'span',
+                Object.assign({ 'data-active': props && props.active === true ? 'true' : 'false' }, rest),
+                props && props.children !== undefined ? props.children : null,
+              )
+            }
+      // HoverCard renders its ANCHOR in place and keeps the props, because the
+      // card itself is portaled to the body - which the server renderer cannot
+      // follow at all. Keeping them is what lets a check read the card's CONTENT
+      // (the whole command, alpha.15) out of a static render.
+      // Both of alpha.15's new primitives can be DROPPED (`withoutHoverCard` /
+      // `withoutPill`), because the bundle guards them: a root-scoped slot
+      // ABDICATES on a render throw, so `h(undefined, ...)` on an older engine
+      // would cost the whole panel. The fallback has to be a working bar.
+      const Card =
+        extraRequire && extraRequire.withoutHoverCard === true
+          ? undefined
+          : (props) => {
+              lastHoverCardProps = props
+              return props && props.anchor !== undefined ? props.anchor : null
+            }
       // The clipboard helper the pinned line really exports
       // (`writeClipboard(text)`, which answers whether the host accepted the
       // write). It is here because the REAL package exports it: a stub poorer
@@ -325,6 +359,8 @@ function loadBundle(relative, extraRequire) {
       return {
         Menu: Anchor,
         Tooltip: Child,
+        Pill: Chip,
+        HoverCard: Card,
         MarkdownText: Text,
         Modal: Dialog,
         Button: Push,
@@ -1835,6 +1871,11 @@ check('gittree: a plain branch wears a chip', gitRailMarkup.includes('data-gittr
 
 // -------------------------------------------------------------- dsh-cmdbar
 const cmdbar = loadBundle('packages/dsh-cmdbar/lib/client.js', {})
+// The SAME bundle against an engine that has neither of alpha.15's two new
+// primitives. It is a second load and not a footnote because the failure it
+// guards is the abdicating one: `h(undefined, …)` inside a root-scoped slot does
+// not cost a chip, it retires the whole dock for the life of the page.
+const cmdbarNoCard = loadBundle('packages/dsh-cmdbar/lib/client.js', { withoutHoverCard: true, withoutPill: true })
 const cmdbarCssTag = cmdbar.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-cmdbar/cmdbar.css').pop()
 const cmdbarCss = cmdbarCssTag ? cmdbarCssTag.textContent : ''
 check('cmdbar bundle id', cmdbar.id, 'dsh-cmdbar')
@@ -1981,7 +2022,20 @@ check('cmdbar adopt: a height already in force moves nothing', adopt({ shared: 2
 check('cmdbar adopt: an unready section waits', adopt({ ready: false }), null)
 check('cmdbar adopt: an absent value is not a height of zero', adopt({ shared: null }), null)
 check('cmdbar adopt: another window still moves the dock', adopt({ shared: 350, known: 400, current: 280 }), 350)
-check('cmdbar dock names the version', cmdbarDockMarkup.includes('dsh-cmdbar 0.1.0-alpha.14'))
+// alpha.15: the version left the bar for the BRAND's tooltip - a 24-character
+// build string was a third of the header row's right-hand half - so the check
+// reads it where a reader finds it now: in the title a hover opens. It is ALSO on
+// the dock ROOT as `data-dsh-cmdbar-version`, and that is not decoration: the host
+// snapshots every `client.js` at boot and republishes it only through its HMR hook
+// (`dsh-client-modules`), so "which bundle is the running host actually serving?"
+// is a real question this package has to let a reader answer from the page.
+check(
+  'cmdbar dock names the version',
+  cmdbarDockMarkup.includes('dsh-cmdbar 0.1.0-alpha.15') &&
+    cmdbarDockMarkup.includes('title="dsh-cmdbar 0.1.0-alpha.15"') &&
+    cmdbarDockMarkup.includes('data-dsh-cmdbar-version="0.1.0-alpha.15"'),
+)
+check('cmdbar bar no longer prints the version as text', cmdbarDockMarkup.includes('>dsh-cmdbar 0.1.0-alpha.15<') === false && cmdbarSource.includes('dsc-ver') === false)
 // alpha.14: the RENAME. The bundle, its row id, its two seats, the one route it
 // reads and the data-* attributes a person or a test can find it by all moved
 // from `dsh-terminal` to `dsh-cmdbar`, because the old name described the
@@ -2035,13 +2089,35 @@ check(
     cmdbarSource.includes('const showActivityView') === false,
 )
 // alpha.11: the counts the bar's badge and the header dot are made of are the
-// COMMANDS' (the fold decides that, below), and the view's own facts line adds the
+// COMMANDS' (the fold decides that, below), and the bar's own facts line adds the
 // other family's running/failed rows back only while "All tools" can DRAW them.
+// alpha.15 moved this arithmetic OUT of the view and into `Dock`, because the
+// chips that set those filters are in the bar now - the same three expressions,
+// reading the model the dock holds as `activity`.
 check(
-  'cmdbar view counts the commands, plus the rest only under All tools',
-  cmdbarSource.includes('if (allTools && model.counts.other > 0) facts.push(String(model.counts.other) + \' other\')') &&
-    cmdbarSource.includes('const running = model.counts.running + (allTools ? model.counts.otherRunning || 0 : 0)') &&
-    cmdbarSource.includes('const failed = model.counts.failed + (allTools ? model.counts.otherFailed || 0 : 0)'),
+  'cmdbar bar counts the commands, plus the rest only under All tools',
+  cmdbarSource.includes('if (allTools && activity.counts.other > 0) facts.push(String(activity.counts.other) + \' other\')') &&
+    cmdbarSource.includes('const running = activity.counts.running + (allTools ? activity.counts.otherRunning || 0 : 0)') &&
+    cmdbarSource.includes('const failed = activity.counts.failed + (allTools ? activity.counts.otherFailed || 0 : 0)'),
+)
+// alpha.15: ONE header row, and the overlap it repaired is a FLEX property, not a
+// spacing one - so it is pinned as CSS. The counts are the row's only shrinkable
+// item (they ellipsise); everything beside them refuses to shrink and refuses to
+// wrap; and the row itself cannot wrap at all. The version span and the view's
+// toolbar row are gone with the second header.
+check(
+  'cmdbar has ONE header row',
+  cmdbarCss.includes('.dsc-bar{flex:none;display:flex;flex-wrap:nowrap;') &&
+    cmdbarCss.includes('.dsc-ver') === false &&
+    cmdbarCss.includes('.dsc-actBar') === false &&
+    cmdbarCss.includes('.dsc-mini') === false &&
+    cmdbarDockMarkup.split('class="dsc-bar"').length === 2,
+)
+check(
+  'cmdbar bar cannot overlap itself',
+  cmdbarCss.includes('.dsc-facts{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;') &&
+    cmdbarCss.includes('.dsc-brand{flex:none;display:inline-flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;') &&
+    cmdbarCss.includes('.dsc-filters{flex:none;display:inline-flex;align-items:center;gap:6px}'),
 )
 check(
   'cmdbar activity styles are injected',
@@ -2051,7 +2127,7 @@ check(
     cmdbarCss.includes('.dsc-pulse{') &&
     cmdbarCss.includes('.dsc-badge{') &&
     // The shared notice is absolute/inset:0, so the body it sits in must be its
-    // containing block or "no commands yet" would cover the filters too.
+    // containing block or "no commands yet" would cover the bar that says why.
     cmdbarCss.includes('.dsc-actBody{position:relative;'),
 )
 // alpha.9: a command row has to be readable at a glance, in EVERY theme. Both
@@ -2134,9 +2210,17 @@ check(
     /function releaseSession\(sessionId\)[\s\S]*?dock\.sessionId !== sessionId\) return[\s\S]*?dock\.sessionId = null/.test(cmdbarSource) &&
     (cmdbarSource.match(/dock\.open = false/g) || []).length === 2,
 )
+// alpha.15 moved the facts line's arithmetic into the dock (the chips that set
+// the filters are up there with it), so what this pins is the alpha.13 rule it
+// still has to hold: with NO conversation the line is EMPTY - no "0 commands" -
+// and the body says why. The counts themselves are still `activityFactsTitle`'s.
 check(
   'cmdbar dock says why it is empty with nothing on screen',
-  cmdbarSource.includes("hint('No conversation open'") && cmdbarSource.includes("sessionId === null ? '' : activityFactsTitle(activity)"),
+  cmdbarSource.includes("hint('No conversation open'") &&
+    cmdbarSource.includes('const facts = []') &&
+    cmdbarSource.includes('if (sessionId !== null) {') &&
+    cmdbarSource.includes('activityFactsTitle(activity)') &&
+    cmdbarDockMarkup.includes('class="dsc-facts"'),
 )
 // alpha.13: the sentence that used to open the facts line is gone; the counts are
 // the whole of it (pinned as text below, on both models).
@@ -2145,7 +2229,7 @@ check(
   cmdbarSource.includes('The agent\u2019s own commands in this conversation') === false,
 )
 
-const { parseExecCall, parseExitMarker, stripAnsi, buildActivityFromEvents, activitySignature, filterActivity, formatDuration, activityFactsTitle, followDecision, commandBody } =
+const { parseExecCall, parseExitMarker, stripAnsi, buildActivityFromEvents, activitySignature, filterActivity, formatDuration, activityFactsTitle, followDecision, commandBody, commandCard } =
   cmdbar.exports.__internals
 
 const shellCall = parseExecCall('bash', '{"command":"ls -la","description":"list files"}')
@@ -2339,7 +2423,85 @@ check(
     activityViewMarkup.includes('Copy output') &&
     activityViewMarkup.includes('Run in Terminal') === false,
 )
-check('activity view: the filters draw', activityViewMarkup.includes('>Commands<') && activityViewMarkup.includes('>Failures<'))
+// alpha.15: THE FILTERS ARE IN THE BAR, not in a second toolbar row. The view
+// draws the log and nothing else; the dock's bar draws the chips, as the app's
+// own Pill primitive, and the view is told what they say.
+check(
+  'cmdbar view draws no toolbar of its own',
+  activityViewMarkup.includes('dsc-actBar') === false && activityViewMarkup.includes('dsc-mini') === false && activityViewMarkup.includes('>Commands<') === false,
+)
+check(
+  'cmdbar bar draws the filters as the app\u2019s own chips',
+  cmdbarDockMarkup.includes('All tools') &&
+    cmdbarDockMarkup.includes('Failures') &&
+    cmdbarDockMarkup.includes('class="dsc-filters"') &&
+    cmdbarDockMarkup.includes('class="dsc-pillSeat"') &&
+    cmdbarSource.includes("const Pill = typeof primitives.Pill === 'function' ? primitives.Pill : null") &&
+    cmdbarSource.includes("h('button', Object.assign({ type: 'button', className: 'dsc-btn'"),
+)
+// alpha.15, the SECOND pass on the same row: the reader measured the first cut
+// (a 31px row, the app's 24px Pill untouched) and said it was still too tall, so
+// the row's height became ONE knob - `--dsc-control-h:20px` on `.dsc-dock`, which
+// is `primitives.Tag`'s own density rather than an invented number - and the app's
+// chip is resized STRUCTURALLY, through a wrapper this package owns
+// (`.dsc-pillSeat>*`). Never by a hashed class name: the app's bundler renames
+// those, so a rule keyed on one would break on the next harness release, and the
+// seat is not named after its occupant for the alpha.12 reason above it.
+check(
+  'cmdbar bar controls wear the app\u2019s own dense scale',
+  cmdbarCss.includes('--dsc-control-h:20px') &&
+    cmdbarCss.includes('.dsc-pillSeat>*{height:var(--dsc-control-h,22px);padding:0 8px;font-size:11px;line-height:17px}') &&
+    cmdbarCss.includes('.dsc-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;height:var(--dsc-control-h,22px);') &&
+    cmdbarCss.includes('.dsc-btnIcon{width:var(--dsc-control-h,22px);padding:0}') &&
+    cmdbarCss.includes('.dsc-bar{flex:none;display:flex;flex-wrap:nowrap;align-items:center;gap:8px;min-width:0;padding:2px 8px 2px 10px;') &&
+    // The dense chip is still the SHIPPED primitive, wrapped - not a lookalike.
+    cmdbarSource.includes("return h('span', { className: 'dsc-pillSeat' }, h(Pill, props, label))"),
+)
+// The chips are STATEFUL, and the state is the dock's: `active` is what the
+// shipped Pill paints, and the aria-pressed a reader's screen reader hears. Both
+// are OFF in a fresh render - the store is not persisted, deliberately - and the
+// source is what pins that a click moves them.
+check(
+  'cmdbar bar wears which filter is on',
+  cmdbarDockMarkup.includes('data-active="false"') &&
+    cmdbarDockMarkup.includes('aria-pressed="false"') &&
+    cmdbarSource.includes('active: allTools') &&
+    cmdbarSource.includes('active: failuresOnly') &&
+    cmdbarSource.includes('const [allTools, setAllTools] = useState(false)') &&
+    cmdbarSource.includes('const [failuresOnly, setFailuresOnly] = useState(false)') &&
+    cmdbarSource.includes('onClick: () => setAllTools((prev) => !prev)') &&
+    cmdbarSource.includes('onClick: () => setFailuresOnly((prev) => !prev)'),
+)
+// ... and the three belong to the conversation they were set in (alpha.13), which
+// alpha.15 had to keep when it moved them one component up: the effect resets them
+// on the same change the view's own key resets its expanded rows.
+check(
+  'cmdbar filters belong to the conversation',
+  /useEffect\(\(\) => \{\n\s*setAllTools\(false\)\n\s*setFailuresOnly\(false\)\n\s*setFollow\(true\)\n\s*\}, \[sessionId\]\)/.test(cmdbarSource) &&
+    cmdbarSource.includes('allTools, failuresOnly, follow, onFollowChange: setFollow'),
+)
+// The FALLBACK bar, rendered for real: an engine without the app's chip primitive
+// gets outlined buttons instead of a vanished panel.
+{
+  const seats = {}
+  cmdbarNoCard.exports.apply({
+    slots: {
+      inject: (name, fn) => fn(),
+      register(spec, component) {
+        seats[spec.name] = { spec, component }
+        return () => {}
+      },
+    },
+    effect: (fn) => fn(),
+    logger: { debug() {}, warn() {} },
+  })
+  const fallbackMarkup = renderToStaticMarkup(h(seats['shell.overlay'].component, {}))
+  check(
+    'cmdbar bar still draws without the app\u2019s chips',
+    fallbackMarkup.includes('>Agent<') && fallbackMarkup.includes('All tools') && fallbackMarkup.includes('Failures') && fallbackMarkup.includes('class="dsc-btn"'),
+  )
+  check('cmdbar fallback chips name their state', fallbackMarkup.includes('data-on') === false || fallbackMarkup.includes('dsc-btn'))
+}
 const activityMultiLineMarkup = renderActivityView([callEvent(1, 'm1', 'npm run a\nnpm run b'), resultEvent(2, 'm1', 'ok\n[exit code: 0]')])
 // A multi-line command is drawn like any other now: the `multi-line` note existed
 // only to explain why Run in Terminal was withheld, and there is nothing to withhold.
@@ -2348,6 +2510,16 @@ const activityMultiLineMarkup = renderActivityView([callEvent(1, 'm1', 'npm run 
 check(
   'activity view: a multi-line command is drawn like any other',
   activityMultiLineMarkup.includes('multi-line') === false && activityMultiLineMarkup.includes('Run in Terminal') === false,
+)
+// ... and the card the row hangs on that line really carries it. The stub keeps
+// the props because the card itself is portaled, so this is the row's own render
+// reaching the primitive - not the pure decision called by hand above.
+check(
+  'activity view: the row hands the WHOLE command to the card',
+  lastHoverCardProps !== null &&
+    lastHoverCardProps.content !== undefined &&
+    lastHoverCardProps.content.props.children === 'npm run a\nnpm run b' &&
+    lastHoverCardProps.variant === 'preview',
 )
 // alpha.14: THE CLICK THAT KILLED THE DOCK. Expanding a row asked for `multiLine`,
 // an identifier this bundle NEVER declared, so the first click on a command line
@@ -2370,6 +2542,41 @@ check(
     cmdbarSource.includes("fullCommand === null ? null : h('pre', { className: 'dsc-out dsc-outCmd' }, fullCommand)") &&
     // Outside prose (doc lines start with ` * `), the free identifier is gone.
     /[^\w.]multiLine\b/.test(cmdbarSource.replace(/^[ \t]*\*.*$/gm, '')) === false,
+)
+// alpha.15: THE WHOLE COMMAND ON HOVER. Through alpha.14 the head's native title
+// showed the agent's DESCRIPTION when the call carried one - so pointing at a
+// command line answered a question nobody asked, and the command itself was
+// readable only by expanding the row. The line now wears the shipped HoverCard,
+// carrying the command in full. Driven in all three cases, because two of them
+// exist to keep a crash out of a ROOT-SCOPED slot: a card that answered
+// `h(undefined, ...)` on an engine without the primitive would not cost one row,
+// it would ABDICATE the whole dock for the life of the page.
+const headAnchor = h('div', { className: 'dsc-cmdHead' })
+const carded = commandCard({ command: 'npm run a\nnpm run b' }, headAnchor, null)
+check('activity: a command line is wrapped in the hover card', typeof carded.type === 'function' && carded.type !== headAnchor.type)
+check('activity: the hover card carries the WHOLE command', carded.props.content.props.children, 'npm run a\nnpm run b')
+check('activity: the hover card is the app\u2019s preview variant', carded.props.variant, 'preview')
+check('activity: the hover card takes its width from the log box', 'widthAnchorRef' in carded.props)
+check('activity: a row with no command keeps its bare anchor', commandCard({ command: '' }, headAnchor, null) === headAnchor)
+check('activity: no entry at all keeps its bare anchor', commandCard(null, headAnchor, null) === headAnchor)
+check(
+  'activity: an engine with no hover card still draws the line',
+  cmdbarNoCard.exports.__internals.commandCard({ command: 'npm test' }, headAnchor, null) === headAnchor,
+)
+// The command is shown WRAPPED and SCROLLABLE inside the card's 420px cap, and
+// the card itself is the shipped surface - so the package styles only its own
+// content box, never the card.
+check(
+  'activity: the hover card content wraps and scrolls',
+  cmdbarCss.includes('.dsc-hoverCmd{flex:auto;min-height:0;margin:0;') &&
+    cmdbarCss.includes('overflow:auto;white-space:pre-wrap;word-break:break-word;'),
+)
+check(
+  'activity: the row hangs the hover card on its head',
+  cmdbarSource.includes('commandCard(entry, head, bodyRef)') &&
+    cmdbarSource.includes('const head = h(') &&
+    // The description is NOT the hover text any more: it was the wrong answer.
+    cmdbarSource.includes('entry.description === \'\' ? entry.command : entry.description') === false,
 )
 // ... and the SECOND free identifier of that release, found by auditing the
 // bundle for names it references but never declares. The row's two actions called
@@ -5858,6 +6065,84 @@ check('the raw measurement table is not furniture', canvasCss.includes('.dsc-met
 check('the prose gesture helper is gone', canvasSource.includes('Drag a layer to move it, or a handle'), false)
 check('the style card keeps one rule per heading', canvasSource.includes('(currentStyle.do || []).slice(0, 1)') && canvasSource.includes('(currentStyle.gates || []).slice(0, 1)'), true)
 check('the canvas tool list carries canvas_style', canvasInternals.TOOL_NAMES.includes('canvas_style'), true)
+
+// --- the vendored Excalidraw surface (alpha.10)
+//
+// TWO things are pinned here and neither is about the artifact's bytes (that is
+// `check-canvas-excalidraw.mjs`, which serves the committed bundle to a real
+// browser): the bridge that turns a laid-out DESIGN into an Excalidraw scene, and
+// the wiring that makes Excalidraw the tab's surface. Every branch of the bridge
+// is a decision worth pinning, because it is what a person sees when the tab
+// opens: a shape becomes the nearest thing Excalidraw has, text keeps the string
+// and the size the design measured, and the kinds with no counterpart are SKIPPED
+// AND COUNTED rather than drawn as a rectangle pretending to be art.
+check('the Excalidraw surface is the tab\u2019s default', canvasSource.includes("const [surface, setSurface] = useState('excalidraw')"))
+// NO BUTTONS IN THE TOP BAR, by not drawing the bar at all in this mode: the editor
+// owns the pane, and the pack's own bar exists only while the design surface is up.
+check('...and the pack\u2019s own bar is NOT rendered in that mode', canvasSource.includes("surface === 'design' ? toolbar : null") && canvasSource.includes("'data-canvas-surface': surface"))
+check('...so the way back to the design surface is a KEY, not a button', canvasSource.includes("event.key !== 'd' && event.key !== 'D'") && canvasSource.includes('onEscapeToDesign'))
+check('...and the note strip is the 30px one', canvasCss.includes('.dsc-excalidrawNote{flex:none;box-sizing:border-box;min-height:30px'), true)
+check('...and the editor gets the WHOLE pane', canvasCss.includes('.dsc-excalidraw{position:absolute;inset:0;'), true)
+check('...and it is seeded from the design the tab selected', canvasSource.includes('design: selected,') && canvasSource.includes('examples: (state && state.examples) || []'))
+// THE LIBRARY IS PERSISTED BY THIS PACK, because Excalidraw persists nothing by
+// itself (its own hook takes an adapter the host supplies). Both halves are driven
+// here against a storage double - including a store that THROWS, which is what a
+// browser with storage blocked does instead of answering null.
+const canvasLibraryStore = { map: {}, getItem(key) { return Object.prototype.hasOwnProperty.call(this.map, key) ? this.map[key] : null }, setItem(key, value) { this.map[key] = String(value) } }
+check('an empty store is an empty library', canvasInternals.readStoredLibrary(canvasLibraryStore).length, 0)
+check(
+  'a library round-trips through storage',
+  canvasInternals.writeStoredLibrary(canvasLibraryStore, [{ id: 'dsh-canvas/x', elements: [] }]) === true && canvasInternals.readStoredLibrary(canvasLibraryStore).length === 1,
+)
+check('...under the pack\u2019s own key', canvasLibraryStore.map[canvasInternals.LIBRARY_STORAGE_KEY] !== undefined, true)
+check('corrupt storage is an empty library, not a crash', canvasInternals.readStoredLibrary({ getItem: () => '{ not json' }).length, 0)
+const throwingStore = { getItem() { throw new Error('blocked') }, setItem() { throw new Error('blocked') } }
+check('a BLOCKED store is survivable in both directions', canvasInternals.readStoredLibrary(throwingStore).length === 0 && canvasInternals.writeStoredLibrary(throwingStore, [{ id: 'x' }]) === false)
+check('no storage at all is survivable too', canvasInternals.readStoredLibrary(null).length === 0 && canvasInternals.writeStoredLibrary(null, [{ id: 'x' }]) === false)
+check(
+  'the surface hands the stored library in and saves what comes back',
+  canvasSource.includes('initialData: { libraryItems: storedLibrary }') && canvasSource.includes('onLibraryChange: (items) =>') && canvasSource.includes('writeStoredLibrary(localStorageNow(), items)'),
+)
+check(
+  'the house examples are merged into that library, once, under stable ids',
+  canvasSource.includes("const LIBRARY_ID_PREFIX = 'dsh-canvas/'") &&
+    canvasSource.includes('id: LIBRARY_ID_PREFIX + entry.id') &&
+    canvasSource.includes('updateLibrary({ libraryItems: items, merge: true, openLibraryMenu: false })'),
+)
+const sceneSkeletonsFor = canvasInternals.sceneSkeletonsFor
+const bridged = sceneSkeletonsFor({
+  boxes: [
+    { path: 'a', kind: 'shape', shape: 'rect', box: { x: 10.4, y: 20.6, w: 100, h: 50 } },
+    { path: 'b', kind: 'shape', shape: 'ellipse', box: { x: 0, y: 0, w: 40, h: 40 } },
+    { path: 'c', kind: 'shape', shape: 'path', box: { x: 5, y: 5, w: 20, h: 20 } },
+    { path: 'd', kind: 'text', box: { x: 1, y: 2, w: 30, h: 12 }, text: 'Ship plugins', font: { size: 21.6 } },
+    { path: 'e', kind: 'frame', box: { x: 0, y: 0, w: 1280, h: 640 } },
+    { path: 'f', kind: 'image', box: { x: 0, y: 0, w: 10, h: 10 } },
+    { path: 'g', kind: 'art', box: { x: 0, y: 0, w: 10, h: 10 } },
+    { path: 'h', kind: 'shape', shape: 'rect', box: { x: 0, y: 0, w: 0, h: 10 } },
+  ],
+})
+check('the bridge maps a design box to the nearest Excalidraw shape', bridged.skeletons.length, 4)
+check('...in DESIGN pixels, rounded', JSON.stringify(bridged.skeletons[0]), JSON.stringify({ x: 10, y: 21, width: 100, height: 50, type: 'rectangle' }))
+check('...an ellipse stays an ellipse', bridged.skeletons[1].type, 'ellipse')
+check('...a path becomes a rectangle, which the note counts', bridged.skeletons[2].type, 'rectangle')
+check(
+  '...text keeps the string and the size the design measured',
+  JSON.stringify(bridged.skeletons[3]),
+  JSON.stringify({ x: 1, y: 2, width: 30, height: 12, type: 'text', text: 'Ship plugins', fontSize: 22 }),
+)
+// The zero-width box produced no skeleton either (four arcs in, four out), and the
+// count is the four kinds this editor has no shape for: the path approximation,
+// plus the frame, the image and the art node.
+check('...a zero-width box is dropped, not drawn', bridged.skeletons.length, 4)
+check('...and every kind without a counterpart is counted', bridged.skipped, 4)
+// The loader is a CLASSIC script and the design is re-seeded ONCE PER REVISION,
+// which is what keeps a person's own drawing on screen instead of being stomped
+// by a re-render.
+check(
+  'the surface re-seeds only when the design\u2019s revision moves',
+  canvasSource.includes("const key = String(design.id ?? '') + '@' + String(design.revision ?? 0)") && canvasSource.includes('if (syncedRef.current === key) return undefined'),
+)
 // Unload the row: the renderer's own effect returned a stopper, which is what the
 // shell calls when the plugin goes away (and what lets this process exit).
 for (const dispose of canvasDisposers) dispose()
