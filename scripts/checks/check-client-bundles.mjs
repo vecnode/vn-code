@@ -1018,6 +1018,7 @@ const themesCopy = {
   'theme.nord': 'Nord',
   'theme.monokai': 'Monokai',
   'theme.hacker': 'Hacker',
+  'theme.cyber': 'Cyber',
   'theme.current': 'Theme: {name}',
   'theme.unavailable': 'The theme service is unavailable',
   'download.title': 'Download session log',
@@ -1058,21 +1059,24 @@ check('themes adopts the written value', themesFacade.themeState.getSnapshot().p
 for (const listener of themeEvents) listener({ preference: 'system', active: { id: 'system', colorScheme: 'dark' }, revision: 9 })
 check('themes follows theme/change', themesFacade.themeState.getSnapshot().preference, 'system')
 
-// ------------------------------------- the theme extensions (Nord, Monokai, Hacker)
+// ------------------------------------- the theme extensions (Nord, Monokai, Hacker, Cyber)
 // alpha.12: this package REGISTERS its own palettes into the shipped registry
 // and the control's menu is built FROM that registry, so a theme this pack adds
 // becomes selectable by being registered - there is no second list to keep in
 // step. Nord rides the dark base palette and recolors the alias layer only;
-// Monokai (alpha.13) sits after it in THEME_EXTENSIONS, and Hacker (alpha.19)
-// after Monokai - that is the order the registration loop walks and therefore
-// the order the menu draws.
+// Monokai (alpha.13) sits after it in THEME_EXTENSIONS, Hacker (alpha.19) after
+// Monokai and Cyber (alpha.24) after Hacker - that is the order the registration
+// loop walks and therefore the order the menu draws. Hacker and Cyber are the
+// two high-contrast programmer palettes and must stay each their own: the check
+// below pins both pages, not just one.
 const nord = themeRegistrations.find((theme) => theme.id === 'nord')
 const monokai = themeRegistrations.find((theme) => theme.id === 'monokai')
 const hacker = themeRegistrations.find((theme) => theme.id === 'hacker')
+const cyber = themeRegistrations.find((theme) => theme.id === 'cyber')
 check(
-  'the registered themes are nord then monokai then hacker',
+  'the registered themes are nord, monokai, hacker then cyber',
   themeRegistrations.map((theme) => theme.id).join(','),
-  'nord,monokai,hacker',
+  'nord,monokai,hacker,cyber',
 )
 check('nord rides the dark base palette', nord && nord.colorScheme, 'dark')
 check(
@@ -1134,10 +1138,44 @@ check(
   hacker && monokai && hacker.tokens['--dsw-alias-bg-base'] !== monokai.tokens['--dsw-alias-bg-base'],
   true,
 )
+check('cyber rides the dark base palette', cyber && cyber.colorScheme, 'dark')
+check(
+  'cyber overrides token variables only',
+  cyber &&
+    Object.keys(cyber.tokens).every(
+      (name) => name.startsWith('--dsw-alias-') || name.startsWith('--dsw-specific-') || name.startsWith('--shiki-token-'),
+    ),
+  true,
+)
+check('cyber paints the blue-cast near-black page', cyber && cyber.tokens['--dsw-alias-bg-base'], '#04060d')
+check('cyber paints the near-white body', cyber && cyber.tokens['--dsw-alias-label-primary'], '#f0f6ff')
+check('cyber paints the neon magenta accent', cyber && cyber.tokens['--dsw-alias-brand-primary'], '#ff2e88')
+check('cyber links take the cyan', cyber && cyber.tokens['--dsw-alias-link'], '#00e5ff')
+check(
+  'cyber keeps the sidebar on the page colour',
+  cyber && cyber.tokens['--dsw-specific-sidebar-fill'],
+  '#04060d',
+)
+check('cyber paints the magenta keywords', cyber && cyber.tokens['--shiki-token-keyword'], '#ff2e88')
+check('cyber paints the cyan functions', cyber && cyber.tokens['--shiki-token-function'], '#00e5ff')
+check('cyber brings its own copy', themeLocales.themes.en['theme.cyber'], 'Cyber')
+check('cyber copy is in both dictionaries', themeLocales.themes.zh['theme.cyber'], 'Cyber')
+// The two high-contrast programmer palettes must not converge: a different page
+// AND a different brand, so "like Hacker but not Hacker" is a real difference
+// rather than a claim in a comment.
+check(
+  'cyber is its own palette, not a Hacker copy',
+  cyber &&
+    hacker &&
+    cyber.tokens['--dsw-alias-bg-base'] !== hacker.tokens['--dsw-alias-bg-base'] &&
+    cyber.tokens['--dsw-alias-brand-primary'] !== hacker.tokens['--dsw-alias-brand-primary'],
+  true,
+)
 check(
   'the registered themes cover the same token names',
   JSON.stringify(Object.keys(monokai.tokens).sort()) === JSON.stringify(Object.keys(nord.tokens).sort()) &&
-    JSON.stringify(Object.keys(hacker.tokens).sort()) === JSON.stringify(Object.keys(nord.tokens).sort()),
+    JSON.stringify(Object.keys(hacker.tokens).sort()) === JSON.stringify(Object.keys(nord.tokens).sort()) &&
+    JSON.stringify(Object.keys(cyber.tokens).sort()) === JSON.stringify(Object.keys(nord.tokens).sort()),
   true,
 )
 // The button wears ONE static appearance mark: it used to paint the active
@@ -1156,7 +1194,44 @@ check(
   'the control reads the third registered theme',
   themesFacade.themeState.getSnapshot().themes.some((theme) => theme.id === 'hacker'),
 )
+check(
+  'the control reads the fourth registered theme',
+  themesFacade.themeState.getSnapshot().themes.some((theme) => theme.id === 'cyber'),
+)
 check('themes button wears the static mark', nordMarkup.includes('M8 2.4A5.6 5.6 0 0 1 8 13.6Z'))
+// The menu's entries reach a render as elements, so a glyph is only CREATED,
+// never drawn - a theme whose icon function threw would pass every check above
+// and break the menu in the browser. The stub Menu keeps the props of the last
+// render, so each registered theme's entry is rendered here for real: an svg
+// carrying the mark's own geometry, not an empty box. A stand-in state is passed
+// because the SERVER snapshot (which a static render uses) carries the shipped
+// pair only - the registry is browser-side - so the extension entries would not
+// otherwise be in the list at all.
+{
+  const menuSnapshot = { preference: 'cyber', active: cyber, themes: themeSnapshot.themes, revision: 12 }
+  const menuState = {
+    subscribe: () => () => {},
+    getSnapshot: () => menuSnapshot,
+    getServerSnapshot: () => menuSnapshot,
+    available: () => true,
+    setTheme: () => {},
+  }
+  renderToStaticMarkup(h(ThemesAction, { t: themesT, themeState: menuState }))
+  const entries = lastMenuProps && Array.isArray(lastMenuProps.items) ? lastMenuProps.items : []
+  const drawn = (id, marker) => {
+    const item = entries.find((entry) => entry.id === id)
+    return item === undefined ? false : renderToStaticMarkup(item.icon).includes(marker)
+  }
+  check(
+    'every registered theme has a menu entry',
+    entries.filter((entry) => ['nord', 'monokai', 'hacker', 'cyber'].includes(entry.id)).length,
+    4,
+  )
+  check('Nord draws the snowflake', drawn('nord', 'M8 2.6v10.8'), true)
+  check('Monokai draws the braces', drawn('monokai', 'M6.5 2.5c-1.5'), true)
+  check('Hacker draws the prompt', drawn('hacker', 'M3.2 4.6 6.2 8l-3 3.4'), true)
+  check('Cyber draws the chip', drawn('cyber', 'M6.4 2.4v2'), true)
+}
 // The dictionaries really carry the download copy (the renders below use the
 // registered English dictionary, so this is what the app would show).
 check('download copy is registered', themeLocales.themes.en['download.title'], 'Download session log')
@@ -5650,10 +5725,11 @@ if (coreThemeBundle === null) {
   await new Promise((resolve) => setTimeout(resolve, 20))
 
   check(
-    'the pack registered all three extension themes into the real registry',
-    realThemeService.getTheme().themes.filter((theme) => theme.id === 'nord' || theme.id === 'monokai' || theme.id === 'hacker')
-      .length,
-    3,
+    'the pack registered all four extension themes into the real registry',
+    realThemeService.getTheme().themes.filter(
+      (theme) => theme.id === 'nord' || theme.id === 'monokai' || theme.id === 'hacker' || theme.id === 'cyber',
+    ).length,
+    4,
   )
   const realSeat = sharedSeats['conversation.session.header.utilities#dsh-themes']
   check('the Themes seat took the header', realSeat !== undefined, true)

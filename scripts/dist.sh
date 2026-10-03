@@ -633,7 +633,7 @@ chmod 755 "$start_here"
   printf '%s\n' '  - PDF .................. read, search and SCAN documents (OCR), with a'
   printf '%s\n' '                           reader tab carrying thumbnails and bookmarks'
   printf '%s\n' '  - Terminal ............. a real shell in a bottom dock'
-  printf '%s\n' '  - Themes / zoom / shot . header controls, incl. Nord, Monokai, Hacker'
+  printf '%s\n' '  - Themes / zoom / shot . header controls, incl. Nord, Monokai, Hacker, Cyber'
   printf '\n'
   printf '%s\n' 'REQUIREMENTS'
   printf '%s\n' '  - Node.js 22 or newer on PATH .......... https://nodejs.org'

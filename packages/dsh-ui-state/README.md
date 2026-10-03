@@ -11,7 +11,7 @@ The `ui-state` row declares its own `.volatile()` `Config`. The Host projects ev
 | Field | Default | Owner |
 |---|---|---|
 | `pageZoom` | `100` | [`dsh-themes`](../dsh-themes) — the header's Page-zoom control |
-| `theme` | `''` | [`dsh-themes`](../dsh-themes) — an **extension** theme id (Nord / Monokai / Hacker) |
+| `theme` | `''` | [`dsh-themes`](../dsh-themes) — an **extension** theme id (Nord / Monokai / Hacker / Cyber) |
 | `dockHeight` | `280` | [`dsh-cmdbar`](../dsh-cmdbar) — the bottom dock |
 | `sidebarWidth` | `-1` | this package — the left column |
 | `rightbarWidth` | `-1` | this package — the right bar |

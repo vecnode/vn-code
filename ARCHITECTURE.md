@@ -53,7 +53,7 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
 | `dsh-pdf` | `pdf` | PDF reader tab + `pdf_info` / `pdf_read` / `pdf_find` / `pdf_render` / `pdf_scan` over vendored pdf.js |
 | `dsh-canvas` | `canvas` | Canvas tab: a JSON design language, a browser painter, PNG export, plus the Excalidraw surface |
 | `dsh-browser` | `browser` | web surface: the host fetches and renders a page in a disposable sandboxed browser (**currently disabled by the master**) |
-| `dsh-themes` | `themes` | extra palettes (Nord, Monokai, Hacker), header controls, branding, account-menu trimming |
+| `dsh-themes` | `themes` | extra palettes (Nord, Monokai, Hacker, Cyber), header controls, branding, account-menu trimming |
 | `dsh-cmdbar` | `cmdbar` | the command bar: a read-only transcript of the agent's own commands |
 | `dsh-modal` | `modal` | the shared dialog surface (`modals` service) |
 | `dsh-skills` | `skills` | the Skills browser: list, read and edit the skills the harness loads |

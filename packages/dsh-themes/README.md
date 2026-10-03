@@ -1,4 +1,4 @@
-# dsh-themes (alpha.23)
+# dsh-themes (alpha.24)
 
 **The vncode Web GUI's conversation-header package: four controls on that header, plus the pack's appearance overrides.**
 
@@ -17,8 +17,10 @@ Open In… (`dsh-open-in-app`) is `-10` and dsh-cmdbar's button `30`; no shipped
 ## What it adds
 
 - **Themes** (`-20`) — a menu of Light / Dark / System plus every theme in the shipped registry. The package
-  registers **Nord**, **Monokai** and **Hacker** through `ctx.theme.register`, as alias-token overrides on the
-  dark base. `THEME_EXTENSIONS` order is menu order: Light, Dark, Nord, Monokai, Hacker, System. The preference and its persistence stay
+  registers **Nord**, **Monokai**, **Hacker** and **Cyber** through `ctx.theme.register`, as alias-token overrides on the
+  dark base. Hacker is the phosphor CRT (green-cast black, green text, amber and cyan accents); Cyber is the second
+  high-contrast programmer palette and deliberately not its twin (blue-cast black, near-white body, magenta brand,
+  cyan link). `THEME_EXTENSIONS` order is menu order: Light, Dark, Nord, Monokai, Hacker, Cyber, System. The preference and its persistence stay
   ui-theme's: this control reads the published snapshot and calls `setTheme(id)`; an extension id, which the durable schema cannot
   hold, lives in `ui-state`'s volatile config and is cleared by a built-in pick.
 - **The Session-log download seat** (`0`) — the shipped three-dot *More actions* menu replaced by one download

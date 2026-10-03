@@ -11,8 +11,8 @@
  *    this one at -20). Pressing it opens a menu holding the appearances the
  *    product already offers - Light, Dark, System, exactly the choice Settings >
  *    General > Appearance presents - plus every theme REGISTERED into the shipped
- *    registry (this pack's own **Nord**, **Monokai** and **Hacker**,
- *    alpha.12/alpha.13/alpha.19). The
+ *    registry (this pack's own **Nord**, **Monokai**, **Hacker** and **Cyber**,
+ *    alpha.12/alpha.13/alpha.19/alpha.24). The
  *    button wears ONE static "appearance" mark (alpha.12) rather than the active
  *    preference's sun/moon: a
  *    registered palette has no shipped glyph to wear, and the menu - and the
@@ -232,7 +232,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.23'
+    const PLUGIN_VERSION = '0.1.0-alpha.24'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -419,6 +419,7 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
       'theme.nord': 'Nord',
       'theme.monokai': 'Monokai',
       'theme.hacker': 'Hacker',
+      'theme.cyber': 'Cyber',
       'theme.current': '主题：{name}',
       'theme.menu': '选择应用主题',
       'theme.unavailable': '主题服务不可用',
@@ -453,6 +454,7 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
       'theme.nord': 'Nord',
       'theme.monokai': 'Monokai',
       'theme.hacker': 'Hacker',
+      'theme.cyber': 'Cyber',
       'theme.current': 'Theme: {name}',
       'theme.menu': 'Choose the app theme',
       'theme.unavailable': 'The theme service is unavailable',
@@ -650,6 +652,41 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         },
         h('path', { d: 'M3.2 4.6 6.2 8l-3 3.4' }),
         h('path', { d: 'M8.4 11.4h4.4' }),
+      )
+    }
+
+    /**
+     * Cyber's own glyph in the menu: a chip - a die with four pins a side, the
+     * mark a machine is drawn with. Hacker's `>_` is the terminal a PALETTE is
+     * named for; this one has to say "circuit" and not repeat it. Same 16px box
+     * and the same 1.2px weight as every other glyph in that menu.
+     */
+    function IconCircuitOutline16(props) {
+      const size = props && typeof props.size === 'number' ? props.size : 16
+      return h(
+        'svg',
+        {
+          width: size,
+          height: size,
+          viewBox: '0 0 16 16',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.2,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': 'true',
+          focusable: 'false',
+        },
+        h('rect', { x: '4.4', y: '4.4', width: '7.2', height: '7.2', rx: '1.2' }),
+        h('rect', { x: '6.9', y: '6.9', width: '2.2', height: '2.2', rx: '0.4' }),
+        h('path', { d: 'M6.4 2.4v2' }),
+        h('path', { d: 'M9.6 2.4v2' }),
+        h('path', { d: 'M6.4 11.6v2' }),
+        h('path', { d: 'M9.6 11.6v2' }),
+        h('path', { d: 'M2.4 6.4h2' }),
+        h('path', { d: 'M2.4 9.6h2' }),
+        h('path', { d: 'M11.6 6.4h2' }),
+        h('path', { d: 'M11.6 9.6h2' }),
       )
     }
 
@@ -948,8 +985,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
      * code blocks, scrollbars, tooltips and the four state colours, and the
      * aliases NOT named here keep their shipped dark value (the scheme-neutral
      * scrims, elevation strokes and shadow scale). The 93 names are Monokai's
-     * own list, unchanged - the tracked check pins that three registered themes
-     * cover the SAME token names, so one theme cannot quietly become a subset.
+     * own list, unchanged - the tracked check pins that every registered theme
+     * covers the SAME token names, so one theme cannot quietly become a subset.
      *
      * The four surfaces are one near-black and its green-cast steps: the page and
      * the sidebar share `#0a0e0a`, the raised step is `#101710`, the overlay (a
@@ -1091,6 +1128,170 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     })
 
     /**
+     * CYBER (alpha.24) on the DARK base palette: the neon city - a near-black
+     * page with a BLUE cast, a near-white body and the two neon signals a
+     * cyberpunk interface is drawn with, magenta and cyan. It is the second
+     * high-contrast programmer palette beside Hacker and is deliberately NOT its
+     * palette: Hacker is a phosphor CRT (a green-cast black, green text, amber
+     * and cyan accents), Cyber is a night street (blue-cast black, near-white
+     * text, magenta brand and cyan link), so the two are told apart by cast,
+     * accent hue and the syntax roles the accents take.
+     *
+     * Same rules as Nord, Monokai and Hacker above: every name is an alias the
+     * app already asks for, so the palette reaches the bars, panes, menus,
+     * buttons, code blocks, scrollbars, tooltips and the four state colours, and
+     * the aliases NOT named here keep their shipped dark value (the
+     * scheme-neutral scrims, elevation strokes and shadow scale). The 93 names
+     * are Monokai's own list, unchanged - the tracked check pins that every
+     * registered theme covers the SAME token names, so one theme cannot quietly
+     * become a subset.
+     *
+     * CONTRAST FIRST, because this is the palette somebody reads code on: the
+     * body is `#f0f6ff` on a `#04060d` page (about 19:1), the secondary
+     * `#d3d8e0` about 14:1, the tertiary `#9da8c3` about 8.5:1, and only
+     * `label-dimmed` - the scrolled-past tier - drops to the slate `#4a5a86`. A
+     * syntax colour is never the only signal either: the roles differ in
+     * lightness as well as hue (lightness here is WCAG relative luminance).
+     *
+     * The four surfaces are one near-black and its blue-cast steps: the page and
+     * the sidebar share `#04060d`, the raised step is `#0a0f1c`, the overlay (a
+     * menu, a bubble, a code block) is `#121a2e` and `#1b2745` is the highest -
+     * the selection, the toolbar and a ghost-active fill.
+     *
+     * Where the palette has no second step for a hover or a pressed fill, the
+     * step is DERIVED from the palette's own colour rather than invented, by the
+     * same arithmetic Monokai and Hacker document: the magenta lifts a fifth
+     * toward white for its hover (`#ff58a0`) and darkens 28% when dimmed
+     * (`#b82162`), the cyan lifts the same fifth (`#33eaff`), the two text tiers
+     * between the body and the dim slate are the body darkened 12% (`#d3d8e0`)
+     * and the slate lifted halfway back to the body (`#9da8c3`).
+     */
+    const CYBER_TOKENS = Object.freeze({
+      // The surfaces. The page is a blue-cast near-black, and the ladder above
+      // it is the same black raised - so a menu, a bubble and a selected row
+      // read as steps of one dark, the way a night city does.
+      '--dsw-alias-bg-base': '#04060d',
+      '--dsw-specific-sidebar-fill': '#04060d',
+      '--dsw-alias-bg-layer-1': '#0a0f1c',
+      '--dsw-alias-bg-layer-2': '#0a0f1c',
+      '--dsw-alias-bg-layer-3': '#121a2e',
+      '--dsw-alias-bg-overlay': '#121a2e',
+      '--dsw-alias-bg-module-platform': '#0a0f1c',
+      '--dsw-alias-bg-multi-select': '#121a2e',
+      '--dsw-alias-bg-skeleton': '#f0f6ff14',
+      '--dsw-specific-menu': '#121a2e',
+      '--dsw-specific-selector': '#121a2e',
+      '--dsw-specific-bubble': '#0a0f1c',
+      '--dsw-specific-bubble-highlight': '#121a2e',
+      '--dsw-specific-input-major': '#0a0f1c',
+      '--dsw-specific-login-input': '#04060d',
+      '--dsw-specific-sidebar-nav-item-hover': '#0a0f1c',
+      '--dsw-specific-sidebar-nav-item-active': '#121a2e',
+      '--dsw-specific-sidebar-nav-item-active-accent': '#1b2745',
+      '--dsw-specific-tip': '#0a0f1c',
+      '--dsw-alias-tooltip-bg': '#121a2e',
+      '--dsw-alias-toast-bg': '#121a2e',
+      // The text ladder: the near-white `#f0f6ff` is the body, the two quieter
+      // tiers its 12% darker step and the slate lifted halfway back to it, and
+      // the quietest is the slate itself - the only tier under 4.5:1.
+      '--dsw-alias-label-primary': '#f0f6ff',
+      '--dsw-alias-label-primary-bluish': '#f0f6ff',
+      '--dsw-alias-label-primary-dimmed': '#d3d8e0',
+      '--dsw-alias-label-primary-inverted': '#04060d',
+      '--dsw-alias-label-primary-foreground': '#04060d',
+      '--dsw-alias-label-secondary': '#d3d8e0',
+      '--dsw-alias-label-tertiary': '#9da8c3',
+      '--dsw-alias-label-caption': '#9da8c3',
+      '--dsw-alias-label-dimmed': '#4a5a86',
+      // The accent. The neon magenta is the brand (switches, focus rings, the
+      // primary button) and the near-black page keeps the fill legible; links
+      // take the cyan, which reads better than magenta for body copy.
+      '--dsw-alias-brand-primary': '#ff2e88',
+      '--dsw-alias-brand-primary-invert': '#04060d',
+      // The right bar's active-tab caret and the dock hint accent read this one,
+      // not `brand-primary` (ui-sidebar-right's own generated token name), so
+      // Cyber has to name it too or a DeepSeek blue would mark the active tab.
+      '--dsw-alias-brand-primary-new-colorprimary-new-color': '#ff2e88',
+      '--dsw-alias-brand-text': '#ff2e88',
+      '--dsw-alias-link': '#00e5ff',
+      '--dsw-alias-button-primary-fill': '#ff2e88',
+      '--dsw-alias-button-primary-hover': '#ff58a0',
+      '--dsw-alias-button-primary-dimmed': '#b82162',
+      '--dsw-alias-button-info-fill': '#00e5ff',
+      '--dsw-alias-button-info-hover': '#33eaff',
+      '--dsw-alias-button-contrast-fill': '#f0f6ff',
+      '--dsw-alias-button-elevated-fill': '#1b2745',
+      // The floating tool-bar chip (the code block's own toolbar) is a
+      // translucent grey by default: the same weight, tinted with the selection.
+      '--dsw-alias-button-tool-bar-fill': '#1b274580',
+      '--dsw-alias-button-tool-bar-hover': '#1b274599',
+      '--dsw-alias-button-floating-fill': '#121a2e',
+      '--dsw-alias-button-floating-hover': '#1b2745',
+      '--dsw-alias-button-ghost-active-border': '#00e5ff',
+      '--dsw-alias-button-ghost-active-fill': '#1b2745',
+      '--dsw-alias-button-ghost-active-hover': '#121a2e',
+      // The interaction washes and the card borders: the shipped palette uses
+      // white alphas on dark, so these are the same weights tinted with the
+      // near-white body instead.
+      '--dsw-alias-interactive-bg-hover': '#f0f6ff1a',
+      '--dsw-alias-interactive-bg-hover-solid': '#1b2745',
+      '--dsw-alias-interactive-bg-hover-accent': '#ff2e8840',
+      '--dsw-alias-interactive-bg-hover-danger': '#ff4d6d2e',
+      '--dsw-alias-interactive-bg-active': '#f0f6ff26',
+      '--dsw-alias-border-inverted': '#f0f6ff0f',
+      '--dsw-alias-border-inverted2': '#f0f6ff14',
+      '--dsw-alias-border-l1': '#f0f6ff0f',
+      '--dsw-alias-border-l2': '#f0f6ff21',
+      '--dsw-alias-border-l2-darkmode-thin': '#f0f6ff0f',
+      '--dsw-alias-border-l3': '#f0f6ff2e',
+      '--dsw-alias-border-l4': '#f0f6ff38',
+      // The four states: a neon red for an error, a green for success, the amber
+      // pair for a warning and the cyan for business - the magenta belongs to
+      // the brand, so a failure does not wear it.
+      '--dsw-alias-state-error-primary': '#ff4d6d',
+      '--dsw-alias-state-error-secondary': '#ff4d6d',
+      '--dsw-alias-state-success-primary': '#3ddc97',
+      '--dsw-alias-state-success-secondary': '#3ddc97',
+      '--dsw-alias-state-success-tertiary': '#3ddc972e',
+      '--dsw-alias-state-warn-primary': '#ffd54d',
+      '--dsw-alias-state-warn-secondary': '#ff9f1c',
+      '--dsw-alias-state-warn-label': '#ffd54d',
+      '--dsw-alias-state-warn-tertiary': '#ffd54d2e',
+      '--dsw-alias-state-business-primary': '#00e5ff',
+      '--dsw-alias-state-business-tertiary': '#b388ff',
+      // Code: a block sits one step ABOVE the page, its banner and the inline
+      // chip one more, so a fence is visible without a border.
+      '--dsw-alias-markdown-code-block': '#121a2e',
+      '--dsw-alias-markdown-code-block-banner': '#1b2745',
+      '--dsw-alias-markdown-code-segment-selected': '#1b2745',
+      '--dsw-alias-markdown-code-segment-unselected': '#121a2e',
+      '--dsw-alias-markdown-inline-code': '#1b2745',
+      '--dsw-alias-markdown-placeholder': '#121a2e',
+      '--dsw-alias-markdown-tag': '#1b2745',
+      '--dsw-alias-markdown-citation': '#121a2e',
+      // Syntax highlighting: the neon roles of a night city - keywords the
+      // brand magenta, functions the cyan, constants the violet, strings the
+      // amber, parameters the pale cyan, punctuation the near-white body, and
+      // comments a slate LIFTED above `label-dimmed` (about 5:1) rather than
+      // that dim tier: a comment is code somebody still has to read.
+      '--shiki-token-keyword': '#ff2e88',
+      '--shiki-token-constant': '#b388ff',
+      '--shiki-token-string': '#ffd54d',
+      '--shiki-token-string-expression': '#ffd54d',
+      '--shiki-token-comment': '#6b7ea8',
+      '--shiki-token-parameter': '#7cf0ff',
+      '--shiki-token-function': '#00e5ff',
+      '--shiki-token-punctuation': '#f0f6ff',
+      '--shiki-token-link': '#00e5ff',
+      // Scrollbars: the shipped pair is bound to the l1/l2 surface tokens, so
+      // the thumb is a Cyber surface step and its hover the magenta brand.
+      '--dsw-alias-scrollbar-bg-l1': '#121a2e',
+      '--dsw-alias-scrollbar-bg-l2': '#1b2745',
+      '--dsw-alias-scrollbar-hover-l1': '#1b2745',
+      '--dsw-alias-scrollbar-hover-l2': '#ff2e88',
+    })
+
+    /**
      * The themes this package registers, in menu order. Adding one is one entry
      * here plus its copy (`theme.<id>`, in both dictionaries); the registration
      * below is what makes it selectable, and the menu picks it up from the
@@ -1117,6 +1318,13 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         colorScheme: 'dark',
         tokens: HACKER_TOKENS,
         Icon: IconTerminalOutline16,
+      }),
+      Object.freeze({
+        id: 'cyber',
+        label: 'theme.cyber',
+        colorScheme: 'dark',
+        tokens: CYBER_TOKENS,
+        Icon: IconCircuitOutline16,
       }),
     ])
 
@@ -1938,7 +2146,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
      *
      * The shipped three keep their own words and icons; an extension theme
      * carries its own (Nord: `theme.nord` and the snowflake; Monokai:
-     * `theme.monokai` and the braces; Hacker: `theme.hacker` and the prompt);
+     * `theme.monokai` and the braces; Hacker: `theme.hacker` and the prompt;
+     * Cyber: `theme.cyber` and the chip);
      * and a theme some OTHER plugin registered -
      * a valid case, the registry is shared - is named by its id and wears the
      * generic appearance mark rather than a glyph this package would be

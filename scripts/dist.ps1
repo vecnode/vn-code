@@ -730,7 +730,7 @@ function New-DistReadme {
         '  - PDF .................. read, search and SCAN documents (OCR), with a',
         '                           reader tab carrying thumbnails and bookmarks',
         '  - Terminal ............. a real shell in a bottom dock',
-        '  - Themes / zoom / shot . header controls, incl. Nord, Monokai, Hacker',
+        '  - Themes / zoom / shot . header controls, incl. Nord, Monokai, Hacker, Cyber',
         '',
         'REQUIREMENTS',
         '  - Node.js 22 or newer on PATH .......... https://nodejs.org',

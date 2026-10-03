@@ -1,7 +1,7 @@
 {
   "name": "dsh-themes",
-  "version": "0.1.0-alpha.23",
-  "description": "Themes and header dress: the conversation header's own controls (page zoom, Screenshot, Themes, session-log download), the Nord/Monokai/Hacker palettes, and the pack's appearance overrides - Markdown paper, the branding band, the account menu's Feedback row removed, and the right bar's resize seam.",
+  "version": "0.1.0-alpha.24",
+  "description": "Themes and header dress: the conversation header's own controls (page zoom, Screenshot, Themes, session-log download), the Nord/Monokai/Hacker/Cyber palettes, and the pack's appearance overrides - Markdown paper, the branding band, the account menu's Feedback row removed, and the right bar's resize seam.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
