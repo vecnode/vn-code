@@ -4218,6 +4218,13 @@ const audio = loadBundle('packages/dsh-audio/lib/client.js', {})
 const audioCssTag = audio.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-audio/audio.css').pop()
 const audioCss = audioCssTag ? audioCssTag.textContent : ''
 const audioSource = readFileSync(path.join(repo, 'packages/dsh-audio/lib/client.js'), 'utf8')
+// The version the console PRINTS is the package's own, read here rather than
+// written twice: the bundle's new PLUGIN_VERSION and a literal in this check
+// drifted apart once already (alpha.3 -> alpha.4 bumped the bundle and left this
+// failing), and a version assertion that has to be edited by hand on every bump
+// is one that gets edited wrong.
+const audioVersion = JSON.parse(readFileSync(path.join(repo, 'packages/dsh-audio/package.json'), 'utf8')).version
+check('the audio client version constant is the package version', audioSource.includes("PLUGIN_VERSION = '" + audioVersion + "'"))
 const A = audio.exports.__internals
 check('audio bundle id', audio.id, 'dsh-audio')
 check('audio inject', JSON.stringify(audio.exports.inject), '["slots","sidebarRightTabs","remote.workspaceFiles"]')
@@ -4998,7 +5005,7 @@ const consoleMarkup = renderToStaticMarkup(
     onClose: () => {},
   }),
 )
-check('the console draws its bar, its version and both columns', consoleMarkup.includes('data-audio-console="true"') && consoleMarkup.includes('v' + '0.1.0-alpha.3') && consoleMarkup.includes('data-audio-section="output"') && consoleMarkup.includes('data-audio-section="input"'))
+check('the console draws its bar, its version and both columns', consoleMarkup.includes('data-audio-console="true"') && consoleMarkup.includes('v' + audioVersion) && consoleMarkup.includes('data-audio-section="output"') && consoleMarkup.includes('data-audio-section="input"'))
 check('every device is a card, named as the browser named it', consoleMarkup.includes('Speakers (Realtek)') && consoleMarkup.includes('USB Microphone') && consoleMarkup.includes('data-audio-device="spk1"'))
 check('...a nameless device is a card too', consoleMarkup.includes('Output 2') && consoleMarkup.includes('data-audio-device="hdmi1"'))
 check('...and the default card says where it points', consoleMarkup.includes('system default \u2192 Speakers (Realtek)'))
