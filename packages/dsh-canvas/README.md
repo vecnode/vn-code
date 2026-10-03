@@ -1,4 +1,4 @@
-# dsh-canvas (alpha.11)
+# dsh-canvas (alpha.12)
 
 **The Canvas tab: a design page the agent drives, in the chat panel's own view ring
 to the right of Trajectory.**

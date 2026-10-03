@@ -1,4 +1,4 @@
-# dsh-cmdbar (alpha.16)
+# dsh-cmdbar (alpha.17)
 
 **A bottom dock for the vncode Web GUI: the commands this conversation's agent ran, in the app, under the conversation.**
 
@@ -17,8 +17,8 @@ reads; it runs nothing.
   on the head carries one `--dsc-accent` per status — green for exit 0, amber while running, red on a failure,
   a signal or an error. A row expands on click, `Enter` or `Space` (the head is a `role="button"`) and carries
   **Copy command** / **Copy output** through `primitives.writeClipboard`, guarded, with **Copied** only for an
-  accepted write. Pointing at a clipped head shows the **whole command** in the shipped `primitives.HoverCard`
-  (`variant: 'preview'`, a 420px height cap).
+  accepted write. Pointing at a clipped head shows the **whole command** in the browser's own tooltip (the line's
+  `title`), never the agent's description.
 - **One 25px header row**: the glyph and **Agent**, the running pulse, the `⚠` for an unreadable log and the
   failed badge; the counts as one faint line (the one shrinkable item, with an ellipsis); then the **All
   tools** / **Failures** chips (`primitives.Pill`), a **Follow ↓** chip while scrolled off the tail, and the

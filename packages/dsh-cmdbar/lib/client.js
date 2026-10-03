@@ -78,7 +78,7 @@ window.__ModuleLoader__.load({
      * root-scoped slot ABDICATES the whole dock when its render throws, and
      * `h(undefined, ...)` throws, so an engine without the export would cost the
      * panel rather than one chip - the same reason the copy buttons guard
-     * `writeClipboard` and the hover card guards `HoverCard`.
+     * `writeClipboard`.
      */
     const Pill = typeof primitives.Pill === 'function' ? primitives.Pill : null
 
@@ -123,9 +123,10 @@ window.__ModuleLoader__.load({
      * alpha.15 is the BAR: one header row instead of the two this panel used to
      * stack (both of which restated the counts), the app's own chip for each
      * control, a facts line that ellipsises instead of running over its
-     * neighbours, and the WHOLE command on hover (see `commandCard`).
+     * neighbours, and the whole command on hover - alpha.17 moved that last one
+     * from a styled card to the browser's own tooltip.
      */
-    const PLUGIN_VERSION = '0.1.0-alpha.16'
+    const PLUGIN_VERSION = '0.1.0-alpha.17'
     /** The header list this control joins (Open In... is -10). */
     const HEADER_SLOT = 'conversation.session.header.utilities'
     /** The root-scoped overlay list the layout package renders inside the frame. */
@@ -386,15 +387,14 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
 .dsc-cmd[data-expanded] .dsc-cmdMark{transform:rotate(90deg)}
 .dsc-cmdName{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:11px}
 .dsc-cmdLine{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary,#1f1f1f)}
-/* THE WHOLE COMMAND, on hover (alpha.15). The head clips its command to one
-   line, and the only way to read the rest was to expand the row - so the line a
-   reader naturally points at now answers with the command itself, wrapped and
-   scrollable, in the app's own HoverCard surface. The card is the SHIPPED
-   primitive (primitives.HoverCard, variant preview), portaled to the body, sized
-   from the log's own box through its widthAnchorRef, and it caps itself at 420px
-   - so this box only has to fill it and let the LONG case scroll instead of
-   growing past the screen. */
-.dsc-hoverCmd{flex:auto;min-height:0;margin:0;padding:10px 14px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,'Cascadia Code',Consolas,'SF Mono',Menlo,monospace;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary,#1f1f1f)}
+/* THE WHOLE COMMAND, in the row's own native tooltip (alpha.17). The head clips its
+   command to one line, and the only way to read the rest used to be to expand the
+   row. alpha.15 answered that with the shipped HoverCard; the reader who asked for
+   it then asked for the browser's own tooltip instead - plainer, selectable, and
+   free of a surface that has to be dismissed before a row can be expanded - so the
+   clipped line carries the title attribute with the WHOLE command and there is no card, no
+   hover state and no portal left in this package. The description still is not the
+   tooltip: it was the wrong answer in alpha.14 and it is not coming back. */
 .dsc-cmdCwd{flex:none;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#999);font-size:11px;direction:rtl;text-align:left}
 .dsc-cmdDur{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:10.5px;font-variant-numeric:tabular-nums}
 .dsc-pill{flex:none;padding:0 5px;border-radius:8px;font-size:10.5px;line-height:15px;white-space:nowrap;background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.16));color:var(--dsw-alias-label-secondary,#666)}
@@ -1549,48 +1549,29 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
     }
 
     /**
-     * The hover card a command LINE wears: the whole command, wrapped.
+     * The tooltip a command LINE wears: the whole command (alpha.17).
      *
-     * alpha.15. The head's own line is clipped to the command's FIRST line and
-     * ellipsised at whatever the panel's width allows, so before this the rest of
-     * a command was readable only by expanding the row - and the native `title`
-     * that used to sit there showed the agent's DESCRIPTION, not the command at
-     * all, which is not what a reader pointing at a command line is asking for.
+     * The head's own line is clipped to the command's FIRST line and ellipsised at
+     * whatever the panel's width allows, so the rest of a command is readable only
+     * by expanding the row - unless the line says what it is truncating. alpha.15
+     * put the whole command in the shipped HoverCard; the reader asked for the
+     * browser's own tooltip instead (plainer, selectable, nothing to dismiss), so
+     * the answer is the native `title` and this function is the ONE place that
+     * decides it: the whole command for a command row, and NOTHING for a row that
+     * has none (a non-command tool row, or an entry whose command is missing) -
+     * because a tooltip is a promise about what the line holds.
      *
-     * It is built on the SHIPPED card (`primitives.HoverCard`, `variant:
-     * 'preview'`), which is the same surface the transcript uses for previews: it
-     * waits for a real dwell before opening, portals itself to the body so the
-     * dock's own box cannot clip it, sizes itself from the log's box through
-     * `widthAnchorRef`, dismisses on a click (so expanding a row does not fight
-     * it), and lets the pointer rest on the card so a long command can be read and
-     * selected. The card caps its own height at 420px, and `.dsc-hoverCmd` fills
-     * that box and scrolls, so a 200-line command cannot push itself off screen.
-     *
-     * PURE - and it answers the ANCHOR UNCHANGED when there is no command to show
-     * (a non-command tool row) or when this engine has no `HoverCard` export. The
-     * guard is the same one the copy buttons carry and for the same reason: this
-     * row is rendered inside a ROOT-SCOPED slot, whose error boundary ABDICATES
-     * the whole dock on a crash - `h(undefined, ...)` here would not cost one row,
-     * it would take the panel away for the life of the page.
+     * The agent's DESCRIPTION is deliberately not the tooltip: through alpha.14 it
+     * was, and pointing at `npm run test:unit -- --reporter=dot` answered "run the
+     * unit tests" - a question nobody asked.
      *
      * @param entry - one folded command entry.
-     * @param head - the rendered command line, used as the card's anchor.
-     * @param widthAnchorRef - the log box the card takes its width from.
-     * @returns the anchor, wrapped in a card when there is a command to show.
+     * @returns the tooltip text, or null when there is no command to show.
      */
-    function commandCard(entry, head, widthAnchorRef) {
-      if (entry === null || typeof entry !== 'object') return head
-      if (typeof entry.command !== 'string' || entry.command === '') return head
-      if (typeof primitives.HoverCard !== 'function') return head
-      return h(
-        primitives.HoverCard,
-        {
-          anchor: head,
-          content: h('pre', { className: 'dsc-hoverCmd' }, entry.command),
-          variant: 'preview',
-          widthAnchorRef,
-        },
-      )
+    function commandTooltip(entry) {
+      if (entry === null || typeof entry !== 'object') return null
+      if (typeof entry.command !== 'string' || entry.command === '') return null
+      return entry.command
     }
 
     /**
@@ -1732,8 +1713,11 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
         // is open (see `commandBody`: a multi-line command is the only case with
         // anything left to show).
         const fullCommand = commandBody(entry, expanded)
-        // The line a reader points at. It CLIPS its command to one line, so the
-        // command itself is what the hover card carries - see `commandCard`.
+        // alpha.17: the line a reader points at CLIPS its command to one line, so
+        // it carries the whole command in its native tooltip - the browser's own,
+        // not a styled surface. See `commandTooltip` for why the description is not
+        // what goes here.
+        const tooltip = commandTooltip(entry)
         const head = h(
           'div',
           {
@@ -1755,7 +1739,7 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
             : h('span', { className: 'dsc-cmdName' }, entry.tool),
           entry.family === 'other'
             ? h('span', { className: 'dsc-cmdLine', title: entry.summary }, entry.summary === '' ? '(no summary)' : entry.summary)
-            : h('span', { className: 'dsc-cmdLine' }, entry.command.split('\n')[0]),
+            : h('span', { className: 'dsc-cmdLine', title: tooltip === null ? undefined : tooltip }, entry.command.split('\n')[0]),
           entry.workdir === '' ? null : h('span', { className: 'dsc-cmdCwd', title: entry.workdir }, entry.workdir),
           duration === '' ? null : h('span', { className: 'dsc-cmdDur' }, duration),
           h('span', { className: 'dsc-pill', 'data-tone': info.tone }, info.label),
@@ -1770,7 +1754,7 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
             'data-expanded': expanded ? '' : undefined,
             'data-dsh-cmdbar-cmd': entry.callId,
           },
-          commandCard(entry, head, bodyRef),
+          head,
           fullCommand === null ? null : h('pre', { className: 'dsc-out dsc-outCmd' }, fullCommand),
           shown.length > 0
             ? h('pre', { className: 'dsc-out' }, shown.join('\n'))
@@ -2333,12 +2317,12 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
       // single-line one and a collapsed row, because the crash it replaces was
       // invisible to every static render this check can make.
       commandBody,
-      // alpha.15: the hover card a command LINE wears. Pure, and driven by the
-      // tracked check, because the three cases that matter - a real command (the
-      // card, carrying the WHOLE command), a non-command row (no card) and an
-      // engine without the primitive (the bare anchor, never a crash) - are all
-      // decisions, and the crash it guards against is the abdicating one.
-      commandCard,
+      // alpha.17: the tooltip a command LINE wears. Pure, and driven by the
+      // tracked check, because the two cases that matter - a real command (the
+      // whole command as the native title) and a row with no command (no tooltip at
+      // all) - are both decisions, and the wrong answer is the description alpha.14
+      // used to show there.
+      commandTooltip,
       // alpha.11: the counts the Agent control and the dock's bar wear as WORDS.
       // It is the one place those numbers reach a reader, and the bug that release
       // fixed was visible there first ("0 commands, 1 failed, nothing run yet" in

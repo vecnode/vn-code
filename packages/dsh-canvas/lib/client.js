@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
     /** The version marker shown in the toolbar, so a fresh bundle is easy to spot. */
-    const PLUGIN_VERSION = '0.1.0-alpha.11'
+    const PLUGIN_VERSION = '0.1.0-alpha.12'
     /** The conversation view this package adds to the chat panel's ring. */
     const VIEW_ID = 'canvas'
     /** Keep in sync with lib/index.js. */
@@ -76,79 +76,79 @@ window.__ModuleLoader__.load({
    view draws the seam the shell would otherwise not: a hairline at the composer's
    own top edge, on the token the app's own column separators use. The clearance
    keeps the artboard's controls off the input box. */
-.dsc-root{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:13px/1.45 var(--dsw-font-family,inherit);--dsc-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)}
-.dsc-root:after{content:"";position:absolute;left:0;right:0;bottom:var(--dsh-composer-height,152px);height:1px;background:var(--dsw-alias-border-l3);pointer-events:none;z-index:2}
-.dsc-bar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l3);min-height:38px;flex-wrap:nowrap;overflow:hidden}
-.dsc-barGroup{display:flex;align-items:center;gap:4px;flex:none}
+.cnv-root{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:13px/1.45 var(--dsw-font-family,inherit);--cnv-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)}
+.cnv-root:after{content:"";position:absolute;left:0;right:0;bottom:var(--dsh-composer-height,152px);height:1px;background:var(--dsw-alias-border-l3);pointer-events:none;z-index:2}
+.cnv-bar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l3);min-height:38px;flex-wrap:nowrap;overflow:hidden}
+.cnv-barGroup{display:flex;align-items:center;gap:4px;flex:none}
 /* THE EXPORT MENU. A native <details> so the open/closed state, the click anywhere
    else and Escape are the browser's, not a listener this file has to own - and so a
    row that starts an async export can keep the menu open until the write lands. */
-.dsc-menu{position:relative;flex:none}
-.dsc-menu>summary{list-style:none;cursor:pointer;user-select:none;white-space:nowrap}
-.dsc-menu>summary::-webkit-details-marker{display:none}
-.dsc-menu[open]>summary{background:var(--dsw-alias-interactive-bg-active)}
+.cnv-menu{position:relative;flex:none}
+.cnv-menu>summary{list-style:none;cursor:pointer;user-select:none;white-space:nowrap}
+.cnv-menu>summary::-webkit-details-marker{display:none}
+.cnv-menu[open]>summary{background:var(--dsw-alias-interactive-bg-active)}
 /* The panel has to clear every column of the app's own furniture - the composer seat
    is 7 (9 with a menu open), the frame's overlay layer 20, the sidebar's fixed
    controls 30 - because the canvas view is a box INSIDE that layout. 1000 is the
    app's own modal-root layer: a menu belongs above the layout it drops out of, and
    still below the toasts and portals that are meant to interrupt anything. */
-.dsc-menuPanel{position:absolute;right:0;top:calc(100% + 6px);z-index:1000;min-width:236px;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:2px;padding:5px;border:.5px solid var(--dsw-alias-border-l3);border-radius:10px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 32px rgba(0,0,0,.28)}
-.dsc-menuItem{display:flex;flex-direction:column;gap:1px;align-items:flex-start;width:100%;text-align:left;padding:6px 8px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer}
-.dsc-menuItem:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
-.dsc-menuItem:disabled{opacity:.5;cursor:default}
-.dsc-menuItem[data-active=true]{background:var(--dsw-alias-interactive-bg-active)}
-.dsc-menuLabel{font-size:12px}
-.dsc-menuHint{font-size:10.5px;color:var(--dsw-alias-label-tertiary)}
+.cnv-menuPanel{position:absolute;right:0;top:calc(100% + 6px);z-index:1000;min-width:236px;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:2px;padding:5px;border:.5px solid var(--dsw-alias-border-l3);border-radius:10px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 32px rgba(0,0,0,.28)}
+.cnv-menuItem{display:flex;flex-direction:column;gap:1px;align-items:flex-start;width:100%;text-align:left;padding:6px 8px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer}
+.cnv-menuItem:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.cnv-menuItem:disabled{opacity:.5;cursor:default}
+.cnv-menuItem[data-active=true]{background:var(--dsw-alias-interactive-bg-active)}
+.cnv-menuLabel{font-size:12px}
+.cnv-menuHint{font-size:10.5px;color:var(--dsw-alias-label-tertiary)}
 /* THE TRANSFORM CONTROLS. A nudge pad is a cross of four arrows because that is the
    gesture a person already knows, and every control here writes through the same
    document route the drag does - so a button press and a drag cannot disagree. */
-.dsc-nudgeRow{display:flex;align-items:center;gap:4px}
-.dsc-nudgeRow button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:26px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer;padding:0}
-.dsc-nudgeRow button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsc-nudgeRow button:disabled{opacity:.4;cursor:default}
-.dsc-row2{display:flex;align-items:center;gap:6px;min-width:0}
-.dsc-row2>*{min-width:0}
-.dsc-fieldLabel{flex:none;width:52px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dsc-num{width:66px;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:11.5px;padding:0 6px}
-.dsc-slider{flex:1;min-width:0;accent-color:var(--dsw-alias-brand-primary,#4D6BFE)}
-.dsc-swatches{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-.dsc-swatch{width:20px;height:20px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l3);cursor:pointer;padding:0}
-.dsc-swatch[data-active=true]{outline:1.5px solid var(--dsw-alias-brand-primary,#4D6BFE);outline-offset:1px}
-.dsc-colorInput{width:26px;height:24px;padding:0;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:transparent;cursor:pointer}
-.dsc-spacer{flex:1}
-.dsc-btn{box-sizing:border-box;height:26px;padding:0 9px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
-.dsc-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsc-btn:disabled{opacity:.5;cursor:default}
-.dsc-btn[data-active=true]{background:var(--dsw-alias-interactive-bg-active);color:var(--dsw-alias-label-primary)}
-.dsc-btn[data-kind=primary]{background:var(--dsw-alias-brand-primary,#4D6BFE);color:#fff;border-color:transparent}
-.dsc-btn[data-kind=primary][aria-disabled=true]{opacity:.5;cursor:default}
-.dsc-select{height:26px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:0 6px}
-.dsc-chip{display:inline-flex;align-items:center;gap:5px;height:19px;padding:0 7px;border-radius:6px;font-size:11px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary)}
-.dsc-pill{display:inline-flex;align-items:center;height:17px;padding:0 6px;border-radius:5px;font-size:10px;font-weight:650;letter-spacing:.02em}
-.dsc-pill[data-state=drawn]{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 18%,transparent);color:var(--dsw-alias-state-success-primary)}
-.dsc-pill[data-state=failed]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 18%,transparent);color:var(--dsw-alias-state-error-primary)}
-.dsc-pill[data-state=stale]{background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-tertiary)}
-.dsc-pill[data-state=pending]{background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-tertiary)}
-.dsc-body{flex:1;display:flex;min-height:0;overflow:hidden}
-.dsc-rail{flex:none;width:216px;border-right:.5px solid var(--dsw-alias-border-l3);overflow:auto;padding:8px}
-.dsc-railHead{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
-.dsc-row{display:flex;flex-direction:column;gap:3px;padding:7px 8px;border-radius:9px;cursor:pointer;border:.5px solid transparent}
-.dsc-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dsc-row[data-selected=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3)}
-.dsc-rowTitle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dsw-alias-label-primary);min-width:0}
-.dsc-rowName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cnv-nudgeRow{display:flex;align-items:center;gap:4px}
+.cnv-nudgeRow button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:26px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer;padding:0}
+.cnv-nudgeRow button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.cnv-nudgeRow button:disabled{opacity:.4;cursor:default}
+.cnv-row2{display:flex;align-items:center;gap:6px;min-width:0}
+.cnv-row2>*{min-width:0}
+.cnv-fieldLabel{flex:none;width:52px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.cnv-num{width:66px;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:11.5px;padding:0 6px}
+.cnv-slider{flex:1;min-width:0;accent-color:var(--dsw-alias-brand-primary,#4D6BFE)}
+.cnv-swatches{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.cnv-swatch{width:20px;height:20px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l3);cursor:pointer;padding:0}
+.cnv-swatch[data-active=true]{outline:1.5px solid var(--dsw-alias-brand-primary,#4D6BFE);outline-offset:1px}
+.cnv-colorInput{width:26px;height:24px;padding:0;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:transparent;cursor:pointer}
+.cnv-spacer{flex:1}
+.cnv-btn{box-sizing:border-box;height:26px;padding:0 9px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.cnv-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.cnv-btn:disabled{opacity:.5;cursor:default}
+.cnv-btn[data-active=true]{background:var(--dsw-alias-interactive-bg-active);color:var(--dsw-alias-label-primary)}
+.cnv-btn[data-kind=primary]{background:var(--dsw-alias-brand-primary,#4D6BFE);color:#fff;border-color:transparent}
+.cnv-btn[data-kind=primary][aria-disabled=true]{opacity:.5;cursor:default}
+.cnv-select{height:26px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;padding:0 6px}
+.cnv-chip{display:inline-flex;align-items:center;gap:5px;height:19px;padding:0 7px;border-radius:6px;font-size:11px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary)}
+.cnv-pill{display:inline-flex;align-items:center;height:17px;padding:0 6px;border-radius:5px;font-size:10px;font-weight:650;letter-spacing:.02em}
+.cnv-pill[data-state=drawn]{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 18%,transparent);color:var(--dsw-alias-state-success-primary)}
+.cnv-pill[data-state=failed]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 18%,transparent);color:var(--dsw-alias-state-error-primary)}
+.cnv-pill[data-state=stale]{background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-tertiary)}
+.cnv-pill[data-state=pending]{background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-tertiary)}
+.cnv-body{flex:1;display:flex;min-height:0;overflow:hidden}
+.cnv-rail{flex:none;width:216px;border-right:.5px solid var(--dsw-alias-border-l3);overflow:auto;padding:8px}
+.cnv-railHead{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.cnv-row{display:flex;flex-direction:column;gap:3px;padding:7px 8px;border-radius:9px;cursor:pointer;border:.5px solid transparent}
+.cnv-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.cnv-row[data-selected=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3)}
+.cnv-rowTitle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dsw-alias-label-primary);min-width:0}
+.cnv-rowName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* The delete control is quiet until the row is worth acting on, and the armed row is
    marked as a question rather than as a selection. */
-.dsc-rowDelete{flex:none;opacity:0;width:20px;height:20px;font-size:14px}
-.dsc-row:hover .dsc-rowDelete,.dsc-row[data-selected=true] .dsc-rowDelete{opacity:1}
-.dsc-rowDelete:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 16%,transparent);color:var(--dsw-alias-state-error-primary)}
-.dsc-rowConfirm{flex:none;display:inline-flex;gap:4px;align-items:center}
-.dsc-rowConfirm .dsc-mini{width:auto;padding:0 7px;height:20px;font-size:11px;border:.5px solid var(--dsw-alias-border-l3)}
-.dsc-danger{color:var(--dsw-alias-state-error-primary)}
-.dsc-row[data-armed=true]{border-color:var(--dsw-alias-state-error-primary)}
-.dsc-rowMeta{font-size:10.5px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsc-stage{flex:1;min-width:0;min-height:0;overflow:auto;position:relative;background:repeating-conic-gradient(from 0deg,var(--dsw-alias-bg-layer-1) 0% 25%,transparent 0% 50%) 0 0/16px 16px}
-.dsc-stage[data-panning=true]{cursor:grabbing}
+.cnv-rowDelete{flex:none;opacity:0;width:20px;height:20px;font-size:14px}
+.cnv-row:hover .cnv-rowDelete,.cnv-row[data-selected=true] .cnv-rowDelete{opacity:1}
+.cnv-rowDelete:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 16%,transparent);color:var(--dsw-alias-state-error-primary)}
+.cnv-rowConfirm{flex:none;display:inline-flex;gap:4px;align-items:center}
+.cnv-rowConfirm .cnv-mini{width:auto;padding:0 7px;height:20px;font-size:11px;border:.5px solid var(--dsw-alias-border-l3)}
+.cnv-danger{color:var(--dsw-alias-state-error-primary)}
+.cnv-row[data-armed=true]{border-color:var(--dsw-alias-state-error-primary)}
+.cnv-rowMeta{font-size:10.5px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cnv-stage{flex:1;min-width:0;min-height:0;overflow:auto;position:relative;background:repeating-conic-gradient(from 0deg,var(--dsw-alias-bg-layer-1) 0% 25%,transparent 0% 50%) 0 0/16px 16px}
+.cnv-stage[data-panning=true]{cursor:grabbing}
 /* THE PAGE: a 22px RULER gutter on the top and the left, the artboard in the corner
    they meet at. The gutter is a grid track rather than padding so the rig is one box
    the stage can centre and scroll - and because the gutter is the ONLY horizontal
@@ -158,116 +158,116 @@ window.__ModuleLoader__.load({
    composer's top edge, so reserving exactly it leaves the artboard touching the input
    box - which is what "glued together" means. The page adds its own 10px on top, and
    the same 10px inset on the other three sides keeps the ruler gutters off the frame. */
-.dsc-pad{min-width:100%;min-height:100%;display:grid;grid-template-columns:22px 1fr;grid-template-rows:22px 1fr;align-items:stretch;justify-items:stretch;gap:0;padding:10px 10px calc(var(--dsc-composer-clearance,168px) + 10px) 10px}
-.dsc-rig{grid-column:2;grid-row:2;position:relative;justify-self:center;align-self:center}
-.dsc-padEmpty{grid-column:1/-1;grid-row:1/-1;display:flex;align-items:center;justify-content:center}
+.cnv-pad{min-width:100%;min-height:100%;display:grid;grid-template-columns:22px 1fr;grid-template-rows:22px 1fr;align-items:stretch;justify-items:stretch;gap:0;padding:10px 10px calc(var(--cnv-composer-clearance,168px) + 10px) 10px}
+.cnv-rig{grid-column:2;grid-row:2;position:relative;justify-self:center;align-self:center}
+.cnv-padEmpty{grid-column:1/-1;grid-row:1/-1;display:flex;align-items:center;justify-content:center}
 /* THE RULERS. They live in the stage, not the rig, so they stay on screen while a
    zoomed design is panned - and they are LABELLED in DESIGN pixels, which is the one
    coordinate system the document and the transform controls both speak. */
-.dsc-axis{position:absolute;background:var(--dsw-alias-bg-layer-1);z-index:3;pointer-events:auto}
-.dsc-axisTop{top:0;height:22px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
-.dsc-axisLeft{left:0;width:22px;border-right:.5px solid var(--dsw-alias-border-l3)}
-.dsc-axisTick{position:absolute;background:var(--dsw-alias-border-l3);pointer-events:none}
-.dsc-axisTop .dsc-axisTick{bottom:0;width:1px;height:6px}
-.dsc-axisLeft .dsc-axisTick{right:0;height:1px;width:6px}
-.dsc-axisLabel{position:absolute;font:9px/1 var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);pointer-events:none;white-space:nowrap}
-.dsc-axisTop .dsc-axisLabel{top:3px;transform:translateX(-50%)}
-.dsc-axisLeft .dsc-axisLabel{left:3px;transform:translateY(-50%)}
-.dsc-axisCorner{position:absolute;left:0;top:0;width:22px;height:22px;background:var(--dsw-alias-bg-layer-1);border-right:.5px solid var(--dsw-alias-border-l3);border-bottom:.5px solid var(--dsw-alias-border-l3);z-index:4}
-.dsc-art{position:relative;box-shadow:0 18px 44px rgba(0,0,0,.28);border-radius:2px;overflow:hidden;cursor:grab;touch-action:none}
-.dsc-art canvas{display:block;width:100%;height:100%}
-.dsc-art[data-dragging=move]{cursor:grabbing}
-.dsc-art[data-dragging=resize]{cursor:nwse-resize}
-.dsc-art[data-empty=true]{box-shadow:none}
+.cnv-axis{position:absolute;background:var(--dsw-alias-bg-layer-1);z-index:3;pointer-events:auto}
+.cnv-axisTop{top:0;height:22px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.cnv-axisLeft{left:0;width:22px;border-right:.5px solid var(--dsw-alias-border-l3)}
+.cnv-axisTick{position:absolute;background:var(--dsw-alias-border-l3);pointer-events:none}
+.cnv-axisTop .cnv-axisTick{bottom:0;width:1px;height:6px}
+.cnv-axisLeft .cnv-axisTick{right:0;height:1px;width:6px}
+.cnv-axisLabel{position:absolute;font:9px/1 var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);pointer-events:none;white-space:nowrap}
+.cnv-axisTop .cnv-axisLabel{top:3px;transform:translateX(-50%)}
+.cnv-axisLeft .cnv-axisLabel{left:3px;transform:translateY(-50%)}
+.cnv-axisCorner{position:absolute;left:0;top:0;width:22px;height:22px;background:var(--dsw-alias-bg-layer-1);border-right:.5px solid var(--dsw-alias-border-l3);border-bottom:.5px solid var(--dsw-alias-border-l3);z-index:4}
+.cnv-art{position:relative;box-shadow:0 18px 44px rgba(0,0,0,.28);border-radius:2px;overflow:hidden;cursor:grab;touch-action:none}
+.cnv-art canvas{display:block;width:100%;height:100%}
+.cnv-art[data-dragging=move]{cursor:grabbing}
+.cnv-art[data-dragging=resize]{cursor:nwse-resize}
+.cnv-art[data-empty=true]{box-shadow:none}
 /* The ORIGIN MARKER: the design's own (0, 0), drawn on the artboard's top-left corner
    so a layer's x/y means the same thing on screen as it does in the document. */
-.dsc-origin{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:2}
-.dsc-originX{position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--dsw-alias-brand-primary,#4D6BFE);opacity:.5}
-.dsc-originY{position:absolute;top:0;left:0;right:0;height:1px;background:var(--dsw-alias-brand-primary,#4D6BFE);opacity:.5}
-.dsc-originDot{position:absolute;left:-3px;top:-3px;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-brand-primary,#4D6BFE);box-shadow:0 0 0 1.5px var(--dsw-alias-bg-base)}
-.dsc-layers{display:flex;flex-direction:column;gap:2px;margin:0 0 10px;padding:0;list-style:none}
-.dsc-layer{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;cursor:pointer;font-size:11.5px;color:var(--dsw-alias-label-secondary);border:.5px solid transparent}
-.dsc-layer:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsc-layer[data-selected=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3);color:var(--dsw-alias-label-primary)}
-.dsc-layerKind{flex:none;font:9.5px/16px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);text-transform:uppercase;width:30px;overflow:hidden}
-.dsc-layerName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsc-layerTools{flex:none;display:flex;gap:2px;opacity:0}
-.dsc-layer:hover .dsc-layerTools,.dsc-layer[data-selected=true] .dsc-layerTools{opacity:1}
-.dsc-mini{width:18px;height:18px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:4px;font-size:12px;line-height:1;padding:0}
-.dsc-mini:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsc-mini:disabled{opacity:.35;cursor:default}
-.dsc-empty{max-width:520px;text-align:center;color:var(--dsw-alias-label-secondary);display:flex;flex-direction:column;gap:12px;align-items:center}
-.dsc-empty h3{margin:0;font-size:15px;color:var(--dsw-alias-label-primary)}
-.dsc-empty p{margin:0;font-size:12.5px;color:var(--dsw-alias-label-tertiary)}
-.dsc-gallery{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;margin-top:4px}
-.dsc-galleryItem{text-align:left;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-layer-1);padding:7px 8px;cursor:pointer;color:inherit;font:inherit}
-.dsc-galleryItem:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dsc-galleryTitle{font-size:11.5px;color:var(--dsw-alias-label-primary);display:block}
-.dsc-galleryMeta{font-size:10px;color:var(--dsw-alias-label-tertiary);display:block;margin-top:2px}
-.dsc-styles{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}
-.dsc-styleChip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px 3px 5px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;cursor:pointer}
-.dsc-styleChip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsc-styleChip[data-selected=true]{border-color:var(--dsw-alias-brand-primary,#4D6BFE);color:var(--dsw-alias-label-primary)}
-.dsc-styleDots{display:inline-flex;gap:2px}
-.dsc-styleDots i{width:9px;height:9px;border-radius:3px;display:block}
-.dsc-styleName{white-space:nowrap}
-.dsc-styleCard{display:flex;flex-direction:column;gap:4px;padding:7px 8px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-layer-1);margin:0 0 10px}
-.dsc-styleCard strong{font-size:11.5px;color:var(--dsw-alias-label-primary)}
-.dsc-styleIntent{font-size:11px;color:var(--dsw-alias-label-tertiary);line-height:1.45}
-.dsc-styleRule{font-size:10.5px;color:var(--dsw-alias-label-secondary);line-height:1.45}
-.dsc-styleRule b{color:var(--dsw-alias-label-tertiary);font-weight:600}
-.dsc-side{flex:none;width:296px;border-left:.5px solid var(--dsw-alias-border-l3);display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-layer-1)}
-.dsc-sideHead{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary)}
+.cnv-origin{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:2}
+.cnv-originX{position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--dsw-alias-brand-primary,#4D6BFE);opacity:.5}
+.cnv-originY{position:absolute;top:0;left:0;right:0;height:1px;background:var(--dsw-alias-brand-primary,#4D6BFE);opacity:.5}
+.cnv-originDot{position:absolute;left:-3px;top:-3px;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-brand-primary,#4D6BFE);box-shadow:0 0 0 1.5px var(--dsw-alias-bg-base)}
+.cnv-layers{display:flex;flex-direction:column;gap:2px;margin:0 0 10px;padding:0;list-style:none}
+.cnv-layer{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;cursor:pointer;font-size:11.5px;color:var(--dsw-alias-label-secondary);border:.5px solid transparent}
+.cnv-layer:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.cnv-layer[data-selected=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3);color:var(--dsw-alias-label-primary)}
+.cnv-layerKind{flex:none;font:9.5px/16px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);text-transform:uppercase;width:30px;overflow:hidden}
+.cnv-layerName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cnv-layerTools{flex:none;display:flex;gap:2px;opacity:0}
+.cnv-layer:hover .cnv-layerTools,.cnv-layer[data-selected=true] .cnv-layerTools{opacity:1}
+.cnv-mini{width:18px;height:18px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:4px;font-size:12px;line-height:1;padding:0}
+.cnv-mini:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.cnv-mini:disabled{opacity:.35;cursor:default}
+.cnv-empty{max-width:520px;text-align:center;color:var(--dsw-alias-label-secondary);display:flex;flex-direction:column;gap:12px;align-items:center}
+.cnv-empty h3{margin:0;font-size:15px;color:var(--dsw-alias-label-primary)}
+.cnv-empty p{margin:0;font-size:12.5px;color:var(--dsw-alias-label-tertiary)}
+.cnv-gallery{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;margin-top:4px}
+.cnv-galleryItem{text-align:left;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-layer-1);padding:7px 8px;cursor:pointer;color:inherit;font:inherit}
+.cnv-galleryItem:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.cnv-galleryTitle{font-size:11.5px;color:var(--dsw-alias-label-primary);display:block}
+.cnv-galleryMeta{font-size:10px;color:var(--dsw-alias-label-tertiary);display:block;margin-top:2px}
+.cnv-styles{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}
+.cnv-styleChip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px 3px 5px;border:.5px solid var(--dsw-alias-border-l3);border-radius:7px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;cursor:pointer}
+.cnv-styleChip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.cnv-styleChip[data-selected=true]{border-color:var(--dsw-alias-brand-primary,#4D6BFE);color:var(--dsw-alias-label-primary)}
+.cnv-styleDots{display:inline-flex;gap:2px}
+.cnv-styleDots i{width:9px;height:9px;border-radius:3px;display:block}
+.cnv-styleName{white-space:nowrap}
+.cnv-styleCard{display:flex;flex-direction:column;gap:4px;padding:7px 8px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-layer-1);margin:0 0 10px}
+.cnv-styleCard strong{font-size:11.5px;color:var(--dsw-alias-label-primary)}
+.cnv-styleIntent{font-size:11px;color:var(--dsw-alias-label-tertiary);line-height:1.45}
+.cnv-styleRule{font-size:10.5px;color:var(--dsw-alias-label-secondary);line-height:1.45}
+.cnv-styleRule b{color:var(--dsw-alias-label-tertiary);font-weight:600}
+.cnv-side{flex:none;width:296px;border-left:.5px solid var(--dsw-alias-border-l3);display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-layer-1)}
+.cnv-sideHead{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary)}
 /* THE PANE SWITCHER. The bar holds two jobs that have nothing to do with each
    other - SHAPING the design (the look it carries, its layers, its lints) and
    AUDITING it (the feed thumbnail, the last picture) - and one scroll column for
    both meant a design with forty layers pushed the rest of the bar out of sight. */
-.dsc-sideTabs{flex:none;display:flex;gap:4px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2)}
-.dsc-sideTab{flex:1;height:24px;display:inline-flex;align-items:center;justify-content:center;border:.5px solid transparent;border-radius:7px;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11.5px;cursor:pointer}
-.dsc-sideTab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsc-sideTab[data-active=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3);color:var(--dsw-alias-label-primary)}
+.cnv-sideTabs{flex:none;display:flex;gap:4px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2)}
+.cnv-sideTab{flex:1;height:24px;display:inline-flex;align-items:center;justify-content:center;border:.5px solid transparent;border-radius:7px;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11.5px;cursor:pointer}
+.cnv-sideTab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.cnv-sideTab[data-active=true]{background:var(--dsw-alias-interactive-bg-active);border-color:var(--dsw-alias-border-l3);color:var(--dsw-alias-label-primary)}
 /* One pane, one flex column, min-height:0 at every level: scroll always belongs to
-   a NAMED block (.dsc-paneScroll for the audit pane, .dsc-layersScroll for the
+   a NAMED block (.cnv-paneScroll for the audit pane, .cnv-layersScroll for the
    list inside the shaping pane), never to the pane, so a long list scrolls inside
    its own section and the sections under it keep their place instead of being
    pushed down the bar. */
-.dsc-pane{flex:1;min-height:0;display:flex;flex-direction:column}
-.dsc-paneScroll{flex:1;min-height:0;overflow:auto;padding:8px 10px;display:flex;flex-direction:column;gap:10px}
-.dsc-section{flex:none;display:flex;flex-direction:column;gap:6px;min-height:0}
-.dsc-sectionHead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary)}
-.dsc-section[data-grow=true]{flex:1;padding:8px 10px 0}
-.dsc-section[data-grow=true] .dsc-layersScroll{flex:1}
-.dsc-layersScroll{min-height:88px;max-height:52vh;overflow:auto;margin:0 -2px;padding:0 2px}
-.dsc-lints{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
-.dsc-lint{display:flex;gap:6px;align-items:flex-start;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary)}
-.dsc-lint[data-level=error]{color:var(--dsw-alias-state-error-primary)}
-.dsc-lintCode{flex:none;font:10px/16px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);text-transform:uppercase}
+.cnv-pane{flex:1;min-height:0;display:flex;flex-direction:column}
+.cnv-paneScroll{flex:1;min-height:0;overflow:auto;padding:8px 10px;display:flex;flex-direction:column;gap:10px}
+.cnv-section{flex:none;display:flex;flex-direction:column;gap:6px;min-height:0}
+.cnv-sectionHead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary)}
+.cnv-section[data-grow=true]{flex:1;padding:8px 10px 0}
+.cnv-section[data-grow=true] .cnv-layersScroll{flex:1}
+.cnv-layersScroll{min-height:88px;max-height:52vh;overflow:auto;margin:0 -2px;padding:0 2px}
+.cnv-lints{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.cnv-lint{display:flex;gap:6px;align-items:flex-start;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary)}
+.cnv-lint[data-level=error]{color:var(--dsw-alias-state-error-primary)}
+.cnv-lintCode{flex:none;font:10px/16px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-tertiary);text-transform:uppercase}
 /* THE DRAWER IS AN OVERLAY, NOT A ROW. It used to be a flex sibling under the body,
    which meant opening it SHRANK the body and re-centred the artboard - and it opened
    at a height the composer sits on top of, so "Source" looked like a button that did
    nothing. It now floats over the BOTTOM of the canvas column, between the artboard
    and the composer, where it can be read while the design stays where it was. */
-.dsc-drawer{position:absolute;left:216px;right:296px;bottom:var(--dsh-composer-height,152px);height:min(42%,320px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l2);border-radius:10px 10px 0 0;z-index:6;box-shadow:0 -14px 34px rgba(0,0,0,.24)}
-.dsc-drawerHead{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;letter-spacing:.06em}
-.dsc-drawer textarea{flex:1;min-height:160px;resize:none;margin:0 10px 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:11.5px/1.5 var(--ds-font-family-code,monospace);padding:8px}
-.dsc-note{padding:6px 10px;font-size:11.5px;color:var(--dsw-alias-state-error-primary);border-top:.5px solid var(--dsw-alias-border-l2)}
-.dsc-note[data-kind=info]{color:var(--dsw-alias-label-secondary)}
-.dsc-card{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:10px;background:var(--dsw-alias-bg-layer-1)}
-.dsc-cardPic{flex:none;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:#000;overflow:hidden}
-.dsc-cardPic canvas{display:block}
-.dsc-cardText{min-width:0;display:flex;flex-direction:column;gap:4px}
-.dsc-cardTitle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dsw-alias-label-primary)}
-.dsc-cardBody{font-size:11.5px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;max-height:132px;overflow:hidden}
-.dsc-hidden{display:none}
+.cnv-drawer{position:absolute;left:216px;right:296px;bottom:var(--dsh-composer-height,152px);height:min(42%,320px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l2);border-radius:10px 10px 0 0;z-index:6;box-shadow:0 -14px 34px rgba(0,0,0,.24)}
+.cnv-drawerHead{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;letter-spacing:.06em}
+.cnv-drawer textarea{flex:1;min-height:160px;resize:none;margin:0 10px 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:11.5px/1.5 var(--ds-font-family-code,monospace);padding:8px}
+.cnv-note{padding:6px 10px;font-size:11.5px;color:var(--dsw-alias-state-error-primary);border-top:.5px solid var(--dsw-alias-border-l2)}
+.cnv-note[data-kind=info]{color:var(--dsw-alias-label-secondary)}
+.cnv-card{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:10px;background:var(--dsw-alias-bg-layer-1)}
+.cnv-cardPic{flex:none;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:#000;overflow:hidden}
+.cnv-cardPic canvas{display:block}
+.cnv-cardText{min-width:0;display:flex;flex-direction:column;gap:4px}
+.cnv-cardTitle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dsw-alias-label-primary)}
+.cnv-cardBody{font-size:11.5px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;max-height:132px;overflow:hidden}
+.cnv-hidden{display:none}
 /* The Excalidraw surface (the Canvas tab's surface). It is an OVERLAY on purpose:
    the design surface underneath stays mounted and untouched, so the migration is
    reversible and this file never has to restructure the tab's tree for an editor
    it does not own. In Excalidraw mode the pack's own bar is not rendered at all,
    so the editor gets the WHOLE pane: no zoom menu, no overlays, no export menu -
    Excalidraw brings its own. */
-.dsc-excalidraw{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff)}
-.dsc-excalidrawHost{flex:1;min-height:0;position:relative}
-.dsc-excalidrawNote{flex:none;box-sizing:border-box;min-height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l2);font-size:11.5px;color:var(--dsw-alias-label-secondary)}
+.cnv-excalidraw{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff)}
+.cnv-excalidrawHost{flex:1;min-height:0;position:relative}
+.cnv-excalidrawNote{flex:none;box-sizing:border-box;min-height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l2);font-size:11.5px;color:var(--dsw-alias-label-secondary)}
 `
     const CSS_TAG = 'dsh-canvas/canvas.css'
     const FONT_CSS_TAG = 'dsh-canvas/fonts.css'
@@ -780,9 +780,9 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { className: 'dsc-excalidraw', 'data-canvas-excalidraw': ready ? 'ready' : 'loading' },
-        h('div', { className: 'dsc-excalidrawHost', 'data-canvas-excalidraw-host': 'true', ref: hostRef }),
-        h('div', { className: 'dsc-excalidrawNote' }, h('span', { 'data-canvas-excalidraw-note': 'true' }, note)),
+        { className: 'cnv-excalidraw', 'data-canvas-excalidraw': ready ? 'ready' : 'loading' },
+        h('div', { className: 'cnv-excalidrawHost', 'data-canvas-excalidraw-host': 'true', ref: hostRef }),
+        h('div', { className: 'cnv-excalidrawNote' }, h('span', { 'data-canvas-excalidraw-note': 'true' }, note)),
       )
     }
 
@@ -1351,15 +1351,15 @@ window.__ModuleLoader__.load({
     /** A render verdict pill. */
     function Pill({ verification }) {
       const state = verification ? verification.state : 'pending'
-      return h('span', { className: 'dsc-pill', 'data-state': state, title: verification && verification.error ? verification.error : state }, state)
+      return h('span', { className: 'cnv-pill', 'data-state': state, title: verification && verification.error ? verification.error : state }, state)
     }
 
     /** One lint line. */
     function LintLine({ lint }) {
       return h(
         'li',
-        { className: 'dsc-lint', 'data-level': lint.level },
-        h('span', { className: 'dsc-lintCode' }, lint.code),
+        { className: 'cnv-lint', 'data-level': lint.level },
+        h('span', { className: 'cnv-lintCode' }, lint.code),
         h('span', null, lint.message),
       )
     }
@@ -1368,7 +1368,7 @@ window.__ModuleLoader__.load({
     function Btn({ onClick, children, active, disabled, kind, title }) {
       return h(
         'button',
-        { type: 'button', className: 'dsc-btn', onClick, disabled: disabled === true, 'data-active': active === true ? 'true' : 'false', 'data-kind': kind, title },
+        { type: 'button', className: 'cnv-btn', onClick, disabled: disabled === true, 'data-active': active === true ? 'true' : 'false', 'data-kind': kind, title },
         children,
       )
     }
@@ -1651,17 +1651,17 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { className: 'dsc-pad', ref: wrapRef, 'data-canvas-stage': 'true' },
+        { className: 'cnv-pad', ref: wrapRef, 'data-canvas-stage': 'true' },
         h(Ruler, { axis: 'top', origin: rigBox.originX, scale, length: rigBox.length, thickness: 22 }),
         h(Ruler, { axis: 'left', origin: rigBox.originY, scale, length: rigBox.breadth, thickness: 22 }),
-        h('div', { className: 'dsc-axisCorner', 'data-canvas-ruler-corner': 'true' }),
+        h('div', { className: 'cnv-axisCorner', 'data-canvas-ruler-corner': 'true' }),
         h(
           'div',
-          { className: 'dsc-rig', ref: rigRef, 'data-canvas-rig': 'true' },
+          { className: 'cnv-rig', ref: rigRef, 'data-canvas-rig': 'true' },
           h(
             'div',
             {
-              className: 'dsc-art',
+              className: 'cnv-art',
               'data-canvas-artboard': document_.preset ?? 'freeform',
               'data-canvas-origin': '0,0',
               'data-canvas-layout-origin': designOrigin ? designOrigin.x + ',' + designOrigin.y : '',
@@ -1673,10 +1673,10 @@ window.__ModuleLoader__.load({
             // THE ORIGIN MARKER, on the artboard's own top-left corner: the design's
             // (0, 0), so a layer's x and y mean the same thing on screen and in the
             // document.
-            h('div', { className: 'dsc-origin', 'data-canvas-origin-marker': 'true' },
-              h('span', { className: 'dsc-originX' }),
-              h('span', { className: 'dsc-originY' }),
-              h('span', { className: 'dsc-originDot' }),
+            h('div', { className: 'cnv-origin', 'data-canvas-origin-marker': 'true' },
+              h('span', { className: 'cnv-originX' }),
+              h('span', { className: 'cnv-originY' }),
+              h('span', { className: 'cnv-originDot' }),
             ),
             (overlay || selectedPath) && prepared
               ? h(Overlay, {
@@ -1691,7 +1691,7 @@ window.__ModuleLoader__.load({
                 })
               : null,
           ),
-          note ? h('div', { className: 'dsc-note' }, note) : null,
+          note ? h('div', { className: 'cnv-note' }, note) : null,
         ),
       )
     }
@@ -1761,21 +1761,21 @@ window.__ModuleLoader__.load({
       return h(
         axis === 'top' ? 'div' : 'div',
         {
-          className: 'dsc-axis ' + (horizontal ? 'dsc-axisTop' : 'dsc-axisLeft'),
+          className: 'cnv-axis ' + (horizontal ? 'cnv-axisTop' : 'cnv-axisLeft'),
           'data-canvas-ruler': axis,
           style: horizontal ? { left: thickness, right: 0 } : { top: thickness, bottom: 0 },
         },
         ticks.map((tick) =>
           h('span', {
             key: 'tick-' + tick.value,
-            className: 'dsc-axisTick',
+            className: 'cnv-axisTick',
             style: horizontal ? { left: Math.round(tick.at - thickness) + 'px' } : { top: Math.round(tick.at - thickness) + 'px' },
           }),
         ),
         ticks.map((tick) =>
           h('span', {
             key: 'label-' + tick.value,
-            className: 'dsc-axisLabel',
+            className: 'cnv-axisLabel',
             style: horizontal ? { left: Math.round(tick.at - thickness) + 'px' } : { top: Math.round(tick.at - thickness) + 'px' },
           }, String(tick.value)),
         ),
@@ -2603,38 +2603,38 @@ window.__ModuleLoader__.load({
       )
 
       if (!sessionId) {
-        return h('div', { className: 'dsc-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true' },
-          h('div', { className: 'dsc-pad' }, h('div', { className: 'dsc-empty' }, h('h3', null, 'Canvas'), h('p', null, 'Open a conversation to design in it.'))),
+        return h('div', { className: 'cnv-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true' },
+          h('div', { className: 'cnv-pad' }, h('div', { className: 'cnv-empty' }, h('h3', null, 'Canvas'), h('p', null, 'Open a conversation to design in it.'))),
         )
       }
 
       const toolbar = h(
         'div',
-        { className: 'dsc-bar', 'data-canvas-bar': 'true' },
-        h('span', { className: 'dsc-chip', title: 'dsh-canvas version' }, 'Canvas ' + PLUGIN_VERSION),
-        selected ? h('span', { className: 'dsc-chip' }, selected.preset ?? 'free-form') : null,
+        { className: 'cnv-bar', 'data-canvas-bar': 'true' },
+        h('span', { className: 'cnv-chip', title: 'dsh-canvas version' }, 'Canvas ' + PLUGIN_VERSION),
+        selected ? h('span', { className: 'cnv-chip' }, selected.preset ?? 'free-form') : null,
         selected ? h(Pill, { verification: selected.verification }) : null,
-        h('span', { className: 'dsc-spacer' }),
+        h('span', { className: 'cnv-spacer' }),
         // ZOOM IS A MENU TOO: five rungs in the bar was a row of buttons for what is
         // one choice, and the rungs are still all there - the summary simply says
         // which one is in force.
-        h('details', { className: 'dsc-menu', 'data-canvas-zoom': 'true' },
-          h('summary', { className: 'dsc-btn', title: 'How much of the design the pane shows' }, 'Zoom: ' + (zoom === 'fit' ? 'Fit' : Math.round(zoom * 100) + '%') + ' \u25be'),
-          h('div', { className: 'dsc-menuPanel' },
+        h('details', { className: 'cnv-menu', 'data-canvas-zoom': 'true' },
+          h('summary', { className: 'cnv-btn', title: 'How much of the design the pane shows' }, 'Zoom: ' + (zoom === 'fit' ? 'Fit' : Math.round(zoom * 100) + '%') + ' \u25be'),
+          h('div', { className: 'cnv-menuPanel' },
             ZOOM_STEPS.map((step) => h('button', {
               key: 'zoom-' + step,
               type: 'button',
-              className: 'dsc-menuItem',
+              className: 'cnv-menuItem',
               'data-canvas-zoom-step': String(step),
               'data-active': zoom === step ? 'true' : 'false',
               onClick: (event) => { event.preventDefault(); setZoom(step); event.currentTarget.closest('details').open = false },
             },
-              h('span', { className: 'dsc-menuLabel' }, step === 'fit' ? 'Fit' : Math.round(step * 100) + '%'),
-              h('span', { className: 'dsc-menuHint' }, step === 'fit' ? 'The whole design in the pane' : step === 1 ? 'Actual pixels' : step < 1 ? 'Smaller' : 'Twice the pixels'),
+              h('span', { className: 'cnv-menuLabel' }, step === 'fit' ? 'Fit' : Math.round(step * 100) + '%'),
+              h('span', { className: 'cnv-menuHint' }, step === 'fit' ? 'The whole design in the pane' : step === 1 ? 'Actual pixels' : step < 1 ? 'Smaller' : 'Twice the pixels'),
             )),
           ),
         ),
-        h('div', { className: 'dsc-barGroup' },
+        h('div', { className: 'cnv-barGroup' },
           h(Btn, { active: overlays.safe, onClick: () => setOverlays((value) => ({ ...value, safe: !value.safe })), title: 'Show the preset\u2019s safe and keep-out areas' }, 'Safe areas'),
           h(Btn, { active: overlays.boxes, onClick: () => setOverlays((value) => ({ ...value, boxes: !value.boxes })), title: 'Show every node\u2019s box' }, 'Boxes'),
         ),
@@ -2643,7 +2643,7 @@ window.__ModuleLoader__.load({
         // tools still write the design document.
         h('button', {
           type: 'button',
-          className: 'dsc-btn',
+          className: 'cnv-btn',
           'data-canvas-action': 'surface',
           'data-active': surface === 'excalidraw' ? 'true' : 'false',
           title: 'Switch between the Excalidraw editor and the design surface',
@@ -2653,54 +2653,54 @@ window.__ModuleLoader__.load({
         // of ONE decision, and four buttons for it was the first thing to wrap out of
         // the bar when the pane got narrow - so what is left in the bar is the
         // decision, and the menu holds the axes.
-        h('details', { className: 'dsc-menu', 'data-canvas-export': 'true', ref: exportMenuRef },
+        h('details', { className: 'cnv-menu', 'data-canvas-export': 'true', ref: exportMenuRef },
           h('summary', {
-            className: 'dsc-btn',
+            className: 'cnv-btn',
             'data-kind': 'primary',
             'data-active': exporting ? 'true' : 'false',
             'aria-disabled': busy || !selected ? 'true' : 'false',
             title: selected ? 'Write this design to a file' : 'Nothing to export yet',
           }, exporting ? 'Exporting\u2026' : 'Export \u25be'),
-          h('div', { className: 'dsc-menuPanel' },
+          h('div', { className: 'cnv-menuPanel' },
             h('button', {
               type: 'button',
-              className: 'dsc-menuItem',
+              className: 'cnv-menuItem',
               'data-canvas-export-item': 'png-1',
               disabled: busy || !selected,
               onClick: (event) => { event.preventDefault(); exportDesign('png', 1, 'desktop', 'PNG') },
             },
-              h('span', { className: 'dsc-menuLabel' }, 'PNG'),
-              h('span', { className: 'dsc-menuHint' }, 'The canvas at its own pixels \u2192 Desktop'),
+              h('span', { className: 'cnv-menuLabel' }, 'PNG'),
+              h('span', { className: 'cnv-menuHint' }, 'The canvas at its own pixels \u2192 Desktop'),
             ),
             h('button', {
               type: 'button',
-              className: 'dsc-menuItem',
+              className: 'cnv-menuItem',
               'data-canvas-export-item': 'png-2',
               disabled: busy || !selected,
               onClick: (event) => { event.preventDefault(); exportDesign('png', 2, 'desktop', 'PNG 2\u00d7') },
             },
-              h('span', { className: 'dsc-menuLabel' }, 'PNG \u00d7 2'),
-              h('span', { className: 'dsc-menuHint' }, 'Twice the pixels, same composition'),
+              h('span', { className: 'cnv-menuLabel' }, 'PNG \u00d7 2'),
+              h('span', { className: 'cnv-menuHint' }, 'Twice the pixels, same composition'),
             ),
             h('button', {
               type: 'button',
-              className: 'dsc-menuItem',
+              className: 'cnv-menuItem',
               'data-canvas-export-item': 'svg',
               disabled: busy || !selected,
               onClick: (event) => { event.preventDefault(); exportDesign('svg', 1, 'desktop', 'SVG') },
             },
-              h('span', { className: 'dsc-menuLabel' }, 'SVG'),
-              h('span', { className: 'dsc-menuHint' }, 'Vector, with the bundled fonts embedded'),
+              h('span', { className: 'cnv-menuLabel' }, 'SVG'),
+              h('span', { className: 'cnv-menuHint' }, 'Vector, with the bundled fonts embedded'),
             ),
             h('button', {
               type: 'button',
-              className: 'dsc-menuItem',
+              className: 'cnv-menuItem',
               'data-canvas-export-item': 'png-workspace',
               disabled: busy || !selected,
               onClick: (event) => { event.preventDefault(); exportDesign('png', 1, 'workspace', 'PNG \u2192 workspace') },
             },
-              h('span', { className: 'dsc-menuLabel' }, 'PNG \u2192 workspace'),
-              h('span', { className: 'dsc-menuHint' }, 'Write into the conversation folder'),
+              h('span', { className: 'cnv-menuLabel' }, 'PNG \u2192 workspace'),
+              h('span', { className: 'cnv-menuHint' }, 'Write into the conversation folder'),
             ),
           ),
         ),
@@ -2716,59 +2716,59 @@ window.__ModuleLoader__.load({
 
       const rail = h(
         'aside',
-        { className: 'dsc-rail', 'data-canvas-rail': 'true' },
-        h('div', { className: 'dsc-railHead' }, h('span', null, 'Designs'), h(Btn, { onClick: () => setNewOpen((value) => !value), title: 'Start a new design' }, '+ New')),
+        { className: 'cnv-rail', 'data-canvas-rail': 'true' },
+        h('div', { className: 'cnv-railHead' }, h('span', null, 'Designs'), h(Btn, { onClick: () => setNewOpen((value) => !value), title: 'Start a new design' }, '+ New')),
         newOpen ? h(NewGallery, { state, onCreate: createDesign, busy }) : null,
         designs.length === 0 && !newOpen
-          ? h('p', { className: 'dsc-rowMeta', style: { padding: '4px 2px' } }, 'Nothing here yet. Press + New, or ask the agent for a banner.')
+          ? h('p', { className: 'cnv-rowMeta', style: { padding: '4px 2px' } }, 'Nothing here yet. Press + New, or ask the agent for a banner.')
           : null,
         designs.map((entry) =>
           h(
             'div',
             {
               key: entry.id,
-              className: 'dsc-row',
+              className: 'cnv-row',
               'data-selected': entry.id === (selected && selected.id) ? 'true' : 'false',
               'data-armed': confirmDelete === entry.id ? 'true' : 'false',
               'data-canvas-design': entry.id,
               onClick: () => setSelectedId(entry.id),
               title: entry.title,
             },
-            h('div', { className: 'dsc-rowTitle' },
-              h('span', { className: 'dsc-rowName' }, entry.title),
+            h('div', { className: 'cnv-rowTitle' },
+              h('span', { className: 'cnv-rowName' }, entry.title),
               h(Pill, { verification: entry.verification }),
               // THE DELETE CONTROL: one small × on the row, revealed on hover or on
               // the selected row, which becomes the question on the first click and
               // the commit on the second.
               confirmDelete === entry.id
-                ? h('span', { className: 'dsc-rowConfirm' },
+                ? h('span', { className: 'cnv-rowConfirm' },
                     h('button', {
                       type: 'button',
-                      className: 'dsc-mini dsc-danger',
+                      className: 'cnv-mini cnv-danger',
                       'data-canvas-delete-confirm': entry.id,
                       disabled: busy,
                       title: 'Delete this design from ' + (entry.scope === 'library' ? 'the library' : 'this conversation'),
                       onClick: (event) => { event.stopPropagation(); deleteDesign(entry) },
                     }, 'Delete'),
-                    h('button', { type: 'button', className: 'dsc-mini', title: 'Keep it', onClick: (event) => { event.stopPropagation(); setConfirmDelete(null) } }, 'Keep'),
+                    h('button', { type: 'button', className: 'cnv-mini', title: 'Keep it', onClick: (event) => { event.stopPropagation(); setConfirmDelete(null) } }, 'Keep'),
                   )
                 : h('button', {
                     type: 'button',
-                    className: 'dsc-mini dsc-rowDelete',
+                    className: 'cnv-mini cnv-rowDelete',
                     'data-canvas-delete': entry.id,
                     disabled: busy,
                     title: 'Delete this design',
                     onClick: (event) => { event.stopPropagation(); setConfirmDelete(entry.id) },
                   }, '\u00d7'),
             ),
-            h('div', { className: 'dsc-rowMeta' }, (entry.preset ?? 'free-form') + ' \u00b7 rev ' + entry.revision + ' \u00b7 ' + entry.warnings + ' warn'),
+            h('div', { className: 'cnv-rowMeta' }, (entry.preset ?? 'free-form') + ' \u00b7 rev ' + entry.revision + ' \u00b7 ' + entry.warnings + ' warn'),
           ),
         ),
       )
 
       const stage = h(
         'div',
-        { className: 'dsc-stage', ref: stageRef, onPointerDown, 'data-canvas-stage-scroll': 'true' },
+        { className: 'cnv-stage', ref: stageRef, onPointerDown, 'data-canvas-stage-scroll': 'true' },
         selected && engine
           ? h(Artboard, {
               engine,
@@ -2788,7 +2788,7 @@ window.__ModuleLoader__.load({
               onResize: resizeLayer,
               triggerSelect,
             })
-          : h('div', { className: 'dsc-padEmpty' }, h(EmptyState, { engineNote, error, state, onCreate: createDesign, onOpenNew: () => setNewOpen(true) })),
+          : h('div', { className: 'cnv-padEmpty' }, h(EmptyState, { engineNote, error, state, onCreate: createDesign, onOpenNew: () => setNewOpen(true) })),
       )
 
       const layers = selected ? layerTree(selected.document) : []
@@ -2800,36 +2800,36 @@ window.__ModuleLoader__.load({
       // can push the other out of the bar.
       const designPane = h(
         'div',
-        { className: 'dsc-pane', 'data-canvas-pane': 'design' },
+        { className: 'cnv-pane', 'data-canvas-pane': 'design' },
         // THE STYLE this design carries: its name, what it is for, and the rules the
         // person and the model are both held to. Coming from the same pack the
         // transform reads, so the advice cannot drift from the look. ONE do, one
         // don't and one gate - the style library holds the rest, and a card that
         // lists six rules is a wall of text in a 296px bar.
         currentStyle
-          ? h('div', { className: 'dsc-styleCard', 'data-canvas-style-card': currentStyle.id },
+          ? h('div', { className: 'cnv-styleCard', 'data-canvas-style-card': currentStyle.id },
               h('strong', null, currentStyle.name),
-              h('span', { className: 'dsc-styleIntent', title: currentStyle.intent }, currentStyle.intent),
-              ...(currentStyle.do || []).slice(0, 1).map((rule, index) => h('span', { key: 'do-' + index, className: 'dsc-styleRule' }, h('b', null, 'Do: '), rule)),
-              ...(currentStyle.dont || []).slice(0, 1).map((rule, index) => h('span', { key: 'dont-' + index, className: 'dsc-styleRule' }, h('b', null, 'Don\u2019t: '), rule)),
-              ...(currentStyle.gates || []).slice(0, 1).map((gate, index) => h('span', { key: 'gate-' + index, className: 'dsc-styleRule' }, h('b', null, 'Gate: '), gate)),
+              h('span', { className: 'cnv-styleIntent', title: currentStyle.intent }, currentStyle.intent),
+              ...(currentStyle.do || []).slice(0, 1).map((rule, index) => h('span', { key: 'do-' + index, className: 'cnv-styleRule' }, h('b', null, 'Do: '), rule)),
+              ...(currentStyle.dont || []).slice(0, 1).map((rule, index) => h('span', { key: 'dont-' + index, className: 'cnv-styleRule' }, h('b', null, 'Don\u2019t: '), rule)),
+              ...(currentStyle.gates || []).slice(0, 1).map((gate, index) => h('span', { key: 'gate-' + index, className: 'cnv-styleRule' }, h('b', null, 'Gate: '), gate)),
             )
           : styleLibrary.length > 0
-            ? h('p', { className: 'dsc-rowMeta' }, 'No style yet - pick one above, or ask the agent for a look.')
+            ? h('p', { className: 'cnv-rowMeta' }, 'No style yet - pick one above, or ask the agent for a look.')
             : null,
         // THE LAYER LIST: every node of the design, in paint order, nested. A row
         // selects the node the drag will move; the arrows reorder it inside its own
         // array; the values are the design's own, in design pixels. The list owns its
         // own scrollport, so two hundred layers cost the lints under it nothing.
-        h('div', { className: 'dsc-section', 'data-grow': 'true' },
-          h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Layers'), h('span', null, selected ? layers.length + ' node(s)' : '')),
-          h('div', { className: 'dsc-layersScroll' },
+        h('div', { className: 'cnv-section', 'data-grow': 'true' },
+          h('div', { className: 'cnv-sectionHead' }, h('span', null, 'Layers'), h('span', null, selected ? layers.length + ' node(s)' : '')),
+          h('div', { className: 'cnv-layersScroll' },
             layers.length > 0
-              ? h('ul', { className: 'dsc-layers', 'data-canvas-layers': 'true' },
+              ? h('ul', { className: 'cnv-layers', 'data-canvas-layers': 'true' },
                   layers.map((row) =>
                     h('li', {
                       key: row.path,
-                      className: 'dsc-layer',
+                      className: 'cnv-layer',
                       'data-selected': row.path === selectedPath ? 'true' : 'false',
                       'data-layer-path': row.path,
                       // The indent is CAPPED: a deeply nested node stops walking off
@@ -2839,26 +2839,26 @@ window.__ModuleLoader__.load({
                       onClick: () => setSelectedPath(row.path),
                       title: row.node.kind + ' \u00b7 ' + row.path,
                     },
-                      h('span', { className: 'dsc-layerKind' }, layerKindBadge(row.node.kind)),
-                      h('span', { className: 'dsc-layerName' }, layerLabel(row.node, row.path)),
-                      h('span', { className: 'dsc-layerTools' },
-                        h('button', { type: 'button', className: 'dsc-mini', title: 'Move up in this array', disabled: busy || row.path.endsWith('.0'), onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'up') } }, '\u2191'),
-                        h('button', { type: 'button', className: 'dsc-mini', title: 'Move down in this array', disabled: busy, onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'down') } }, '\u2193'),
+                      h('span', { className: 'cnv-layerKind' }, layerKindBadge(row.node.kind)),
+                      h('span', { className: 'cnv-layerName' }, layerLabel(row.node, row.path)),
+                      h('span', { className: 'cnv-layerTools' },
+                        h('button', { type: 'button', className: 'cnv-mini', title: 'Move up in this array', disabled: busy || row.path.endsWith('.0'), onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'up') } }, '\u2191'),
+                        h('button', { type: 'button', className: 'cnv-mini', title: 'Move down in this array', disabled: busy, onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'down') } }, '\u2193'),
                       ),
                     ),
                   ),
                 )
-              : h('p', { className: 'dsc-rowMeta' }, selected ? 'This design has no layers yet.' : 'No design selected.'),
+              : h('p', { className: 'cnv-rowMeta' }, selected ? 'This design has no layers yet.' : 'No design selected.'),
           ),
         ),
         // THE LINTS: the same advisory list the model is handed, for the revision on
         // screen. They live in the SHAPING pane rather than the auditing one because
         // they are a to-do list - what a person acts on while editing.
-        h('div', { className: 'dsc-section' },
-          h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Lints'), h('span', null, lints ? lints.length + ' \u00b7 rev ' + (selected ? selected.revision : '?') : 'laying out\u2026')),
+        h('div', { className: 'cnv-section' },
+          h('div', { className: 'cnv-sectionHead' }, h('span', null, 'Lints'), h('span', null, lints ? lints.length + ' \u00b7 rev ' + (selected ? selected.revision : '?') : 'laying out\u2026')),
           lints && lints.length > 0
-            ? h('ul', { className: 'dsc-lints' }, lints.map((lint, index) => h(LintLine, { key: lint.code + index, lint })))
-            : h('p', { className: 'dsc-rowMeta' }, lints ? 'None.' : 'Laying out\u2026'),
+            ? h('ul', { className: 'cnv-lints' }, lints.map((lint, index) => h(LintLine, { key: lint.code + index, lint })))
+            : h('p', { className: 'cnv-rowMeta' }, lints ? 'None.' : 'Laying out\u2026'),
         ),
       )
 
@@ -2881,25 +2881,25 @@ window.__ModuleLoader__.load({
         return tokens && typeof tokens === 'object' ? Object.values(tokens).filter((value) => typeof value === 'string') : []
       })()
       const transformPane = !selectedNode
-        ? h('p', { className: 'dsc-rowMeta' }, 'Select a layer to transform it - click one in the layer list, or on the canvas.')
+        ? h('p', { className: 'cnv-rowMeta' }, 'Select a layer to transform it - click one in the layer list, or on the canvas.')
         : h(
             React.Fragment,
             null,
-            h('div', { className: 'dsc-section', 'data-canvas-transform': 'true' },
-              h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Move'), h('span', null, nudgeStep + 'px')),
+            h('div', { className: 'cnv-section', 'data-canvas-transform': 'true' },
+              h('div', { className: 'cnv-sectionHead' }, h('span', null, 'Move'), h('span', null, nudgeStep + 'px')),
               // THE FOUR DIRECTIONS IN ONE ROW. A cross is the gesture a gamepad has,
               // not the one a toolbar has: four buttons side by side read as "move",
               // and the row is one line in a 296px bar instead of a 3x3 block.
-              h('div', { className: 'dsc-nudgeRow', 'data-canvas-nudge': 'true' },
+              h('div', { className: 'cnv-nudgeRow', 'data-canvas-nudge': 'true' },
                 h('button', { type: 'button', 'data-canvas-nudge-dir': 'left', disabled: busy, title: 'Move left', onClick: () => nudgeLayer(-nudgeStep, 0) }, '\u2190'),
                 h('button', { type: 'button', 'data-canvas-nudge-dir': 'up', disabled: busy, title: 'Move up', onClick: () => nudgeLayer(0, -nudgeStep) }, '\u2191'),
                 h('button', { type: 'button', 'data-canvas-nudge-dir': 'down', disabled: busy, title: 'Move down', onClick: () => nudgeLayer(0, nudgeStep) }, '\u2193'),
                 h('button', { type: 'button', 'data-canvas-nudge-dir': 'right', disabled: busy, title: 'Move right', onClick: () => nudgeLayer(nudgeStep, 0) }, '\u2192'),
-                h('span', { className: 'dsc-spacer' }),
+                h('span', { className: 'cnv-spacer' }),
                 [1, 10].map((step) => h('button', {
                   key: 'step-' + step,
                   type: 'button',
-                  className: 'dsc-mini',
+                  className: 'cnv-mini',
                   'data-canvas-step': String(step),
                   'data-on': nudgeStep === step ? 'true' : 'false',
                   style: { width: 'auto', padding: '0 8px', height: '26px' },
@@ -2907,12 +2907,12 @@ window.__ModuleLoader__.load({
                 }, step + 'px')),
               ),
             ),
-            h('div', { className: 'dsc-section', 'data-canvas-size': 'true' },
-              h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Size'), h('span', null, selectedBox ? Math.round(selectedBox.w) + ' \u00d7 ' + Math.round(selectedBox.h) + ' as laid out' : '')),
-              h('div', { className: 'dsc-row2' },
-                h('span', { className: 'dsc-fieldLabel' }, 'Width'),
+            h('div', { className: 'cnv-section', 'data-canvas-size': 'true' },
+              h('div', { className: 'cnv-sectionHead' }, h('span', null, 'Size'), h('span', null, selectedBox ? Math.round(selectedBox.w) + ' \u00d7 ' + Math.round(selectedBox.h) + ' as laid out' : '')),
+              h('div', { className: 'cnv-row2' },
+                h('span', { className: 'cnv-fieldLabel' }, 'Width'),
                 h('input', {
-                  className: 'dsc-num',
+                  className: 'cnv-num',
                   type: 'number',
                   min: 8,
                   'data-canvas-size-input': 'w',
@@ -2922,7 +2922,7 @@ window.__ModuleLoader__.load({
                   title: 'A number, or type over a hug to give it one',
                 }),
                 h('input', {
-                  className: 'dsc-num',
+                  className: 'cnv-num',
                   type: 'number',
                   min: 8,
                   'data-canvas-size-input': 'h',
@@ -2932,12 +2932,12 @@ window.__ModuleLoader__.load({
                   title: selectedNode.kind === 'text' ? 'A text layer\u2019s height is what its words measure' : 'Height in design pixels',
                 }),
               ),
-              h('div', { className: 'dsc-row2' },
-                h('span', { className: 'dsc-fieldLabel' }, 'Scale'),
+              h('div', { className: 'cnv-row2' },
+                h('span', { className: 'cnv-fieldLabel' }, 'Scale'),
                 [0.5, 0.9, 1.1, 2].map((factor) => h('button', {
                   key: 'scale-' + factor,
                   type: 'button',
-                  className: 'dsc-mini',
+                  className: 'cnv-mini',
                   'data-canvas-scale': String(factor),
                   disabled: busy,
                   style: { width: 'auto', padding: '0 7px', height: '22px' },
@@ -2946,11 +2946,11 @@ window.__ModuleLoader__.load({
                 }, '\u00d7' + factor)),
               ),
             ),
-            h('div', { className: 'dsc-section', 'data-canvas-frame': 'true' },
-              h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Rotate') , h('span', null, (typeof selectedNode.rotate === 'number' ? selectedNode.rotate : 0) + '\u00b0')),
-              h('div', { className: 'dsc-row2' },
+            h('div', { className: 'cnv-section', 'data-canvas-frame': 'true' },
+              h('div', { className: 'cnv-sectionHead' }, h('span', null, 'Rotate') , h('span', null, (typeof selectedNode.rotate === 'number' ? selectedNode.rotate : 0) + '\u00b0')),
+              h('div', { className: 'cnv-row2' },
                 h('input', {
-                  className: 'dsc-slider',
+                  className: 'cnv-slider',
                   type: 'range',
                   min: -180,
                   max: 180,
@@ -2960,12 +2960,12 @@ window.__ModuleLoader__.load({
                   value: typeof selectedNode.rotate === 'number' ? selectedNode.rotate : 0,
                   onChange: (event) => rotateLayer(Number(event.target.value)),
                 }),
-                h('button', { type: 'button', className: 'dsc-mini', style: { width: 'auto', padding: '0 7px', height: '22px' }, disabled: busy, title: 'Back to 0\u00b0', 'data-canvas-rotate-reset': 'true', onClick: () => rotateLayer(0) }, '0\u00b0'),
+                h('button', { type: 'button', className: 'cnv-mini', style: { width: 'auto', padding: '0 7px', height: '22px' }, disabled: busy, title: 'Back to 0\u00b0', 'data-canvas-rotate-reset': 'true', onClick: () => rotateLayer(0) }, '0\u00b0'),
               ),
-              h('div', { className: 'dsc-row2' },
-                h('span', { className: 'dsc-fieldLabel' }, 'Opacity'),
+              h('div', { className: 'cnv-row2' },
+                h('span', { className: 'cnv-fieldLabel' }, 'Opacity'),
                 h('input', {
-                  className: 'dsc-slider',
+                  className: 'cnv-slider',
                   type: 'range',
                   min: 0,
                   max: 1,
@@ -2975,29 +2975,29 @@ window.__ModuleLoader__.load({
                   value: typeof selectedNode.opacity === 'number' ? selectedNode.opacity : 1,
                   onChange: (event) => opacityLayer(Number(event.target.value)),
                 }),
-                h('span', { className: 'dsc-rowMeta', style: { width: '34px', textAlign: 'right' } }, Math.round((typeof selectedNode.opacity === 'number' ? selectedNode.opacity : 1) * 100) + '%'),
+                h('span', { className: 'cnv-rowMeta', style: { width: '34px', textAlign: 'right' } }, Math.round((typeof selectedNode.opacity === 'number' ? selectedNode.opacity : 1) * 100) + '%'),
               ),
             ),
-            h('div', { className: 'dsc-section', 'data-canvas-colors': 'true' },
-              h('div', { className: 'dsc-sectionHead' }, h('span', null, 'Colour'), h('span', null, targets.length > 0 ? targets.length + ' target(s)' : 'none')),
+            h('div', { className: 'cnv-section', 'data-canvas-colors': 'true' },
+              h('div', { className: 'cnv-sectionHead' }, h('span', null, 'Colour'), h('span', null, targets.length > 0 ? targets.length + ' target(s)' : 'none')),
               targets.length === 0
-                ? h('p', { className: 'dsc-rowMeta' }, 'This kind paints nothing it owns - an image or an SVG document keeps its own colours.')
+                ? h('p', { className: 'cnv-rowMeta' }, 'This kind paints nothing it owns - an image or an SVG document keeps its own colours.')
                 : targets.map((target) =>
-                    h('div', { key: target.key, className: 'dsc-row2', 'data-canvas-color-row': target.key },
-                      h('span', { className: 'dsc-fieldLabel' }, target.label),
+                    h('div', { key: target.key, className: 'cnv-row2', 'data-canvas-color-row': target.key },
+                      h('span', { className: 'cnv-fieldLabel' }, target.label),
                       h('input', {
-                        className: 'dsc-colorInput',
+                        className: 'cnv-colorInput',
                         type: 'color',
                         'data-canvas-color': target.key,
                         disabled: busy,
                         value: paintColorOf(target.paint) ?? '#000000',
                         onChange: (event) => colorLayer(target.key, event.target.value),
                       }),
-                      h('div', { className: 'dsc-swatches' },
+                      h('div', { className: 'cnv-swatches' },
                         designColors.slice(0, 8).map((color, index) => h('button', {
                           key: 'swatch-' + index,
                           type: 'button',
-                          className: 'dsc-swatch',
+                          className: 'cnv-swatch',
                           'data-canvas-swatch': color,
                           'data-active': paintColorOf(target.paint) === paintColorOf(color) ? 'true' : 'false',
                           style: { background: color },
@@ -3013,43 +3013,43 @@ window.__ModuleLoader__.load({
 
       const inspectPane = h(
         'div',
-        { className: 'dsc-pane', 'data-canvas-pane': 'inspect' },
-        h('div', { className: 'dsc-paneScroll' }, transformPane),
+        { className: 'cnv-pane', 'data-canvas-pane': 'inspect' },
+        h('div', { className: 'cnv-paneScroll' }, transformPane),
       )
 
       const side = h(
         'aside',
-        { className: 'dsc-side', 'data-canvas-side': 'true' },
-        h('div', { className: 'dsc-sideHead' }, h('span', null, 'Canvas'), h('span', null, selected ? 'rev ' + selected.revision : '')),
-        h('div', { className: 'dsc-sideTabs', 'data-canvas-side-tabs': 'true' },
-          h('button', { type: 'button', className: 'dsc-sideTab', 'data-active': sideTab === 'design' ? 'true' : 'false', onClick: () => setSideTab('design') }, 'Design' + (lints && lints.length > 0 ? ' \u00b7 ' + lints.length : '')),
-          h('button', { type: 'button', className: 'dsc-sideTab', 'data-active': sideTab === 'inspect' ? 'true' : 'false', onClick: () => setSideTab('inspect') }, 'Inspect'),
+        { className: 'cnv-side', 'data-canvas-side': 'true' },
+        h('div', { className: 'cnv-sideHead' }, h('span', null, 'Canvas'), h('span', null, selected ? 'rev ' + selected.revision : '')),
+        h('div', { className: 'cnv-sideTabs', 'data-canvas-side-tabs': 'true' },
+          h('button', { type: 'button', className: 'cnv-sideTab', 'data-active': sideTab === 'design' ? 'true' : 'false', onClick: () => setSideTab('design') }, 'Design' + (lints && lints.length > 0 ? ' \u00b7 ' + lints.length : '')),
+          h('button', { type: 'button', className: 'cnv-sideTab', 'data-active': sideTab === 'inspect' ? 'true' : 'false', onClick: () => setSideTab('inspect') }, 'Inspect'),
         ),
         sideTab === 'inspect' ? inspectPane : designPane,
       )
 
       return h(
         'div',
-        { className: 'dsc-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true', 'data-canvas-version': PLUGIN_VERSION, 'data-canvas-surface': surface },
+        { className: 'cnv-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true', 'data-canvas-version': PLUGIN_VERSION, 'data-canvas-surface': surface },
         // THE PACK'S OWN BAR IS NOT RENDERED IN EXCALIDRAW MODE. The editor owns the
         // pane: its own toolbar, its own zoom, its own export and Library. Keeping
         // this bar above it was a strip of controls for a surface the person is no
         // longer looking at - so it exists only while the design surface is up.
         surface === 'design' ? toolbar : null,
-        h('div', { className: 'dsc-body' }, rail, stage, side),
+        h('div', { className: 'cnv-body' }, rail, stage, side),
         drawer && selected
           ? h(
               'div',
-              { className: 'dsc-drawer', 'data-canvas-drawer': 'true' },
-              h('div', { className: 'dsc-drawerHead' }, h('span', null, 'Document (canonical JSON)'), h('span', { className: 'dsc-spacer' }),
+              { className: 'cnv-drawer', 'data-canvas-drawer': 'true' },
+              h('div', { className: 'cnv-drawerHead' }, h('span', null, 'Document (canonical JSON)'), h('span', { className: 'cnv-spacer' }),
                 h(Btn, { onClick: applyDraft, disabled: busy, kind: 'primary' }, 'Apply'),
                 h(Btn, { onClick: () => setDraft(JSON.stringify(selected.document, null, 2)) }, 'Reset'),
               ),
               h('textarea', { value: draft, spellCheck: false, onChange: (event) => setDraft(event.target.value), 'data-canvas-source': 'true' }),
             )
           : null,
-        note ? h('div', { className: 'dsc-note', 'data-kind': note.kind }, note.text) : null,
-        engineNote ? h('div', { className: 'dsc-note', 'data-kind': 'info' }, engineNote) : null,
+        note ? h('div', { className: 'cnv-note', 'data-kind': note.kind }, note.text) : null,
+        engineNote ? h('div', { className: 'cnv-note', 'data-kind': 'info' }, engineNote) : null,
         // The Excalidraw surface replaces the DESIGN surface visually while
         // leaving it mounted: the overlay is a sibling, so switching back is a
         // state change, the design keeps its zoom/selection/exports, and the
@@ -3106,63 +3106,63 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { 'data-canvas-new': 'true' },
-        h('select', { className: 'dsc-select', value: presetId ?? '', onChange: (event) => setPresetId(event.target.value), style: { width: '100%', marginBottom: '6px' } },
+        h('select', { className: 'cnv-select', value: presetId ?? '', onChange: (event) => setPresetId(event.target.value), style: { width: '100%', marginBottom: '6px' } },
           presets.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.label + ' \u00b7 ' + entry.width + '\u00d7' + entry.height)),
         ),
         // THE LOOK LIBRARY: a composition is WHICH design, a style is HOW it looks.
         // They are independent, so a banner can be started in any genre and
         // re-styled later without moving a single element.
         styles.length > 0
-          ? h('div', { className: 'dsc-styles', 'data-canvas-styles': 'true' },
+          ? h('div', { className: 'cnv-styles', 'data-canvas-styles': 'true' },
               styles.map((entry) =>
                 h('button', {
                   key: entry.id,
                   type: 'button',
-                  className: 'dsc-styleChip',
+                  className: 'cnv-styleChip',
                   'data-selected': entry.id === styleId ? 'true' : 'false',
                   title: entry.intent,
                   onClick: () => setStyleId(entry.id === styleId ? null : entry.id),
                 },
-                  h('span', { className: 'dsc-styleDots' }, (entry.swatch.colours || []).slice(0, 4).map((colour, index) => h('i', { key: colour + index, style: { background: colour } }))),
-                  h('span', { className: 'dsc-styleName' }, entry.name),
+                  h('span', { className: 'cnv-styleDots' }, (entry.swatch.colours || []).slice(0, 4).map((colour, index) => h('i', { key: colour + index, style: { background: colour } }))),
+                  h('span', { className: 'cnv-styleName' }, entry.name),
                 ),
               ),
             )
           : null,
-        chosenStyle ? h('p', { className: 'dsc-rowMeta', style: { margin: '6px 0' } }, chosenStyle.intent) : null,
+        chosenStyle ? h('p', { className: 'cnv-rowMeta', style: { margin: '6px 0' } }, chosenStyle.intent) : null,
         // THE HOUSE GALLERY: the fastest start there is, because the preset, the
         // composition AND the look have already been chosen well. It sits above the
         // presets crossed with archetypes, which is the manual way to the same place.
         (state && Array.isArray(state.examples) && state.examples.length > 0)
           ? h('div', { 'data-canvas-examples': 'true' },
-              h('p', { className: 'dsc-rowMeta', style: { margin: '2px 0 4px' } }, 'Start from a house example (' + state.examples.length + '):'),
-              h('div', { className: 'dsc-gallery' },
+              h('p', { className: 'cnv-rowMeta', style: { margin: '2px 0 4px' } }, 'Start from a house example (' + state.examples.length + '):'),
+              h('div', { className: 'cnv-gallery' },
                 state.examples.map((entry) =>
                   h('button', {
                     key: entry.id,
                     type: 'button',
-                    className: 'dsc-galleryItem',
+                    className: 'cnv-galleryItem',
                     disabled: busy,
                     'data-example': entry.id,
                     title: entry.intent,
                     onClick: () => onCreate(null, null, null, entry.id),
                   },
-                    h('span', { className: 'dsc-galleryTitle' }, entry.title),
-                    h('span', { className: 'dsc-galleryMeta' }, entry.preset + ' \u00b7 ' + entry.style),
+                    h('span', { className: 'cnv-galleryTitle' }, entry.title),
+                    h('span', { className: 'cnv-galleryMeta' }, entry.preset + ' \u00b7 ' + entry.style),
                   ),
                 ),
               ),
             )
           : null,
-        h('div', { className: 'dsc-gallery' },
-          h('button', { type: 'button', className: 'dsc-galleryItem', disabled: busy, onClick: () => onCreate(presetId, null, styleId) },
-            h('span', { className: 'dsc-galleryTitle' }, 'Blank starter'),
-            h('span', { className: 'dsc-galleryMeta' }, chosenStyle ? chosenStyle.name + ' starter' : 'Mesh + your headline'),
+        h('div', { className: 'cnv-gallery' },
+          h('button', { type: 'button', className: 'cnv-galleryItem', disabled: busy, onClick: () => onCreate(presetId, null, styleId) },
+            h('span', { className: 'cnv-galleryTitle' }, 'Blank starter'),
+            h('span', { className: 'cnv-galleryMeta' }, chosenStyle ? chosenStyle.name + ' starter' : 'Mesh + your headline'),
           ),
           matching.map((entry) =>
-            h('button', { key: entry.id, type: 'button', className: 'dsc-galleryItem', disabled: busy, onClick: () => onCreate(presetId, entry.id, styleId), title: entry.description },
-              h('span', { className: 'dsc-galleryTitle' }, entry.title),
-              h('span', { className: 'dsc-galleryMeta' }, entry.presets.length + ' preset(s)'),
+            h('button', { key: entry.id, type: 'button', className: 'cnv-galleryItem', disabled: busy, onClick: () => onCreate(presetId, entry.id, styleId), title: entry.description },
+              h('span', { className: 'cnv-galleryTitle' }, entry.title),
+              h('span', { className: 'cnv-galleryMeta' }, entry.presets.length + ' preset(s)'),
             ),
           ),
         ),
@@ -3174,16 +3174,16 @@ window.__ModuleLoader__.load({
       const presets = state && state.presets ? Object.values(state.presets) : []
       return h(
         'div',
-        { className: 'dsc-empty', 'data-canvas-empty': 'true' },
+        { className: 'cnv-empty', 'data-canvas-empty': 'true' },
         h('h3', null, 'Canvas'),
         h('p', null, 'A design page the agent drives. Ask for a GitHub social preview, a LinkedIn banner or a poster, or start one yourself - the agent writes the same document the drawer shows, and the browser renders it here.'),
         h('p', null, engineNote || (error ? String(error.message ?? error) : null) || 'Pick a destination to start:'),
         presets.length > 0
-          ? h('div', { className: 'dsc-gallery' },
+          ? h('div', { className: 'cnv-gallery' },
               presets.slice(0, 6).map((preset) =>
-                h('button', { key: preset.id, type: 'button', className: 'dsc-galleryItem', onClick: () => onCreate(preset.id, null) },
-                  h('span', { className: 'dsc-galleryTitle' }, preset.label),
-                  h('span', { className: 'dsc-galleryMeta' }, preset.width + '\u00d7' + preset.height),
+                h('button', { key: preset.id, type: 'button', className: 'cnv-galleryItem', onClick: () => onCreate(preset.id, null) },
+                  h('span', { className: 'cnv-galleryTitle' }, preset.label),
+                  h('span', { className: 'cnv-galleryMeta' }, preset.width + '\u00d7' + preset.height),
                 ),
               ),
             )
@@ -3266,11 +3266,11 @@ window.__ModuleLoader__.load({
       const state_ = entry ? entry.verification.state : meta ? meta.state : 'pending'
       return h(
         'div',
-        { className: 'dsc-card', 'data-canvas-card': props.toolName },
-        h('div', { className: 'dsc-cardPic' }, h('canvas', { ref: canvasRef, 'data-canvas-card-pic': 'true' })),
-        h('div', { className: 'dsc-cardText' },
-          h('div', { className: 'dsc-cardTitle' }, h('strong', null, titleOf(props.toolName, args, entry, meta)), h('span', { className: 'dsc-pill', 'data-state': state_ }, state_)),
-          h('div', { className: 'dsc-cardBody' }, content),
+        { className: 'cnv-card', 'data-canvas-card': props.toolName },
+        h('div', { className: 'cnv-cardPic' }, h('canvas', { ref: canvasRef, 'data-canvas-card-pic': 'true' })),
+        h('div', { className: 'cnv-cardText' },
+          h('div', { className: 'cnv-cardTitle' }, h('strong', null, titleOf(props.toolName, args, entry, meta)), h('span', { className: 'cnv-pill', 'data-state': state_ }, state_)),
+          h('div', { className: 'cnv-cardBody' }, content),
         ),
       )
     }

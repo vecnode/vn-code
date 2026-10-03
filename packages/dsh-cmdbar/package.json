@@ -1,6 +1,6 @@
 {
   "name": "dsh-cmdbar",
-  "version": "0.1.0-alpha.16",
+  "version": "0.1.0-alpha.17",
   "description": "Command bar: a read-only transcript of the agent's own commands in a bottom dock, fed by one bounded read-only route. One view, and no shell of its own.",
   "type": "module",
   "main": "lib/index.js",

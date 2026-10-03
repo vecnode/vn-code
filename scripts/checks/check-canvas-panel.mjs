@@ -382,7 +382,7 @@ async function run() {
     const tabs = document.querySelector('[data-canvas-side-tabs]')
     const designPane = document.querySelector('[data-canvas-pane=design]')
     const inspectPane = document.querySelector('[data-canvas-pane=inspect]')
-    const listScroll = document.querySelector('.dsc-layersScroll')
+    const listScroll = document.querySelector('.cnv-layersScroll')
     const art = document.querySelector('[data-canvas-artboard]')
     report.geometry = {
       side: rectOf(side) ? { w: rectOf(side).width, h: rectOf(side).height } : null,
@@ -423,7 +423,7 @@ async function run() {
       report.overflowBelowPanel = paintsBelow(side, rectOf(side).bottom)
       report.listScrollsInsideItsSection = listScroll ? listScroll.scrollHeight > listScroll.clientHeight : null
     }
-    report.lints = (document.querySelectorAll('.dsc-lint') || []).length
+    report.lints = (document.querySelectorAll('.cnv-lint') || []).length
     // THE RULERS AND THE ORIGIN: what the page draws for its own coordinate system,
     // plus the measured GAP between the artboard and the floating composer seat.
     const topRuler = document.querySelector('[data-canvas-ruler="top"]')
@@ -433,8 +433,8 @@ async function run() {
     report.rulers = {
       top: topRuler !== null,
       left: leftRuler !== null,
-      topLabels: topRuler ? Array.from(topRuler.querySelectorAll('.dsc-axisLabel')).map((node) => node.textContent).slice(0, 4) : [],
-      leftLabels: leftRuler ? Array.from(leftRuler.querySelectorAll('.dsc-axisLabel')).map((node) => node.textContent).slice(0, 4) : [],
+      topLabels: topRuler ? Array.from(topRuler.querySelectorAll('.cnv-axisLabel')).map((node) => node.textContent).slice(0, 4) : [],
+      leftLabels: leftRuler ? Array.from(leftRuler.querySelectorAll('.cnv-axisLabel')).map((node) => node.textContent).slice(0, 4) : [],
       originMarker: document.querySelector('[data-canvas-origin-marker]') !== null,
       originAttr: art ? art.getAttribute('data-canvas-origin') : null,
       originAtArtTopLeft: Boolean(artBox && topRuler && Math.abs(rectOf(topRuler).left - artBox.left) < 26),
@@ -538,7 +538,7 @@ async function run() {
     //     the shaping one rather than stacking under it - and it is now the CONTROLS,
     //     not a quarter-scale copy of the artboard.
     report.step = 'switch'
-    const inspectTab = Array.from(document.querySelectorAll('.dsc-sideTab')).find((button) => button.textContent.indexOf('Inspect') >= 0)
+    const inspectTab = Array.from(document.querySelectorAll('.cnv-sideTab')).find((button) => button.textContent.indexOf('Inspect') >= 0)
     if (inspectTab) {
       inspectTab.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await settle(6)
@@ -662,13 +662,13 @@ async function run() {
       // open menu has to out-rank the columns it drops over - the composer seat (7/9),
       // the frame's overlay (20) and the sidebar's own fixed controls (30). This is the
       // bug the user reported as "the export dropdown is behind the bar".
-      const panel = exportControl.querySelector('.dsc-menuPanel')
+      const panel = exportControl.querySelector('.cnv-menuPanel')
       report.menuLayer = panel ? getComputedStyle(panel).zIndex : null
       report.menuAboveFurniture = panel ? Number(getComputedStyle(panel).zIndex) > 30 : false
       report.exportItems = Array.from(exportControl.querySelectorAll('[data-canvas-export-item]')).map((node) => node.getAttribute('data-canvas-export-item')).join(',')
       // The rows carry the DESTINATION too, which is the axis the old four buttons
       // spelled out in their labels.
-      report.exportHints = Array.from(exportControl.querySelectorAll('.dsc-menuHint')).map((node) => node.textContent).join(' | ')
+      report.exportHints = Array.from(exportControl.querySelectorAll('.cnv-menuHint')).map((node) => node.textContent).join(' | ')
       const pngRow = exportControl.querySelector('[data-canvas-export-item="png-1"]')
       if (pngRow) {
         pngRow.click()
@@ -750,11 +750,11 @@ async function run() {
       if (saveButton) {
         saveButton.click()
         for (let attempt = 0; attempt < 120; attempt += 1) {
-          const note = document.querySelector('.dsc-note')
+          const note = document.querySelector('.cnv-note')
           if (note && note.textContent.indexOf('Saved') === 0) break
           await frame()
         }
-        report.saveNote = (document.querySelector('.dsc-note') || {}).textContent || ''
+        report.saveNote = (document.querySelector('.cnv-note') || {}).textContent || ''
       }
 
     report.ok = true

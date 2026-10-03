@@ -173,7 +173,7 @@
       ]
     },
     "dsh-cmdbar": {
-      "version": "0.1.0-alpha.16",
+      "version": "0.1.0-alpha.17",
       "rows": [
         "cmdbar"
       ],
@@ -267,7 +267,7 @@
       "vendoredPatches": 2
     },
     "dsh-canvas": {
-      "version": "0.1.0-alpha.11",
+      "version": "0.1.0-alpha.12",
       "rows": [
         "canvas"
       ],

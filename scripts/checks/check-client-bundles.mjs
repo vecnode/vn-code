@@ -106,10 +106,8 @@ let failures = 0
 // The last Menu the stand-in primitives rendered, so a check can read the props
 // a bundle handed it (its items and its onSelect) instead of only the markup.
 let lastMenuProps = null
-// ... and the same for the two primitives whose interesting half is a PORTAL the
-// server renderer cannot follow: the hover card (its `content` is the whole
-// command dsh-cmdbar shows) and dsh-canvas's own figures.
-let lastHoverCardProps = null
+// ... and the same for the primitives whose interesting half is a PORTAL the
+// server renderer cannot follow (dsh-canvas's own figures).
 function check(label, actual, expected) {
   const ok = expected === undefined ? Boolean(actual) : actual === expected
   if (!ok) failures += 1
@@ -333,34 +331,20 @@ function loadBundle(relative, extraRequire) {
                 props && props.children !== undefined ? props.children : null,
               )
             }
-      // HoverCard renders its ANCHOR in place and keeps the props, because the
-      // card itself is portaled to the body - which the server renderer cannot
-      // follow at all. Keeping them is what lets a check read the card's CONTENT
-      // (the whole command, alpha.15) out of a static render.
-      // Both of alpha.15's new primitives can be DROPPED (`withoutHoverCard` /
-      // `withoutPill`), because the bundle guards them: a root-scoped slot
-      // ABDICATES on a render throw, so `h(undefined, ...)` on an older engine
-      // would cost the whole panel. The fallback has to be a working bar.
-      const Card =
-        extraRequire && extraRequire.withoutHoverCard === true
-          ? undefined
-          : (props) => {
-              lastHoverCardProps = props
-              return props && props.anchor !== undefined ? props.anchor : null
-            }
+      // The Pill is alpha.15's one new primitive, and it can be DROPPED
+      // (`withoutPill`), because the bundle guards it: a root-scoped slot ABDICATES
+      // on a render throw, so `h(undefined, ...)` on an older engine would cost the
+      // whole panel. The fallback has to be a working bar.
+      const Clip = async () => true
       // The clipboard helper the pinned line really exports
       // (`writeClipboard(text)`, which answers whether the host accepted the
-      // write). It is here because the REAL package exports it: a stub poorer
-      // than the package it stands in for would let an unqualified
-      // `writeClipboard(...)` call in a bundle look like a call to an absent
-      // primitive - a quiet no-op here - while throwing a ReferenceError in the
-      // browser. alpha.14 was exactly that bug, twice over.
-      const Clip = async () => true
+      // write): a stub poorer than the package it stands in for would let an
+      // unqualified call in a bundle look like a call to an absent primitive - a
+      // quiet no-op here - while throwing a ReferenceError in the browser.
       return {
         Menu: Anchor,
         Tooltip: Child,
         Pill: Chip,
-        HoverCard: Card,
         MarkdownText: Text,
         Modal: Dialog,
         Button: Push,
@@ -1871,11 +1855,11 @@ check('gittree: a plain branch wears a chip', gitRailMarkup.includes('data-gittr
 
 // -------------------------------------------------------------- dsh-cmdbar
 const cmdbar = loadBundle('packages/dsh-cmdbar/lib/client.js', {})
-// The SAME bundle against an engine that has neither of alpha.15's two new
-// primitives. It is a second load and not a footnote because the failure it
-// guards is the abdicating one: `h(undefined, …)` inside a root-scoped slot does
-// not cost a chip, it retires the whole dock for the life of the page.
-const cmdbarNoCard = loadBundle('packages/dsh-cmdbar/lib/client.js', { withoutHoverCard: true, withoutPill: true })
+// The SAME bundle against an engine whose primitives have no Pill. It is a second
+// load and not a footnote because the failure it guards is the abdicating one:
+// `h(undefined, …)` inside a root-scoped slot does not cost a chip, it retires the
+// whole dock for the life of the page.
+const cmdbarNoCard = loadBundle('packages/dsh-cmdbar/lib/client.js', { withoutPill: true })
 const cmdbarCssTag = cmdbar.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-cmdbar/cmdbar.css').pop()
 const cmdbarCss = cmdbarCssTag ? cmdbarCssTag.textContent : ''
 check('cmdbar bundle id', cmdbar.id, 'dsh-cmdbar')
@@ -2033,9 +2017,9 @@ check('cmdbar adopt: another window still moves the dock', adopt({ shared: 350, 
 // itself does and does not republish a change.
 check(
   'cmdbar dock names the version',
-  cmdbarDockMarkup.includes('dsh-cmdbar 0.1.0-alpha.16') &&
-    cmdbarDockMarkup.includes('title="dsh-cmdbar 0.1.0-alpha.16"') &&
-    cmdbarDockMarkup.includes('data-dsh-cmdbar-version="0.1.0-alpha.16"'),
+  cmdbarDockMarkup.includes('dsh-cmdbar 0.1.0-alpha.17') &&
+    cmdbarDockMarkup.includes('title="dsh-cmdbar 0.1.0-alpha.17"') &&
+    cmdbarDockMarkup.includes('data-dsh-cmdbar-version="0.1.0-alpha.17"'),
 )
 // alpha.16: WHAT ACTUALLY REPUBLISHES A CLIENT BUNDLE. alpha.15 asserted, in the
 // bundle's own comment, that the host snapshots every `client.js` at boot and that
@@ -2054,7 +2038,7 @@ check(
     cmdbarSource.includes('only a host restart') === false &&
     cmdbarSource.includes('SNAPSHOTS each') === false,
 )
-check('cmdbar bar no longer prints the version as text', cmdbarDockMarkup.includes('>dsh-cmdbar 0.1.0-alpha.16<') === false && cmdbarSource.includes('dsc-ver') === false)
+check('cmdbar bar no longer prints the version as text', cmdbarDockMarkup.includes('>dsh-cmdbar 0.1.0-alpha.17<') === false && cmdbarSource.includes('dsc-ver') === false)
 // alpha.14: the RENAME. The bundle, its row id, its two seats, the one route it
 // reads and the data-* attributes a person or a test can find it by all moved
 // from `dsh-terminal` to `dsh-cmdbar`, because the old name described the
@@ -2248,7 +2232,7 @@ check(
   cmdbarSource.includes('The agent\u2019s own commands in this conversation') === false,
 )
 
-const { parseExecCall, parseExitMarker, stripAnsi, buildActivityFromEvents, activitySignature, filterActivity, formatDuration, activityFactsTitle, followDecision, commandBody, commandCard } =
+const { parseExecCall, parseExitMarker, stripAnsi, buildActivityFromEvents, activitySignature, filterActivity, formatDuration, activityFactsTitle, followDecision, commandBody, commandTooltip } =
   cmdbar.exports.__internals
 
 const shellCall = parseExecCall('bash', '{"command":"ls -la","description":"list files"}')
@@ -2541,15 +2525,12 @@ check(
   'activity view: a multi-line command is drawn like any other',
   activityMultiLineMarkup.includes('multi-line') === false && activityMultiLineMarkup.includes('Run in Terminal') === false,
 )
-// ... and the card the row hangs on that line really carries it. The stub keeps
-// the props because the card itself is portaled, so this is the row's own render
-// reaching the primitive - not the pure decision called by hand above.
+// ... and the line the row draws really wears it. The tooltip is a plain `title`,
+// so the row's own static render answers for it - this is not the pure decision
+// called by hand.
 check(
-  'activity view: the row hands the WHOLE command to the card',
-  lastHoverCardProps !== null &&
-    lastHoverCardProps.content !== undefined &&
-    lastHoverCardProps.content.props.children === 'npm run a\nnpm run b' &&
-    lastHoverCardProps.variant === 'preview',
+  'activity view: the row puts the WHOLE command in the line\u2019s tooltip',
+  activityMultiLineMarkup.includes('title="npm run a\nnpm run b"'),
 )
 // alpha.14: THE CLICK THAT KILLED THE DOCK. Expanding a row asked for `multiLine`,
 // an identifier this bundle NEVER declared, so the first click on a command line
@@ -2573,40 +2554,30 @@ check(
     // Outside prose (doc lines start with ` * `), the free identifier is gone.
     /[^\w.]multiLine\b/.test(cmdbarSource.replace(/^[ \t]*\*.*$/gm, '')) === false,
 )
-// alpha.15: THE WHOLE COMMAND ON HOVER. Through alpha.14 the head's native title
-// showed the agent's DESCRIPTION when the call carried one - so pointing at a
-// command line answered a question nobody asked, and the command itself was
-// readable only by expanding the row. The line now wears the shipped HoverCard,
-// carrying the command in full. Driven in all three cases, because two of them
-// exist to keep a crash out of a ROOT-SCOPED slot: a card that answered
-// `h(undefined, ...)` on an engine without the primitive would not cost one row,
-// it would ABDICATE the whole dock for the life of the page.
-const headAnchor = h('div', { className: 'dsc-cmdHead' })
-const carded = commandCard({ command: 'npm run a\nnpm run b' }, headAnchor, null)
-check('activity: a command line is wrapped in the hover card', typeof carded.type === 'function' && carded.type !== headAnchor.type)
-check('activity: the hover card carries the WHOLE command', carded.props.content.props.children, 'npm run a\nnpm run b')
-check('activity: the hover card is the app\u2019s preview variant', carded.props.variant, 'preview')
-check('activity: the hover card takes its width from the log box', 'widthAnchorRef' in carded.props)
-check('activity: a row with no command keeps its bare anchor', commandCard({ command: '' }, headAnchor, null) === headAnchor)
-check('activity: no entry at all keeps its bare anchor', commandCard(null, headAnchor, null) === headAnchor)
+// alpha.17: THE WHOLE COMMAND IN THE BROWSER'S OWN TOOLTIP. alpha.15 answered the
+// clipped line with the shipped HoverCard; the reader who asked for that then asked
+// for the DEFAULT tooltip instead - plainer, selectable, and with nothing to dismiss
+// before a row can be expanded - so the line carries `title` and the card, its
+// portal, its content box and its hover state are gone. Driven in all four cases,
+// because the wrong answer here is the one alpha.14 shipped: the agent's DESCRIPTION
+// ("run the unit tests") where the command was asked for.
+check('activity: a command line wears the WHOLE command as its tooltip', commandTooltip({ command: 'npm run a\nnpm run b' }), 'npm run a\nnpm run b')
+check('activity: a row with no command wears no tooltip', commandTooltip({ command: '' }), null)
+check('activity: a command-less entry wears no tooltip', commandTooltip({ command: undefined }), null)
+check('activity: no entry at all wears no tooltip', commandTooltip(null), null)
 check(
-  'activity: an engine with no hover card still draws the line',
-  cmdbarNoCard.exports.__internals.commandCard({ command: 'npm test' }, headAnchor, null) === headAnchor,
-)
-// The command is shown WRAPPED and SCROLLABLE inside the card's 420px cap, and
-// the card itself is the shipped surface - so the package styles only its own
-// content box, never the card.
-check(
-  'activity: the hover card content wraps and scrolls',
-  cmdbarCss.includes('.dsc-hoverCmd{flex:auto;min-height:0;margin:0;') &&
-    cmdbarCss.includes('overflow:auto;white-space:pre-wrap;word-break:break-word;'),
+  'activity: no styled hover card is left behind',
+  cmdbarSource.includes('primitives.HoverCard') === false &&
+    cmdbarSource.includes('function commandCard') === false &&
+    cmdbarSource.includes('widthAnchorRef') === false &&
+    cmdbarCss.includes('.dsc-hoverCmd') === false,
 )
 check(
-  'activity: the row hangs the hover card on its head',
-  cmdbarSource.includes('commandCard(entry, head, bodyRef)') &&
-    cmdbarSource.includes('const head = h(') &&
-    // The description is NOT the hover text any more: it was the wrong answer.
-    cmdbarSource.includes('entry.description === \'\' ? entry.command : entry.description') === false,
+  'activity: the row names its tooltip from the pure decision',
+  cmdbarSource.includes('const tooltip = commandTooltip(entry)') &&
+    cmdbarSource.includes("h('span', { className: 'dsc-cmdLine', title: tooltip === null ? undefined : tooltip }") &&
+    // The description is NOT the tooltip: it was the wrong answer in alpha.14.
+    cmdbarSource.includes("entry.description === '' ? entry.command : entry.description") === false,
 )
 // ... and the SECOND free identifier of that release, found by auditing the
 // bundle for names it references but never declares. The row's two actions called
@@ -5874,7 +5845,7 @@ check(
 )
 const canvasCssTag = canvas.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-canvas/canvas.css').pop()
 const canvasCss = canvasCssTag ? canvasCssTag.textContent : ''
-check('canvas stylesheet injected', canvasCss.includes('.dsc-root{') && canvasCss.includes('.dsc-art{'), true)
+check('canvas stylesheet injected', canvasCss.includes('.cnv-root{') && canvasCss.includes('.cnv-art{'), true)
 // The full-height view asks the shell to float the composer over it, which is the
 // same contract the shipped Trajectory view uses.
 check(
@@ -5965,9 +5936,9 @@ check('a run layer is named by its runs', canvasInternals.layerLabel({ kind: 'te
 check('a bare layer falls back to its own style', canvasInternals.layerLabel({ kind: 'art', style: 'mesh' }, 'layers.0'), 'mesh')
 // The composer seam and the layer dress live in the stylesheet, not inline: a tab
 // the composer floats over has to draw the hairline at the composer's own edge.
-check('the composer seam is drawn at the composer height', canvasCss.includes('bottom:var(--dsh-composer-height,152px)') && canvasCss.includes('.dsc-root:after{'), true)
-check('the page reserves the composer clearance', canvasCss.includes('--dsc-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)'), true)
-check('the layer list is styled', canvasCss.includes('.dsc-layers{') && canvasCss.includes('.dsc-layer[data-selected=true]'), true)
+check('the composer seam is drawn at the composer height', canvasCss.includes('bottom:var(--dsh-composer-height,152px)') && canvasCss.includes('.cnv-root:after{'), true)
+check('the page reserves the composer clearance', canvasCss.includes('--cnv-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)'), true)
+check('the layer list is styled', canvasCss.includes('.cnv-layers{') && canvasCss.includes('.cnv-layer[data-selected=true]'), true)
 check('the layer rows indent by depth', canvasSource.includes('paddingLeft: 6 + Math.min(row.depth, 6) * 8'), true)
 check('a selection draws a box and handles', canvasSource.includes("'data-canvas-selection'") && canvasSource.includes('handle-'), true)
 // RESIZE, the other half of direct manipulation: the handles a node kind can
@@ -6025,7 +5996,7 @@ check('the pointer is captured for the drag', canvasSource.includes('element.set
 check('a cancelled pointer ends the gesture too', canvasSource.includes("window.addEventListener('pointercancel', finish)"), true)
 check('a handle drag never reselects', canvasSource.includes('if (!handle && onSelect) onSelect(chosen.path)'), true)
 check('the cursor names the edge pair', canvasInternals.cursorFor({ right: true }) === 'ew-resize' && canvasInternals.cursorFor({ bottom: true }) === 'ns-resize' && canvasInternals.cursorFor({ left: true, top: true }) === 'nesw-resize', true)
-check('the resize dress is styled', canvasCss.includes('.dsc-art[data-dragging=resize]'), true)
+check('the resize dress is styled', canvasCss.includes('.cnv-art[data-dragging=resize]'), true)
 // THE HOUSE GALLERY in the tab: the rows the state route carries, each starting a
 // design by example id rather than by preset + archetype + style.
 check('the new-design gallery lists the house examples', canvasSource.includes("'data-canvas-examples'") && canvasSource.includes('state.examples.map'), true)
@@ -6038,12 +6009,12 @@ check('dragging is a pointer gesture', canvasSource.includes('pointermove') && c
 // deliberately NO style control in the top bar any more: a select there could only
 // either restyle or start a new design, and starting one is what "+ New" already does
 // - so the styling decision belongs to the New gallery alone.
-check('the new-design gallery offers the style library', canvasSource.includes("'data-canvas-styles'") && canvasSource.includes('dsc-styleChip'), true)
+check('the new-design gallery offers the style library', canvasSource.includes("'data-canvas-styles'") && canvasSource.includes('cnv-styleChip'), true)
 check('a style chip carries its own swatch', canvasSource.includes('entry.swatch.colours'), true)
 check('starting a design sends the chosen style', canvasSource.includes('preset: presetId, archetype: archetypeId, style: styleId'), true)
 check('no style picker in the top bar', canvasSource.includes("'data-canvas-style-picker'") === false && canvasSource.includes('restyle(') === false, true)
 check('the side panel carries the current style card', canvasSource.includes("'data-canvas-style-card'") && canvasSource.includes('currentStyle.gates'), true)
-check('the style dress is styled', canvasCss.includes('.dsc-styleChip[data-selected=true]') && canvasCss.includes('.dsc-styleCard{'), true)
+check('the style dress is styled', canvasCss.includes('.cnv-styleChip[data-selected=true]') && canvasCss.includes('.cnv-styleCard{'), true)
 // ZOOM IS A MENU TOO, for the same reason the export is: five rungs in the bar is a
 // row of buttons for one choice. Every rung survives as a row and the summary names
 // the one in force.
@@ -6054,7 +6025,7 @@ check('the zoom summary names the current rung', canvasSource.includes("'Zoom: '
 // - which is exactly "the export dropdown is behind the bar". 1000 is the app's own
 // modal-root layer: above every column of furniture, below the toasts and portals that
 // are meant to interrupt anything.
-check('an open menu clears the app furniture', canvasCss.includes('.dsc-menuPanel{position:absolute;right:0;top:calc(100% + 6px);z-index:1000'), true)
+check('an open menu clears the app furniture', canvasCss.includes('.cnv-menuPanel{position:absolute;right:0;top:calc(100% + 6px);z-index:1000'), true)
 // THE TOP BAR HOLDS ONE EXPORT CONTROL, not four buttons: format and destination are
 // two axes of ONE decision, and four buttons for it was the first thing to wrap out
 // of the bar on a narrow pane. The menu is a native <details>, so the open state, the
@@ -6063,10 +6034,10 @@ check('an open menu clears the app furniture', canvasCss.includes('.dsc-menuPane
 // lands. The four decisions survive as ROWS, destination included.
 check('the bar carries one export menu', canvasSource.includes("'data-canvas-export': 'true'") && canvasSource.includes('h(\'details\''), true)
 check('the export menu lists every decision', ['png-1', 'png-2', 'svg', 'png-workspace'].every((key) => canvasSource.includes("'data-canvas-export-item': '" + key + "'")), true)
-check('every export row names its destination', (canvasSource.match(/dsc-menuHint/g) || []).length >= 4 && canvasSource.includes('Write into the conversation folder'), true)
+check('every export row names its destination', (canvasSource.match(/cnv-menuHint/g) || []).length >= 4 && canvasSource.includes('Write into the conversation folder'), true)
 check('the four old export buttons are gone', canvasSource.includes("'Export PNG'") === false && canvasSource.includes("'To workspace'") === false, true)
-check('the export menu is dressed', canvasCss.includes('.dsc-menuPanel{') && canvasCss.includes('.dsc-menuItem:disabled'), true)
-check('the bar cannot wrap', canvasCss.includes('flex-wrap:nowrap') && canvasCss.includes('.dsc-barGroup{display:flex;align-items:center;gap:4px;flex:none}'), true)
+check('the export menu is dressed', canvasCss.includes('.cnv-menuPanel{') && canvasCss.includes('.cnv-menuItem:disabled'), true)
+check('the bar cannot wrap', canvasCss.includes('flex-wrap:nowrap') && canvasCss.includes('.cnv-barGroup{display:flex;align-items:center;gap:4px;flex:none}'), true)
 check('the menu closes on the write, not the press', canvasSource.includes('menu.open = false') && canvasSource.includes('event.preventDefault()'), true)
 // THE EXPORT SURVIVES AN ENCODER THAT DECLINES. `toBlob` is asynchronous and a
 // browser may answer null for it on a big canvas; the synchronous data URL is the
@@ -6075,8 +6046,8 @@ check('a refused toBlob falls back to the data URL', canvasSource.includes('blob
 // THE RIGHT BAR'S TWO PANES. One scroll column for both jobs meant a design with
 // many layers pushed the rest of the bar out of sight, so shaping and auditing are
 // two panes and only one is mounted. The rule that makes that hold is in the
-// stylesheet: every scrolling block is NAMED (`.dsc-paneScroll` for the audit pane,
-// `.dsc-layersScroll` for the list inside the shaping pane), and no pane scrolls.
+// stylesheet: every scrolling block is NAMED (`.cnv-paneScroll` for the audit pane,
+// `.cnv-layersScroll` for the list inside the shaping pane), and no pane scrolls.
 check('the right bar holds two panes', canvasSource.includes("'data-canvas-pane': 'design'") && canvasSource.includes("'data-canvas-pane': 'inspect'"), true)
 check('only the chosen pane is mounted', canvasSource.includes("sideTab === 'inspect' ? inspectPane : designPane"), true)
 // THE INSPECT PANE IS THE CONTROLS. It used to hold a quarter-scale copy of the
@@ -6085,7 +6056,7 @@ check('only the chosen pane is mounted', canvasSource.includes("sideTab === 'ins
 // layer - nudge, size, scale, rotate, opacity and colour - and every one of them
 // writes through the same document route the drag and the agent's patch use.
 check('the inspect pane carries the transform controls', ["'data-canvas-transform'", "'data-canvas-size'", "'data-canvas-frame'", "'data-canvas-colors'"].every((marker) => canvasSource.includes(marker)), true)
-check('the panes no longer carry a feed thumbnail', canvasSource.includes('data-canvas-feed') === false && canvasCss.includes('.dsc-feed') === false, true)
+check('the panes no longer carry a feed thumbnail', canvasSource.includes('data-canvas-feed') === false && canvasCss.includes('.cnv-feed') === false, true)
 check('the nudge pads the four directions', ['up', 'down', 'left', 'right'].every((dir) => canvasSource.includes("'data-canvas-nudge-dir': '" + dir + "'")), true)
 // The arithmetic behind the controls, asserted as DATA: a nudge is a position, a size
 // is one field, a scale multiplies what the layer HAS, and the language's own two
@@ -6120,20 +6091,20 @@ check('a token name is not a colour', canvasInternals.paintColorOf('accent'), nu
 check('recolouring writes the literal', JSON.stringify(canvasInternals.colorOps('layers.0', { key: 'fill', paint: '#111111' }, '#4D6BFE')), JSON.stringify([{ op: 'set', at: 'layers.0.fill', value: '#4d6bfe' }]))
 check('recolouring to the same colour writes nothing', canvasInternals.colorOps('layers.0', { key: 'fill', paint: '#4d6bfe' }, '#4D6BFE').length, 0)
 check('a gradient is replaced by the chosen solid', JSON.stringify(canvasInternals.colorOps('layers.0', { key: 'fill', paint: { type: 'linear', stops: [] } }, '#4D6BFE')), JSON.stringify([{ op: 'set', at: 'layers.0.fill', value: '#4d6bfe' }]))
-check('the transform dress is styled', canvasCss.includes('.dsc-nudgeRow{') && canvasCss.includes('.dsc-swatch[data-active=true]'), true)
+check('the transform dress is styled', canvasCss.includes('.cnv-nudgeRow{') && canvasCss.includes('.cnv-swatch[data-active=true]'), true)
 // THE GAP OVER THE COMPOSER. The page's bottom inset used to be the composer clearance
 // with 6px subtracted, which still left the artboard touching its top edge because the
 // clearance is measured to the START of the composer, not past it. It is now a 10px
 // inset of its own, and the clearance variable is not what draws it.
-check('the artboard keeps a gap over the composer', canvasCss.includes('padding:10px 10px calc(var(--dsc-composer-clearance,168px) + 10px) 10px'), true)
-check('the page reserves the composer clearance', canvasCss.includes('--dsc-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)'), true)
+check('the artboard keeps a gap over the composer', canvasCss.includes('padding:10px 10px calc(var(--cnv-composer-clearance,168px) + 10px) 10px'), true)
+check('the page reserves the composer clearance', canvasCss.includes('--cnv-composer-clearance:calc(var(--dsh-composer-height,152px) + 16px)'), true)
 // THE RULERS AND THE ORIGIN: the page's coordinate system, drawn. The gutters are grid
 // tracks - the ONLY horizontal inset on the left - so design x=0 is the artboard's own
 // left edge, which is what makes the origin marker the origin.
-check('the page is a ruler gutter around the artboard', canvasCss.includes('.dsc-pad{min-width:100%;min-height:100%;display:grid;grid-template-columns:22px 1fr;grid-template-rows:22px 1fr'), true)
-check('both rulers exist', canvasCss.includes('.dsc-axisTop{') && canvasCss.includes('.dsc-axisLeft{'), true)
+check('the page is a ruler gutter around the artboard', canvasCss.includes('.cnv-pad{min-width:100%;min-height:100%;display:grid;grid-template-columns:22px 1fr;grid-template-rows:22px 1fr'), true)
+check('both rulers exist', canvasCss.includes('.cnv-axisTop{') && canvasCss.includes('.cnv-axisLeft{'), true)
 check('the origin is marked on the artboard', canvasSource.includes("'data-canvas-origin': '0,0'") && canvasSource.includes("'data-canvas-origin-marker': 'true'"), true)
-check('the rulers are labelled in design pixels', canvasSource.includes('data-canvas-ruler') && canvasSource.includes('dsc-axisLabel'), true)
+check('the rulers are labelled in design pixels', canvasSource.includes('data-canvas-ruler') && canvasSource.includes('cnv-axisLabel'), true)
 check('the ruler spacing is chosen so labels do not collide', canvasSource.includes('candidate * Math.abs(scale) >= 64'), true)
 // SAVE confirms what the HOST holds rather than inventing a second writer: the design is
 // already persisted on every edit, so the button re-reads the state and reports the
@@ -6145,14 +6116,14 @@ check('the bar carries a Save that confirms the host revision', canvasSource.inc
 check('a click on empty canvas de-selects', canvasSource.includes('if (!chosen) {') && canvasSource.includes('if (!handle && onDeselect) onDeselect()'), true)
 check('a drag does not leave a stale cursor', canvasSource.includes('draggingRef.current = false') && canvasSource.includes('if (draggingRef.current) return'), true)
 check('the one hover after a selection is skipped', canvasSource.includes('if (triggerSelect.current) {'), true)
-check('the pane switcher is styled', canvasCss.includes('.dsc-sideTab[data-active=true]') && canvasCss.includes('.dsc-sideTabs{'), true)
-check('the layer list owns its own scrollport', canvasCss.includes('.dsc-layersScroll{') && canvasCss.includes('.dsc-section[data-grow=true] .dsc-layersScroll{flex:1}'), true)
-check('no pane scrolls as a whole', canvasCss.includes('.dsc-pane{flex:1;min-height:0;display:flex;flex-direction:column}') && canvasSource.includes('dsc-paneScroll'), true)
+check('the pane switcher is styled', canvasCss.includes('.cnv-sideTab[data-active=true]') && canvasCss.includes('.cnv-sideTabs{'), true)
+check('the layer list owns its own scrollport', canvasCss.includes('.cnv-layersScroll{') && canvasCss.includes('.cnv-section[data-grow=true] .cnv-layersScroll{flex:1}'), true)
+check('no pane scrolls as a whole', canvasCss.includes('.cnv-pane{flex:1;min-height:0;display:flex;flex-direction:column}') && canvasSource.includes('cnv-paneScroll'), true)
 // The widgets that earned no room: the raw measurement table (a diagnostic the
 // model's render report already carries), the six-line prose helper, and the
 // two-rule-per-heading style card. Their absence is the assertion, because a bar
 // that grows a wall of text back is the bug this alpha fixes.
-check('the raw measurement table is not furniture', canvasCss.includes('.dsc-metrics') === false && canvasSource.includes('metricsText') === false, true)
+check('the raw measurement table is not furniture', canvasCss.includes('.cnv-metrics') === false && canvasSource.includes('metricsText') === false, true)
 check('the prose gesture helper is gone', canvasSource.includes('Drag a layer to move it, or a handle'), false)
 check('the style card keeps one rule per heading', canvasSource.includes('(currentStyle.do || []).slice(0, 1)') && canvasSource.includes('(currentStyle.gates || []).slice(0, 1)'), true)
 check('the canvas tool list carries canvas_style', canvasInternals.TOOL_NAMES.includes('canvas_style'), true)
@@ -6172,8 +6143,8 @@ check('the Excalidraw surface is the tab\u2019s default', canvasSource.includes(
 // owns the pane, and the pack's own bar exists only while the design surface is up.
 check('...and the pack\u2019s own bar is NOT rendered in that mode', canvasSource.includes("surface === 'design' ? toolbar : null") && canvasSource.includes("'data-canvas-surface': surface"))
 check('...so the way back to the design surface is a KEY, not a button', canvasSource.includes("event.key !== 'd' && event.key !== 'D'") && canvasSource.includes('onEscapeToDesign'))
-check('...and the note strip is the 30px one', canvasCss.includes('.dsc-excalidrawNote{flex:none;box-sizing:border-box;min-height:30px'), true)
-check('...and the editor gets the WHOLE pane', canvasCss.includes('.dsc-excalidraw{position:absolute;inset:0;'), true)
+check('...and the note strip is the 30px one', canvasCss.includes('.cnv-excalidrawNote{flex:none;box-sizing:border-box;min-height:30px'), true)
+check('...and the editor gets the WHOLE pane', canvasCss.includes('.cnv-excalidraw{position:absolute;inset:0;'), true)
 check('...and it is seeded from the design the tab selected', canvasSource.includes('design: selected,') && canvasSource.includes('examples: (state && state.examples) || []'))
 // THE LIBRARY IS PERSISTED BY THIS PACK, because Excalidraw persists nothing by
 // itself (its own hook takes an adapter the host supplies). Both halves are driven
@@ -6238,6 +6209,40 @@ check(
 // shell calls when the plugin goes away (and what lets this process exit).
 for (const dispose of canvasDisposers) dispose()
 check('the renderer stopped with its row', canvasEffects.length >= 11, true)
+
+// ---------------------------------------------------------------------------
+// NO TWO BUNDLES MAY DRESS THE SAME CLASS
+//
+// Every bundle injects its stylesheet when it loads, and the LAST one wins each
+// equal-specificity tie. So two packages that both define `.x-bar` do not merely
+// collide in a linter's sense: the later bundle silently redresses the earlier
+// one's UI. That is exactly what dsh-canvas's `dsc-bar` did to dsh-cmdbar's dock
+// header - the APP drew a 51px header row, because canvas's
+// `.dsc-bar{min-height:38px;padding:6px 10px}` landed on a content-box bar after the
+// dock's own `.dsc-bar{padding:2px 8px 2px 10px}`, and its close button at 26px
+// instead of 20px (canvas's `.dsc-btn{height:26px}`) - while every render of either
+// bundle ON ITS OWN agreed with the design, which is why the harness pictures and
+// the app disagreed. Canvas claimed the dock's `dsc-` prefix two days after the
+// dock took it (its toolbar wears 88 classes; five were shared: dsc-bar, dsc-btn,
+// dsc-pill, dsc-body, dsc-spacer). A prefix is the namespace a package owns; this
+// reads every `lib/client.js` in the pack and fails on any class two of them define.
+{
+  const bundlesDir = path.join(repo, 'packages')
+  const owners = new Map()
+  for (const name of readdirSync(bundlesDir)) {
+    const file = path.join(bundlesDir, name, 'lib', 'client.js')
+    if (!existsSync(file)) continue
+    const source = readFileSync(file, 'utf8')
+    for (const [, cls] of source.matchAll(/\.([a-z][a-z0-9]*-[A-Za-z0-9_-]+)\s*[,{:[>\s]/g)) {
+      if (!owners.has(cls)) owners.set(cls, new Set())
+      owners.get(cls).add(name)
+    }
+  }
+  const shared = [...owners.entries()]
+    .filter(([, names]) => names.size > 1)
+    .map(([cls, names]) => cls + ' (' + [...names].join(', ') + ')')
+  check('no two bundles define the same class', shared.length === 0 ? 'ok' : shared.join(' | '), 'ok')
+}
 
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')
