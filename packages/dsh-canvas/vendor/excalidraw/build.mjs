@@ -124,6 +124,7 @@ function copyFonts() {
 
 /** The trim, as esbuild plugins: each one is named in VERSION.json. */async function trimPlugins() {
   const applied = []
+  const patched = []
   const stubs = {
     name: 'dsh-canvas: trim',
     setup(api) {
@@ -143,17 +144,20 @@ function copyFonts() {
     },
   }
   const list = [stubs]
-  // 3. whatever THIS repository adds on top
+  // 3. whatever THIS repository adds on top. A patch is NOT a trim: it is named
+  // separately in VERSION.json (`patches`), because "what this build deleted" and
+  // "what this repository changed" are different facts about the artifact, and
+  // recording a patch under `trims` would make the record a lie about upstream.
   const patchFile = path.join(here, 'patches', 'index.mjs')
   if (existsSync(patchFile)) {
     const loaded = await import('file:///' + patchFile.replace(/\\/g, '/'))
     const patches = Array.isArray(loaded.default) ? loaded.default : Array.isArray(loaded.patches) ? loaded.patches : []
     for (const patch of patches) {
       list.push(patch)
-      applied.push(String(patch.name))
+      patched.push(String(patch.name))
     }
   }
-  return { list, applied }
+  return { list, applied, patched }
 }
 
 /** The sha256 of one file, as VERSION.json records it. */
@@ -224,7 +228,7 @@ if (process.argv.includes('--check')) {
 }
 
 mkdirSync(outDir, { recursive: true })
-const { list, applied } = await trimPlugins()
+const { list, applied, patched } = await trimPlugins()
 
 await build({
   entryPoints: [path.join(here, 'entry.js')],
@@ -296,7 +300,7 @@ writeFileSync(
         'The vendored Excalidraw surface for the Canvas tab: ONE classic script, the stylesheet it cannot live without, and the LATIN FACES it fetches at runtime (every URL it builds is `new URL(\'fonts/<Family>/<file>\', EXCALIDRAW_ASSET_PATH)`, so this package serves one exact route per file under its own vendor prefix). Built from the pinned versions below, with the trims named in `trims` and any repository patches named in `patches`. `node build.mjs --check` re-hashes every file here OFFLINE - artifacts, licences and every font - so the committed tree cannot drift from this record. React is bundled (Excalidraw takes it as a peer and a script tag cannot reach the shell\u2019s module table), which means the page carries a SECOND React: nothing may pass a component across that boundary. The .js/.css files are TEXT and are pinned to LF in .gitattributes, because these hashes would otherwise report phantom drift on a Windows checkout; the .woff2 faces are binary and are never touched.',
       pins: PINS,
       trims: applied,
-      patches: applied.filter((name) => name !== 'locales-stubbed' && name !== 'mermaid-dialog-stubbed'),
+      patches: patched,
       unshipped: {
         locales: 'the 55 locale modules are stubbed; Excalidraw fetches them at runtime from EXCALIDRAW_ASSET_PATH and falls back to English',
         cjkFonts: 'the Xiaolai (CJK) family is NOT vendored: ' + String(fonts.skipped.join(', ')) + ' - 209 of the 234 published files and 12.1 MiB, which no design in this pack contains. Add it to SKIPPED_FONT_FAMILIES\' sibling list to ship it.',
@@ -317,7 +321,7 @@ writeFileSync(
 )
 
 const kib = (bytes) => (bytes / 1024).toFixed(1) + ' KiB'
-console.log('built the vendored Excalidraw surface (trims: ' + applied.join(', ') + ')')
+console.log('built the vendored Excalidraw surface (trims: ' + applied.join(', ') + (patched.length > 0 ? '; patches: ' + patched.join(', ') : '') + ')')
 for (const name of ARTIFACTS) console.log('  ' + name.padEnd(20) + kib(files[name].bytes) + '  ' + files[name].sha256.slice(0, 16) + '\u2026')
 console.log('  digest             ' + digestOf(ARTIFACTS).slice(0, 16) + '\u2026')
 console.log(

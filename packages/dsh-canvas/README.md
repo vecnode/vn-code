@@ -427,6 +427,34 @@ plugins, because the artifact IS the build and a text diff against a minified
 3.07 MiB instead of 8.02 MiB. **No submodule**: the pack's rule is a pinned build
 root plus a committed artifact, and the install flow is "clone, run the installer".
 
+**Alpha.11 adds the first of those patches, and it is a SECURITY patch:**
+`firebase-api-key-redacted`. Excalidraw's published build ships its own OSS
+Firebase configuration as a string literal — `VITE_APP_FIREBASE_CONFIG`, api key
+included — because Firebase **web** api keys are public by design (they name a
+project; access is decided by security rules and App Check). Vendoring the bundle
+therefore put a key-shaped literal into this **public** repository, GitHub's
+secret scanning opened a `google_api_key` alert against
+`lib/vendor/excalidraw/excalidraw.min.js`, and that alert names **Excalidraw's**
+key — a key this repository can neither rotate nor revoke, so it can never be
+"resolved" by the usual route.
+
+The patch is an esbuild `onLoad` hook that blanks the `apiKey` **value** in every
+file read from the pinned package's `dist/`, matched **by key name** rather than
+by the secret's text, so a version bump that rotates the key is redacted just the
+same. Nothing else in the config moves, so the constant keeps its exact shape and
+anything that parses it keeps parsing; the only behavioural difference is that
+this copy cannot talk to Excalidraw's Firebase project, which is right for a
+vendored surface that enables no collaboration at all — and if anything ever does
+ask, a Firebase config error names the cause instead of silently connecting to
+someone else's database. `VERSION.json.patches` records the patch, the artifact
+hash proves it, and two checks keep it removed: `check-no-secrets.mjs` gained the
+`google-api-key` rule (plus a quoted-name fix in its assignment rule, without
+which `"apiKey":"AIza…"` matched nothing, and a self-test over the exact
+serialized-JSON shape that got past it), and `check-canvas-excalidraw.mjs`
+asserts the record still names the patch, the bundle carries no Google key and
+the api key it shipped is blanked. A build patch — never an allowlist entry: the
+rule is that a credential does not ship, not that this one is tolerated.
+
 ## The scene language (alpha.10, in progress)
 
 The Canvas tab is being moved onto Excalidraw's own vocabulary. What an agent will

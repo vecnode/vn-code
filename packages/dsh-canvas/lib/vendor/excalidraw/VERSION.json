@@ -11,16 +11,18 @@
     "locales-stubbed",
     "mermaid-dialog-stubbed"
   ],
-  "patches": [],
+  "patches": [
+    "firebase-api-key-redacted"
+  ],
   "unshipped": {
     "locales": "the 55 locale modules are stubbed; Excalidraw fetches them at runtime from EXCALIDRAW_ASSET_PATH and falls back to English",
     "cjkFonts": "the Xiaolai (CJK) family is NOT vendored: Xiaolai - 209 of the 234 published files and 12.1 MiB, which no design in this pack contains. Add it to SKIPPED_FONT_FAMILIES' sibling list to ship it."
   },
-  "digest": "679670335272f6348bda495dbad81a9854b31379a4891a5354c302537844c569",
+  "digest": "23b49347c41ea89dc2a412440dca9aeebeeca6b72cd8b74ae0cc25f30440984c",
   "files": {
     "excalidraw.min.js": {
-      "bytes": 3218185,
-      "sha256": "22c3470439f4b68edd315ad6bd6dd56e5a039db0125722c86777d872a3a835db"
+      "bytes": 3218146,
+      "sha256": "35b687b836de5916bb9a173046055b98c844a32869a71ff54252dc3fb4c380d2"
     },
     "excalidraw.css": {
       "bytes": 144689,

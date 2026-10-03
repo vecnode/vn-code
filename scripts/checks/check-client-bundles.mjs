@@ -3707,10 +3707,19 @@ check(
 // Bytes come from the harness's own workspaceFiles remote - the call already
 // enforces the path policy and the byte cap on the HOST side - so this package
 // has no route, no fetch, and no policy of its own to get wrong.
+//
+// THE CALL IS `readBytes(sessionId, path, {}, signal)`: EMPTY options are the
+// namespace's whole-file read, and that is exactly what the shipped document
+// preview passes for its own bytes-complete mode. The namespace has NO
+// `readAll` (the pinned line's generated Remote declares `changes`, `list`,
+// `read`, `readBytes` and `stat`), and this tab called one for as long as it
+// existed - which is why every image answered "This harness exposes no
+// workspaceFiles remote" while the remote was there all along.
 check(
   'bytes come from the shipped remote, not a route of its own',
   imageSource.includes("const REMOTE_NAMESPACE = 'remote.workspaceFiles'") &&
-    imageSource.includes('workspaceFiles\n          .readAll(sessionId, parsed.path, controller.signal)') &&
+    imageSource.includes('workspaceFiles\n          .readBytes(sessionId, parsed.path, {}, controller.signal)') &&
+    imageSource.includes('.readAll(') === false &&
     imageSource.includes('fetch(') === false &&
     imageSource.includes("'/api/") === false,
 )
@@ -3720,7 +3729,28 @@ check(
     imageSource.includes('controller.abort()') &&
     imageSource.includes('URL.revokeObjectURL(objectUrl)'),
 )
+// The payload shift is DRIVEN, not grepped - a grep for a call shape is what let
+// the absent `readAll` ship. The generated result codec declares `data` as a
+// Uint8Array, and every other shape a carrier could hand over must answer the
+// same bytes, because bytes fed to `atob` by mistake are a broken picture.
+const probeBytes = new Uint8Array([0, 1, 127, 128, 255])
+const probeBase64 = btoa(String.fromCharCode(0, 1, 127, 128, 255))
+check(
+  'the image byte payload is accepted in every shape a carrier could use',
+  image.exports.__internals.bytesOf(probeBytes).join(',') === '0,1,127,128,255' &&
+    image.exports.__internals.bytesOf(probeBytes.buffer).join(',') === '0,1,127,128,255' &&
+    image.exports.__internals.bytesOf([0, 1, 127, 128, 255]).join(',') === '0,1,127,128,255' &&
+    image.exports.__internals.bytesOf(probeBase64).join(',') === '0,1,127,128,255' &&
+    image.exports.__internals.bytesOf(null) === null &&
+    image.exports.__internals.bytesOf('') === null,
+)
 check('the base64 decode is one indexed loop', imageSource.includes('bytes[index] = binary.charCodeAt(index)'))
+// A read that stops at the host's ceiling answers `eof: false`, and half a
+// photograph drawn as if it were the picture is worse than one sentence.
+check(
+  'a truncated read is refused rather than drawn',
+  imageSource.includes('value.eof === false') && imageSource.includes('only part of it arrived'),
+)
 
 const imageTypes = []
 const imageSeats = {}
@@ -3733,7 +3763,7 @@ image.exports.apply({
     },
   },
   sidebarRightTabs: { register: (definition) => (imageTypes.push(definition), () => {}), entries: () => [] },
-  remote: { workspaceFiles: { readAll: () => Promise.resolve({ ok: false, error: { code: 'workspace-file/not-file' } }) } },
+  remote: { workspaceFiles: { readBytes: () => Promise.resolve({ ok: false, error: { code: 'workspace-file/not-file' } }) } },
   effect: (fn) => fn(),
   logger: { debug() {}, warn() {} },
 })
@@ -4287,12 +4317,15 @@ check(
 )
 // Bytes come from the harness's own workspaceFiles remote, read in WINDOWS so a
 // file far past the single-read cap still draws - and the package ships no
-// route of its own to re-implement the path policy with.
+// route of its own to re-implement the path policy with. The WHOLE-FILE read is
+// `readBytes` with empty options too: the namespace has no `readAll`, and the
+// whole-file path asked for one, which is why no FLAC could ever be decoded.
 check(
   'audio streams the file through the shipped remote, not a route of its own',
   audioSource.includes("const REMOTE_NAMESPACE = 'remote.workspaceFiles'") &&
     audioSource.includes('workspaceFiles.readBytes(sessionId, path, { offset: offset, length: size }, signal)') &&
-    audioSource.includes('workspaceFiles.readAll(sessionId, path, signal)') &&
+    audioSource.includes('workspaceFiles.readBytes(sessionId, path, {}, signal)') &&
+    audioSource.includes('.readAll(') === false &&
     audioSource.includes('fetch(') === false &&
     audioSource.includes("'/api/") === false,
 )
@@ -4308,6 +4341,27 @@ check(
     audioSource.includes('controller.abort()') &&
     audioSource.includes('const binary = atob(String(base64))') &&
     audioSource.includes('bytes[index] = binary.charCodeAt(index)'),
+)
+// Every window of every file goes through this decode, so it is DRIVEN rather
+// than grepped: a `Uint8Array` (what the generated result codec declares), an
+// ArrayBuffer, a plain array and base64 text must all answer the same bytes -
+// a window handed to `atob` by mistake is a waveform that cannot be drawn.
+const probeWindow = new Uint8Array([82, 73, 70, 70, 0, 255])
+check(
+  'the audio byte payload is accepted in every shape a carrier could use',
+  audio.exports.__internals.bytesOf(probeWindow).join(',') === '82,73,70,70,0,255' &&
+    audio.exports.__internals.bytesOf(probeWindow.buffer).join(',') === '82,73,70,70,0,255' &&
+    audio.exports.__internals.bytesOf([82, 73, 70, 70, 0, 255]).join(',') === '82,73,70,70,0,255' &&
+    audio.exports.__internals.bytesOf(btoa(String.fromCharCode(82, 73, 70, 70, 0, 255))).join(',') === '82,73,70,70,0,255' &&
+    audio.exports.__internals.bytesOf(null) === null &&
+    audio.exports.__internals.bytesOf('') === null,
+)
+// A whole-file read that stopped at the single-read ceiling arrives truncated
+// with `eof: false`, and a browser decoder handed a truncated FLAC reports a
+// decode fault instead of the size that caused it.
+check(
+  'a whole-file read refuses a truncated payload',
+  audioSource.includes('result.value.eof === false') && audioSource.includes('so it cannot be decoded'),
 )
 check(
   'a FLAC past the single-read cap keeps its facts and says so',

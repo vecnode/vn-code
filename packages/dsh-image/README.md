@@ -1,4 +1,4 @@
-# dsh-image (alpha.1)
+# dsh-image (alpha.2)
 
 **Images open as pictures, not as a file whose bytes happen to be an image.**
 
@@ -13,6 +13,19 @@ pointer, and drag to pan.**
 It is a **client-only** package: bytes come from the harness's own
 `remote.workspaceFiles` remote, so there is no route, no host-side state, and no
 path policy of its own.
+
+**Alpha.2 fixes the read that made every image refuse to open.** The tab asked
+for `readAll` on that remote - a method the namespace does not have (it declares
+`changes`, `list`, `read`, `readBytes` and `stat`) - under a guard that tested
+the same absent name, so every picture answered *"This harness exposes no
+workspaceFiles remote, so the file cannot be read"* while the remote was there
+the whole time. The whole-file read is now `readBytes(sessionId, path, {},
+signal)` (empty options, exactly what the shipped preview passes for its own
+bytes-complete mode), the payload is accepted in whichever shape the carrier
+delivered it, and a read that stopped at the host's ceiling (`eof: false`) is
+refused in one sentence instead of drawing part of a photograph. The tracked
+check now DRIVES the payload decode instead of grepping for a call shape, which
+is the kind of assertion that let the absent method ship in the first place.
 
 ## What it adds
 
@@ -97,14 +110,29 @@ inspecting an 8000 px photograph does not copy the picture into a second buffer.
 a mapper once per byte; at the remote's 32 MiB ceiling that is the difference
 between an instant open and a visible stall.
 
-**Bytes come from the harness, not from a new route.** `readAll` on the
-`workspaceFiles` remote - the same call the shipped preview makes for a
+**Bytes come from the harness, not from a new route.** `readBytes(sessionId,
+path, {}, signal)` - `readBytes` with **empty options**, which is the namespace's
+whole-file read, and exactly what the shipped preview passes for a
 "bytes-complete" document - already resolves the path against the conversation
 workspace, refuses a symlink out of it, requires a regular file, and enforces the
-single-file byte cap (32 MiB by default) on the **host** side. A plugin route
+single-file byte cap (32 MiB by default) on the **host** side. There is no
+`readAll` on that namespace at all: the generated Remote declares `changes`,
+`list`, `read`, `readBytes` and `stat`, and the tab used to call the absent
+`readAll` under a guard that tested it, which is why every image said the harness
+exposed no `workspaceFiles` remote. A plugin route
 would have to re-implement all of that. So this package ships no route and no
 host state; `lib/index.js` is one no-op row whose only job is to put the browser
 bundle in the boot graph.
+
+**A truncated read is refused, not drawn.** A file past the host's ceiling comes
+back with `eof: false`, and half a photograph laid out as if it were the whole
+picture is worse than one sentence saying only part of it arrived.
+
+**The payload is taken in whatever shape the carrier used.** The generated result
+codec declares `value.data` as a `Uint8Array` (what the shipped preview hands to
+`new Blob`), and `bytesOf` also accepts an `ArrayBuffer`, a plain byte array and
+base64 text - so a carrier that ever hands the bytes over as text cannot turn
+into a picture built from `String(bytes)`.
 
 **The blob URL is revoked.** A reader flipping through a folder of photographs
 does not keep every one of them pinned in memory, and a reload is a new

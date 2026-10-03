@@ -25,6 +25,26 @@ passing: the git routes need `git` on `PATH`, and the TikZ cases need a TeX
 engine. (The live terminal socket that used to need a resolvable `node-pty` and
 `ws` went with the terminals in terminal alpha.12.)
 
+- `check-no-secrets.mjs` is the repository's own secret scanner and the first check
+  to run before a push: it walks every file `git add -A` would stage (`git ls-files
+  -co --exclude-standard`, tracked plus unignored-untracked, NUL-separated so a path
+  with a newline cannot be read as two), skips binaries and anything over 8 MiB, and
+  matches a small set of credential shapes - DeepSeek/OpenAI keys, GitHub, Slack and
+  Stripe tokens, AWS access keys, private-key blocks, JWTs, `?token=` URLs, and
+  generic `apiKey`/`password`/`client_secret` assignments. It NEVER prints what it
+  found (a scanner that echoes a secret into CI logs has moved the leak, not closed
+  it): every report names the file, the line, the RULE and a masked preview. The
+  allowlist is deliberately empty - a fixture that trips a rule is made
+  non-key-shaped rather than excused - and the check self-tests that it fires on a
+  synthetic key, hides the value and stays quiet on clean text.
+  **Alpha.11 is the fix for the alert this repository actually got**, and it is two
+  corrections in one: the rules had no Google/Firebase api-key shape at all, and the
+  assignment rule required the colon to follow the BARE name, so the serialized
+  `"apiKey":"AIza..."` form that a vendored bundle carries matched NOTHING. There is
+  now a `google-api-key` rule (`AIza` + 35 URL-safe characters), the assignment rule
+  tolerates a quoted name, and the self-test drives the exact serialized-JSON shape
+  that got past it. The artifact itself is fixed by a build patch, not by an
+  allowlist entry - see `check-canvas-excalidraw.mjs` below.
 - `check-client-bundles.mjs` loads each browser half exactly the way the shell
   does (through `window.__ModuleLoader__.load`), activates it against a stub
   cordis context, and drives it with a **real React runtime** found in the
@@ -426,12 +446,17 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
   NOT written in this repository: the vendored **Excalidraw** surface (alpha.10,
   preview). It checks it from both sides, because either half alone can be fooled -
   `vendor/excalidraw/build.mjs --check` re-hashes the committed artifact against
-  `VERSION.json` **offline** (the pins, the trims, a sha256 per file, a digest and
-  the licence hash), and then a throwaway headless Chromium is served those very
-  bytes over loopback and loads them **exactly the way the client loader does** - a
+  `VERSION.json` **offline** (the pins, the trims, **the repository patches**, a
+  sha256 per file, a digest and the licence hash), and then a throwaway headless
+  Chromium is served those very bytes over loopback and loads them **exactly the way
+  the client loader does** - a
   stylesheet `link` and a classic `script` with a cache-busting query - so a loader
-  that only worked because of how the check fetched it would fail here. What it
-  asserts is what only a browser can see: the artifact leaves
+  that only worked because of how the check fetched it would fail here. It also
+  asserts the artifact's own SECURITY contract (alpha.11): the record still names the
+  `firebase-api-key-redacted` patch, the bundle carries no Google-key-shaped literal,
+  and the api key Excalidraw shipped is blanked - the fix for the `google_api_key`
+  alert GitHub's secret scanning opened against this public repository. What it
+  asserts beyond that is what only a browser can see: the artifact leaves
   `globalThis.DSHExcalidraw` behind, it MOUNTS in a pane, Excalidraw's own canvases
   and UI are there, **its stylesheet applied** (`--color-primary` resolves to
   `#6965db`, which is the difference between an editor and a broken grid), the
