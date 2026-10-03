@@ -1523,19 +1523,22 @@ const chrome = chromeTag ? chromeTag.textContent : ''
 check('chrome rule injected', chrome.includes('[data-document-viewer-menu]{display:none}'))
 check('chrome scoped to markdown', chrome.includes('body [data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown"]'))
 
-// The left column's top bar override (alpha.4): its own tag again. The band is
-// the sidebar root's 6px top padding plus a 70px row, i.e. the 76px hairline the
-// conversation header and the right column's tab header already draw; the rail
-// keeps the same 6px so neither the line nor the toggle moves when it collapses.
+// The left column's top bar override (alpha.4, centred on the top row since
+// alpha.27): its own tag again. The band is the row's whole 76px from the
+// frame's top edge - the sidebar's own 6px top padding is folded into it, so the
+// 76px hairline the conversation header and the right column's tab header
+// already draw does not move - and the row's 30px content strip is centred on
+// the frame's y=20, the middle of the top row above the y=40 mid-band line, in
+// both the wide row and the rail.
 const topBarTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/left-topbar.css').pop()
 const topBar = topBarTag ? topBarTag.textContent : ''
-check('top bar rule injected', topBar.includes('height:70px'))
-check('top bar keeps the 76px line', topBar.includes('padding:4px 12px 35.5px 16px'))
+check('top bar rule injected', topBar.includes('height:76px'))
+check('the band starts at the frame\'s top edge', topBar.includes(':not([data-windows-titlebar]) .hHd-Xa_root{padding-top:0}'))
+check('the row\'s content is centred on the frame\'s y=20', topBar.includes('padding:5px 12px 40.5px 16px'))
 check('top bar bleeds to both edges', topBar.includes('margin:0 -12px'))
 check('top bar clears New session', topBar.includes('margin:0 -12px 8px'))
 check('top bar draws the header hairline', topBar.includes('border-bottom:.5px solid var(--dsw-alias-border-l3'))
-check('top bar pins the rail padding', topBar.includes('.hHd-Xa_root.hHd-Xa_collapsed{padding-top:6px}'))
-check('top bar re-dresses the rail row', topBar.includes('.hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1px 10px 32.5px}'))
+check('top bar centres the rail\'s 36px square too', topBar.includes('.hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:2px 10px 37.5px}'))
 check('top bar is engine-neutral', topBar.includes(':has('), false)
 
 // The VN branding on that same row (alpha.6). The mark and the name are SLOTS the
@@ -1585,6 +1588,117 @@ check(
   topBar.includes('.hHd-Xa_brandName{font-size:14px;font-weight:500;line-height:20px;letter-spacing:0}'),
 )
 check('branding covers the collapsed rail too', topBar.includes('.hHd-Xa_railMark::before'))
+// alpha.25: the left column's half of the MID-BAND line. The row now starts at
+// the frame's top edge (alpha.27 folded the root's own 6px top padding into the
+// row's 76px height), so a rule 40px into that row is the
+// frame's y=40 - the y the conversation header's own new line sits at, which is
+// the only reason the number is 40. It is the band's own `.5px` border on a
+// zero-height pseudo (so it weighs what the band's bottom hairline weighs and
+// costs no layout), and it is drawn in the WIDE column only: the rail's icon
+// button is a 36px square (`.hHd-Xa_collapsed .hHd-Xa_iconButton`) that fills
+// its whole 36px strip, y=2..38, so a line at 40 would cross it.
+check(
+  'the branding row carries the mid-band line',
+  topBar.includes('.hHd-Xa_root:not(.hHd-Xa_collapsed) .hHd-Xa_logoRow::after{content:"";position:absolute;left:0;right:0;top:40px;height:0'),
+)
+check(
+  'the mid-band line is the band hairline, not a new colour',
+  topBar.includes('border-top:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18));pointer-events:none}'),
+)
+check('the branding row is the line\'s positioning context', topBar.includes('.hHd-Xa_logoRow{position:relative;height:76px'))
+check('the rail is left out of the mid-band line', topBar.includes(':not(.hHd-Xa_collapsed) .hHd-Xa_logoRow::after'))
+
+// alpha.25: the band's second hairline, and alpha.27: the centre of the 40px top
+// row that line creates. The middle column's line is drawn by the tabs row:
+// `margin-top:0` plus `padding-top:10px` is exactly the 10px of space that
+// margin was, so the tab text does not move by a pixel, and the line itself is a
+// `.5px` border on a zero-height pseudo - the band's own weight, and no layout at
+// all (a `border-top` on the row would have made the header 76.5px and pushed
+// everything below it down half a pixel, measured in a real browser). The
+// negative inline margins - against the header's own 20px and 28px padding - run
+// the line to both column edges like the band's own. The band's top row is
+// therefore the frame's y=0..40, and the three columns' furniture in it is
+// centred on its middle, y=20: the middle column's title row takes the header's
+// own 10px of `padding-top` and grows to 40px (the sessionless header, whose
+// empty title row IS that padding, is scoped out of both rules), and the right
+// bar's dock strip carries the 4px it needs below its chips as `padding-bottom`
+// while `[data-dockkit-strip]` - the dock's own marker on that box - keeps its
+// 38px total, so the tab body below it and the y=40 line on that body do not
+// move. The right bar's Start tab (the shipped guide) is the one tab whose body
+// has no tool bar: this gives it the same 38px bar every other tab draws, with
+// the same `.5px` border on the pseudo whose containing block starts at the
+// transparent border's bottom edge - y=76, where every other tab's tool bar
+// draws its own.
+const bandTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/band-lines.css').pop()
+const bandLines = bandTag ? bandTag.textContent : ''
+check('band-lines rule injected', bandLines.includes('.wSkVaW_tabs{margin-top:0;'))
+check(
+  'the header hands its top padding to the title row',
+  bandLines.includes('html .wSkVaW_header:not(.wSkVaW_headerSessionless){padding-top:0}'),
+)
+check(
+  'the middle column\'s title row is the whole 40px top row',
+  bandLines.includes('.wSkVaW_header:not(.wSkVaW_headerSessionless) .wSkVaW_titleRow{min-height:40px}'),
+)
+check(
+  'the sessionless header keeps its shipped height',
+  bandLines.includes('.wSkVaW_headerSessionless){padding-top:0}') &&
+    bandLines.includes('.wSkVaW_headerSessionless) .wSkVaW_titleRow{min-height:40px}') &&
+    bandLines.match(/\.wSkVaW_header:not\(\.wSkVaW_headerSessionless\)/g).length === 2,
+)
+check(
+  'the dock strip centres its chips on the same y=20',
+  bandLines.includes('html [data-dockkit-strip]{padding-top:6px;padding-bottom:4px}'),
+)
+check('the tabs row does not move when the line arrives', bandLines.includes('padding:10px 28px 0}'))
+check(
+  'the mid-band line is a .5px border on a zero-height pseudo',
+  bandLines.includes('.wSkVaW_tabs::before{content:"";position:absolute;left:0;right:0;top:0;height:0;border-top:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18))}'),
+)
+check('the mid-band line runs to both column edges', bandLines.includes('margin-left:-20px;margin-right:-28px'))
+// alpha.26: the right bar's own mid-band line, at the SAME y=40 the middle and
+// left columns' lines sit at, and the surface for the row below it. That band's
+// own rows do not divide at 40 - the tab strip is 38px (6px of padding above
+// 28px of tab chips, 4px below, since alpha.27) - so the line is drawn 2px into
+// the row below the strip, on
+// the tab body's own box, which is what spans that row on every tab; the band
+// under it then measures 40 + 36 like the other two columns'. The same box is
+// given the bar's surface, because the right bar is an OVERLAY: the surface that
+// makes it opaque is painted by the forked bar's stylesheet on the dock box, so a
+// row the open tab paints nothing on was a real hole (the conversation behind the
+// Start tab's empty 38px bar). The token is the one the fork already paints the
+// dock with, with the dark palette's own literal as the fallback.
+check(
+  'the right bar\'s line hangs on the row below the strip',
+  bandLines.includes('html .P3OORG_tabBody{position:relative;background:var(--dsw-alias-bg-base,#151517)}'),
+)
+check(
+  'the right bar\'s line sits on the frame\'s y=40, like the other two columns\'',
+  bandLines.includes('html .P3OORG_tabBody::before{content:"";position:absolute;left:0;right:0;top:2px;height:0;border-top:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18))}'),
+)
+check(
+  'the row below the strip is the bar\'s own surface',
+  bandLines.includes('background:var(--dsw-alias-bg-base,#151517)}'),
+)
+// The strip is only ever given padding (alpha.27, to centre its chips): the line
+// itself hangs on the tab body below it, never on the strip, whose own edge is
+// 2px above the frame's y=40.
+check('the strip carries padding, not the line', bandLines.includes('[data-dockkit-strip]{padding-top:6px;padding-bottom:4px}'))
+check('no hairline hangs on the strip', /\[data-dockkit-strip\][^{]*\{[^}]*border/.test(bandLines), false)
+check(
+  'the Start tab\'s bar is that surface, not a hole',
+  bandLines.includes('.geFEbW_guide{position:relative;border-top:38px solid var(--dsw-alias-bg-base,#151517)}'),
+)
+check(
+  'the Start tab gets the bar it was missing',
+  bandLines.includes('.P3OORG_tabBody .geFEbW_guide{position:relative;border-top:38px solid'),
+)
+check(
+  'the Start tab\'s line lands where every other tab\'s does',
+  bandLines.includes('.geFEbW_guide::before{content:"";position:absolute;left:0;right:0;top:0;height:0;border-top:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18))}'),
+)
+check('band-lines is engine-neutral', bandLines.includes(':has('), false)
+check('band-lines adds no size of its own to the guide', bandLines.includes('height:38px'), false)
 
 // alpha.22: the global panel rows at the column's FOOT. `SidebarRoot` is a flex
 // column, so three `order` declarations move the rows without touching the DOM:

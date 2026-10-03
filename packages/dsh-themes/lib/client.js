@@ -133,7 +133,19 @@
  * stops being its containing block and the width becomes a PERCENTAGE of the
  * frame - the one box that is the whole viewport at every level (see the seam
  * section below; it is the same root cause the alpha.16 seam rule already
- * repairs one box over). All of them are plain engine-neutral CSS, so they hold
+ * repairs one box over). The seventh (alpha.25) is the **band lines**: the same
+ * hairline the band already ends in, drawn a second time in the MIDDLE of that
+ * band - on the frame's y=40 in ALL THREE columns, which is why the right bar's
+ * is hung 2px into the row below its 38px tab strip rather than on the strip's
+ * own edge - plus the 38px bar the right bar's Start tab was the only tab to be
+ * missing and the bar surface that row needs. The eighth (alpha.27) is the
+ * **top row's centre**: that second hairline splits every band into a 40px top
+ * row and a 36px one below it, so all three columns' top-row furniture - the
+ * branding row's mark, name and collapse toggle, the conversation title and its
+ * 28px controls, the right bar's tab chips - is centred on the frame's y=20
+ * rather than sitting on the rule at y=40 (see the band-lines section below).
+ * All of
+ * them are plain engine-neutral CSS, so they hold
  * in every browser the Web GUI runs in.
  *
  * Module-table format of every core client package; no build step.
@@ -232,7 +244,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.24'
+    const PLUGIN_VERSION = '0.1.0-alpha.27'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -1585,8 +1597,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     }
 
     // ---------------------------------------------------------------------
-    // The left column's TOP BAR (alpha.4; the gap under the line is alpha.5).
-    // The frame opens with one band per
+    // The left column's TOP BAR (alpha.4; whose content is centred on the top
+    // row since alpha.27). The frame opens with one band per
     // column, and every column's band ends in the same hairline at y=76: the
     // conversation header is `min-height:76px` with a `.5px`
     // `--dsw-alias-border-l3` bottom border, and the right column's first line
@@ -1597,12 +1609,20 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     // padding (6px -> 18px) and that row's height (60px -> 36px) - anything
     // drawn under it moved with the toggle.
     //
-    // This gives the branding row the same band, in both rail states: the row
-    // keeps a 30px content strip at its top - the strip the conversation's own
-    // `titleRow` occupies - so the mark, the brand name and the collapse
-    // control sit ON the top bar, level with the conversation title (a common
-    // centre at the frame's y=25), and the hairline stays at y=76 whether the
-    // rail is open or collapsed.
+    // This gives the branding row the same band, in both rail states, and puts
+    // its content in the MIDDLE of the band's top row. The row now spans the
+    // band from the frame's top edge - the sidebar's own 6px top padding is
+    // dropped and the row grows from 70px to 76px, so the hairline AND
+    // everything below it stay exactly where they were (6 + 70 = 0 + 76) - and
+    // its 30px content strip (the strip the conversation's own `titleRow`
+    // occupies) is centred on the frame's y=20, the middle of the top row: the
+    // frame's y=0 down to the mid-band line at y=40 (alpha.25). So the 24px
+    // mark runs y=8..32, the wide row's 28px collapse toggle fills y=6..34, the
+    // rail's 36px one fills y=2..38, and the product text is centred on the same
+    // y=20 the conversation title and the header's own 28px controls are
+    // centred on: the top row reads as one line of furniture rather than as
+    // four things resting on the rule below it. The hairline stays at y=76
+    // whether the rail is open or collapsed.
     //
     // The row's own bottom edge IS the hairline, so the row keeps a bottom
     // margin as the breathing room under it (the core's 8px open, 12px in the
@@ -1618,7 +1638,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     const TOPBAR_TAG = 'dsh-themes/left-topbar.css'
 
     /**
-     * Install the left column's top bar (alpha.4) and its VN branding (alpha.6).
+     * Install the left column's top bar (alpha.4, centred on the top row since
+     * alpha.27) and its VN branding (alpha.6).
      * Static CSS with no palette dependency beyond the border token itself, which
      * carries a literal fallback for a profile that never mounts ui-theme - so,
      * like the chrome override, it is installed once and needs no refresh on
@@ -1640,21 +1661,40 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     function installLeftTopBar() {
       if (typeof document === 'undefined') return false
       const topBar = [
-        // The rail keeps the frame's own 6px top padding, so the band's height,
-        // the hairline and the toggle's centre all stay put when it collapses.
-        'html .hHd-Xa_root.hHd-Xa_collapsed{padding-top:6px}',
-        // The band: 6px (root) + 70px = the 76px line the other two columns
-        // draw. `box-sizing` is border-box, so the .5px rule sits inside the
-        // 70px. The 4px / 35.5px split leaves a 30px content strip at the top,
-        // and the negative inline margins run the rule to both column edges.
-        // The 8px bottom margin is the breathing room the core gave the row
-        // (`margin-bottom:8px`): the row's own bottom IS the hairline, so this
-        // is the gap under the line, before "New session".
-        'html .hHd-Xa_root .hHd-Xa_logoRow{height:70px;margin:0 -12px 8px;padding:4px 12px 35.5px 16px;align-items:center;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18))}',
+        // The row opens at the frame's top edge: the sidebar's own 6px top
+        // padding is dropped and the row grows to 76px, so the hairline at the
+        // row's bottom edge - and everything below it - does not move
+        // (6 + 70 = 0 + 76). Scoped away from the desktop shell's own title-bar
+        // frame, where the core already owns that strip (a 40px row inside the
+        // frame's title-bar padding) and the 6px would only push it down.
+        'html:not([data-windows-titlebar]) .hHd-Xa_root{padding-top:0}',
+        // The band: 76px from the frame's top edge, ending in the hairline the
+        // other two columns draw. `box-sizing` is border-box, so the .5px rule
+        // sits inside the 76px. The 5px / 40.5px split leaves a 30px content
+        // strip whose centre is the frame's y=20 - the middle of the top row
+        // (y=0 to the mid-band line at 40) - and the negative inline margins run
+        // the rule to both column edges. The 8px bottom margin is the breathing
+        // room the core gave the row (`margin-bottom:8px`): the row's own bottom
+        // IS the hairline, so this is the gap under the line, before "New
+        // session". `position:relative` is for the MID-BAND rule below, which
+        // this row carries as a pseudo-element.
+        'html .hHd-Xa_root .hHd-Xa_logoRow{position:relative;height:76px;margin:0 -12px 8px;padding:5px 12px 40.5px 16px;align-items:center;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18))}',
         // The rail's own dress: 10px to bleed past (its root padding), a 36px
-        // strip for the 36px rail toggle centred on the same y=25, and the
-        // core's own 12px rail gap under the line.
-        'html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:1px 10px 32.5px}',
+        // content strip for the 36px rail toggle centred on that same y=20
+        // (y=2..38), and the core's own 12px rail gap under the line.
+        'html .hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow{margin:0 -10px 12px;padding:2px 10px 37.5px}',
+        // THE MID-BAND LINE (alpha.25) - the band's second hairline, at y=40.
+        // The row starts at the frame's top edge, so 40px into it is the frame's
+        // y=40: the same y the conversation header's own line sits at, which is
+        // the whole point of the two rules. It is the same `.5px` border the
+        // band's own bottom hairline is, on a zero-height pseudo, so it costs no
+        // layout; it clears the content - the 24px mark and product text are
+        // centred on y=20 (the mark runs y=8..32) and the wide row's 28px toggle
+        // sits at y=6..34, 6px above the line - and it is scoped to the WIDE
+        // column because the rail draws one 36px square where the wide row draws
+        // a mark, a name and a 28px button: the rail's button fills its whole
+        // 36px strip (y=2..38), so a line at 40 would cross it.
+        'html .hHd-Xa_root:not(.hHd-Xa_collapsed) .hHd-Xa_logoRow::after{content:"";position:absolute;left:0;right:0;top:40px;height:0;border-top:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18));pointer-events:none}',
         // The VN branding: whatever the mark and the name hold - the shipped
         // wordmark, the fish, or the layout's own fallback label - is hidden, and
         // the disc and the product text are drawn in its place. `!important`
@@ -1797,6 +1837,196 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         document.head.appendChild(tag)
       }
       if (tag.textContent !== order) tag.textContent = order
+      return true
+    }
+
+    // ---------------------------------------------------------------------
+    // THE BAND LINES (alpha.25) AND THE TOP ROW'S CENTRE (alpha.27).
+    //
+    // Every column opens with a 76px band that ends in the same `.5px`
+    // `--dsw-alias-border-l3` hairline: the conversation header is
+    // `min-height:76px` with that bottom border, the left column's branding row
+    // is the 76px box this package gives it (the frame's top edge, the
+    // sidebar's own 6px top padding dropped), and in
+    // the right column every tab's own 38px tool bar draws it under the 38px
+    // docking strip. A person reading the frame asked for that SAME hairline a
+    // second time, in the MIDDLE of the band, so the band reads as two rows -
+    // and, in the right column, for the one tab that has no tool bar to draw it.
+    //
+    // MEASURED, because the numbers are the whole rule. The line divides each
+    // column's band at y=40, so the TOP ROW is the frame's y=0 to y=40 and its
+    // middle is y=20: every piece of furniture in the three top rows is centred
+    // there, which is what makes them read as one row. Centring it in the last
+    // 30px above the rule instead - the strip the conversation's own title row
+    // used to define, y=10..40 - is what measures as furniture RESTING on the
+    // rule: a 28px control ends 1px above the line with 11px of air over it.
+    //
+    //  - THE MIDDLE COLUMN. The top row is 40px of band, so the header's own
+    //    10px `padding-top` moves into the row it was padding: the header takes
+    //    `padding-top:0` and the conversation title row - 28px of controls (this
+    //    package's own `.dst-button` and its neighbours) inside a 28px crumb -
+    //    takes `min-height:40px`. The row's box is therefore y=0..40 and its
+    //    content is centred on y=20, i.e. y=6..34, 6px clear of the line below
+    //    and level with the left column's. Nothing below it moves: the row still
+    //    ends at y=40, so the tabs row still begins there. The line is given to
+    //    the tabs row
+    //    without touching its geometry: `margin-top:0` plus `padding-top:10px`
+    //    is exactly the 10px of space that margin was, so the tab text does not
+    //    move by a pixel, and a zero-height pseudo carrying a `.5px` top border
+    //    draws the line on the row's own top edge - the same border the band's
+    //    bottom hairline is, so the two weigh the same, and a border on a
+    //    zero-height absolutely positioned box costs no layout at all (a
+    //    `border-top` on the row itself would have made the header 76.5px and
+    //    pushed everything below it down by half a pixel, measured). The negative
+    //    inline margins (against the header's own 20px and 28px padding) run the
+    //    line to both column edges. A conversation with no tabs renders no
+    //    `.wSkVaW_tabs` and the rule is inert there.
+    //
+    //    THE ONE HEADER THAT KEEPS ITS 10px is the sessionless one (no Session
+    //    yet): it renders an EMPTY title row whose whole height IS that padding,
+    //    on every platform but the desktop shell's, so both rules above are
+    //    scoped away from `.wSkVaW_headerSessionless` and it measures what it
+    //    measured before.
+    //
+    //  - THE LEFT COLUMN. Its mid-band line is the pseudo-element the top-bar
+    //    rule above carries, 40px into the 76px row, which starts at the frame's
+    //    top edge: 0 + 40 is the same y=40. It clears the content (the 24px mark
+    //    and product text are centred on y=20, the mark y=8..32; the wide row's
+    //    28px toggle is at y=6..34) and is drawn only in the WIDE column: the
+    //    rail draws one
+    //    36px square (`.hHd-Xa_collapsed .hHd-Xa_iconButton`) that fills its whole
+    //    36px strip, y=2..38, so a line at 40 would cross it.
+    //
+    //  - THE RIGHT COLUMN. Its band is the same 76px, but its rows do not divide
+    //    where the other two columns' do: the tab strip is 38px (28px of tab
+    //    chips inside it) and the open tab's own body follows it. The strip's own
+    //    padding puts those chips at y=6..34, centred on the same y=20 as the
+    //    other two columns' controls, and its 38px total is kept - 6px above the
+    //    chips, 4px below them - so the tab body keeps its top. The
+    //    line therefore goes on the row BELOW the strip, 2px in, so that it sits
+    //    on the frame's y=40 - the SAME y as the middle and left columns' lines,
+    //    which is the whole point of the three rules: the tab body's own box
+    //    (`.P3OORG_tabBody`, which spans that row on every tab) carries it, and
+    //    the band under it then measures 40 + 36 exactly like the other two
+    //    columns'. Nothing else moves to get there: the strip keeps its 38px, the
+    //    chips their 28px, the body its top, and the line itself is the same
+    //    zero-height absolutely positioned border the other two are.
+    //
+    //    AND THAT ROW IS THE BAR'S SURFACE, on every tab. The right bar is an
+    //    OVERLAY on the frame, and the surface that makes it opaque is painted by
+    //    the forked bar's own stylesheet on the dock box - so a band the open tab
+    //    paints nothing on was a REAL HOLE with the conversation behind it. The
+    //    very box that carries the line (`.P3OORG_tabBody`, the one that spans
+    //    that row for every tab) is given the surface the dock is given, and the
+    //    Start tab's new bar wears it as its border colour, so the row below the
+    //    line is the bar rather than a window.
+    //
+    //    THE ONE TAB WITH NO TOOL BAR is the shipped guide - the Start tab - whose
+    //    body is a centred box with no header at all: its content started at y=38
+    //    and no line was drawn, so it read higher than every other tab. It is
+    //    given the bar it is missing (a top border in the bar's own surface, so
+    //    its content starts at y=76 like every other tab's) with the same `.5px`
+    //    border on the pseudo whose containing block begins at that border's
+    //    bottom edge - y=76, where every other tab's tool bar draws its own.
+    //    `box-sizing:border-box` is already the guide's own, so its
+    //    `min-height:100%` still fits the pane (measured: 302px of a 302px pane,
+    //    before and after).
+    //
+    // Every line here carries the band token with its literal fallback, so it is
+    // one grey line on every palette and on every theme, and every one of them is
+    // engine-neutral: no `:has()`, nothing a non-Blink browser would drop past the
+    // rule itself.
+    //
+    // The selectors are hashed class names of the PINNED harness line (the
+    // conversation header's tabs row, the branding row, and the guide body inside
+    // the pack's own forked right bar) plus the dock's own stable
+    // `[data-dockkit-strip]` marker, exactly like the rules above: on a bump
+    // that renames them this matches nothing and the frame keeps its shipped
+    // dress, which is the accepted failure mode of every override here.
+    // ---------------------------------------------------------------------
+    /** The band-lines override's style-tag identity (idempotent injection). */
+    const BAND_LINES_TAG = 'dsh-themes/band-lines.css'
+    /** The band's hairline, as every rule in this package writes it. */
+    const BAND_HAIRLINE = 'var(--dsw-alias-border-l3,rgba(127,127,127,.18))'
+    /**
+     * The bar's own surface, as the right bar's forked stylesheet paints it on
+     * the dock (`.P3OORG_panelBody>[data-dockkit-host=dock]`). The literal is the
+     * dark palette's own `--dsw-alias-bg-base` (`neutral-bluish-950`), so a
+     * profile that never mounts ui-theme still gets a dark bar rather than a hole.
+     */
+    const BAR_SURFACE = 'var(--dsw-alias-bg-base,#151517)'
+
+    /**
+     * Install the band lines (alpha.25) and the top row's centre (alpha.27):
+     * the mid-band hairline in the middle column, the top rows of the middle
+     * and right columns centred on the same y=20 the left column's is, and the
+     * 38px bar the right bar's Start tab was missing. (The left column's half of
+     * the mid-band line is the pseudo-element `installLeftTopBar` writes on the
+     * branding row.)
+     * @returns whether the rules are in place.
+     */
+    function installBandLines() {
+      if (typeof document === 'undefined') return false
+      const bandLines = [
+        // The middle column's TOP ROW: the header hands its own 10px of
+        // `padding-top` to the row it was padding, so the title row becomes the
+        // whole 40px band above the line and the 28px controls inside it (and
+        // the 28px crumb beside them) centre on the frame's y=20 instead of
+        // ending 1px above the rule. The row still ends at y=40 - the tabs row
+        // below still begins there - and the sessionless header, whose empty
+        // title row IS that 10px of padding, is left out of both rules.
+        'html .wSkVaW_header:not(.wSkVaW_headerSessionless){padding-top:0}',
+        'html .wSkVaW_header:not(.wSkVaW_headerSessionless) .wSkVaW_titleRow{min-height:40px}',
+        // The middle column: the row keeps exactly the 10px its margin was, and
+        // the line is a `.5px` border on a zero-height pseudo at the row's top
+        // edge - the band's own weight, no layout, full-bleed.
+        'html .wSkVaW_tabs{margin-top:0;margin-left:-20px;margin-right:-28px;padding:10px 28px 0}',
+        'html .wSkVaW_tabs::before{content:"";position:absolute;left:0;right:0;top:0;height:0;border-top:.5px solid ' +
+          BAND_HAIRLINE +
+          '}',
+        // The right bar's TOP ROW: the dock strip's own padding centres its 28px
+        // chips on the same y=20 the left and middle columns' controls sit on.
+        // `[data-dockkit-strip]` is the dock's own marker on that box (the strip
+        // the dock measures itself with), not a hashed class. The strip's 38px
+        // total is kept - 6px above the chips, 4px below them where its 10px of
+        // top padding was - so the tab body below it keeps its top and the y=40
+        // line below stays where it is.
+        'html [data-dockkit-strip]{padding-top:6px;padding-bottom:4px}',
+        // The right bar: the SAME line at the SAME y as the other two columns -
+        // the frame's y=40. That band's own rows do not divide at 40 (the tab
+        // strip is 38px: 6px of padding above 28px of tab chips, 4px below), so
+        // the line is
+        // drawn 2px into the row BELOW the strip, on the tab body's own box,
+        // which is what spans that row on every tab. Nothing else moves: the strip
+        // keeps its 38px, the chips their 28px, the body keeps its top - the line
+        // is a zero-height absolutely positioned border, so the band under it
+        // measures 40 + 36 exactly like the middle and left columns' bands.
+        'html .P3OORG_tabBody{position:relative;background:' + BAR_SURFACE + '}',
+        'html .P3OORG_tabBody::before{content:"";position:absolute;left:0;right:0;top:2px;height:0;border-top:.5px solid ' +
+          BAND_HAIRLINE +
+          '}',
+        // The Start tab's missing 38px bar: a top border in that same surface
+        // pushes its content down to y=76, and the pseudo sits on the border's
+        // bottom edge (its containing block's padding box top) with the same
+        // `.5px` border the other tabs' tool bars draw there.
+        'html .P3OORG_tabBody .geFEbW_guide{position:relative;border-top:38px solid ' + BAR_SURFACE + '}',
+        'html .P3OORG_tabBody .geFEbW_guide::before{content:"";position:absolute;left:0;right:0;top:0;height:0;border-top:.5px solid ' +
+          BAND_HAIRLINE +
+          '}',
+      ].join('')
+      let tag = null
+      try {
+        tag = document.querySelector('style[data-plugin-css=' + JSON.stringify(BAND_LINES_TAG) + ']')
+      } catch (e) {
+        tag = null
+      }
+      if (!tag) {
+        tag = document.createElement('style')
+        tag.dataset.plugin = 'dsh-themes'
+        tag.dataset.pluginCss = BAND_LINES_TAG
+        document.head.appendChild(tag)
+      }
+      if (tag.textContent !== bandLines) tag.textContent = bandLines
       return true
     }
 
@@ -3340,6 +3570,14 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
       // One-shot: the left column's top bar is static CSS too, and belongs to
       // the frame rather than to any one appearance.
       installLeftTopBar()
+
+      // One-shot (alpha.25, and alpha.27 for the top rows): the band's second
+      // hairline - the mid-band line the
+      // middle column draws at y=40 (its left-column half is the branding row's
+      // pseudo-element, written above with the top bar), the centring of all
+      // three columns' top-row content on the y=20 above it, and the 38px bar
+      // the right bar's Start tab was missing.
+      installBandLines()
 
       // One-shot (alpha.22): the global panel rows move to the column's foot -
       // the workspaces region takes their seat under "New Session" and Plugins

@@ -1,4 +1,4 @@
-# dsh-themes (alpha.24)
+# dsh-themes (alpha.27)
 
 **The vncode Web GUI's conversation-header package: four controls on that header, plus the pack's appearance overrides.**
 
@@ -39,11 +39,25 @@ Open In… (`dsh-open-in-app`) is `-10` and dsh-cmdbar's button `30`; no shipped
   boot and re-declared on `body [data-document-markdown]`, plus white — all-or-nothing, re-installed on
   `theme/change`); the **Markdown chrome** (the viewer menu hidden on the shipped Markdown renderer alone);
   the **left column's top bar**, whose branding band takes the other columns' hairline at **y=76**, with the
-  **VN branding** (`assets/vncode.svg` inlined as a data URI, a 24px mark, the name `vncode`); the **header
+  **VN branding** (`assets/vncode.svg` inlined as a data URI, a 24px mark, the name `vncode`) centred on the
+  band's own top row; the **header
   ring** on `[data-conversation-header-corner] button`; the account menu's **Feedback row**, hidden on the
   paper-plane `path` artwork; the **right bar's resize seam**, placed from a CSS anchor under `html[data-dsh-page-zoomed]`; the left
-  column's **panel order** (`regionArea` 1, `panelList` 2, `footArea` 3); and the fullscreen right panel's `width:100%` while a zoom is in
-  force. Hooks are stable app markers (`data-conversation-header-corner`, `data-rightbar-col`, `role="menuitem"`) or hashed class names.
+  column's **panel order** (`regionArea` 1, `panelList` 2, `footArea` 3); the **band lines** — the same `.5px`
+  hairline the band already ends in, drawn a second time on the frame's **y=40** in ALL THREE columns: between the
+  middle column's button row and its session tabs, under the left column's branding row, and in the right bar 2px
+  into the row below its 38px tab strip (that band's own rows divide at 38, not 40, so the line cannot hang on the
+  strip's edge if all three are to start at the same height) — and, with it, the **top row's centre**: that line
+  splits every band into a 40px top row and a 36px one below, so all three columns' top-row furniture (the
+  branding row's mark, name and collapse toggle, the conversation title and its 28px controls, the dock strip's
+  28px tab chips) is centred on the frame's **y=20**, 6px clear of the rule, rather than resting on it — plus the
+  **38px bar the right bar's Start tab
+  was missing**, so every tab's hairline lands at y=76 like the Files, History, editor, Diagrams, PDF, image, video
+  and audio tabs' own tool bars already do, and the **surface for that row**, because the right bar is an overlay:
+  the tab body's own box is painted with the bar's own `--dsw-alias-bg-base` and the Start tab's bar wears it as its
+  border colour, so the row under the line is the bar rather than a window onto the conversation behind it; and the
+  fullscreen right panel's `width:100%` while a zoom is in
+  force. Hooks are stable app markers (`data-conversation-header-corner`, `data-rightbar-col`, `data-dockkit-strip`, `role="menuitem"`) or hashed class names.
 
 ## How it plugs in
 
@@ -61,13 +75,19 @@ Open In… (`dsh-open-in-app`) is `-10` and dsh-cmdbar's button `30`; no shipped
   `413` / `500`), the client never names a path, and without the host row the browser download is the fallback.
 - A hashed-class pin stops matching after a harness rename: a no-op, not a broken layout, and the Feedback row
   would simply return.
+- The mid-band line is drawn in the **wide** left column only. Collapsed, the shell draws one 36px square where
+  the wide row draws a mark, a name and a 28px button, and that square fills its whole 36px strip (y=2..38), so a
+  line at y=40 would run through it.
+- The right bar's row surface is painted by this package because the bar is an **overlay** on the frame: the tab
+  body's own box takes `--dsw-alias-bg-base`, the token the forked bar's own stylesheet paints the dock with. A tab
+  that wants a different surface paints it on top, as every tab body already does.
 - Under a page zoom, `vh` and pointer coordinates stay unscaled while `getBoundingClientRect()` does not, so a
   drag that compares pointer deltas against a rect moves by the zoom factor.
 
 ## Verify
 
 ```sh
-node scripts/checks/check-client-bundles.mjs   # seats, orders, the ladder, the paper, the seam
+node scripts/checks/check-client-bundles.mjs   # seats, orders, the ladder, the paper, the seam, the band lines, the top row's centre
 node scripts/checks/check-node-routes.mjs      # the screenshot route: type, signature, cap, Desktop write
 ```
 
