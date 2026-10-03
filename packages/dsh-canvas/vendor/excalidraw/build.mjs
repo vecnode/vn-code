@@ -4,6 +4,13 @@
  *   node build.mjs            build lib/vendor/excalidraw/ and rewrite VERSION.json
  *   node build.mjs --check    re-hash the committed artifacts OFFLINE and compare
  *
+ * `--check` NEEDS NOTHING BUT NODE. esbuild is imported INSIDE the build path, not
+ * at the top of this file, because the tracked check runs `--check` and the build
+ * root (`node_modules/`) is gitignored and routinely absent - a top-level engine
+ * import made an "offline" hash check fail with a module-resolution error the
+ * moment the build root was cleaned. A BUILD still needs it, and says so in one
+ * sentence instead of a stack trace.
+ *
  * WHY A BUILD ROOT AND A COMMITTED ARTIFACT, not a dependency and not a
  * submodule. This pack ships ZERO npm dependencies (the profile installs live
  * links, so a package dependency would not even be installed), and the
@@ -36,7 +43,6 @@
  *      Whatever runs is named in VERSION.json's `patches`, and the artifact hash
  *      is what proves the set was what produced it.
  */
-import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -228,6 +234,13 @@ if (process.argv.includes('--check')) {
 }
 
 mkdirSync(outDir, { recursive: true })
+// A BUILD needs the pinned build root; `--check` above never reaches this line.
+if (!existsSync(path.join(here, 'node_modules', '@excalidraw', 'excalidraw'))) {
+  console.error('no build root beside build.mjs: run `npm install` in packages/dsh-canvas/vendor/excalidraw first')
+  console.error('(the committed artifact under lib/vendor/excalidraw/ needs nothing - `node build.mjs --check` re-hashes it as it is)')
+  process.exit(1)
+}
+const { build } = await import('esbuild')
 const { list, applied, patched } = await trimPlugins()
 
 await build({
