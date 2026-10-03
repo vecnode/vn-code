@@ -1,7 +1,7 @@
 {
   "name": "dsh-video",
   "version": "0.1.0-alpha.1",
-  "description": "Video as a surface that actually plays. A right-bar tab type (row `video`, kind `video`) for MP4, MOV, WebM, MKV, AVI, WMV, FLV, OGV, MPEG-TS and 3GP: the film streams through dsh-media's Range-capable route (so a 2 GB file seeks instead of being read into memory), plays in a pane that fits it, and carries a facts panel with the container, every stream, the chapters as jump targets and what a browser can and cannot decode. When a container or codec is one no browser opens, the tab offers the one action that fixes it - a remux or a transcode through dsh-media's ffmpeg, into a cached MP4 it then plays - with ffmpeg's own progress while it runs. Client-only: the bytes, the probe and the conversion all belong to dsh-media, which says so in a sentence when it is not installed. Alpha.",
+  "description": "Video: a player tab for MP4/MOV/WebM/MKV/AVI/WMV/FLV/OGV/TS/3GP that fits the pane, with the ffprobe facts, chapters as jump targets and one-click remux/convert. The bytes never enter the tab: the `<video>` is handed a URL to dsh-media's Range route.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

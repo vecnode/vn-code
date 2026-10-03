@@ -1,7 +1,7 @@
 {
   "name": "dsh-ui-state",
   "version": "0.1.0-alpha.2",
-  "description": "UI state that outlives the process, for the vncode Web GUI and its desktop window alike. The row declares its own FIVE `.volatile()` Config fields (the page zoom, an extension theme - Nord/Monokai/Hacker, which the shipped durable preference schema cannot hold - the terminal dock's height and the two column widths), which is what makes the Host project them into the settings form keyed by this row's own profile entry id (`ui-state`) and persist an accepted write into the profile's Cordis patch document; one browser half binds that form once (`ctx.configForms.get('ui-state')`), restores the two column widths into ui-layout's own store, and publishes the `uiState` client service the pack's other halves write their own fields through. It is host-side on purpose: localStorage is per browser profile, so a Chrome tab and the desktop window's WebView can never share it, while a profile-entry form is one picture both hosts read, hand-editable in the profile patch like any other configuration. Alpha.",
+  "description": "UI state that outlives the process: the page zoom, an extension theme, the dock height and the two column widths, kept in one durable settings section and applied before first paint for the zoom.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

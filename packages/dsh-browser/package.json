@@ -1,7 +1,7 @@
 {
   "name": "dsh-browser",
   "version": "0.1.0-alpha.1",
-  "description": "Browser (row `browser`, kind `browser`): the pack's own web surface, and the REPLACEMENT for the shipped iframe tab. A remote page is never framed live: the host fetches and renders it in a disposable, sandboxed headless Chrome/Edge whose ONLY network path is a loopback egress gate that permits https on 443 to a validated public-unicast address and nothing else - so the site's own X-Frame-Options / frame-ancestors cannot decide whether you see it, the page never executes in your browser or your session's origin, and every refused hop is named. The tab shows the render as a picture (with viewport presets, zoom and pan), as readable text with clickable links, and as a metrics table, behind a policy panel that states the engine and the gate's verdict. The agent gets three tools over the same pipeline - browser_render (a PNG whose real pixel size is read back from the file, plus the page's own numbers), browser_query (measured geometry, computed styles, text and counts for selectors, for design work) and browser_text (the rendered page's readable text) - so a page that needs script and layout is data the model can use. Alpha.",
+  "description": "Browser: the pack's own web surface, which fetches and renders a page on the HOST in a disposable sandboxed engine behind an egress gate instead of framing it remotely - three tools and three routes. Currently disabled by dsh-vn-master's `browser` row; re-enabling it is deleting those two lines.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
