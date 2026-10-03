@@ -1,4 +1,4 @@
-# dsh-cmdbar (alpha.14)
+# dsh-cmdbar (alpha.15)
 
 **Command bar** is a **bottom dock** for the DeepSeek Harness web GUI: the commands
 the agent ran in this conversation, in the app, under the conversation. A header
@@ -13,6 +13,68 @@ Inside the panel is one view and nothing else: every `bash` / `pwsh` / `run_code
 asked for it, with the tool, the working folder, the duration, the exit status and
 the output. It is a *transcript of the conversation you are already in*, served
 from the host's own copy of the log.
+
+## One header row, and the whole command on hover (alpha.15)
+
+The dock used to stack **two** header rows — its own bar, and the view's toolbar
+underneath — and both of them restated the counts. At a narrow width it was worse
+than redundant: the bar's count line carried `flex:none` and no overflow rule, so
+it kept its full width, ran over the version text beside it and pushed the close
+button toward the panel's edge, while the version — the only shrinkable item in the
+row — wrapped into a **four-line stack**. Measured in the pack's own browser
+harness against a 358px-wide dock: the bar was **84px tall**, and the two rows plus
+the grip took **121px of a 280px panel**.
+
+There is now **one row**, dressed the way every other panel in this app dresses its
+own — the title at the left, the controls as the app's own chips at the right:
+
+| | |
+|---|---|
+| left | the glyph and **Agent**, the running pulse, the `⚠` for an unreadable log, the failed badge |
+| middle | the counts, as one faint line |
+| right | **All tools** and **Failures** chips (`primitives.Pill`), the **Follow ↓** chip while the view has been scrolled away from the tail, and the close button |
+
+Three declarations are what keep it from breaking again, and each is the direct
+repair of a measured defect: the row is `flex-wrap:nowrap`, so it can never become
+two lines; everything that must not shrink is `flex:none;white-space:nowrap`; and
+the **counts line alone** is `flex:0 1 auto;min-width:0;overflow:hidden;
+text-overflow:ellipsis`, so the one item that can afford to give way is the one that
+does. The version string moved into the brand's tooltip — a 24-character build
+string was a third of the row's right-hand half, and it is still one hover away, and
+still in the markup the tracked check reads.
+
+**The row is 25px, and its height is one knob.** The first cut of this release put
+the controls at the app's own *panel* size (a 24px `Pill`) and drew a 31px row; the
+reader measured that and said it was **still too tall**, which is the honest way to
+learn that a log strip under a conversation is not a settings page. The row's height
+is now `--dsc-control-h: 20px` on `.dsc-dock`, and that one value sizes the two
+filter chips, the follow chip and the close button together:
+
+| the dock | 358px wide, before | one row, panel size | one row, dense |
+|---|---|---|---|
+| the bar itself | 84px | 31px | **25px** |
+| grip + bar (chrome above the log) | 121px of a 280px panel | 37px | **31px** |
+
+20px is not invented: it is `primitives.Tag`'s own density in this same design
+system (11px text on a 17px line plus 1px of padding), which is what the app uses
+for a *small* chip. The chips are still the **shipped** `Pill` — only their metric
+belongs to this bar — and the app's chip is resized **structurally**, through a
+wrapper this package owns (`.dsc-pillSeat > *`), never through one of the app's
+hashed class names, which its bundler renames on every release. That wrapper is
+deliberately *not* named after its occupant: alpha.12 pinned the absence of this
+package's terminal **chip strip** by substring, and a class name containing "chip"
+would collide with the pin that keeps the emulator from coming back.
+
+Hovering a **highlighted command line** now shows the **whole command**. The head
+clips its command to the first line and ellipsises it, and through alpha.14 the
+native `title` that sat there held the agent's **description** — so pointing at a
+command line answered a question nobody had asked. The line now wears the shipped
+`primitives.HoverCard` (`variant: 'preview'`): the command in full, wrapped and
+scrollable inside the card's 420px cap, portaled to the body so nothing in the dock
+can clip it, sized from the log's own box, dismissed by a click so expanding a row
+does not fight it, and left open to the pointer so a long command can be read and
+selected. Keyboard readers lose nothing: the row is still a `role="button"` that
+expands to show the same command.
 
 ## The name, and the click that used to kill the dock (alpha.14)
 
@@ -87,7 +149,7 @@ this package adds surface. It contributes two things and owns one row.
 | header control | `conversation.session.header.utilities`, `order: 30` |
 | dock | `shell.overlay` (the layout package's root-scoped **list**), `order: 50` |
 | client `inject` | `slots` (code), `@deepseek-ai/dsh-client-ui-conversation` (package) |
-| primitives used | `Tooltip` only — the glyph is drawn here |
+| primitives used | `Tooltip`, `Pill` (alpha.15, the bar's controls) and `HoverCard` (alpha.15, the whole command on hover) — the glyphs are drawn here, and both new ones are **guarded**, because a root-scoped seat abdicates on a render throw |
 | Node `inject` | `connection` only |
 | Node routes | **one**: `GET /api/dsh-cmdbar/activity` (read-only) — it answers a filtered **tail** of the conversation's session events, folded in the browser by the same pure fold the check drives |
 
@@ -173,12 +235,13 @@ nodes into a React-managed container), so it positions itself:
 - **The bar wears the log's own state** — a pulse while a command runs, the count
   of what **failed** as a red badge, a `⚠` and the warning tone when this
   conversation's log cannot be read here (with the host's own reason in the
-  tooltip), **the counts alone**, and the version. (alpha.13 dropped the sentence
-  those counts used to open with — *The agent's own commands in this
-  conversation: …* — because the control and the panel are both already labelled
-  **Agent**, and the prose only pushed the numbers away from the eye.) The header
-  control carries the same running/failed dot while the panel is closed, so "the
-  agent is doing something" is visible without opening it.
+  tooltip), and **the counts alone**. (alpha.13 dropped the sentence those counts
+  used to open with — *The agent's own commands in this conversation: …* — because
+  the control and the panel are both already labelled **Agent**, and the prose only
+  pushed the numbers away from the eye. alpha.15 moved the build string out of the
+  row and into the brand's tooltip.) The header control carries the same
+  running/failed dot while the panel is closed, so "the agent is doing something"
+  is visible without opening it.
 - **Every number is the COMMANDS'** (alpha.11). A tool call that is not an
   executing tool — a `read`, a `grep`, an `edit` — is a row under the *All tools*
   filter and never a number on the bar: before alpha.11 any failed tool
@@ -189,6 +252,14 @@ nodes into a React-managed container), so it positions itself:
   described honestly.
 - **Survives a reload** in the only sense left to it: the panel's height does.
   The panel's **open** state deliberately does not — see *Known limits*.
+- **Which bundle is running is answerable from the page.** The dock root carries
+  `data-dsh-cmdbar-version`, and the brand's tooltip prints the same string. That is
+  not decoration: the harness **snapshots** every client bundle when it boots and
+  republishes it only through its HMR hook, so an edit to `lib/client.js` changes
+  nothing a running host serves — a page refresh cannot show it, and neither can
+  `Ctrl+F5`; the host has to restart. In the page's console,
+  `document.querySelector('[data-dsh-cmdbar-dock]').dataset.dshCmdbarVersion`
+  answers which revision you are actually looking at, in one line.
 
 ## The agent's own commands
 
@@ -204,7 +275,10 @@ call named one, the duration, and a status pill: `running`, `exit N`,
 `killed · SIG`, `error`, or `done`. Output is clamped to 12 lines with
 **Show all N lines**; long output is never hidden outright. A row expands on
 click (or on `Enter`/`Space` — the head is a `role="button"`), and carries two
-actions: **Copy command** and **Copy output**.
+actions: **Copy command** and **Copy output**. **Pointing at the head shows the
+whole command** in the app's own hover card — the head's line is clipped to the
+command's first line, so the card is where the rest of it lives, and it is also
+the only way to read a command that is longer than the panel is wide.
 
 **A row is readable at a glance, in any theme.** The row's status is drawn as a
 **rail down each side** — left *and* right, so a long command line cannot leave
@@ -218,15 +292,18 @@ a signal or an error. The wash is mixed with `transparent` rather than with a
 surface colour, which lightens a light theme, darkens a dark theme, and leaves
 the label's own themed colour alone.
 
-**Filters.** `Commands` (the default) / `All tools` switches every other tool call
-into the log as a one-line row with its own status and a summary taken from its
-arguments (`file_path`, `pattern`, `query`, …); `Failures` narrows to what went
-wrong. The filter is applied at RENDER time: changing it never re-reads the
-conversation.
+**Filters.** The bar's **All tools** chip switches every other tool call into the
+log as a one-line row with its own status and a summary taken from its arguments
+(`file_path`, `pattern`, `query`, …); **Failures** narrows to what went wrong. Both
+are the app's own `primitives.Pill`, both live in the dock's single header row
+(alpha.15 — they were the only things in a toolbar row of their own), and the
+filter is applied at RENDER time: changing one never re-reads the conversation. The
+chips and the follow chip belong to the conversation they were set in: a
+conversation change resets them exactly as it resets the view's expanded rows.
 
 **Following is a scroll position, not a mode.** The view follows the tail while
-you are at the bottom, stops the moment you scroll up (a **Follow ↓** pill appears
-in its bar to come back), and shows the newest command otherwise.
+you are at the bottom, stops the moment you scroll up (a **Follow ↓** chip appears
+in the bar to come back), and shows the newest command otherwise.
 
 **Where the data comes from** — the conversation's own durable session events,
 served by this package's read-only Node route `GET /api/dsh-cmdbar/activity`
@@ -391,6 +468,26 @@ see, because a row starts collapsed; and the row's copy path is asserted to call
 an accepted write) with no bare `writeClipboard` left outside prose, while the
 pack-wide primitive scan grades that name against the real pinned package.
 
+alpha.15 pins the BAR, and it does it in the three registers the defect lived in.
+The **CSS** is asserted as the fix itself — the row is `flex-wrap:nowrap`, the
+counts are the one shrinkable item with an ellipsis, the brand and the chips refuse
+to shrink or wrap, `.dsc-ver` and `.dsc-actBar` and `.dsc-mini` are asserted
+**gone** from the stylesheet, and the dock's markup is asserted to contain exactly
+one `dsc-bar`. The **markup** is asserted as the app's own dress: both chips are
+drawn, they carry `active` and `aria-pressed`, and the view draws no toolbar of its
+own. And the **behaviour** is driven, because two of its three cases exist to keep
+a crash out of a root-scoped slot: `commandCard` answers the bare anchor for a
+non-command row and for `null`, the whole command for a real one (asserted as the
+card's own `content`, in the app's `preview` variant, with the log box as its width
+anchor), and the ROW is asserted to hand that card the whole command — the stub
+keeps the props precisely because the real card is portaled where a server render
+cannot follow. The same two new primitives are also dropped from a **second load**
+of the bundle (`withoutHoverCard` / `withoutPill`), because `h(undefined, …)` in
+this seat does not cost a chip: it retires the dock. The fallback bar is rendered
+and asserted to be a working bar, and the fallback hover is asserted to be the bare
+line. Finally the version moved, so alpha.15 pins WHERE it moved TO: the brand's
+`title`, and **not** as text in the row.
+
 ## Known limits
 
 - The dock is positioned from the frame's resolved grid tracks, and the two
@@ -399,6 +496,11 @@ pack-wide primitive scan grades that name against the real pinned package.
   the columns, or that puts something else between the middle and right columns,
   needs `columnsFor` updated (there is no layout service API for a bottom region).
 - A fullscreen right bar suspends the dock while it is up.
+- **The whole command is hover-only in the row itself** (alpha.15): the head's line
+  is one clipped line by design — a log a reader scans — so the full command is the
+  card on hover, or the expanded row for a keyboard reader. A narrow dock ellipsises
+  the counts line first; the full sentence, including *older ones are outside this
+  view*, is in that line's tooltip.
 - The panel reads the conversation only while it is **live on this host** (a
   stored conversation that no process has open answers `NOT_LIVE`), it is
   refreshed by polling rather than pushed — 6 s, or 2 s while a command is
@@ -413,7 +515,8 @@ pack-wide primitive scan grades that name against the real pinned package.
   onto a conversation, and after a reload the client holds none, so reopening it
   would show a panel nobody asked for. Its **height** is remembered (both
   stores). The activity *view* preference that used to be remembered per origin
-  is gone with the toggle: with one view there is nothing to remember.
+  is gone with the toggle: with one view there is nothing to remember. The
+  **filters** are not remembered either, and are reset by a conversation change.
 - **A render error in this panel costs the whole panel, not one row** (the shape
   alpha.14 was repaired in, **twice**). A slot occupant is wrapped in the shell's
   `SlotErrorBoundary`, and for a root-scoped entry such as this dock's

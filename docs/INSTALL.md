@@ -353,7 +353,37 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
   asked for an identifier the bundle never declared, and the copy buttons called
   the clipboard primitive's name unqualified, and the shell's slot error boundary
   RETIRES an entry that crashes, so the dock vanished until a reload. Confirm the
-  bar prints `dsh-cmdbar 0.1.0-alpha.14` and hard-refresh (Ctrl+F5).
+  build string reads `dsh-cmdbar 0.1.0-alpha.14` or later and hard-refresh (Ctrl+F5).
+  (alpha.15 moved that string out of the bar and into the **Agent** label's
+  tooltip — hover it.)
+- **A plugin edit does not show up, however many times you refresh** — this is the
+  harness's own behaviour, not the plugin's: the host **snapshots** every
+  `client.js` when it boots and republishes it only through its client-plugin HMR
+  hook (`dsh-client-modules`: *bundle content changes reach the graph only through
+  `rebuilt()`*), so a page refresh cannot pick up an edited bundle and neither can
+  `Ctrl+F5`. **Restart the process serving the page** (`npx @deepseek-ai/dsh web`,
+  or `scripts\run-web.bat` / `./scripts/run-web.sh`), then reload. Client-plugin
+  changes reload without a restart only while `pnpm run dev:web` is running from the
+  checkout that owns them. To find out WHICH bundle the running host is actually
+  serving, without trusting your eyes, paste this in the page's console (F12):
+  `document.querySelector('[data-dsh-cmdbar-dock]').dataset.dshCmdbarVersion` — it
+  answers e.g. `0.1.0-alpha.15`, and every release prints the same string in the
+  **Agent** label's tooltip.
+- **The bar's header is too tall, or its text runs into itself** — that was through
+  alpha.14, and it was worst on a narrow dock: the bar stacked two rows (its own and
+  the view's toolbar), its count line could not shrink and ran over the version
+  beside it, and the version — the only shrinkable item — wrapped into four lines,
+  so the bar grew to 84px. alpha.15 is ONE row — 25px, on the app's own dense chip
+  scale — the counts ellipsise, and the version moved to the **Agent** label's
+  tooltip: hover it for `dsh-cmdbar 0.1.0-alpha.15`, then hard-refresh (Ctrl+F5). If
+  the row still reads too tall or too tight for you, its height is ONE value,
+  `--dsc-control-h` on the dock's own `.dsc-dock` rule in
+  `packages/dsh-cmdbar/lib/client.js` — change the 20px and the chips and the close
+  button follow it together.
+- **Hovering a command line shows what the command is for, not the command** — that
+  was through alpha.14 (the native tooltip held the agent's `description`). From
+  alpha.15 the line's hover card carries the **whole command**, wrapped and
+  scrollable, and the row still expands for keyboard readers.
 - **The dock opens but the panel does not make room for itself** — something is
   writing the middle/right columns' inline `height`; the dock sets
   `calc(100% - <dock>px)` on those two while open and hands back what they had on
@@ -365,8 +395,10 @@ from the web profile, plus any retired bundle name (`dsh-files`, `dsh-focus`).
 - **The dock keeps the old left edge after collapsing or expanding the left
   bar** — that was alpha.2 (only the frame's `style` mutation was watched, and the
   left bar is *animated*, so it reported the pre-transition width and never fired
-  again). alpha.3 follows the columns' size instead. Confirm the dock's bar prints
-  `dsh-cmdbar 0.1.0-alpha.3` or later and hard-refresh (Ctrl+F5).
+  again). alpha.3 follows the columns' size instead. Confirm the build string reads
+  `dsh-cmdbar 0.1.0-alpha.3` or later — through alpha.14 it was printed at the right
+  end of the bar; from alpha.15 it is in the **Agent** label's tooltip — and
+  hard-refresh (Ctrl+F5).
 - **The left bar still shows the fish and the "deepseek" wordmark** — the branding
   override arrives with `dsh-themes` alpha.6; reinstall (`scripts\install.bat` /
   `./scripts/install.sh`, or `-Force`) so that version is in the profile, then restart and

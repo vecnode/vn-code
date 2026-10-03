@@ -130,7 +130,28 @@ engine. (The live terminal socket that used to need a resolvable `node-pty` and
     to leave the last conversation's commands on screen, a closed panel only
     forgetting, the same conversation moving nothing, a missing state not
     crashing), with the source pinned so the panel is closed by the reader's own
-    control and by nothing else.
+    control and by nothing else. **alpha.15 pins the BAR in the three registers the
+    defect lived in**: the CSS as the fix (`flex-wrap:nowrap` on the row, the counts
+    as the ONE shrinkable item with an ellipsis, the brand and chips refusing to
+    shrink or wrap, and `.dsc-ver` / `.dsc-actBar` / `.dsc-mini` asserted GONE),
+    the markup as the app's own dress (one `dsc-bar`, both `primitives.Pill` chips
+    with their `active` and `aria-pressed`, no toolbar row in the view), and the
+    hover as a behaviour - `commandCard` answers the bare line for a non-command row
+    and for `null`, the whole command as the card's own `content` (in the app's
+    `preview` variant, anchored to the log's box) for a real one, and the ROW is
+    asserted to hand that card the whole command, read off the stub because the real
+    card is portaled. Both new primitives are ALSO dropped from a second load
+    (`withoutHoverCard` / `withoutPill`) and the fallback bar rendered, because
+    `h(undefined, …)` in this root-scoped seat abdicates the whole dock rather than
+    costing one chip. The version is pinned where it MOVED to - the brand's tooltip -
+    and asserted **not** to be text in the row again. The DENSITY pass on the same
+    row is pinned too, because the first cut measured 31px and the reader said that
+    was still too tall: `--dsc-control-h:20px` is asserted as the one knob, the
+    chips' resizing as a rule on a wrapper THIS package owns (`.dsc-pillSeat>*`,
+    never one of the app's hashed class names), and the shipped `Pill` as still the
+    thing being wrapped - so a future tidy-up cannot quietly turn the app's chip into
+    a lookalike, and cannot rename the wrapper into alpha.12's chip-strip absence
+    pin either.
   - The repo manifest and the master's pack-wide patches are checked by
     `check-node-routes.mjs`: `.dsh-version.json` must agree with every
     package.json, and `packages/dsh-vn-master/cordis.patch.yml` must keep the

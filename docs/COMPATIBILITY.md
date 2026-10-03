@@ -874,6 +874,48 @@ the details.
   until then - followed by a hard refresh (Ctrl+F5). The dock's bar prints
   `dsh-cmdbar 0.1.0-alpha.14`.
 
+- **cmdbar alpha.15 - one header row, and the whole command on hover**: the bar
+  itself, revised from the reader's own report that this dock's header was too big
+  and that its text overlapped.
+  *The header*: the dock stacked **two** rows — its own bar and the view's toolbar
+  underneath — and both restated the counts. At a narrow width it was worse than
+  redundant, and the pack's browser harness measured it against a 358px-wide dock:
+  the bar was **84px tall** and the two rows plus the grip took **121px of a 280px
+  panel**. The count line carried `flex:none` and no overflow rule, so it kept its
+  full width and ran over the version text beside it, while the version — the only
+  shrinkable item in the row — wrapped into a **four-line stack**. There is now ONE
+  row: the brand and the log's state marks at the left, the counts as one faint
+  ellipsised line, and the app's own `primitives.Pill` chips at the right (**All
+  tools**, **Failures**, and **Follow ↓** while the view is scrolled away from the
+  tail). Three CSS declarations are the fix and are pinned as such: the row is
+  `flex-wrap:nowrap`; everything that must not shrink is `flex:none;white-space:
+  nowrap`; and the counts line alone is `flex:0 1 auto;min-width:0;overflow:hidden;
+  text-overflow:ellipsis`. The row's height is ONE knob after the reader measured
+  the first cut and said it was still too tall: `--dsc-control-h: 20px` on
+  `.dsc-dock`, which is `primitives.Tag`'s own density in this design system, and
+  the shipped `Pill` is resized structurally through a wrapper this package owns
+  (`.dsc-pillSeat > *`) rather than through one of the app's hashed class names. The
+  same dock now draws a **25px** row and **31px** of chrome above the log, against
+  84px and 121px before; the version string moved out of the row into the brand's
+  tooltip. The view's toolbar row is gone, so the filters and the follow chip moved
+  UP into the dock with the state that sets them — still reset by a conversation
+  change, exactly as the view's expanded rows are.
+  *The hover*: pointing at a highlighted command line now shows the **whole
+  command**, wrapped and scrollable, in the shipped `primitives.HoverCard`
+  (`variant: 'preview'`, portaled to the body, sized from the log's own box,
+  height-capped at 420px). The native `title` it replaces held the agent's
+  **description**, so it answered a question nobody had asked while the command
+  itself stayed one clipped line. Both new primitives are resolved once and
+  **guarded** — `commandCard` answers the bare line when the engine has no
+  `HoverCard` — because `h(undefined, …)` in this root-scoped seat ABDICATES the
+  dock rather than costing one chip; a second load of the bundle with both exports
+  dropped renders the fallback bar and the bare line. The tracked check pins the new
+  CSS, the one-row markup, the chips' `active`/`aria-pressed`, the whole command as
+  the card's own `content`, and the version's new home.
+  **What an installed profile needs**: nothing but the rebuild the live link already
+  does — no route, row, storage key or file name moved — and a hard refresh
+  (Ctrl+F5). The dock's brand tooltip reads `dsh-cmdbar 0.1.0-alpha.15`.
+
 ## Alpha policy
 
 Every package under `packages/` ships with an `-alpha.<n>` suffix. "Stable"
