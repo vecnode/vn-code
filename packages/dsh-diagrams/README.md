@@ -1,382 +1,75 @@
-# dsh-diagrams (alpha.6)
+# dsh-diagrams (alpha.7)
 
-**Mermaid and TikZ diagrams as a first-class surface of the harness**: the model
-writes them as tools, the host validates every write with a real parser or a
-real TeX engine, they render inline in the conversation, and each one lives in
-its own right-bar tab with a zoom ladder, a source drawer and an export menu
-that saves to the Desktop of the machine running the harness.
+**Mermaid and TikZ diagrams as a first-class surface: the model writes them as tools, the host validates every
+write with a real parser or TeX engine, and each diagram gets its own right-bar tab.**
 
-A diagram can live in **two places**. By default it belongs to the conversation
-that drew it; publish it and it joins the **LIBRARY**, one shared store every
-conversation reads, whose address names no conversation
-(`dsh-resource://diagram/library/<id>`) - so `jepa-model` means the same diagram
-in every chat, and survives the chat it was drawn in.
+A diagram lives in the conversation that drew it, or in the shared **LIBRARY** — one store every conversation
+reads, addressed without naming one (`dsh-resource://diagram/library/<id>`).
 
-- Row `diagrams`, bundle `dsh-diagrams`, tab kinds `diagram` (one tab per
-  diagram, in either scope) and `diagrams` (the index, reachable from the tab
-  strip's `+` / **Start** page, showing the library and this conversation).
-- Tools: `diagram_write`, `diagram_patch`, `diagram_read`, `diagram_verify`,
-  `diagram_publish`, `diagram_delete` - each taking an optional `scope`
-  (`conversation` | `library`) and resolving a bare id in the LIBRARY first,
-  except `diagram_publish`, which takes an id from THIS conversation and copies
-  it in.
-- Skills: `mermaid-diagrams`, `tikz-diagrams` (authored in `skills/`, copied
-  into `$DSH_HOME/skills` by the installer), each with a
-  `reference/complex-diagrams.md` for pictures too big for the syntax summary.
-- No core patch, no forked bundle, no npm dependency, **no network**.
+## What it adds
 
-Alpha. `0.1.0-alpha.6`.
+- **Six tools** — `diagram_write` (create or replace, validated), `diagram_patch` (`oldString`/`newString`;
+  `NO_MATCH` / `AMBIGUOUS` refused), `diagram_read` (source, diagnostics, warnings, verdict), `diagram_verify`
+  (re-validate; no revision bump, report kept), `diagram_publish` (copy into the LIBRARY), `diagram_delete` —
+  each taking an optional `scope` (`conversation` | `library`), a bare id resolving **library-first**.
+- **Every write is validated before storage**, so a broken diagram returns the parser's or compiler's
+  line-accurate error. Mermaid is parsed in a **child process** (a DOM stub and the same vendored engine the
+  browser uses); TikZ is compiled by the machine's engine (`pdflatex`, else `xelatex`, else `lualatex`). Status
+  is the contract: `ok` | `error` | `unavailable` (stored but NOT verified).
+- **Warnings are advisory and never change the status**: nodes with no edges, too many nodes, an unclosed
+  label, a Mermaid first line naming another type, a TikZ document of several pages or none; empty Mermaid and
+  a TikZ document with no drawing command are refused outright.
+- **Parsing and drawing are separate verdicts.** The browser reports what it drew to
+  `POST /api/dsh-diagrams/render-report`, read back as `drawn` / `failed` / `stale` / `pending` by one function
+  shared by the tool result, the state route and the pill; a write clears it.
+- **Two tab types.** `diagram` (`priority: 'extension'`, one tab per diagram, patterns for
+  `dsh-resource://diagram/session/**` and `.../library/**`) draws the picture at 80% of the pane with a
+  25%–400% zoom ladder, pan, and a source drawer whose Apply re-validates like a model write. `diagrams` (the
+  index, `sidebar://diagrams`, `priority: 'builtin'`) lists the conversation's diagrams and the library, with
+  the one guide entry at `order: 40` (after Files 10, Editor 20, History 30), and a `tool.call.toolview` card
+  per tool draws it inline.
+- **Export** saves mmd/md/tex/pdf/svg/png to the **Desktop of the machine running the harness**,
+  create-exclusively; the client names a format, never a path (a browser download is the fallback).
 
----
+## How it plugs in
 
-## 1. What the user sees
+`cordis.patch.yml` inserts the `diagrams` row and patches nothing else. The routes are exact `connection.fetch`
+paths with **GET/HEAD/POST only** —
+`/api/dsh-diagrams/{health,state,diagram,artifact,export,render-report,vendor/mermaid.js}` — which is why the
+engine is one self-contained file on one route (ETag, ~3.4 MB) and why every write, delete included, is a POST.
+Two skills are registered at runtime from the package folder **and** copied by both installers into
+`$DSH_HOME/skills` with a `.vncode-<package>` marker, so a person's own skill is never overwritten.
 
-**In the conversation.** Every diagram tool call renders its picture inline -
-Mermaid drawn by the browser from its own source, TikZ drawn from the SVG the
-host compiled - under a header naming the diagram (`kind`, title, id, status
-pill) with two links: **Open tab** (opens or reveals that diagram's tab) and
-**Show/Hide** (the picture). The card is built from the tool call itself, so it
-is already correct on replay, before any request returns.
+## Limits
 
-The card reads the shell's own block model: a call still running is a call block
-with **no** `kind` (`ui-tool` reads `done = "kind" in block`), and a settled call
-is a `tool-result` block carrying `call.argsRaw` plus the `meta` view the host
-declared. That second channel is what names the diagram for a `diagram_write` -
-the write never carries an id, because the host derives one from the title - so
-the settled card can name the diagram, show its status, refresh the conversation
-store and offer a live **Open tab** link.
+- **State**: `$DSH_HOME/dsh-diagrams/sessions/<session>.json`, one atomic write per change, capped at
+  **64 diagrams**, **256 KiB per source**, a **4 MiB source budget per conversation** (charged once on replace,
+  checked on write AND patch, `BUDGET` on refusal) and a **16 MiB file cap**.
+  `$DSH_HOME/dsh-diagrams/library.json` is the same shape for the whole harness.
+- **Cache**: `artifacts/<sha256[0:24]>/{doc.tex,doc.pdf,doc.svg,doc.png,meta.json}`, keyed by engine + renderer
+  + normalized source, LRU-pruned at **200 MiB**, **8 MiB** per artifact; a cache hit re-reads the verdict it
+  was cached with.
+- **Safety**: engines and converters spawn with an **argv array**, never a shell. TeX runs with
+  `-no-shell-escape`, `MIKTEX_AUTOINSTALL=0` (a missing package fails fast rather than reaching the internet),
+  `openin_any=p` / `openout_any=p`, a private temp cwd removed afterwards; `tectonic` is refused (it downloads
+  packages). Bounded: **20 s** compile kill, **15 s** validator kill, **512 KiB** log, **2** validator
+  children with a bounded queue, one compile at a time. **No network.**
+- **Mermaid's render path is parse-first**: `parse()` before `render()`, `suppressErrorRendering: true`, a
+  container the plugin owns, and a `finally` sweep — so a broken source is text, never an error picture.
+- **Never a session event**: `dsh-session-persistence` refuses a log with a type outside
+  `KNOWN_SESSION_EVENT_TYPES` unless the envelope is `ignorable`, which `Session.append()` cannot set. **Never a
+  projection**: a unit needs `zod`, and this pack ships no npm dependencies.
+- **TeX is optional**: without an engine TikZ stores and exports as `.tex`, and the UI says so. A panel edit
+  writes back where the diagram already is, so a library diagram is not forked.
+- **Not implemented**: host-side Mermaid rasterization (no SVG geometry in the stub; `jsdom` would break the
+  zero-dependency rule).
 
-**In the right bar.**
-
-| Surface | What it is |
-|---|---|
-| `dsh-resource://diagram/session/<session>/<id>` (a library diagram is `dsh-resource://diagram/library/<id>`) | **one tab per diagram**: the rendered picture laid out at 80% of the pane with a `-` / `+` / `Fit` zoom ladder (25%-400%), drag-to-pan when it overflows, a `Recompile` button for TikZ, `Copy`, and `Export ▾` |
-| `sidebar://diagrams` | the **index**: every diagram of the conversation and of the shared library, with kind, status and size; `New Mermaid` / `New TikZ`; picking a row opens its tab |
-
-80% **is** the 100% rung: a diagram is read whole first. The zoom moves the
-layout BOX rather than a CSS `transform`, so a zoomed box stays scrollable to
-its edge; every child of a zoomed box is stretched to it, because a column flex
-container sizes its children to their content on the cross axis; panning is the
-canvas' own `scrollLeft`/`scrollTop`; and a zoom keeps the point the reader was
-looking at.
-
-The index type carries the package's one **guide entry** (`order: 40`, after
-Files 10, Editor 20 and History 30), which is what the `+` control and the Start
-page list.
-
-Both pane bodies re-read the conversation from the host when they mount **and**
-whenever the tab becomes visible again, so a tab that stayed mounted while the
-model wrote diagrams shows them the moment the user returns to it.
-
-**The source drawer.** `Source` opens a monospace drawer beside the picture:
-edit, then `Apply` (validated and stored exactly like a model write, and
-recompiled when it is TikZ) or `Revert`. It is deliberately a plain textarea:
-the package depends on no editor, and the document that this drawer edits is a
-diagram, not a program. For a real editor, export the `.mmd`/`.tex` and open it
-in `dsh-editor`.
-
-**Export.** `Export ▾` saves every format to the **Desktop of the machine
-running the harness** (`POST /api/dsh-diagrams/export`, create-exclusive: the
-first free name wins and an existing file is never replaced), and reports the
-absolute path it wrote. The client names a format, never a path, so there is no
-traversal surface and no way to overwrite a file the user already had. The
-second half of the menu downloads through the browser instead - the fallback for
-a profile whose host row is not mounted.
-
-| Kind | Formats | Where the bytes come from |
-|---|---|---|
-| Mermaid | `mmd`, `md`, `svg`, `png` | source for `mmd`/`md`; the **browser's own render** for `svg`, rasterized at 2x for `png` |
-| TikZ | `tex`, `pdf`, `svg`, `png` | source for `tex`; the host's compiled artifacts for the rest |
-
-## 2. What the model gets
-
-Six tools with raw JSON-Schema parameters (the registry validates both the
-arguments and the returned canonical value):
-
-| Tool | Purpose |
-|---|---|
-| `diagram_write` | create or replace one diagram (`kind`, `source`, optional `id`, `title`, `scope`, `note`) and validate it |
-| `diagram_patch` | literal `oldString`/`newString` replacement inside one diagram - the cheap iteration path for a long TikZ picture; ambiguous matches are refused (`AMBIGUOUS`), a miss is refused (`NO_MATCH`) |
-| `diagram_read` | one diagram's full source plus its last diagnostics, warnings and browser verdict, or both indexes (library and conversation) |
-| `diagram_verify` | re-validate the stored source without writing: it never bumps the revision and never discards the browser's render report |
-| `diagram_publish` | copy a conversation diagram into the shared LIBRARY, so every chat can read it and cite its id |
-| `diagram_delete` | remove one diagram from whichever scope holds it |
-
-Five rules make this more than a text box:
-
-1. **Every write is validated before it is stored**, so a broken diagram
-   returns the parser's or the compiler's own line-accurate error rather than a
-   broken picture.
-   - *Mermaid*: the source goes to a **child process** that loads the vendored
-     engine behind a DOM stub and calls `mermaid.parse()`; the parse error comes
-     back with the offending line, the caret and the parser's "Expecting" list.
-   - *TikZ*: the source is compiled by the machine's own TeX engine and the
-     compiler's lines come back line-accurate
-     (`diagram.tex:12: Package pgf Error: No shape named ...`).
-2. **The status is the contract.** A tool result carries
-   `status: ok | error | unavailable`. `unavailable` means "stored but NOT
-   verified" (no TeX engine on this host, or the validator itself failed) and
-   says so in the result text, because telling the model its diagram is wrong
-   when the checker is what broke would be a lie.
-3. **Warnings are advisory, never a refusal.** After a successful validation the
-   host lints what a parser cannot refuse but a reader pays for: a picture with
-   nodes and no edges, more nodes than a person takes in at once, an
-   unclosed-looking label, a Mermaid source whose first line names a different
-   diagram type than the engine parsed, a TikZ document that compiled to several
-   pages or to a canvas too wide to read. They ride the same result, marked as
-   advisory, and never change `status`.
-4. **Two degenerate sources are refused in plain words.** An empty (or
-   comments-only) source, and a TikZ document with no drawing command - both of
-   which the engines handle with a success and a blank page.
-5. **"It parses" and "it draws" are separate verdicts.** See §3.
-
-The returned `address` is the diagram's tab, so the model can point the user at
-it in prose as well.
-
-**`diagram_verify`** re-runs the whole validation against the stored source
-without writing: it never bumps the revision, never claims an id, and never
-discards the browser's render report. It is the right call when a person edited
-the diagram in its panel, when the model's context was compacted, or before
-describing a diagram's contents - and it is why re-checking does not have to
-cost a rewrite.
-
-**Skills** carry the craft the tools cannot: which Mermaid diagram type fits
-which question, the syntax traps that actually break diagrams, layout and
-readability budgets; the TikZ preamble the host supplies, node/edge/plot
-recipes, sizing, the host's hard limits (no shell escape, no file access, no
-package installation) and how to read each compile error. They also document the
-verdicts above - what `status`, `warnings` and the `Browser:` line each mean, and
-which one to act on. They are registered at runtime from `skills/` **and** copied
-into `$DSH_HOME/skills` by the installer, so the catalog finds them however the
-bundle was installed.
-
-## 3. How it is put together
-
-```
-lib/index.js          host row: 6 tools, 2 skills, the /api/dsh-diagrams/* routes
-lib/store.js          per-conversation state (one JSON file, atomic writes)
-lib/cache.js          content-addressed artifact cache (svg/png/pdf/tex + meta)
-lib/latex.js          engine probe, source normalization, compile, convert
-lib/mermaid-check.mjs CHILD process: DOM stub + vm-loaded engine + parse + lint
-lib/client.js         browser half: 2 tab types, their bodies/titles, tool cards
-lib/vendor/mermaid.min.js   GENERATED single-file mermaid build (~3.4 MB)
-skills/<name>/SKILL.md      the two skills (copied to $DSH_HOME/skills on install)
-vendor/build.mjs      generates lib/vendor/mermaid.min.js + VERSION.json
-```
-
-### Routes (`connection.fetch`, exact paths, GET/HEAD/POST only)
-
-The harness's Connection registry registers **exact** routes and its method
-vocabulary is `GET | HEAD | POST`. Two consequences are visible in the design:
-the vendored engine is **one self-contained file** served from one route (the
-chunked ESM build would have needed 104 routes), and every write - including
-delete - is a **POST**.
-
-| Route | Behavior |
-|---|---|
-| `GET /health` | the vendored Mermaid version, the TeX capability (`engine`, `svg`, `png`), cache entry count. `?refresh=1` re-probes the engines |
-| `GET /state?session=` | the conversation's diagrams **and the shared library** (each with source, revision, scope, warnings and last render report) + the capability block |
-| `GET /diagram?session=&id=&scope=` | one diagram, source included. Without `scope` the id resolves library-first |
-| `POST /diagram` | create/replace (`{session, id?, kind?, title?, source, scope?, create?, recompile?}`), or delete (`{session, id, scope?, delete: true}`). Used by the panel; the model goes through the tools |
-| `GET /artifact?session=&id=&scope=&format=` | `svg`/`png`/`pdf`/`tex` from the cache (Mermaid: `mmd`/`source` only - its picture exists in the browser) |
-| `POST /export` | save one format to the **Desktop** of the machine running the harness, create-exclusively, and answer with the absolute path, the folder and the name it wrote |
-| `POST /render-report` | what the BROWSER did with one revision (`{session, id, scope?, revision, ok, phase?, error?, theme?, ms?}`). Deliberately forgiving: a report about a deleted diagram or an older revision answers 200, because a verification channel must not fail loudly |
-| `GET /vendor/mermaid.js` | the vendored engine (ETag, immutable) |
-
-### State: one file per conversation, and one for the library
-
-`$DSH_HOME/dsh-diagrams/sessions/<session>.json` - `{order, diagrams{id →
-{kind, title, source, status, diagnostics, warnings, render, artifact, revision,
-history}}}`, one atomic write per change, capped (64 diagrams, 256 KiB per
-source, 4 MiB of source per conversation, 16 MiB per file). A conversation
-source budget is enforced on write AND on patch (replacing a diagram is charged
-once) and refuses with a typed `BUDGET` error the model can act on. The browser
-reads the file through the routes; the model reads it through `diagram_read`,
-which is what makes a diagram survive compaction, a reload or the browser
-closing.
-
-`$DSH_HOME/dsh-diagrams/library.json` is the **same shape in one file** for the
-whole harness, written by the same store class with a fixed name instead of a
-name per conversation. It has its own 4 MiB source budget, its own render
-reports and its own revisions, so the library copy of a diagram is an
-independent entry that happens to share its source - and therefore its artifact,
-because the cache is content-addressed. Nothing about a conversation leaks into
-it: the file knows no session.
-
-Four rules are load-bearing:
-
-- **A panel edit writes back where the diagram already is** - otherwise editing
-  a library diagram in its tab would quietly fork a conversation-only copy.
-- **Deleting a diagram does not drop its cached artifact blindly**, because the
-  cache is content-addressed and shared: an identical diagram elsewhere is the
-  same file.
-- **State is never a session event.** `@deepseek-ai/dsh-session-persistence`
-  refuses to load a log containing an event type outside
-  `KNOWN_SESSION_EVENT_TYPES` unless the envelope carries `ignorable: true`, and
-  `Session.append()` has no way to set that marker - a plugin-owned event type
-  would make the conversation unreadable.
-- **State is never a projection.** A `sessionProjections` unit requires `zod`
-  schemas, and this pack ships no npm dependencies (the profile installs bundles
-  as live links, so a package dependency would not be installed). It would also
-  fold the same events the rule above refuses.
-
-`render` is the browser's own report about the revision it drew
-(`{revision, ok, phase, error, theme, at}`), stored by `recordRender` and read
-back as one of four states by `verificationOf`: `drawn` (a renderer reported
-success for THIS revision), `failed` (it reported failure, with its own error),
-`stale` (the newest report names a DIFFERENT revision, so this one has never been
-drawn) or `pending` (no report at all). The verdict is ONE function
-(`lib/store.js: verificationOf`) used by the tool result, the state route and the
-tab pill, so the three cannot disagree; it carries both revision numbers, so
-`stale` is read rather than guessed - a report about revision 4 is never
-evidence about revision 5 - and it **omits** its `error`/`at` keys rather than
-nulling them, because the tool registry refuses a value that does not survive a
-JSON round trip. A write sets `render` back to `null`, because the old picture
-was of different text.
-
-### Rendering
-
-**Mermaid, in the browser.** The engine is fetched once from the plugin's own
-route and evaluated as a classic script (its last line is
-`globalThis["mermaid"] = ...`), exactly how the editor loads CodeMirror. Renders
-are cached per `(source, theme)` (LRU, 24 entries) and re-drawn when the app's
-light/dark scheme flips.
-
-Every render goes through **`renderMermaidSafe`**, and the order inside it is
-load-bearing:
-
-1. **`mermaid.parse(source)` first.** It is the engine's own syntax check and
-   it throws with the offending line, so `render()` is only ever reached by a
-   source the parser accepted. A broken source therefore cannot produce a
-   picture *at all* - clean or broken.
-2. **`suppressErrorRendering: true`.** If `render()` fails anyway (a renderer
-   bug on a source the parser accepted), the engine throws instead of drawing
-   its 2412x512 "Syntax error in text" diagram.
-3. **A container the plugin owns.** `render(id, source)` with no container
-   builds `#d<id>` on `document.body` and removes it **only on success**, so a
-   failure would leave one behind - and one of those divs holds the error
-   picture. Passing `mermaidHost()` - attached, laid out at zero size, offscreen
-   - keeps every fixture out of the interface. A `finally` sweeps `d<id>`/`i<id>`
-   anyway, so an engine that ever ignores the container still cannot paint.
-4. **A verdict, not a throw**, at the call site: `MermaidError.phase` says
-   whether the parser or the renderer refused, and the pictures draw that as
-   text with the diagnostics, a **Retry** button and a route to the source.
-
-The exports (`svg`/`png`) go through the same path, so a diagram that does not
-render fails with the parser's words instead of writing an engine error picture
-to the Desktop.
-
-The validator itself runs as a **bounded child pool** (2 at a time, bounded
-queue) rather than an unbounded fan-out of ~3.4 MB engine children, and its DOM
-stub exposes `window.CSS`: without it the engine's sequence-diagram `box` parser
-takes a `new Option()` fallback that does not exist in a stub.
-
-**TikZ, on the host.** `pdflatex` (else `xelatex`, else `lualatex`) compiles a
-normalized document in a private temp folder, then `pdftocairo`/`pdftoppm`
-produce the SVG/PNG. A bare pgfplots body is wrapped in a `tikzpicture` first,
-because an `axis` at the top level of a `standalone` document does not compile.
-The tab and the card show the **engine's own vector output** (`pdftocairo -svg`
-emits glyph outlines, so it is font-independent), fetched as a blob and shown
-through an `<img>`. A failing compile that still produced a PDF is cached too
-and shown **flagged as errored** - a hint, never proof, and the verdict is read
-back from the cached meta rather than assumed to be a success. A document that
-compiles to no picture at all is refused before the engine sees it, with words
-rather than a blank panel.
-
-Content-addressed cache: `$DSH_HOME/dsh-diagrams/artifacts/<sha256[0:24]>/{doc.tex,doc.pdf,doc.svg,doc.png,meta.json}`,
-keyed by engine + renderer version + normalized source. Editing back to a
-previous revision is an instant hit, and the cache can be deleted at any time
-(it costs a recompile, nothing else). LRU-pruned at 200 MiB.
-
-## 4. Safety
-
-- **argv, never a shell**: every engine and converter is spawned with an
-  argument array; nothing a model writes reaches a shell.
-- **No shell escape, no installer, no network**: `-no-shell-escape`,
-  `MIKTEX_AUTOINSTALL=0` (a missing package fails in ~300 ms instead of reaching
-  the internet), `openin_any=p`/`openout_any=p`, `TEXMFOUTPUT` inside the temp
-  folder, cwd inside it too, and the folder is removed afterwards. `tectonic` is
-  deliberately **not** accepted as an engine: it downloads packages.
-- **Bounded**: 20 s engine kill, 15 s validator kill, 512 KiB captured compiler
-  log, 256 KiB source, 4 MiB of source per conversation, 8 MiB artifact, one
-  compile at a time (queued) and at most two Mermaid validator children (with a
-  bounded queue behind them).
-- **Mermaid validation runs in a child process** so the DOM stub never touches
-  the harness process, and a crashing engine can never take the host down.
-- **Writes** go to `$DSH_HOME/dsh-diagrams/**` (state + cache) and to the
-  **Desktop** when the user asks for an export - where the name is
-  host-generated, the folder is resolved per request (OneDrive-redirected
-  Windows, `XDG_DESKTOP_DIR` on Linux, the home folder last), and the write is
-  create-exclusive, so nothing the user already had can be replaced. The client
-  never names a path.
-
-## 5. Building the vendored engine
+## Verify
 
 ```sh
-node packages/dsh-diagrams/vendor/build.mjs          # rebuild from the pinned version
-node packages/dsh-diagrams/vendor/build.mjs --check  # drift check (non-zero on drift)
+node scripts/checks/check-client-bundles.mjs   # tab types, seats, cards, the render path, verdicts
+node scripts/checks/check-node-routes.mjs      # routes, tools, store, compile, export, drift, budgets
+node scripts/checks/check-skill-examples.mjs   # every fenced skill example, parsed or compiled
 ```
 
-`vendor/package.json` pins the version; the script installs it under
-`vendor/node_modules` (gitignored), copies **mermaid's own single-file browser
-build** to `lib/vendor/mermaid.min.js` and writes `lib/vendor/VERSION.json`
-(bytes + sha256 + the global it exposes). The tracked route check re-computes
-that hash against the served bytes, so a hand-edited or half-copied engine fails
-the checks instead of shipping.
-
-Why that file: it is self-contained (no dynamic imports, no chunk requests), it
-exposes `globalThis.mermaid` for the browser, and **the same bytes** run
-headlessly in Node via `vm.runInThisContext` behind the DOM stub - one vendored
-artifact, both halves.
-
-## 6. TeX is optional
-
-Everything works without a TeX engine except compiling TikZ. `GET /health`
-reports `tex.available`; when it is false the index says so, the tab explains
-that the diagram is stored but not validated, the tool result says the same, and
-TikZ diagrams still store and export as `.tex`. Mermaid needs no engine at all.
-
-## 7. Checks
-
-```sh
-node scripts/checks/check-client-bundles.mjs   # tab types, seats, cards, the render path, zoom, Desktop export, verdict labels
-node scripts/checks/check-node-routes.mjs      # routes, tools, store, compile, export, vendor drift, budgets, cache verdicts
-node scripts/checks/check-skill-examples.mjs   # every fenced example in every shipped skill, parsed or compiled
-```
-
-The client check renders the real seats through a real React runtime (the panel
-bodies, both chips, all six tool cards) and asserts the four load-bearing
-properties of the render path - parse-before-render, `suppressErrorRendering`,
-the plugin's own container, and the `finally` sweep - each of which is the
-difference between a text error and a stray error picture in the page; it also
-pins the zoom ladder to the layout box rather than a transform, the Desktop
-export wording, and the four verdict labels. The node check drives the routes and
-the tool bodies against a temp `DSH_HOME` - including a real Mermaid parse, a real
-TikZ compile when the host has an engine, the lint warnings, the empty-source
-refusals, `diagram_verify` leaving the revision alone, the render-report round
-trip (drawn / failed / stale / pending), an ambiguous-patch refusal, the
-create-exclusive export onto a redirected Desktop (never the workspace), the
-source budget, a cache hit keeping the verdict it was cached with, a `box`
-sequence diagram validating, a bare `axis` chart compiling, and the
-vendored-engine hash. The skill check is the one that keeps the DOCUMENTATION
-honest: it extracts every fenced example from `skills/**/*.md` and runs it
-through the same parser and engine, so a copy-pasteable source that no longer
-works fails the run instead of misleading the next agent.
-
-## 8. Limits
-
-- One diagram per tab: `dsh-resource://diagram/session/<session>/<id>` for a
-  conversation diagram and `dsh-resource://diagram/library/<id>` for a shared
-  one; the index is the only page.
-- The source drawer is a textarea by design - the package depends on no editor.
-- TikZ with multiple files (`\input`) is not supported - the document is one
-  self-contained source.
-- A source may not read files or run commands: the engine is sandboxed to its
-  temp folder with shell escape off.
-- **Host-side Mermaid rasterization is not implemented.** Verifying a Mermaid
-  *picture* on the host would need real SVG geometry (`getBBox`), which the
-  child validator's DOM stub deliberately does not provide - and adding
-  `jsdom`/`svgdom` would break the pack's zero-dependency rule. The browser
-  render report is the substitute: it uses the real renderer, in the real theme,
-  on the user's own screen, which is a stronger signal than a headless proxy.
-  Its only cost is that it needs a client to have drawn the revision.
+`node packages/dsh-diagrams/vendor/build.mjs` rebuilds it from the pinned version; `--check` fails on drift.

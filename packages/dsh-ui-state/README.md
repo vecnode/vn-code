@@ -1,162 +1,48 @@
-# dsh-ui-state (alpha.1)
+# dsh-ui-state (alpha.2)
 
-**UI state that outlives the process**, for the web GUI and the desktop window
-alike. One host-owned settings form holds the things a reload would otherwise
-forget, and one browser half binds it, restores the two column widths, and
-publishes the **`uiState`** client service the pack's other halves write through:
+**UI state that outlives the process**, for the web GUI and the desktop window alike: one host-owned settings form holds the things a reload would otherwise forget, one browser half binds it, restores the two column widths, and publishes the **`uiState`** client service the pack's other halves write through.
 
-```js
-const uiState = ctx.get('uiState')
-uiState.set('dockHeight', 340)     // durable, host-side, shared by both hosts
-uiState.get('pageZoom')            // -> 125
-uiState.subscribe(rerender)        // fires when an accepted section arrives
-```
+Browser storage is per **origin** and per browser **profile**, so a Chrome tab and the desktop window's WebView never share it, even at the same port. The profile's own Cordis patch is one document both hosts read.
 
-Alpha.
+## What it adds
 
-## Why this exists
-
-Everything that survives a restart survives because it already lives on the
-**host**: `$DSH_HOME/sessions` holds the conversations (which is why a new chat
-opens the last one), `$DSH_HOME/storages/workspace.json` holds the workspaces,
-and the profile's own Cordis patch, `$DSH_HOME/profiles/web/cordis.patch.yml`,
-holds the shipped preferences as each entry's `config:`. What the interface
-keeps in the **browser** is per **origin** and per browser **profile**: a Chrome
-tab and the desktop window's WebView2 are two different stores, so they never
-share it — even at the same port — and the desktop shell prefers port 3080 and
-falls back to a free one, so even one host loses it by moving a port. A form over
-one profile entry is one document both hosts read. That is the whole idea.
-
-## What is remembered
+The `ui-state` row declares its own `.volatile()` `Config`. The Host projects every volatile field into a settings form keyed by that entry id and persists an accepted write into `$DSH_HOME/profiles/web/cordis.patch.yml` under the entry's `config:`. A fresh install writes no `config:` block at all: every field carries a schema default.
 
 | Field | Default | Owner |
 |---|---|---|
 | `pageZoom` | `100` | [`dsh-themes`](../dsh-themes) — the header's Page-zoom control |
 | `theme` | `''` | [`dsh-themes`](../dsh-themes) — an **extension** theme id (Nord / Monokai / Hacker) |
-| `dockHeight` | `280` | [`dsh-cmdbar`](../dsh-cmdbar) — the bottom dock (the command bar) |
+| `dockHeight` | `280` | [`dsh-cmdbar`](../dsh-cmdbar) — the bottom dock |
 | `sidebarWidth` | `-1` | this package — the left column |
 | `rightbarWidth` | `-1` | this package — the right bar |
 
-The medium is the profile's own Cordis patch document,
-`$DSH_HOME/profiles/web/cordis.patch.yml`, as the `ui-state` entry's `config:`
-block, and a fresh install writes **no** `config:` block at all: every field
-carries a schema default, so only values that actually differ from the contract
-are written.
+Two conventions: **a negative width means "never recorded"**, deliberately not `0`, because for the sidebar `0` is a real state (collapsed) and is restored through ui-layout's toggle rather than its width setter; and **`theme` holds an extension theme only**, because `light`/`dark`/`system` are already durable in ui-theme's own form and duplicating a preference would give one setting two owners.
 
-There is deliberately **no field for the terminal dock's open state**. The panel
-is the window onto a *process*: after a reload the client holds no slots, so
-reopening it would either show an empty panel or — once the server's five-minute
-PTY retention has lapsed — **start a shell nobody asked for**. A height is a
-preference; "a shell was running" is not.
+There is deliberately **no field for the terminal dock's open state**: the panel is the window onto a *process*, and reopening it after the server's five-minute PTY retention lapsed would start a shell nobody asked for. The desktop shell's window geometry lives separately, in `$DSH_HOME/vncode/window.json`, because the size must be known before the window is built.
 
-Two conventions matter when reading it by hand. **A negative width means "never
-recorded"**, which is deliberately not `0`, because for the sidebar `0` is a real
-state (collapsed) and a remembered `0` is restored through ui-layout's toggle
-rather than its width setter. And **`theme` holds an extension theme only**:
-`light` / `dark` / `system` are already durable in ui-theme's own form, and
-duplicating a preference would give one setting two owners that could disagree.
+## How it plugs in
 
-## Why a `.volatile()` Config
+`lib/index.js` declares the `Config` (every field `.volatile()`), answers `webserver/index-inject` with one inline script carrying the remembered page zoom immediately after the opening body tag so the level is in force for the first paint, and calls `settings.configure({ auto: false })` through `ctx.inject(['settings'], …)` so no settings page is generated from those fields. The script writes both the `zoom` declaration and the `data-dsh-page-zoomed` marker, which is the gate `dsh-themes`' right-bar seam fix keys on. With no schemastery new enough to carry `.volatile()`, the row **warns and degrades** — nothing is remembered — rather than failing the boot.
 
-A plugin-owned session event is not an option: `dsh-session-persistence` refuses
-an unknown event type unless the envelope carries `ignorable: true`, which
-`Session.append()` cannot set, so the conversation would become unreadable.
-`ctx.storageDomain` cannot be used either — it needs a projection the browser
-cannot read. A `.volatile()` field in the row's own `Config` is the documented
-third-party seam for a preference, and the Host is what turns it into a form.
+Schema is resolved at runtime with `createRequire`, never imported: the profile installs each bundle as a **live link**, so a bare `import '@deepseek-ai/schemastery'` fails with `ERR_MODULE_NOT_FOUND`. The anchors are `process.argv[1]`, then `$DSH_HOME/profiles`; every resolved copy is probed for `.volatile()` itself, because the 3.18.2 build an older line installed lacks it.
 
-## The Node half
+`lib/client.js` binds that form (`ctx.configForms.get('ui-state')`) **once** — three bundles binding it independently would each fence their writes on their own revision — and publishes **`uiState`** (`get` / `set` / `unset` / `subscribe` / `snapshot` / `status`), which `dsh-themes` and `dsh-cmdbar` reach **lazily** through `ctx.get`, never in their `inject`, so each still works in a profile without this package. `set` is safe before the transport is ready (replayed when the first section arrives) and with none at all; `unset` exists because clearing is not overwriting.
 
-`lib/index.js` declares the row's own `Config` — every remembered field marked
-`.volatile()`, which is what the Host projects into the form keyed by the entry
-id `ui-state` — and answers `webserver/index-inject` with one inline script
-carrying the remembered page zoom, placed immediately after the opening body tag
-so the level is in force for the first paint. It also calls
-`settings.configure({ auto: false })` inside `ctx.inject(['settings'], ...)`, so
-no settings page is generated from those fields: this is the interface's own
-memory, not a preference a person browses. The script writes **both** the `zoom`
-declaration and the `data-dsh-page-zoomed` marker, because that marker is the
-gate `dsh-themes`' right-bar seam fix keys on. Should no copy of schemastery — or
-none new enough to carry `.volatile()` — be reachable, the row **warns and
-degrades** — nothing is remembered, and the client falls back to its own
-defaults — rather than failing the boot.
+The two column widths are this package's job because `ctx.layout` exposes no width setter: the store is reached the way ui-layout's own `AppFrame` reaches it, through the **`root` slot registration**, which carries the store handle. That is the one core store this pack writes, so it is guarded twice — the handle must look like a layout store before anything is touched, and a shape it does not recognise means "remember nothing" rather than "run blind".
 
-## Why schema is resolved at runtime and never imported
+## Limits
 
-This pack ships zero npm dependencies: the profile installs each bundle as a
-**live link** into this repo, so a bare `import '@deepseek-ai/schemastery'`
-resolves from the repo folder and fails with `ERR_MODULE_NOT_FOUND` (measured).
-Declaring a `.volatile()` field needs a schemastery schema, so the module is
-loaded at runtime instead with `createRequire`, through the anchors
-`packages/dsh-cmdbar/lib/pty.js` established for the harness's own `node-pty` (that
-file is gone — alpha.12 deleted the command bar's PTY — and the anchors stay,
-because what they resolve is schemastery, not a shell) —
-`process.argv[1]`, then `$DSH_HOME/profiles`, which `dsh-app-boot` keeps as a
-mirror of the installation's dependency closure. Duck typing is what makes that
-safe: the form projection treats the schema as a value and reads
-`schema.toJSON()`, so class identity never matters across the two module graphs.
-Every resolved copy
-is also probed for `.volatile()` itself, because the 3.18.2 build an older line
-installed has no such method: a stale `$DSH_HOME/profiles/node_modules` mirror is
-passed over rather than crashing the import.
+- Widths go to the store's own setters **unclamped**: it clamps to its drag range and to 70% of the frame itself. A remembered `0` goes through `toggleSidebar()` because `setSidebar(0)` clamps to 264. Below ui-layout's 1024px auto-collapse width the sidebar is not restored at all.
+- A plugin-owned session event is not an option (`dsh-session-persistence` refuses an unknown type unless the envelope carries `ignorable: true`, which `Session.append()` cannot set), and `ctx.storageDomain` needs a projection the browser cannot read.
+- The row id (`ui-state`), the Node half's `ENTRY_ID` and the client's `ENTRY_ID` must stay equal. A mismatch is silent: the form answers `unavailable` and the pack remembers nothing.
 
-## The browser half
+## Verify
 
-`lib/client.js` binds that form (`ctx.configForms.get('ui-state')`) **once** —
-three bundles binding it
-independently would each fence their writes on their own revision, and the
-contract's recovery for a stale revision is a reload that silently drops the
-write — and publishes the client service **`uiState`**
-(`get`/`set`/`unset`/`subscribe`/`snapshot`/`status`), which `dsh-themes` and
-`dsh-cmdbar` reach **lazily** via `ctx.get`, never in their `inject`, so each
-still works — and still writes its own `localStorage` copy — in a profile without
-this package. `snapshot()` answers `{ status, value, defaults }` and `status()`
-answers `loading` / `ready` / `unavailable` / `absent` (no transport); `set` is
-safe before the transport is ready — the write is replayed when the first section
-arrives — and safe with none at all, where it resolves without writing. `unset`
-exists because clearing is not overwriting: picking a built-in theme after Nord
-must **remove** the field so it reads as inherited again.
-
-## Why the column widths are this package's job
-
-ui-layout keeps them in a **transient** store — its own words — so a reload
-returns the sidebar to its 280px contract default and the right bar to 45% of the
-frame, and closing the sidebar forgets its drag width by design. `ctx.layout`
-exposes no width setter, so the store is reached the way ui-layout's own
-`AppFrame` reaches it: through the **`root` slot registration**, which carries the
-store handle, and `store.create()` answers the same shared instance the frame
-renders from. That is the one core store this pack writes, so it is guarded twice
-— the handle must look like a layout store before anything is touched, and a
-shape it does not recognise means "remember nothing" rather than "run blind".
-Both widths go to the store's own setters **unclamped**: it clamps to its drag
-range and to 70% of the frame itself, and a remembered `0` goes through
-`toggleSidebar()` because `setSidebar(0)` clamps to 264. Below ui-layout's 1024px
-auto-collapse width the sidebar is not restored at all: the rail is the layout's
-decision, not a preference.
-
-## Desktop window geometry
-
-The desktop shell remembers its own window geometry separately, in
-`$DSH_HOME/vncode/window.json` — written and read by the Rust shell itself
-(`app/src-tauri/src/windowstate.rs`, whose pure half is covered by `cargo test`)
-— because the size must be known *before* the window is built, and a Chrome tab
-has no window geometry to share. A maximized recording keeps the previously known
-size and position and flips only the flag.
-
-## Layout
-
-```
-cordis.patch.yml   bundle layer: inserts the 'ui-state' row (nothing else patched)
-lib/index.js       Node half: declares the `.volatile()` Config, inlines the remembered zoom
-lib/client.js      Browser half: binds `ctx.configForms.get('ui-state')`, restores the column widths, provides `uiState`
+```sh
+node scripts/checks/check-client-bundles.mjs
+node scripts/checks/check-node-routes.mjs
 ```
 
-No route, no fork, no core row disabled, no npm dependency.
+## Install
 
-## Install / uninstall
-
-The repo launcher (`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux)
-auto-discovers this package — it is a standard `dsh.bundle`, so a bundle the
-profile does not list yet is added by one plain launcher run (no `-Force`
-needed). The web profile links it into this repo, so code edits only need a
-restart of `npx @deepseek-ai/dsh web` plus a hard browser refresh.
+The repo launcher (`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux) auto-discovers this package — it is a standard `dsh.bundle`, so a bundle the profile does not list yet is added by one plain launcher run (no `-Force`). The web profile links it into this repo, so code edits need a restart of `npx @deepseek-ai/dsh web` plus a hard browser refresh.

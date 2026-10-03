@@ -1,359 +1,80 @@
 # Building vncode
 
-> **Stage 2 is specified in [`STAGE2.md`](STAGE2.md), and its measurements
-> supersede §1–3 of this file.** The measurement changed the design: the pinned
-> harness's production closure is **461.5 MB / 26 642 files**, and `--omit=dev`
-> saves nothing - 461 MB *is* the runtime - so "one lightweight `.exe`" was never
-> achievable. The decision taken is **one `.exe`, fully offline, ~176 MB, shipped
-> whole with LibreOffice included**, because a recipient must be able to start
-> the app with no network and no prerequisites. Read `STAGE2.md` before starting
-> stage 2's work items.
+Two verbs, deliberately separate: `scripts\run-desktop.bat` is the developer loop
+(build the Rust shell when it is stale and run it from the source checkout, where
+the profile's live links already point); `scripts\run-dist.bat` produces `dist/`.
 
-This document is the **build plan** for the vncode distribution. It describes the
-target pipeline, why each decision was made, and the order the work has to happen
-in. It is a specification, not a description of what exists today - see
-*Current state* for the delta.
+## No JavaScript build step
 
-Read `ARCHITECTURE.md` for what the application **is**. This file is only about
-turning it into artifacts.
+There is no JavaScript/TypeScript build here; the packages are hand-written:
 
----
+- `packages/*/lib/client.js` is the shipped browser bundle, loaded by the harness
+  as a live link - which is what makes a plugin edit visible on a reload.
+- Vendored engines keep their own `vendor/build.mjs` and the tracked hashes in
+  `lib/vendor/VERSION.json`. Regenerate them, never hand-edit.
+- `app/ui/` is one splash page inlined by `tauri-build`, and `scripts/checks/` is
+  the build gate: a build that fails a check is not a build.
 
-## The four decisions
-
-| Decision | Choice |
-|---|---|
-| What `run-dist` leaves in `dist/` | **Both** - the folder (dev, live-linked) and one self-extracting `.exe` (the thing you hand over) |
-| Runtime | **Vendor the harness AND bundle a pinned Node runtime**, shipped whole (~176 MB). No `npx`, no `PATH` lookup, and **no network at startup** - the network is for the chat and search only. See `STAGE2.md` |
-| Profile | **Pre-built into the payload** and copied on first run, so every launch is pure Node: no npm, no pnpm, no registry |
-| Signing | **Wired behind `-Sign`, off by default** - local builds stay fast and unsigned; the certificate comes from the environment, since there is no CI to hold one |
-| JavaScript/TypeScript build | **No bundler for `packages/`** - hand-written client bundles, live-linked, preserved as the fast dev loop |
-
----
-
-## 1. Two verbs, not one
-
-`scripts\run-desktop.bat` stays the **developer loop** and must never assemble a
-distribution: it builds the Rust shell when it is stale and runs it from the
-source checkout, where the web profile's live links already point. That loop is
-seconds and it is the reason plugin edits appear on a reload.
-
-The distribution gets its own entry point.
-
-```bat
-scripts\run-dist.bat [flags]        :: new - the one verb that produces dist/
-scripts\run-dist.bat              :: becomes a thin alias, so nothing breaks
-```
-
-`scripts\run-dist.ps1` is the worker (Windows). `scripts/dist.sh` is the POSIX
-twin; both call the same shared steps so the halves cannot drift.
-
-Build only what changed:
+## The distribution entry points
 
 | Flag | Effect |
 |---|---|
-| `-SkipRuntime` | reuse the vendored runtime tree (the common case) |
-| `-SkipBuild` | reuse `app/src-tauri/target/release/vncode-desktop.exe` (already exists) |
-| `-NoZip` | assemble the folder only |
-| `-Sign` | sign the shell **and** the final one-file build |
-| `-Verify` | assemble, install into a throwaway `DSH_HOME`, boot, await the ready line |
-| `-Clean` | delete `dist/` first |
+| `-NoShell` | source-only release: compile nothing, ship `app/` as source, name the artifact `vncode-<version>-<os>` |
+| `-TargetOs win\|mac\|linux` | label the artifact and `BUILD-INFO.json` for that OS; refused without `-NoShell` |
+| `-SkipBuild` / `-ForceBuild` | reuse `app/src-tauri/target/release/vncode-desktop[.exe]` / run cargo even when nothing looks stale |
+| `-SkipChecks` | do not run `scripts/checks/` first (and say the result is unverified) |
+| `-Verify` / `-KeepVerifyHome` | install the assembled copy into a throwaway `DSH_HOME` and boot the pinned harness, waiting for the ready line / keep that home |
+| `-Run` / `-RunApp` | assemble, then run the folder's `START-HERE` / the packed binary |
+| `-NoZip`, `-OutDir <dir>`, `-Clean` | assemble the folder only / assemble elsewhere / delete the output folder first |
+| `-Sign` | sign the shell and the final one-file build (off by default) |
 
-A day-to-day release run is therefore `-SkipRuntime` and takes seconds.
+`scripts\run-dist.ps1` is the Windows worker and `scripts/dist.ps1` the engine it
+calls; `scripts/dist.sh` is the POSIX half doing the same work itself. The output is
+`dist/vncode-<version>-<os>/` plus its `.zip`, and `dist/` is gitignored.
 
----
+## Runtime and launch path
 
-## 2. DSH becomes a build input, not a runtime pull
+`scripts/dsh/vendor.ps1` produces a complete vendored runtime under
+`runtime/<rid>/` (`node/`, `harness/`, `VENDOR.json`) from the pinned tree the
+machine already has, falling back to the registry only when nothing local carries
+the pin. `choose_launch()` in `app/src-tauri/src/main.rs` prefers it and launches
+`node <runtime>/harness/.../lib/bin.js web --no-open --port N`, with no npm, no npx
+and no cache touched; when no complete runtime exists it falls back to
+`npx --yes @deepseek-ai/dsh@<pin> web` and sets `npm_config_cache` on that branch
+alone. All three pieces must be present or the fallback is taken, and `runtime/` is
+a distribution tree, never a repository tree: gitignored, absent from a clone.
 
-The shell **used to** run `npx.cmd --yes @deepseek-ai/dsh@<pin> web --no-open` and
-no longer does when a runtime is vendored: that was a network dependency, a `PATH`
-dependency, one extra process on every launch, and - on this machine - the source
-of an `npm error code EPERM` in a cache owned by another account, whose own message
-advised running as Administrator.
+## Signing, and Windows SmartScreen
 
-`scripts/dsh/vendor.ps1` is **delivered** and works differently from the sketch
-below, in one deliberate way: it is **local-first**. It looks for the pinned tree
-the machine already has (the app-local and shared npm caches, `.upgrade/`,
-`.scratch/`) and copies it, so a first run needs no network at all - on this
-machine it copied the very tree the running session boots from. Only when no local
-tree carries the pin does it fall back to resolving the pin by name from the
-registry. What is left of this sketch is that fallback and a tracked lock file.
-It also stamps `runtime/<rid>/VENDOR.json` **only after** running the copied pair
-and watching it report a version, so a half-copy can never be resolved.
+Authenticode covers the exact bytes of a file, so the order matters: build the
+shell, sign it, append the payload zip and the `VNHRNS01` trailer, then sign the
+final file. `-Sign` takes a certificate named by the environment (never committed)
+and is off by default so a local run stays fast. UAC is not a concern - nothing
+elevates and there is no installer. SmartScreen is: a downloaded file warns until
+that file or publisher has reputation, and a self-signed certificate fixes nothing
+for other people; until one exists, ship the `.zip` ("extract, then run" drops the
+mark) and publish `SHA256SUMS.txt`.
 
-```jsonc
-// tools/dsh-vendor.lock.json  - NOT YET WRITTEN; the pin in .dsh-version.json is
-// what today's vendor.ps1 reads, and VENDOR.json records what it actually copied.
-{
-  "dsh": "0.2.0-rc.2",
-  "resolved": "0.2.0-rc.2",
-  "integrity": "sha512-...",
-  "node": { "version": "22.x.y", "rid": "win-x64", "sha256": "..." },
-  "tree": { "files": 0, "bytes": 0, "digest": "sha256:..." }
-}
+## No CI
+
+`.github/workflows/` does not exist, GitHub Actions is disabled on the repository,
+and `scripts/checks/check-dist-layout.mjs` **fails** if a workflow directory comes
+back - a deleted CI cannot quietly return on a push. A release is cut by hand with
+`scripts\run-dist.bat -NoShell -Verify` ([RELEASE.md](RELEASE.md) is the ritual),
+and any pipeline added later must call that same script.
+
+## Checks
+
+Run the one that owns the area; a check that cannot run on this host skips loudly
+and exits 0. [scripts/checks/README.md](../scripts/checks/README.md) lists them all.
+
+```sh
+node scripts/checks/check-no-secrets.mjs       # before anything is pushed
+node scripts/checks/check-dist-layout.mjs      # ship list, console contract, no CI
+node scripts/checks/check-node-routes.mjs      # every Node route, the manifest, the patches
+node scripts/checks/check-client-bundles.mjs   # every browser bundle, driven for real
+node scripts/checks/check-media-node.mjs       # dsh-media's host half and its ffmpeg pin
+node scripts/checks/check-pdf-node.mjs         # the five pdf tools and their routes
+node scripts/checks/check-canvas-node.mjs      # the canvas host half, tools and routes
+node scripts/checks/check-skill-examples.mjs   # every example in the shipped skills
 ```
-
-It writes `runtime/<rid>/` (gitignored). A rebuild with the same pin re-copies the
-local tree rather than re-resolving it.
-
-**Nothing is pruned and nothing is deduplicated**: the payload ships the harness
-whole, by decision - see `STAGE2.md`. `vendor/` never enters the payload, but the
-full production closure does.
-
----
-
-## 3. The shell runs the bundled Node
-
-`app/src-tauri/src/main.rs` **no longer resolves only `npx.cmd`** - that is
-delivered. `choose_launch()` prefers a complete vendored runtime and falls back to
-npx only when there is none, so the "make sure npx.cmd is on PATH" sentence is
-reachable only from a source checkout that has not vendored anything yet.
-
-The resolver order, as shipped:
-
-```text
-> <root>/runtime/<rid>/{node/node.exe, harness/…/bin.js, VENDOR.json}   the vendored path
-> npx --yes @deepseek-ai/dsh@<pin> web                                  the source-checkout fallback
-```
-
-All THREE vendored pieces must exist or the fallback is taken - a half-copied
-runtime that the shell resolved would report a broken install instead of starting.
-
-The launch becomes, in effect:
-
-```text
-<root>/runtime/<rid>/node/node.exe <root>/runtime/<rid>/harness/…/@deepseek-ai/dsh/lib/bin.js web --no-open --port <n>
-```
-
-One process fewer than `npx`, no registry lookup, no npm cache, no PowerShell. This is the main
-cold-start win, and it should be **measured before and after** rather than
-asserted.
-
-The shell keeps everything it already owns: the port choice, `DSH_HOME` (still
-never invented - see `app/README.md`), the ready-line watch, the job object, the
-redaction, the geometry record.
-
----
-
-## 4. Bootstrap without PowerShell
-
-A first run on a clean machine has no web profile, so the pack must be installed
-before the harness boots. Today that is `START-HERE.bat` -> `install-all.ps1`.
-
-For the one-file build the shell does it itself, in the **bundled Node**:
-
-- new `app/runtime/bootstrap.mjs`, run by the runtime Node. No PowerShell, no
-  execution policy, and the same file works on macOS and Linux;
-- `main.rs` runs it only when the profile manifest is absent or does not list
-  every bundle, with a hard timeout and the same line-by-line redaction the
-  harness's own output gets;
-- it installs each bundle with the **local CLI** (`node <runtime>/.../dsh.js
-  plugin add <bundle>`) instead of `npx`, so a first run needs no registry;
-- the folder distribution keeps `START-HERE.bat`; the one-file build makes it
-  unnecessary, which is what a double-click has to mean.
-
----
-
-## 5. One file - and signing the right bytes
-
-**This is a sequencing trap, not a detail.** Authenticode covers the exact bytes
-of the file, so appending the payload to a signed shell *invalidates that
-signature*. The order is load-bearing:
-
-```text
-1. cargo build --release
-2. sign  app/src-tauri/target/release/vncode-desktop.exe     (-Sign)
-3. append the payload zip + the VNHRNS01 trailer
-4. sign  dist/vncode-<version>-<rid>.exe                     (-Sign, the FINAL file)
-```
-
-`scripts/dist.ps1`'s existing `New-StandaloneExecutable` is step 3 and already
-writes one handle end to end (deliberately, so a virus scanner cannot grab the
-half-written 8 MB exe between two opens). Steps 2 and 4 are new and belong on
-either side of it.
-
-Also new, and cheap: an embedded **application manifest** (DPI awareness, long
-path awareness, `supportedOS` for Windows 10/11) and a **`VERSIONINFO`
-resource** carrying company, product and version. The shell's resource currently
-carries the Tauri icon only.
-
----
-
-## 6. Windows will not complain - the truthful version
-
-Two complaints, two answers. Do not conflate them.
-
-**UAC is already fine.** Nothing here elevates: no installer, a per-user unpack
-into `%LOCALAPPDATA%`, no `requestedExecutionLevel`. There is nothing to fix.
-
-**SmartScreen is the real one**, and it splits three ways:
-
-- *your own local build* is copied on disk, carries no `Zone.Identifier`, and
-  will not prompt;
-- *a file somebody downloads* carries the mark-of-the-web and shows "Windows
-  protected your PC" until that file (or that publisher) has reputation;
-- *a self-signed certificate fixes nothing for other people.* It helps only on
-  machines where you installed the root. Say so rather than shipping one.
-
-What actually fixes it: **EV** or **Azure Trusted Signing**. EV gains SmartScreen
-reputation immediately; a plain OV certificate accumulates it over downloads.
-
-Until a certificate exists, the honest mitigations - all of which already partly
-exist:
-
-- ship the **`.zip`** and say "extract, then run": extraction drops the mark;
-- publish `SHA256SUMS.txt` and `BUILD-INFO.json` (both already generated);
-- keep a stable publisher identity and version metadata.
-
-`-Sign` takes a certificate named by the environment (never committed), and it is
-**off by default** so a local release run stays fast. There is no CI to hold a
-secret for it — see [`RELEASE.md`](RELEASE.md).
-
----
-
-## 7. Keeping it light
-
-The weight is real and it has to be fought deliberately. Measured signal: a
-resolved DSH tree on this machine is **461 MB / 26 640 files**. That number is
-discardable - it is not the pruned runtime - but it is the order of magnitude
-being dealt with.
-
-- **Resolve once.** The vendored tree lives in `dist/runtime-cache/`. It is never
-  re-resolved for a rebuild, and it never enters the payload twice.
-- **Prune at vendor time**, with the vendor step *printing* what it removed:
-  docs, tests, source maps, TypeScript sources, and non-`win32-x64` prebuilds.
-  The prune rule is data, so the POSIX half removes the same things.
-- **Unpack once per payload identity.** `app/src-tauri/src/payload.rs` already
-  keys the directory on `<version>-<rid>` and reuses it. The missing piece: once
-  a **new** version has booted successfully, sweep older unpack directories,
-  because each one is hundreds of MB.
-- **`NODE_COMPILE_CACHE`**, pointed at a stable per-version directory under
-  `%LOCALAPPDATA%\vncode\cache`, so V8's compile cost for the client bundles and
-  vendored engines is not paid on every start. This needs a measurement before it
-  is believed - it is a claim, not a fact.
-- **Keep the folder product for development.** The live links are why editing a
-  plugin and reloading is instant. Every "optimisation" that breaks that trade is
-  the wrong trade.
-
----
-
-## 8. The JavaScript/TypeScript position
-
-There is **no JavaScript/TypeScript build step in this repository, and this plan
-does not add one.**
-
-- `packages/*/lib/client.js` is the shipped browser bundle: hand-written, loaded
-  by the harness as a live link. That is what makes the dev loop fast, and it
-  stays.
-- Vendored engines keep their own `vendor/build.mjs` plus the tracked hash
-  checks (`lib/vendor/VERSION.json`). Regenerate, never hand-edit.
-- `app/ui/` is a single 5.4 KB splash page inlined into the Rust binary by
-  `tauri-build`. It needs no bundler today. **If** the shell's window ever becomes
-  a real typed application, that is the one place worth Vite + TypeScript
-  (`frontendDist`, built at build time) - and it still would not disturb
-  `packages/`.
-
-`scripts/checks/` is the build gate: node-routes, client bundles, dist layout,
-skill examples. A build that fails a check is not a build.
-
----
-
-## 9. No CI, and why
-
-**This repository has no CI.** `.github/workflows/` does not exist, GitHub Actions
-is disabled on the repository, and `scripts/checks/check-dist-layout.mjs` **fails**
-if a workflow directory ever comes back — so a deleted CI cannot quietly return on
-somebody's push. A release is cut by hand with `scripts\run-dist.bat -NoShell -Verify`;
-[`RELEASE.md`](RELEASE.md) is the whole ritual.
-
-The workflow that used to live here asserted a matrix of runner labels, pinned
-GitHub-official actions to commit SHAs, ran `cargo test` so the shell's unit tests
-were not laptop-only, ran the end-to-end `-Verify` on every leg and uploaded
-artifacts. All of it was removed **with** the file rather than left commented out.
-What it bought, and what it cost, is worth recording:
-
-- **What it bought:** six archives per release (win/mac/linux × x64/arm64), each
-  built and verified on its own real runner, and a green light before a tag.
-- **What it cost:** 6.6 GB of `v0-rust-*` caches and 369 MB of artifacts that then
-  had to be cleaned out by hand, a compile of the Rust shell on every leg, and a
-  push that took minutes and produced six archives nobody downloaded.
-
-The trade made instead: **the release compiles nothing and ships source**, so
-there is nothing a per-architecture runner is needed for. One assembly on this
-machine is published as the three operating-system archives (`-TargetOs` labels
-each one), and `-Verify` — the same end-to-end check the runners ran — still runs
-locally before anything is pushed.
-
-> If a build step is ever added to a pipeline here, the rule to keep is the one the
-> workflow held: **it calls the same script a person calls.** It never reimplements
-> a build step.
-
-`-Verify` is the end-to-end check a release runs: install into a throwaway
-`DSH_HOME`, boot the pinned harness from the produced folder, and wait for the
-ready line. It never opens a window, which is what makes it runnable on a machine
-with no screen — and it is what replaces the runners' green light.
-
----
-
-## 10. Verification
-
-A build nobody tested is a guess. Beyond the existing `-Verify`:
-
-| Check | What it proves |
-|---|---|
-| `runtime/node.exe` exists and runs | the artifact is self-contained |
-| the launch path contains no `npx` | no registry and no `PATH` dependency at runtime |
-| a second launch reuses the unpack directory | no re-unpack cost per start |
-| the produced `.exe` ends with `VNHRNS01` | it is what it claims to be |
-| `-Sign` then `Get-AuthenticodeSignature` = `Valid` | the signature survived the append |
-| `check-dist-layout.mjs` learns `runtime/` | the tracked check does not fail the first build |
-
-That last row is a **required edit**, not a nice-to-have: the manifest pins what
-ships, and a `runtime/` tree it does not know about is a failing build.
-
----
-
-## Current state - the delta to implement
-
-| Path | Action |
-|---|---|
-| `scripts/run-dist.bat` | **new, and DELIVERED (stage 1)** - the entry point the maintainer double-clicks |
-| `scripts/run-dist.ps1` | **new, and DELIVERED (stage 1)** - shell-staleness decision, the checks gate, the worker call, `-Run` / `-RunApp` |
-| `scripts/run-dist.bat` | **DELIVERED (stage 1)** - forwards to `run-dist.bat`, so the console contract and the worker call exist once |
-| `scripts/dist.ps1` | **DELIVERED (stage 1)** - build fingerprint (skip an unchanged copy, hashing and zip), `Assert-NoSecrets`, `-Sign` accepted. Still pending: signing itself, and the `runtime/` tree |
-| `scripts/dist-manifest.txt` | **DELIVERED (stage 1)** - `node_modules` / `.env` / `*.pem` / `*.key` skip rules |
-| `scripts/checks/check-dist-layout.mjs` | **DELIVERED (stage 1)** - the new entry point is held to the console contract and the worker rule; the forwarder is recognised |
-| `scripts/dsh/vendor.ps1` | **DELIVERED** - local-first: copies the pinned tree the machine already has into `runtime/<rid>/`, falls back to a registry resolve only when nothing local carries the pin, and stamps only after running the pair |
-| `tools/dsh-vendor.lock.json` | **new**, tracked |
-| `app/runtime/bootstrap.mjs` | **new** - install the pack from the bundled Node |
-| `app/src-tauri/src/main.rs` | Node resolver (bundled -> `PATH`), bootstrap call, launch with the local CLI |
-| `app/src-tauri/src/payload.rs` | sweep older unpack directories after a good boot |
-| `app/src-tauri/build.rs` + a `.manifest` / `.rc` | application manifest and `VERSIONINFO` |
-| `.github/workflows/distribute.yml` | **REMOVED, deliberately** - there is no CI. Actions is disabled on the repository and the tracked check FAILS if a workflow directory comes back. See [`RELEASE.md`](RELEASE.md) for how a release is cut instead |
-
-## What stage 1 measured
-
-Run on this machine (Windows 11, PowerShell 5.1, Rust shell already built):
-
-| | |
-|---|---|
-| Full assemble | **8.8 s** - 377 files, 20.5 MB folder, 7.2 MB zip, 15.4 MB single file |
-| Nothing changed | **2.1 s** - the folder, zip and single file are all reused |
-| One shipped file edited, **same size, same mtime** | cache **missed**, reassembled, dropped the stale zip and single file and rebuilt both |
-
-That third row is the one worth keeping: a timestamp-only cache would have
-shipped the edit inside a stale zip. The fingerprint carries a sha256 per shipped
-file, so content is what decides.
-
-`Assert-NoSecrets` was driven directly with a planted `sub\probe\.env` and
-refused the folder; the single-file build's `VNHRNS01` trailer arithmetic was
-verified against the file's real length (16110910 bytes, exact).
-
-## Order of work
-
-1. **Stage 1 - one entry point.** `run-dist` + folder + zip + one `.exe`, reusing
-   today's `dist.ps1` steps. Gives you the build you asked for, quickly.
-2. **Stage 2 - the local runtime.** Vendor DSH, bundle Node, launch from the
-   runtime, bootstrap from Node. This is the offline/standalone answer.
-3. **Stage 3 - release hardening.** Signing behind `-Sign`, manifest and version
-   resource, pruning, the unpack sweep, CI, and the size numbers measured.

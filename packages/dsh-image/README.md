@@ -1,187 +1,55 @@
 # dsh-image (alpha.2)
 
-**Images open as pictures, not as a file whose bytes happen to be an image.**
-
-The shipped preview draws a PNG at its intrinsic size and stops there: a 4000 px
-screenshot in a 400 px pane is a scrollbar with a corner of a picture in it, and
-there is no way to zoom out, zoom in, or drag it. This package is the right bar's
-`image` tab type - PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, SVG and TIFF - and it
-behaves the way an image viewer is expected to: **fit on open, a zoom ladder from
-5% to 800%, fit-to-pane and 100% actual pixels one click away, wheel zoom at the
-pointer, and drag to pan.**
-
-It is a **client-only** package: bytes come from the harness's own
-`remote.workspaceFiles` remote, so there is no route, no host-side state, and no
-path policy of its own.
-
-**Alpha.2 fixes the read that made every image refuse to open.** The tab asked
-for `readAll` on that remote - a method the namespace does not have (it declares
-`changes`, `list`, `read`, `readBytes` and `stat`) - under a guard that tested
-the same absent name, so every picture answered *"This harness exposes no
-workspaceFiles remote, so the file cannot be read"* while the remote was there
-the whole time. The whole-file read is now `readBytes(sessionId, path, {},
-signal)` (empty options, exactly what the shipped preview passes for its own
-bytes-complete mode), the payload is accepted in whichever shape the carrier
-delivered it, and a read that stopped at the host's ceiling (`eof: false`) is
-refused in one sentence instead of drawing part of a photograph. The tracked
-check now DRIVES the payload decode instead of grepping for a call shape, which
-is the kind of assertion that let the absent method ship in the first place.
+**Images open as pictures, not as a file whose bytes happen to be an image.** The shipped preview draws a PNG at its intrinsic size and stops there: a 4000 px screenshot in a 400 px pane is a scrollbar with a corner of a picture in it. This is the right bar's `image` tab type - PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, SVG and TIFF - and it behaves the way an image viewer is expected to: fit on open, zoom, and drag to pan. Client-only: bytes come from the harness's own `remote.workspaceFiles` remote, so there is no route, no host state and no path policy of its own; `lib/index.js` is one no-op row.
 
 ## What it adds
 
-| | |
-|---|---|
-| **Fit on open** | The whole picture is visible whatever the pane's size. Fit shrinks but never enlarges - blowing a 16 px icon up to fill the pane is not what "fit" means. The pane is followed live: resizing the column re-fits while Fit is on. |
-| **Zoom ladder** | 5%, 10%, 17%, 25%, 33%, 50%, 67%, 75%, 100%, 125%, 150%, 200%, 300%, 400%, 600%, 800%. `+` / `-` walk it; the ends clamp. |
-| **100% actual pixels** | One image pixel per CSS pixel, the honest reference for "how big is this really". |
-| **Ctrl/Cmd + wheel** | Zooms **at the pointer**, so the detail under the cursor stays under the cursor. A trackpad pinch is the same gesture, and it multiplies the zoom rather than stepping it, so the pinch feels continuous. A bare wheel is left alone: it scrolls, as it should. |
-| **Drag to pan** | With a real grab cursor - offered only when the pane was **measured** to have something to pan. |
-| **Double-click** | Toggles Fit and 100%. |
-| **Keyboard** | `+` / `-` zoom, `0` fit, `1` actual size, arrows scroll. |
-| **Transparency** | A checkerboard behind the picture, so a transparent PNG reads as transparent instead of as whatever the pane's background happens to be. |
-| **Pixel peeping** | Past 300% the image is drawn with nearest-neighbour sampling, so a zoomed pixel is a square and not a smear. |
-| **Status line** | The picture's true dimensions, its size on disk, its format, and the **source pixel under the pointer with its colour** (`x,y · #rrggbb · 42%` for a partially transparent one), sampled through a 1×1 canvas. |
-| **Honest failure** | A codec this browser does not have (TIFF in Chrome, say) says exactly that, names the format, and offers to read the file again - rather than drawing nothing. |
+- **Fit on open** - the whole picture is visible whatever the pane's size, followed live while Fit is on. Fit shrinks but never enlarges.
+- **Zoom ladder** - 5, 10, 17, 25, 33, 50, 67, 75, 100, 125, 150, 200, 300, 400, 600, 800 %; `+`/`-` walk it and the ends clamp. `0` fits, `1` shows actual size, and **double-click** toggles the two.
+- **Ctrl/Cmd + wheel zooms at the pointer**, multiplying the zoom rather than stepping it, so a trackpad pinch feels continuous. A bare wheel scrolls.
+- **Drag to pan** with a real grab cursor, offered only when the pane was **measured** to overflow.
+- **Checkerboard** behind the picture, so a transparent PNG reads as transparent; past **300%** the image is drawn pixelated, so a zoomed pixel is a square.
+- **Status line** - true dimensions, size on disk, format, and the **source pixel under the pointer with its colour** (`x,y · #rrggbb · 42%` for a partially transparent one), sampled by drawing a 1x1 source rectangle into a 1x1 canvas, so inspecting an 8000 px photograph never copies it into a second buffer.
+- **Honest failure** - a codec this browser does not have (TIFF in Chrome) says so, names the format and offers to read the file again.
 
 ## How it plugs in
 
 | Piece | Value |
 |---|---|
-| `id` / slot key | `dsh-image` |
-| `kind` | `image` |
-| `patterns` / `priority` | `['*.png','*.apng','*.jpg','*.jpeg','*.jpe','*.jfif','*.gif','*.webp','*.avif','*.bmp','*.ico','*.svg','*.tif','*.tiff']` / `extension` |
-| seats | keyed `sidebar.right.pane.tab` and `sidebar.right.pane.tab.title` |
-| services | `slots`, the bar's `sidebarRightTabs`, and `remote.workspaceFiles` |
-| guide entry | **none** - a blank image is not a document the "+" control should offer |
-| core rows disabled | **none** |
-| npm dependencies | **none** |
-| host routes | **none** |
+| `id` / kind | `dsh-image` / `image` |
+| `patterns` / `priority` | `*.png *.apng *.jpg *.jpeg *.jpe *.jfif *.gif *.webp *.avif *.bmp *.ico *.svg *.tif *.tiff` / `extension` |
+| seats / services | `sidebar.right.pane.tab` / `.title`; `slots`, the bar's `sidebarRightTabs`, `remote.workspaceFiles` |
+| guide entry, disabled rows, routes, deps | none |
 
-It replaces nothing by patching. The bar's tab registry ranks by band
-(`extension` 3, `builtin` 2, `fallback` 1) and then by the length of the pattern
-that matched; the shipped preview claims `dsh-resource://file/**` with its `text`
-type at `fallback` (1), and this type registers the image suffixes at `extension`
-(3), so an image opens here **by ranking** while every other file type keeps
-exactly the surface it had. `canOpen` refuses anything that is not a claimed
-image address, so the ranking can never leak. The shipped preview stays mounted
-as the fallback for a profile without this package, and the editor is unaffected:
-it vetoes image extensions outright.
+The registry ranks by band (`extension` 3, `builtin` 2, `fallback` 1) then by pattern length. The shipped preview claims `dsh-resource://file/**` with its `text` type at `fallback`, and this type registers the image suffixes at `extension`, so an image opens here **by ranking** while every other file keeps the surface it had; a `canOpen` refusing anything else keeps the ranking from leaking. The shipped preview stays mounted as the fallback; the editor is untouched, since it vetoes images outright.
 
-## Addresses
+**One address shape:** `dsh-resource://file/session/<sessionId>/<path>`. There is deliberately no package-owned `absolute` form: `session` authorizes a host read, and the absolute form carries none.
 
-One shape: `dsh-resource://file/session/<sessionId>/<path>` - the ordinary file
-grammar, so a click in the Files tab lands here.
+## Rules and limits
 
-There is deliberately no second, package-owned shape (the way `dsh-pdf` has one
-for a document outside any workspace). A `session` address is what authorizes a
-host read of the file; the ordinary grammar's `absolute` form carries no session
-and cannot authorize one, so claiming it would only produce a tab that cannot
-read. An image outside a conversation workspace is still opened by whatever
-surface had it - the conversation's own attachment renderer, for instance.
+- **The zoom moves the layout, never a CSS transform.** The picture sits in a box sized `naturalPixels * zoom` inside a scrollable pane, so panning is the pane's own `scrollLeft`/`scrollTop` and browser scrolling keeps working; `transform: scale()` would draw into a clipped box with no scrollable area. `margin:auto` on the box is the centring that survives overflow.
+- **A zoom keeps the point the reader was looking at**, remembered as a fraction of the scrollable area before the layout changes and restored on the next animation frame.
+- **The wheel listener is native and non-passive** (`{ passive: false }`, the handler read from a ref): React's own wheel listener is passive, so a `preventDefault()` inside it does nothing and the browser's Ctrl+wheel page zoom would scale the whole app.
+- **Bytes come from the harness:** `remote.workspaceFiles.readBytes(sessionId, path, {}, signal)` - `readBytes` with **empty options**, the namespace's whole-file read. It already resolves the path inside the workspace, refuses a symlink out, requires a regular file, and enforces the host's 32 MiB cap. There is no `readAll` on that namespace (it declares `changes`, `list`, `read`, `readBytes` and `stat`). A truncated payload (`eof: false`) is refused rather than drawing part of a photograph; `bytesOf` accepts a `Uint8Array`, an `ArrayBuffer`, a byte array or base64 text; and the base64 decode is one indexed loop.
+- **The blob URL is revoked**, and a superseded read's settlement is dropped rather than racing the new one.
+- Not claimed: HEIC/HEIF, RAW, PSD and every other format no browser decodes - those keep the shipped preview. This tab reads: no crop, rotate, resize, convert or save. TIFF is claimed on purpose, so a browser that cannot decode it gets one sentence naming the format rather than a generic binary-file message.
 
-## Why it is built this way
-
-**The zoom moves the layout, never a CSS transform.** The picture sits in a box
-sized `naturalPixels * zoom` inside a scrollable pane, so panning is the pane's
-own `scrollLeft` / `scrollTop` and everything the browser already does - wheel
-scrolling, scrollbars, keyboard scrolling, overscroll - keeps working untouched.
-A `transform: scale()` would draw into a clipped box with no scrollable area; a
-zoomed picture stays scrollable to its edge. `margin:auto` on the box is the
-centring that survives overflow: a flex item centred with `justify-content`
-cannot be scrolled back to its own top-left corner.
-
-**A zoom keeps the point the reader was looking at.** The point under the
-pointer (or the pane's centre for a button) is remembered as a *fraction* of the
-scrollable area before the layout changes, and restored on the next animation
-frame - by then React has committed the new box and the browser has laid it out,
-but the frame has not been painted, so the picture never visibly jumps.
-
-**The wheel listener is native and non-passive.** React's own wheel listener is
-passive, so a `preventDefault()` inside it does nothing - the browser's own
-Ctrl+wheel *page* zoom would fire on top of ours, and the whole app would scale.
-The listener is therefore attached with `addEventListener('wheel', …, { passive:
-false })`, reading the latest handler from a ref.
-
-**The pixel readout costs one pixel.** The sample is drawn into a 1×1 canvas
-(`drawImage` of a 1×1 source rectangle) and read back with `getImageData`, so
-inspecting an 8000 px photograph does not copy the picture into a second buffer.
-
-**Base64 is decoded with one indexed loop.** `Uint8Array.from(atob(x), fn)` calls
-a mapper once per byte; at the remote's 32 MiB ceiling that is the difference
-between an instant open and a visible stall.
-
-**Bytes come from the harness, not from a new route.** `readBytes(sessionId,
-path, {}, signal)` - `readBytes` with **empty options**, which is the namespace's
-whole-file read, and exactly what the shipped preview passes for a
-"bytes-complete" document - already resolves the path against the conversation
-workspace, refuses a symlink out of it, requires a regular file, and enforces the
-single-file byte cap (32 MiB by default) on the **host** side. There is no
-`readAll` on that namespace at all: the generated Remote declares `changes`,
-`list`, `read`, `readBytes` and `stat`, and the tab used to call the absent
-`readAll` under a guard that tested it, which is why every image said the harness
-exposed no `workspaceFiles` remote. A plugin route
-would have to re-implement all of that. So this package ships no route and no
-host state; `lib/index.js` is one no-op row whose only job is to put the browser
-bundle in the boot graph.
-
-**A truncated read is refused, not drawn.** A file past the host's ceiling comes
-back with `eof: false`, and half a photograph laid out as if it were the whole
-picture is worse than one sentence saying only part of it arrived.
-
-**The payload is taken in whatever shape the carrier used.** The generated result
-codec declares `value.data` as a `Uint8Array` (what the shipped preview hands to
-`new Blob`), and `bytesOf` also accepts an `ArrayBuffer`, a plain byte array and
-base64 text - so a carrier that ever hands the bytes over as text cannot turn
-into a picture built from `String(bytes)`.
-
-**The blob URL is revoked.** A reader flipping through a folder of photographs
-does not keep every one of them pinned in memory, and a reload is a new
-generation: the aborted read's settlement is dropped rather than racing the new
-one.
-
-## Caps and what is not claimed
-
-| | |
-|---|---|
-| claimed formats | png, apng, jpg, jpeg, jpe, jfif, gif, webp, avif, bmp, ico, svg, tif, tiff |
-| zoom | 5% - 800% |
-| file size | the harness's own read cap (32 MiB by default), reported in a sentence when exceeded |
-| not claimed | HEIC/HEIF, RAW, PSD, and every other format no browser decodes - those keep the shipped preview |
-| no editing | this tab reads. There is no crop, rotate, resize, convert or save. |
-
-TIFF is claimed on purpose: Chrome cannot decode it, and a viewer that says
-"this browser could not decode a TIFF file - the bytes are here and intact, it is
-the codec that is missing" is more useful than a generic binary-file message.
-
-## Verifying a change
+## Verify
 
 ```
 node --check packages/dsh-image/lib/client.js
 node scripts/checks/check-client-bundles.mjs
 ```
 
-The tracked check drives this bundle through the real React runtime: it activates
-it against a stubbed context, asserts the type definition (bands, patterns,
-`canOpen`'s refusals, the chip title, the absence of a guide entry), renders the
-tab body and the title seat as markup, and pins the load-bearing rules by name -
-the layout-sized zoom, the measured overflow, the non-passive wheel listener, the
-pointer anchor, the 1×1 sampler, the checkerboard, the pixelated threshold, and
-the fact that there is no `fetch` and no `/api/` path anywhere in the bundle.
+The tracked check drives the bundle through a real React runtime: the type definition, the rendered body and title seat, the layout-sized zoom, the measured overflow, the non-passive wheel listener, the pointer anchor, the 1x1 sampler, and the absence of `fetch`/`/api/` in the bundle.
 
 ## Install
 
-The package is discovered from `packages/`; both installers pick it up:
+Both installers pick the package up from `packages/`; it is a new bundle, so the profile learns about it once:
 
 ```
 scripts\install.bat -Force        # Windows
 ./scripts/install.sh -Force       # macOS / Linux
 ```
 
-This one is a **new bundle**, so the app's profile has to learn about it: run the
-installer once, then restart `npx @deepseek-ai/dsh web` and hard-refresh the
-browser (Ctrl+F5). After that it is a live link, and editing `lib/client.js`
-needs only a restart.
-
-This package is also the shape the **`dsh-audio`** viewer reuses: the same
-zoom-moves-the-layout rule, the same pointer anchoring, the same
-measured-overflow pan.
+Then restart `npx @deepseek-ai/dsh web` and hard-refresh; after that it is a live link and editing `lib/client.js` needs only a restart.

@@ -1,277 +1,80 @@
-# `app/` - the desktop shell
+# `app/` - the native window launcher
 
-The vncode web profile, in a native window instead of a browser tab.
+The vncode web profile in a native window instead of a browser tab. It is a
+**launcher, not a desktop edition**: it installs nothing, writes no profile file and
+starts the same pinned `dsh web` that `scripts\run-web.bat` / `./scripts/run-web.sh`
+start, showing **that** URL in a WebView2 / WKWebView / WebKitGTK window.
+`scripts\run-desktop.bat` builds the shell when needed and runs it; on macOS/Linux run
+`cargo build --release` in `app/src-tauri` and start the binary. A source checkout needs
+the **Rust toolchain** ([rustup.rs](https://rustup.rs)) and Node.js 22+, which is also
+needed to BUILD the vendored runtime and by the npx fallback.
 
-```bat
-scripts\run-desktop.bat            :: Windows: builds this when needed, then runs it
-cargo build --release      :: macOS / Linux (from app/src-tauri), then run the binary
-```
+## How it starts the harness
 
-## What it is, and what it is not
+`choose_launch()` in `src/main.rs` is the whole decision. With a complete vendored
+runtime present - `runtime/<rid>/`, produced by `scripts/dsh/vendor.ps1` - it runs
+`node <runtime>/harness/.../lib/bin.js web --no-open --port N` directly: no npm, no
+npx, no registry, nothing written to an npm cache. With none it falls back to
+`npx @deepseek-ai/dsh@<pin> web --no-open` and sets `npm_config_cache` to this
+application's own directory on that branch alone. Flags mirror `scripts\run-web.bat`
+(`-Port`, `-DshHome`, `-DshVersion`, `-Help`), plus `-NoBuild`, `-NoPause` and
+`-NoTerminal` for this launcher.
 
-It is a **launcher**, not a desktop edition. It starts the same pinned harness that
-`scripts\run-web.bat` / `./scripts/run-web.sh` start, and shows **that** URL in a
-WebView2 / WKWebView / WebKitGTK window.
-
-**HOW it starts is the one thing worth knowing here, and it changed.** With a
-complete vendored runtime present - `runtime/<rid>/`, produced once by
-`scripts\dsh\vendor.ps1` - the shell launches
-
-```text
-<root>/runtime/<rid>/node/node.exe <root>/runtime/<rid>/harness/…/@deepseek-ai/dsh/lib/bin.js web --no-open --port N
-```
-
-**directly**: no npm, no npx, no registry, and not one byte written to an npm
-cache. That is not an optimisation, it is the fix for a real failure. `npx`
-writes into an npm cache, and when that cache is owned by another account - which
-an earlier ELEVATED run of anything will do - starting the app produced
-
-```text
-npm error code EPERM
-npm error path ...\npm-cache\_cacache\tmp\b143f96f
-npm error Log files were not written due to an error writing to the directory
-...or try running the command again as root/Administrator.
-```
-
-and npm's own advice made the ownership problem worse. Resolving the harness once,
-at BUILD time, removes npm from the start-up path entirely: the network is used
-for the chat and for search, and never to open the window.
-
-Without a vendored runtime the shell falls back to
-`npx @deepseek-ai/dsh@<pin> web --no-open` - the source-checkout path - and sets
-`npm_config_cache` to this application's own directory **on that branch alone**.
-`choose_launch()` in `src/main.rs` is the whole decision.
-
-- no TypeScript is bundled or rebuilt - the web profile installs every bundle as
-  a **live link** into the repository, so the app in this window is the same app
-  the browser tab shows, served by the same process;
-- nothing under `packages/` knows this directory exists, no installer touches it,
-  no row is disabled and no profile file is written;
-- the flags mirror `scripts\run-web.bat` (`-Port`, `-DshHome`, `-DshVersion`, `-Help`);
-- it asks for the harness's **own default port** when nothing holds it  -  the same
-  origin a `scripts\run-web.bat` tab opens on, which is what keeps the window's per-origin
-  client state  -  and falls back to a free loopback port when something already has
-  it, so it never collides with a `scripts\run-web.bat` server or the Web GUI.
-
-Requires the **Rust toolchain** ([rustup.rs](https://rustup.rs)) to build. Node.js
-22 or newer is needed to BUILD the vendored runtime and by the npx fallback;
-**a vendored runtime needs neither**, because it carries its own `node.exe`.
-
-## What it does
-
-1. Finds the repository root by walking up from the executable for
-   `.dsh-version.json`, and reads the pinned dsh version from it - so debug and
-   release builds, and any `CARGO_TARGET_DIR`, all land on the same pin. There is
-   no built-in fallback version: a stale hard-coded pin would mean this window
-   quietly ran a different harness than `scripts\run-web.bat`.
-2. Chooses the port: `-Port` when it was given, else the harness's own default
-   (3080) if binding `127.0.0.1` there succeeds, else `127.0.0.1:0`  -  asking the OS
-   for any free port  -  released again before the harness binds it. The URL loaded
-   is the one the harness prints, so a wrong guess here costs the origin and
-   nothing else.
-3. Restores the window's own geometry from the last launch (see *The window
-   remembers its own geometry* below), because it has to be known **before** the
-   window is built.
-4. Opens the window **immediately**, on its own splash (`ui/index.html`), because
-   the first run of a dsh version spends a while inside `npx`. The splash says
-   which harness home this run will use and whether a DeepSeek key was found
-   there (see *The splash answers the two questions worth asking first* below).
-   After 45 seconds it says the wait is long and points at the console.
-5. Runs the pinned CLI, streaming its stdout and stderr to this console.
-6. Watches that output for `dsh web: http://127.0.0.1:<port>/?token=<token>`,
-   parses the URL and navigates the window there.
-7. Kills the harness - and the `npx`/`node` processes under it - when the window
-   closes, and closes the window if the harness exits first. On Windows the
-   harness is ALSO placed in a **Job Object** with `KILL_ON_JOB_CLOSE`, so it dies
-   with this shell even when the shell is killed outright (a crash, Task Manager)
-   rather than closed - the case where the exit hook never runs at all. Closing the
-   window is enough on macOS/Linux; an abrupt kill of the shell there can leave the
-   harness running, because no equivalent is wired up for those platforms in this
-   first cut.
+1. Walks up from the executable for `.dsh-version.json` and reads the pinned dsh
+   version from it - there is no built-in fallback pin, so every build lands on the
+   same harness a `run-web` tab uses.
+2. Chooses the port: `-Port` when given, else 3080 if binding `127.0.0.1` there
+   succeeds, else `127.0.0.1:0`. The URL loaded is the one the harness prints, so a
+   wrong guess costs the origin and nothing else.
+3. Restores the window geometry (below) before building the window, then opens the
+   splash (`ui/index.html`), which names the harness home and whether a DeepSeek key
+   was found there; after 45 s it says the wait is long and points at the console.
+4. Runs the pinned CLI, streams its stdout and stderr to this console, watches for
+   `dsh web: http://127.0.0.1:<port>/?token=<token>` and navigates the window there.
+5. Kills the harness and its `npx`/`node` children when the window closes, and closes
+   the window if the harness exits first. On Windows a **Job Object** with
+   `KILL_ON_JOB_CLOSE` takes the harness down even on a crash; macOS/Linux can leak it.
 
 ## The window remembers its own geometry
+One record at `$DSH_HOME/vncode/window.json` - `{version, width, height, x, y,
+maximized}`, size inner and point outer in logical pixels - is read before the window
+is built and written atomically (a temp sibling, then a rename) on a coalesced resize
+or move and once at exit. A record this build cannot vouch for is DISCARDED rather
+than repaired, an oversized dimension is clamped, a position counts only when both `x`
+and `y` are present and a monitor still holds the point, and a maximized recording
+keeps the last size and flips only the flag.
 
-A window that forgets its size every launch is a window the reader has to place
-again every morning, so the shell keeps ONE small record at
-`<harness home>/vncode/window.json` and restores it - **before** the window is
-built, which is why this cannot ride the web profile's own remembered state in
-its Cordis patch (`$DSH_HOME/profiles/web/cordis.patch.yml`, the `ui-state`
-entry's `config:`): that document is read by the page, long after the window
-exists. The record is `{version, width, height, x, y, maximized}`, the size
-being the window's **inner** size and the point its **outer** position, all four in
-**logical** pixels (the unit the window builder takes, and the only unit that means
-the same thing on a 100% and on a 150% display; `main.rs` divides the physical
-readings by the scale factor on the way in).
+## The harness home, and the key
 
-Five rules keep a record written by a different build - or truncated by a machine
-that lost power mid-write - from ever stopping the window from opening:
+The shell hands the child a `DSH_HOME` only when `-DshHome` gave one or `DSH_HOME` was
+**inherited**; otherwise it passes nothing and lets the harness apply its own default
+(`~/.dsh`). It never derives one from `USERPROFILE`/`HOME`: `DSH_HOME` names the
+harness's folder *under* the home, not the home itself.
 
-1. a record this build cannot **vouch for** is DISCARDED, never repaired (an
-   unreadable file, JSON that does not parse, a `version` that is not 1, a
-   width/height that is absent, non-numeric, non-finite or below the smallest
-   window the shell builds), and the window opens at the geometry it opened at
-   before this file existed;
-2. a dimension **above** the platform's practical ceiling is CLAMPED rather than
-   refused, because the number is plausible, the platform simply cannot honour it,
-   and discarding the record would also discard the position and the flag beside it;
-3. a position is honoured only when **both** `x` and `y` are present, numeric and
-   finite - a half-written pair means "centre the window", never "trust the one
-   number that was there" - and `main.rs` still runs the point past Tauri's monitor
-   list, so a monitor that is no longer attached cannot park the window off-screen;
-4. a **maximized** recording keeps the last known size and position and flips only
-   the flag, so un-maximizing restores the window the reader actually sized;
-5. a write is **atomic** (a temp sibling, then a rename; the directory is created
-   if absent), so a reader sees one whole version or the other, and a failure costs
-   one launch's geometry and nothing else.
+`keystate.rs` answers "will the harness find my key" by walking the harness's own four
+layers, highest first: the inherited environment (`DEEPSEEK_API_KEY`),
+`$DSH_HOME/.credentials.yaml` (the ref is nested under `refs:`, not at the margin),
+`<cwd>/.env`, then `$DSH_HOME/.env`. The splash gets a boolean and the layer's name,
+**never the value**; the page has no IPC channel and no command.
 
-Nothing in `windowstate.rs` refers to a `tauri` type: it is the pure half of the
-feature, and `cargo test` drives all of it.
-
-## The harness home it opens, and why it never invents one
-
-The window shows the same profile a `scripts\run-web.bat` tab shows, and the rule that keeps
-it that way is deliberately narrow: the shell hands the child a `DSH_HOME` only
-when `-DshHome` gave one or `DSH_HOME` was **inherited** from the environment. With
-neither, it passes nothing at all and lets the harness apply its own default
-(`~/.dsh`), exactly as the browser launcher does.
-
-It must never derive one from `USERPROFILE` / `HOME`, because `DSH_HOME` names the
-harness's own folder *under* the user's home  -  not the home itself. The first cut
-did exactly that, and the harness accepted it: finding no profile at
-`%USERPROFILE%`, it bootstrapped a fresh one holding only its own two base
-bundles, so the window opened the **plain DeepSeek Harness**  -  no plugins, no
-`vncode` branding, none of the user's sessions  -  and left a whole second home
-beside the real `.dsh`. Unit tests in `src-tauri/src/main.rs` pin the rule
-(`chosen_home`, `default_dsh_home`, `pick_home_variable`), and the console still
-*reports* the resolved home  -  `~/.dsh` included  -  without exporting it.
-
-## The splash answers the two questions worth asking first
-
-The window opens before the server exists, on `ui/index.html`, and the two things a
-person actually wonders while it starts are *"will the harness find my key"* and
-*"is this the profile I have been using"*. So the splash says both:
-
-- **DeepSeek key loaded  -  from the credentials file** (green), or **No DeepSeek
-  key yet  -  add one in Settings → Models** (amber);
-- **Harness home: `C:\Users\you\.dsh`**, with the reminder that sessions, settings
-  and the key live *there* and not in the folder that was replaced. That is what
-  makes installing a newer distribution a non-event: the plugins come from the new
-  folder (the profile live-links them), and everything you accumulated stays put.
-
-`keystate.rs` decides, and it walks **the harness's own four layers**, highest
-first  -  precisely because `dsh-credentials-local` owns the real lookup and a splash
-that disagreed with it would be worse than no splash at all:
-
-```text
-inherited process environment   DEEPSEEK_API_KEY=… dsh          (wins)
-> $DSH_HOME/.credentials.yaml   what Settings > Models writes
-> <cwd>/.env                    the launcher's directory
-> $DSH_HOME/.env
-```
-
-The document's real shape matters and is easy to get wrong: the ref is nested one
-level inside `refs:`, **not** at the margin  - 
-
-```yaml
-version: 1
-refs:
-  DEEPSEEK_API_KEY: sk-…        <- here
-records:
-  client-connection/browser-session:
-    payload:
-      secret: …
-```
-
-  -  and the first cut of this module missed it for exactly that reason: it looked at
-column 0, its own tests agreed with it, and the built shell then reported "no key"
-on a machine whose key was present. `the_real_document_shape_is_read` pins the real
-layout now, and `a_ref_inside_a_record_is_not_a_credential` pins the half that must
-*not* count.
-
-**The value never leaves the module.** The splash is handed a boolean and the NAME
-of the layer (`the credentials file`), never the key  -  same rule as the launch
-token. `the_splash_script_never_carries_the_secret` feeds a real-looking key in and
-asserts it does not appear in the injected script or in the console line, and the
-console line is the other place people paste from.
-
-The page still has **no IPC channel and no command**: Tauri's
-`initialization_script` injects the payload after the global object exists and
-before the document is parsed, which is why the page needs neither. The script
-guards on the pathname, because it runs on *every* top-level navigation and this
-window is later navigated to the harness URL  -  the harness page must not inherit
-the global.
-
-## The two rules that are load-bearing
+## The two rules that must survive any edit
 
 The ready line carries the **launch token**, a live credential for the running
-process. Both rules are the ones the browser launcher already holds, and they are
-pinned by unit tests in `src-tauri/src/readyline.rs` (`cargo test`):
+process; both rules are pinned by tests in `src-tauri/src/readyline.rs`.
 
-1. **The token is read in memory.** It is never written to a file, never handed
-   to a shell, and never echoed: the harness's own output is printed with the
-   value replaced by `token=REDACTED`, so a start-up failure is still diagnosable
-   from the console without leaking the credential into a scrollback buffer.
-2. **Only a loopback URL is opened.** A ready line naming any other host is
-   refused and reported, never loaded, because handing this credential to another
-   host is the one mistake that cannot be walked back.
+1. **The token is read in memory** - never written to a file, never handed to a shell,
+   never echoed: the app's own output prints `token=REDACTED`.
+2. **Only a loopback URL is opened.** A ready line naming any other host is refused and
+   reported; a link clicked inside the app goes the other way round, and anything but
+   the harness's own origin opens in the system browser.
 
-A link clicked *inside* the app is a separate matter and is handled the other
-way round: anything that is not the harness's own origin opens in the system
-browser, so a rendered document can never replace the app's only window.
+If the harness never becomes ready, the window is retitled `vncode - the harness server
+did not start (see the console window)` and the reason is printed: `npx` missing, an
+unreadable pin, no free port, or 90 s without a ready line.
 
 ## Files
-
 | Path | What it is |
 |---|---|
-| `src-tauri/src/main.rs` | The supervisor: flags, the repository/pin lookup, the port and harness-home choices, spawning npx, the window, the geometry write-back, the exit hook |
-| `src-tauri/src/readyline.rs` | The pure half - ANSI stripping, URL extraction, the loopback refusal, `redact` - and its tests |
-| `src-tauri/src/keystate.rs` | Whether the harness will find a DeepSeek key, and which of the four layers supplied it (`keystate` docs the layering, which is `dsh-credentials-local`'s own). Parses the credentials document and `.env` files; emits the read-only payload the splash reads. **The key's value never leaves this module** - one test feeds a key in and asserts it does not come out |
-| `src-tauri/src/windowstate.rs` | The window's own memory - the record's shape, the five rules that decide whether a record can be trusted, atomic save - and its tests. Refers to no `tauri` type |
-| `src-tauri/Cargo.toml` | Two dependencies: `tauri`, and `serde_json` (already in the tree behind tauri) |
-| `src-tauri/tauri.conf.json` | Identifier, the `ui/` folder as `frontendDist`, no declared window (it is built in Rust so the navigation filter can live with it), `bundle.active: false` |
-| `ui/index.html` | The splash. One file, no request of any kind. The key line and the harness home are **injected** before the document parses (`initialization_script`), not fetched - the page still has no IPC channel and no command; `scripts/checks/check-splash.mjs` renders it in both states |
-| `src-tauri/icons/` | **Generated** by `scripts/make-desktop-icon.mjs` from `assets/vncode.svg`, and committed so a clone builds without running the generator |
-
-## Failures
-
-There is no dialog plugin; the console is the log and the window title carries
-the verdict. If the harness never becomes ready, the window is retitled
-`vncode - the harness server did not start (see the console window)` and the
-reason is printed - `npx` missing, the pin unreadable, no free port, or 90
-seconds without a ready line. Because the shell is a **console** application on
-purpose, `scripts\run-desktop.bat` runs it in the foreground and that output stays on
-screen.
-
-## What was actually verified
-
-Measured on Windows 11 (Rust 1.94, Node 22.20, WebView2 153) rather than assumed:
-
-- `cargo test`  -  56/56 (`main.rs` 9, `readyline.rs` 14, `windowstate.rs` 15,
-  `keystate.rs` 18): the launch-token rules below plus the home, port,
-  window-geometry and key-state rules;
-- the port rule: a free port is chosen whenever 3080 is taken (61203, 62066, 60927
-  across the runs that were measured while the Web GUI was serving 3080), and 3080
-  itself is asked for first once nothing holds it;
-- the ready line is found ~8 seconds into a warm run, the window is titled
-  `vncode` and answering, and a `msedgewebview2.exe` process holds established
-  connections to the harness port - so the app really loaded, rather than the
-  window merely being pointed at the URL;
-- **no token leaked**: every `token=` occurrence in either stream, across every
-  run, read `token=REDACTED`;
-- window close: the shell exits in ~1s, zero harness processes survive and the
-  port has zero listeners;
-- force-kill of the shell: the same result - which is exactly what the job object
-  buys, because before it was added this test left two `node` processes and a
-  listening port behind;
-- `scripts\run-desktop.bat -Help` exits 0; an unknown flag exits 1 with the flag named.
-
-## Rebuilding the icons
-
-```sh
-node scripts/make-desktop-icon.mjs
-```
-
-Reads `cx`, `cy`, `r` and the viewBox out of `assets/vncode.svg` and writes
-`icon.ico` (16-256px) plus a 512px `icon.png`. It needs no image library: it
-encodes the PNGs and the ICO directory itself. Re-run it only when the mark
-changes, and commit the result.
+| `src-tauri/src/main.rs` | the supervisor: flags, the repo/pin lookup, port and home choices, spawning, the window, the geometry write-back, the exit hook |
+| `src-tauri/src/readyline.rs`, `windowstate.rs`, `keystate.rs` | the pure halves - the ready line and its refusals, the geometry record and its trust rules, the four key layers - each driven by `cargo test` and each keeping the token or the key value inside |
+| `src-tauri/tauri.conf.json`, `ui/index.html`, `src-tauri/icons/` | the config (`bundle.active: false`, no declared window), the splash (`scripts/checks/check-splash.mjs` renders it in both states) and the icons generated by `node scripts/make-desktop-icon.mjs` from `assets/vncode.svg` |
