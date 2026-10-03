@@ -70,23 +70,21 @@ const QUEUE_ROUTE = API_ROOT + '/render-queue'
 const REPORT_ROUTE = API_ROOT + '/render-report'
 const ENGINE_ROUTE = API_ROOT + '/vendor/engine.js'
 /**
- * The vendored Excalidraw surface (see vendor/excalidraw/build.mjs): the bundle,
- * the stylesheet it cannot run without, and the LATIN FACES it fetches at runtime.
- * The bundle and the stylesheet are two routes because they have different lives -
- * the bundle is one 3 MiB iife script that leaves `globalThis.DSHExcalidraw`
- * behind, and the stylesheet is what makes that editor usable at all - and the
- * faces are one route each, because the registry matches EXACT paths and this is
- * the shape `FONT_ROUTE_PREFIX` already uses for this package's own fonts.
+ * The Konva painter (see lib/konva-paint.js): the module that replays the engine's draw ops
+ * into real Konva nodes. It is served on its own route for exactly the reason the engine is -
+ * it has zero static imports and the browser imports it from a blob URL - and a check can
+ * fetch it and drive it directly, which is how the two painters are compared pixel for pixel.
  */
-const EXCALIDRAW_JS_ROUTE = API_ROOT + '/vendor/excalidraw.js'
-const EXCALIDRAW_CSS_ROUTE = API_ROOT + '/vendor/excalidraw.css'
+const KONVA_PAINT_ROUTE = API_ROOT + '/vendor/konva-paint.js'
 /**
- * The faces' prefix, and it is NOT a choice: the editor resolves every face as
- * `new URL('fonts/<Family>/<file>', EXCALIDRAW_ASSET_PATH)`, and the client sets
- * that base to this package's vendor prefix - so these are exactly the paths
- * Excalidraw asks for.
+ * The vendored Konva surface (see vendor/konva/build.mjs): the browser build of the
+ * interaction layer, and the ONE route it needs. It is a separate route from the
+ * engine because the two are rebuilt independently and neither can be assumed: the
+ * tab paints and exports without Konva (the engine is the only painter) and only
+ * loses its transform handles if the interaction layer is missing - so a missing
+ * artifact is a named 503 on this route alone rather than a dead tab.
  */
-const EXCALIDRAW_FONT_ROUTE_PREFIX = API_ROOT + '/vendor/excalidraw/fonts/'
+const KONVA_JS_ROUTE = API_ROOT + '/vendor/konva.js'
 
 /** How long a tool waits for the browser before it gives up and says why. */
 const REPORT_TIMEOUT_MS = 20_000
@@ -1736,6 +1734,7 @@ export function registerRoutes(ctx, row) {
     return 0
   }
   const engineFile = fileURLToPath(new URL('./engine.js', import.meta.url))
+  const konvaFile = fileURLToPath(new URL('./vendor/konva/konva.min.js', import.meta.url))
   let engineEtag = null
   let engineStat = null
   /**
@@ -2131,67 +2130,71 @@ export function registerRoutes(ctx, row) {
     }
   })
 
-  // ---- the vendored Excalidraw surface -----------------------------------
+  // ---- the Konva painter module ------------------------------------------
   //
-  // The ETag is the sha256 VERSION.json already records, so answering a request
-  // costs no hashing; `cache-control: no-cache` (never `immutable`) is deliberate
-  // for a 3 MiB artifact: a rebuilt bundle must be picked up on the next load, and
-  // a stale copy of it would be the whole editor. A missing artifact is a 503 that
-  // NAMES the rebuild command instead of a bare 404, because the only way this
-  // file is absent is a checkout that skipped the committed tree.
-  const excalidrawDir = fileURLToPath(new URL('./vendor/excalidraw/', import.meta.url))
-  const vendorRecord = () => {
+  // The same contract as the engine route above: a plain file, imported by the browser from a
+  // blob URL, re-hashed only when its bytes move, and answerable with an ETag.
+  const konvaPaintFile = fileURLToPath(new URL('./konva-paint.js', import.meta.url))
+  let konvaPaintEtag = null
+  let konvaPaintStat = null
+  register(KONVA_PAINT_ROUTE, ['GET', 'HEAD'], async (request) => {
     try {
-      return JSON.parse(readFileSync(path.join(excalidrawDir, 'VERSION.json'), 'utf8'))
-    } catch (err) {
-      return null
-    }
-  }
-  const serveVendor = (name, contentType) => async (request) => {
-    const file = path.join(excalidrawDir, name)
-    if (!existsSync(file)) {
-      throw httpError(
-        503,
-        'VENDOR_MISSING',
-        'the vendored Excalidraw artifact (' + name + ') is not in this checkout - rebuild it with `node packages/dsh-canvas/vendor/excalidraw/build.mjs`',
-      )
-    }
-    const record = vendorRecord()
-    const recorded = record !== null && record.files !== undefined ? record.files[name] : undefined
-    const etag = '"' + (recorded !== undefined && typeof recorded.sha256 === 'string' ? recorded.sha256.slice(0, 32) : String(statSync(file).mtimeMs)) + '"'
-    const headers = { 'content-type': contentType, 'cache-control': 'no-cache', etag }
-    if (request.headers.get('if-none-match') === etag) return new Response(null, { status: 304, headers: { etag } })
-    const size = statSync(file).size
-    if (request.method === 'HEAD') return new Response(null, { status: 200, headers: { ...headers, 'content-length': String(size) } })
-    return new Response(readFileSync(file), { status: 200, headers: { ...headers, 'content-length': String(size) } })
-  }
-  register(EXCALIDRAW_JS_ROUTE, ['GET', 'HEAD'], serveVendor('excalidraw.min.js', 'text/javascript; charset=utf-8'))
-  register(EXCALIDRAW_CSS_ROUTE, ['GET', 'HEAD'], serveVendor('excalidraw.css', 'text/css; charset=utf-8'))
-
-  // ---- the vendored Excalidraw faces (one exact route each) --------------
-  //
-  // Enumerated from VERSION.json rather than from the directory, because the record
-  // IS the authority on what this checkout claims to ship: a file that went missing
-  // is then a 404 with the hash it should have had, and `build.mjs --check` fails
-  // offline long before a person notices a face falling back. Immutable caching is
-  // right here (unlike the bundle): a face's bytes never change under its hash.
-  const excalidrawFontDir = path.join(excalidrawDir, 'fonts')
-  const recordedFonts = vendorRecord()?.fonts?.families ?? {}
-  let excalidrawFontRoutes = 0
-  for (const [family, entries] of Object.entries(recordedFonts)) {
-    for (const [name, meta] of Object.entries(entries)) {
-      register(EXCALIDRAW_FONT_ROUTE_PREFIX + family + '/' + name, ['GET', 'HEAD'], async (request) => {
-        const file = path.join(excalidrawFontDir, family, name)
-        if (!existsSync(file)) throw httpError(404, 'NOT_FOUND', 'no such font file')
-        const etag = '"' + String(meta.sha256).slice(0, 32) + '"'
-        if (request.headers.get('if-none-match') === etag) return new Response(null, { status: 304, headers: { etag } })
-        const headers = { 'content-type': 'font/woff2', 'content-length': String(meta.bytes), etag, 'cache-control': 'public, max-age=31536000, immutable' }
-        if (request.method === 'HEAD') return new Response(null, { status: 200, headers })
-        return new Response(readFileSync(file), { status: 200, headers })
+      const info = statSync(konvaPaintFile)
+      if (konvaPaintStat === null || konvaPaintStat.size !== info.size || konvaPaintStat.mtimeMs !== info.mtimeMs) {
+        const bytes = readFileSync(konvaPaintFile)
+        konvaPaintEtag = '"' + createHash('sha256').update(bytes).digest('hex').slice(0, 32) + '"'
+        konvaPaintStat = { size: info.size, mtimeMs: info.mtimeMs }
+      }
+      if (request.headers.get('if-none-match') === konvaPaintEtag) return new Response(null, { status: 304, headers: { etag: konvaPaintEtag } })
+      const text = readFileSync(konvaPaintFile, 'utf8')
+      return new Response(text, {
+        status: 200,
+        headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: konvaPaintEtag },
       })
-      excalidrawFontRoutes += 1
+    } catch (err) {
+      return errorToResponse(err)
     }
-  }
+  })
+
+  // ---- the vendored Konva surface ----------------------------------------
+  //
+  // The tab's INTERACTION layer (hit testing, transform handles, marquee). It is a
+  // classic script rather than a module on purpose: the artifact is one UMD file
+  // that ends with `globalThis.Konva = ...`, so a `<script>` element is exactly the
+  // loader it wants - no blob URL, no import map, no bare specifiers, and it cannot
+  // reach into the shell's module table.
+  //
+  // Unlike the fonts (immutable: a face's bytes never change under its hash), the
+  // ETag here is read from VERSION.json and served `no-cache`, because this route
+  // can be rebuilt: a stale copy of the interaction layer is a stale editor, and the
+  // record already carries the sha256, so answering costs no hashing.
+  register(KONVA_JS_ROUTE, ['GET', 'HEAD'], async (request) => {
+    try {
+      if (!existsSync(konvaFile)) {
+        throw httpError(
+          503,
+          'VENDOR_MISSING',
+          'the vendored Konva surface is not in this checkout - build it with `node packages/dsh-canvas/vendor/konva/build.mjs`',
+        )
+      }
+      const info = statSync(konvaFile)
+      let etag = '"' + String(info.size) + '-' + String(Math.round(info.mtimeMs)) + '"'
+      try {
+        const record = JSON.parse(readFileSync(fileURLToPath(new URL('./vendor/konva/VERSION.json', import.meta.url)), 'utf8'))
+        const recorded = record.files?.['konva.min.js']
+        if (recorded && typeof recorded.sha256 === 'string') etag = '"' + recorded.sha256.slice(0, 32) + '"'
+      } catch (err) {
+        // A missing or unreadable record is not a reason to refuse the file: the
+        // bytes are what the browser needs, and the mtime ETag still revalidates.
+      }
+      const headers = { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag, 'content-length': String(info.size) }
+      if (request.headers.get('if-none-match') === etag) return new Response(null, { status: 304, headers: { etag } })
+      if (request.method === 'HEAD') return new Response(null, { status: 200, headers })
+      return new Response(readFileSync(konvaFile), { status: 200, headers })
+    } catch (err) {
+      return errorToResponse(err)
+    }
+  })
 
   // ---- the bundled font files (one exact route each) ---------------------
   let fontRoutes = 0
@@ -2220,16 +2223,8 @@ export function registerRoutes(ctx, row) {
       fontRoutes += 1
     }
   }
-  row.log.debug(
-    '[dsh-canvas] routes registered (' +
-      (10 + excalidrawFontRoutes + fontRoutes) +
-      ' including ' +
-      fontRoutes +
-      ' font file(s) and ' +
-      excalidrawFontRoutes +
-      ' Excalidraw face(s))',
-  )
-  return 10 + excalidrawFontRoutes + fontRoutes
+  row.log.debug('[dsh-canvas] routes registered (' + (12 + fontRoutes) + ' including ' + fontRoutes + ' font file(s))')
+  return 12 + fontRoutes
 }
 
 // ---------------------------------------------------------------------------

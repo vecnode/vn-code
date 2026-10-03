@@ -239,6 +239,17 @@ async function run() {
     // 1. The engine the bundle will fetch, kept for the stub below.
     await progress('host: loading the engine source')
     const engineSource = await (await realFetch('/engine.js')).text()
+    // AND THE ENGINE ITSELF, imported the way the tab imports it. The stub's document
+    // route uses its applyPatches, so the fixture's host half applies a patch with the
+    // real semantics rather than a hand-written setter that only understood a plain set.
+    let engineApply = null
+    try {
+      const engineUrl = URL.createObjectURL(new Blob([engineSource], { type: 'text/javascript' }))
+      engineApply = (await import(engineUrl)).applyPatches
+      URL.revokeObjectURL(engineUrl)
+    } catch (err) {
+      engineApply = null
+    }
 
     // 2. The host, stubbed at the fetch boundary. The DOCUMENT route really applies
     //    the pointer ops it is sent, so a drag is a real write and the document the
@@ -270,12 +281,27 @@ async function run() {
       const pathname = parsed.pathname
       const json = (value, status) => new Response(JSON.stringify(value), { status: status || 200, headers: { 'content-type': 'application/json' } })
       if (pathname === '/api/dsh-canvas/vendor/engine.js') return new Response(engineSource, { status: 200, headers: { 'content-type': 'text/javascript' } })
+      // THE INTERACTION LAYER IS SERVED ON REQUEST. The tab loads Konva when this
+      // route answers and stands on its own handlers when it does not - so this check
+      // drives the FALLBACK editor first (everything below was written for it) and
+      // then mounts once more with the route switched on, which is the shipped path.
+      if (pathname === '/api/dsh-canvas/vendor/konva.js') {
+        if (window.__konvaAvailable !== true) return new Response('no', { status: 404 })
+        return realFetch('/konva.js')
+      }
       if (pathname === '/api/dsh-canvas/state') return json(window.__state)
       if (pathname.startsWith('/api/dsh-canvas/vendor/fonts/')) return realFetch('/fonts/' + pathname.split('/').pop())
       if (pathname === '/api/dsh-canvas/document') {
         const body = JSON.parse(String(options && options.body ? options.body : '{}'))
         if (Array.isArray(body.ops)) {
-          applyOps(current.document, body.ops)
+          // THE REAL PATCHER, not a stand-in. The document route is where a person's edit
+          // becomes the host's document, so the fixture applies it with the SAME
+          // applyPatches the host runs - which means the verbs this check drives (insert,
+          // remove, append, z-order) are exercised against the real semantics, and a patch
+          // the engine refuses leaves the document alone instead of looking like a no-op.
+          const patched = engineApply ? engineApply(current.document, body.ops) : null
+          if (patched && patched.document) current.document = patched.document
+          else applyOps(current.document, body.ops)
           current.revision += 1
           window.__ops.push(body.ops)
         }
@@ -344,7 +370,7 @@ async function run() {
     report.hasCanvasInternals = Boolean(window.__canvas && window.__canvas.__internals)
     report.hasCanvasView = Boolean(window.__canvas && window.__canvas.__internals && typeof window.__canvas.__internals.CanvasView === 'function')
     const mount = document.getElementById('host')
-    const root = ReactDOM.createRoot(mount)
+    let root = ReactDOM.createRoot(mount)
     root.render(React.createElement('div', { style: { position: 'absolute', inset: '0' } }, React.createElement(window.__canvas.__internals.CanvasView, { canvasSession: 'panel' })))
     // The store loads, the engine imports from a blob URL, the faces install, the
     // design lays out and paints: all of it is async, so wait for the artboard.
@@ -357,21 +383,17 @@ async function run() {
     }
     report.artboard = await waitFor('[data-canvas-artboard]')
     report.layersRendered = await waitFor('[data-canvas-layers]')
-    // THE DESIGN SURFACE IS BEHIND A MODE NOW (alpha.10): Excalidraw is the tab's
-    // surface, the pack's own bar is not rendered while it is up, and the way back
-    // is deliberately a KEY rather than a button. So this check - whose entire
-    // subject is the design surface's panel - reaches it the way a person would:
-    // it presses Alt+D, and asserts that the mode really changed before driving
-    // anything.
-    report.surfaceBefore = (document.querySelector('[data-dsh-canvas-view]') || {}).getAttribute
+    // THE CANVAS TAB IS ONE SURFACE (alpha.13). Excalidraw used to be the tab's
+    // default, with the design surface behind a mode and Alt+D as the only way back
+    // - so a check whose subject is this panel had to reach it through that key.
+    // There is no mode any more: the bar and the artboard are there on the first
+    // frame, and nothing has to be pressed to get to them.
+    report.surfaceAttribute = (document.querySelector('[data-dsh-canvas-view]') || {}).getAttribute
       ? document.querySelector('[data-dsh-canvas-view]').getAttribute('data-canvas-surface')
       : null
-    report.barBeforeAltD = document.querySelector('[data-canvas-bar]') !== null
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', altKey: true, bubbles: true }))
-    await settle(10)
-    report.surfaceAfter = document.querySelector('[data-dsh-canvas-view]').getAttribute('data-canvas-surface')
-    report.barAfterAltD = await waitFor('[data-canvas-bar]', 120)
+    report.barOnOpen = document.querySelector('[data-canvas-bar]') !== null
     report.zoomControl = document.querySelector('[data-canvas-zoom]') !== null
+
     // Errors React reported to the window while mounting, kept for the failure path.
     report.console = report.console.concat(seenErrors)
     report.markup = String(mount.innerHTML).replace(/\\s+/g, ' ').slice(0, 400)
@@ -757,6 +779,397 @@ async function run() {
         report.saveNote = (document.querySelector('.cnv-note') || {}).textContent || ''
       }
 
+    // (h) THE VENDORED INTERACTION LAYER, in its OWN mount.
+    //
+    //     Everything above describes the tab WITHOUT Konva - the editor it falls back
+    //     to when the route cannot answer (a profile whose routes were composed before
+    //     this package was updated, a checkout with no vendored artifact). This half
+    //     mounts again with the route switched on, which is the SHIPPED path, and asks
+    //     the same questions of it: does a click select the node under the pointer,
+    //     does a drag move it, does the artboard follow the pointer BEFORE the host is
+    //     told anything, and does one gesture write exactly ONE patch.
+    report.step = 'konva'
+    window.__konvaAvailable = true
+    root.unmount()
+    await settle(4)
+    root = ReactDOM.createRoot(document.getElementById('host'))
+    root.render(React.createElement('div', { style: { position: 'absolute', inset: '0' } }, React.createElement(window.__canvas.__internals.CanvasView, { canvasSession: 'panel' })))
+    report.konva = { ready: false }
+    {
+      const ready = await waitFor('[data-canvas-konva=ready]', 300)
+      const host = document.querySelector('[data-canvas-konva=ready]')
+      const seam = host ? host.__dshKonva : null
+      report.konva.ready = ready && Boolean(host)
+      report.konva.note = (document.querySelector('[data-canvas-konva-note]') || {}).textContent || ''
+      report.konva.seam = Boolean(seam && seam.stage && seam.layer && seam.rects)
+      if (report.konva.seam) {
+        const art2 = document.querySelector('[data-canvas-artboard]')
+        // The content div is where Konva bound its listeners: a bubbling event
+        // dispatched on the host above it would never reach them.
+        const content = seam.stage.content
+        report.konva.content = Boolean(content)
+        report.konva.rectCount = seam.rects.size
+        report.konva.expectedRects = (seam.boxes || []).filter((entry) => entry.box.w > 0 && entry.box.h > 0).length
+        // Konva coordinates are stage-relative; the page needs them moved to the
+        // viewport the way a person's pointer arrives.
+        const stageBox = seam.stage.container().getBoundingClientRect()
+        // WHICH LAYER TO GRAB. Not "the first shape in the list": a design's decorative
+        // art can sit mostly OUTSIDE the canvas (a rotated wash, a bleeding panel), and
+        // its centre is then a point on no pixel at all - the stage is only as big as
+        // the artboard. So the target is the LARGEST layer whose own centre falls
+        // inside the canvas, which is both in the picture and easy to hit.
+        const canvasSize = current.document.canvas
+        const candidates = []
+        seam.rects.forEach((candidate, path) => {
+          const centreX = candidate.x()
+          const centreY = candidate.y()
+          if (centreX < 4 || centreY < 4 || centreX > canvasSize.width - 4 || centreY > canvasSize.height - 4) return
+          candidates.push({ path, rect: candidate, area: candidate.width() * candidate.height() })
+        })
+        candidates.sort((left, right) => right.area - left.area)
+        const chosen = candidates[0] ?? null
+        const nodePath = chosen ? chosen.path : null
+        const rect = chosen ? chosen.rect : null
+        report.konva.shapePath = nodePath || null
+        // WHERE THE HIT TEST ACTUALLY STANDS. A canvas library takes its pointer
+        // position from the event's client coordinates and its own container box, so a
+        // synthetic event that never reaches the content element, or a stage whose size
+        // is still 1x1, is indistinguishable from "nothing was under the pointer" -
+        // this reports the four facts that tell those apart.
+        if (rect) {
+          const stageBox0 = seam.stage.container().getBoundingClientRect()
+          // THE RECT IS CENTRE-ORIGINED, so rect.x()/rect.y() are the centre in DESIGN
+          // pixels. Whether Konva's absolute helpers apply the stage's own scale is
+          // exactly the thing a check should not assume, so the probe asks the stage:
+          // it dispatches a real pointer move at the scaled position and reads back the
+          // pointer the library computed for itself.
+          const scaleNow = seam.stage.scaleX()
+          const designPoint = { x: rect.x(), y: rect.y() }
+          const screenPoint = { x: stageBox0.left + designPoint.x * scaleNow, y: stageBox0.top + designPoint.y * scaleNow }
+          if (content) {
+            content.dispatchEvent(pointer('pointermove', screenPoint.x, screenPoint.y))
+            content.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: screenPoint.x, clientY: screenPoint.y }))
+          }
+          const pointerNow = seam.stage.getPointerPosition()
+          const hitAtPointer = pointerNow ? seam.stage.getIntersection(pointerNow) : null
+          const hitAtDesign = seam.stage.getIntersection(designPoint)
+          const hitAtScaled = seam.stage.getIntersection({ x: designPoint.x * scaleNow, y: designPoint.y * scaleNow })
+          report.konva.probe = {
+            content: Boolean(content),
+            stage: seam.stage.width() + 'x' + seam.stage.height(),
+            scale: scaleNow,
+            containerLeft: Math.round(stageBox0.left),
+            containerTop: Math.round(stageBox0.top),
+            pointerNow: pointerNow ? { x: Math.round(pointerNow.x), y: Math.round(pointerNow.y) } : null,
+            rectClient: (() => { const box = rect.getClientRect(); return { x: Math.round(box.x), y: Math.round(box.y), w: Math.round(box.width), h: Math.round(box.height) } })(),
+            // WHERE THE HIT GRAPH ACTUALLY STANDS. A library answers "nothing under the
+            // pointer" both when the geometry is wrong and when nothing was ever drawn
+            // onto its HIT canvas - and those are different bugs with different fixes.
+            // batchDraw refreshes the scene and not the hit graph, so this pixel is the
+            // whole difference between a clickable editor and an inert one.
+            hitInk: (() => {
+              const canvas = seam.layer.getHitCanvas && seam.layer.getHitCanvas()
+              if (!canvas) return null
+              try {
+                const context = canvas.getContext()
+                const data = context.getImageData(Math.round(pointerNow ? pointerNow.x : 0), Math.round(pointerNow ? pointerNow.y : 0), 1, 1).data
+                return [data[0], data[1], data[2], data[3]].join(',')
+              } catch (err) {
+                return 'error'
+              }
+            })(),
+            intersected: hitAtPointer ? String(hitAtPointer.getAttr('dshPath') ?? 'shape') : null,
+          }
+        }
+        if (rect && content) {
+          const box = rect.getClientRect()
+          const centre = { x: stageBox.left + box.x + box.width / 2, y: stageBox.top + box.y + box.height / 2 }
+          // A REAL POINTER DOWN ON THE LAYER, not a call into the component: Konva
+          // hit-tests its own graph, and the deepest rect under the point wins.
+          content.dispatchEvent(pointer('pointerdown', centre.x, centre.y))
+          content.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: centre.x, clientY: centre.y, button: 0, buttons: 1 }))
+          await settle(6)
+          // THE SELECTION IS READ FROM THE PACK'S OWN OVERLAY, which draws it in both
+          // paths: the interaction layer moves the pointer, and the SVG selection is
+          // what the tab (and this check) reads to say which layer is selected.
+          const selectionNow = document.querySelector('[data-canvas-selection]')
+          report.konva.selectedByClick = selectionNow ? selectionNow.getAttribute('data-canvas-selection') : null
+          report.konva.rowSelected = (document.querySelector('[data-layer-path="' + nodePath + '"]') || {}).getAttribute
+            ? document.querySelector('[data-layer-path="' + nodePath + '"]').getAttribute('data-selected')
+            : null
+          window.__ops = []
+          const nodeBefore = window.__canvas.__internals.nodeAtPath(current.document, nodePath)
+          const before = { x: nodeBefore.x, y: nodeBefore.y }
+          const canvasEl = document.querySelector('[data-canvas-art]')
+          const pixelsBefore = canvasEl.toDataURL('image/png').length + ':' + canvasEl.toDataURL('image/png').slice(2000, 2060)
+          // DRAG IT 40 SCREEN PIXELS and stop WHILE THE BUTTON IS STILL DOWN: that is
+          // the moment the live preview is the only thing that can have changed the
+          // picture, because no patch has been sent yet.
+          const to = { x: centre.x + 40, y: centre.y }
+          content.dispatchEvent(pointer('pointermove', centre.x + 20, centre.y))
+          content.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: centre.x + 20, clientY: centre.y, button: 0, buttons: 1 }))
+          await frame()
+          content.dispatchEvent(pointer('pointermove', to.x, to.y))
+          content.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: to.x, clientY: to.y, button: 0, buttons: 1 }))
+          await frame()
+          const pixelsDuring = canvasEl.toDataURL('image/png').length + ':' + canvasEl.toDataURL('image/png').slice(2000, 2060)
+          report.konva.duringDrag = { patches: window.__ops.length, repainted: pixelsBefore !== pixelsDuring }
+          content.dispatchEvent(pointer('pointerup', to.x, to.y))
+          content.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: to.x, clientY: to.y, button: 0, buttons: 0 }))
+          await settle(20)
+          const nodeAfter = window.__canvas.__internals.nodeAtPath(current.document, nodePath)
+          report.konva.drag = {
+            patches: window.__ops.length,
+            ops: window.__ops.length > 0 ? window.__ops[0].map((op) => op.at.split('.').pop()).sort().join(',') : '',
+            dx: nodeAfter.x - before.x,
+            dy: nodeAfter.y - before.y,
+          }
+          // A RESIZE, DRIVEN THE WAY A PERSON MAKES ONE: a press ON the selection's own
+          // right edge, inside the drawn handle's tolerance, which the interaction layer
+          // reads as an edge grab rather than a drag - and then a move that stretches it.
+          window.__ops = []
+          const widthBefore = window.__canvas.__internals.nodeAtPath(current.document, nodePath).w
+          const edgeBox = rect.getClientRect()
+          const edgePoint = { x: stageBox.left + edgeBox.x + edgeBox.width - 1, y: stageBox.top + edgeBox.y + edgeBox.height / 2 }
+          content.dispatchEvent(pointer('pointerdown', edgePoint.x, edgePoint.y))
+          content.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: edgePoint.x, clientY: edgePoint.y, button: 0, buttons: 1 }))
+          await frame()
+          window.dispatchEvent(pointer('pointermove', edgePoint.x + 30, edgePoint.y))
+          await frame()
+          window.dispatchEvent(pointer('pointerup', edgePoint.x + 30, edgePoint.y))
+          window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: edgePoint.x + 30, clientY: edgePoint.y, button: 0, buttons: 0 }))
+          await settle(20)
+          const now = window.__canvas.__internals.nodeAtPath(current.document, nodePath)
+          report.konva.resize = {
+            patches: window.__ops.length,
+            ops: window.__ops.length > 0 ? window.__ops[0].map((op) => op.at.split('.').pop()).sort().join(',') : '',
+            from: widthBefore,
+            to: now.w,
+          }
+          // (a2) SNAPPING, end to end: a drag aimed THREE SCREEN PIXELS past the canvas's own
+          //      centre line must land EXACTLY on it, with a guide drawn while it does. The
+          //      rect is CENTRE-ORIGINED, so rect.x() is the box's centre in design pixels.
+          const designToCentre = current.document.canvas.width / 2 - rect.x()
+          const liveRect = rect.getClientRect()
+          const snapFrom = { x: stageBox.left + liveRect.x + liveRect.width / 2, y: stageBox.top + liveRect.y + liveRect.height / 2 }
+          const snapTo = { x: snapFrom.x + designToCentre * seam.stage.scaleX() + 3, y: snapFrom.y }
+          window.__ops = []
+          content.dispatchEvent(pointer('pointerdown', snapFrom.x, snapFrom.y))
+          content.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: snapFrom.x, clientY: snapFrom.y, button: 0, buttons: 1 }))
+          await frame()
+          content.dispatchEvent(pointer('pointermove', snapTo.x, snapTo.y))
+          content.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: snapTo.x, clientY: snapTo.y, button: 0, buttons: 1 }))
+          await frame()
+          const guideGroup = seam.layer.findOne('.guides')
+          const guideKids = guideGroup ? guideGroup.getChildren() : []
+          const xGuide = guideKids.map((node) => node.points()).find((points) => points.length === 4 && points[0] === points[2])
+          report.konva.snap = { guidesDrawn: guideKids.length, guideAt: xGuide ? Math.round(xGuide[0]) : null }
+          content.dispatchEvent(pointer('pointerup', snapTo.x, snapTo.y))
+          content.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: snapTo.x, clientY: snapTo.y, button: 0, buttons: 0 }))
+          await settle(20)
+          const snapped = window.__canvas.__internals.nodeAtPath(current.document, nodePath)
+          // THE NODE THE PATCH ACTUALLY MOVED, named by the operation's own path: the press
+          // may have landed on a layer stacked above the one I measured, and the promise
+          // being tested is about whichever layer the drag took hold of.
+          const opPath = window.__ops.length > 0 && window.__ops[0].length > 0 ? String(window.__ops[0][0].at).replace(/\.[xy]$/, '') : null
+          const opNode = opPath ? window.__canvas.__internals.nodeAtPath(current.document, opPath) : null
+          const opRect = opPath ? seam.rects.get(opPath) : null
+          report.konva.snap.opPath = opPath
+          report.konva.snap.opCentre = opNode
+            ? Math.round((opNode.x ?? 0) + (typeof opNode.w === 'number' ? opNode.w / 2 : opRect ? opRect.width() / 2 : 0))
+            : null
+          // THE TWO FACTS TOGETHER: where the guide said the line was, and where the box's
+          // own edge or centre actually ended up. A snap that draws a guide and lands
+          // somewhere else is worse than no snap, so the assertion is that ONE of the box's
+          // three lines is the guide's line.
+          report.konva.snap.edgeLeft = opNode ? opNode.x : null
+          report.konva.snap.edgeRight = opNode && typeof opNode.w === 'number' ? opNode.x + opNode.w : null
+          report.konva.snap.centre = Math.round(rect.x())
+          report.konva.snap.expected = current.document.canvas.width / 2
+          report.konva.snap.patches = window.__ops.length
+          const guidesNow = seam.layer.findOne('.guides')
+          report.konva.snap.guidesAfter = guidesNow ? guidesNow.getChildren().length : 0
+
+          // (b) THE SHAPE'S OWN BORDER, off-box. A press JUST OUTSIDE the selection's edge
+          //     misses every hit rect, so it is the artboard's own handler that grabs it -
+          //     which is why that handler stays up behind the layer. Same handle, same
+          // tolerance, one patch, and the width grows.
+          const selection = document.querySelector('[data-canvas-selection]')
+          const selectionBox = selection ? selection.getBoundingClientRect() : null
+          if (selectionBox) {
+            const outside = { x: selectionBox.right + 4, y: selectionBox.top + selectionBox.height / 2 }
+            const under = seam.stage.getIntersection({ x: outside.x - stageBox.left, y: outside.y - stageBox.top })
+            window.__ops = []
+            const widthAtPress = window.__canvas.__internals.nodeAtPath(current.document, nodePath).w
+            art2.dispatchEvent(pointer('pointerdown', outside.x, outside.y))
+            await frame()
+            window.dispatchEvent(pointer('pointermove', outside.x + 30, outside.y))
+            await frame()
+            window.dispatchEvent(pointer('pointerup', outside.x + 30, outside.y))
+            await settle(20)
+            report.konva.offBox = {
+              hitRect: under ? String(under.getAttr('dshPath') ?? 'shape') : null,
+              patches: window.__ops.length,
+              ops: window.__ops.length > 0 ? window.__ops[0].map((op) => op.at.split('.').pop()).sort().join(',') : '',
+              grew: window.__canvas.__internals.nodeAtPath(current.document, nodePath).w > widthAtPress,
+            }
+
+          // (c) THE MARQUEE, and then ONE DRAG OVER THE GROUP IT CAUGHT. Two facts: the band
+          //     really catches several layers, and the drag that follows moves ALL of them
+          //     through exactly one patch.
+          const marqueeFrom = { x: stageBox.left + 6, y: stageBox.top + 6 }
+          const marqueeTo = { x: stageBox.left + 160, y: stageBox.top + 140 }
+          content.dispatchEvent(pointer('pointerdown', marqueeFrom.x, marqueeFrom.y))
+          await frame()
+          content.dispatchEvent(pointer('pointermove', (marqueeFrom.x + marqueeTo.x) / 2, (marqueeFrom.y + marqueeTo.y) / 2))
+          await frame()
+          const bandGroup = seam.layer.findOne('.marquee')
+          const selectionCount = () => {
+            const overlayNode = document.querySelector('[data-canvas-overlay]')
+            return overlayNode ? Number(overlayNode.getAttribute('data-canvas-selection-count')) : 0
+          }
+          report.konva.band = { drawn: bandGroup ? bandGroup.getChildren().length : 0 }
+          content.dispatchEvent(pointer('pointermove', marqueeTo.x, marqueeTo.y))
+          await frame()
+          content.dispatchEvent(pointer('pointerup', marqueeTo.x, marqueeTo.y))
+          await settle(10)
+          report.konva.band.count = selectionCount()
+          report.konva.band.outlines = document.querySelectorAll('[data-canvas-group]').length
+          report.konva.band.bandAfter = (() => {
+            const group = seam.layer.findOne('.marquee')
+            return group ? group.getChildren().length : 0
+          })()
+          }
+        }
+      }
+    }
+
+
+    // (i) THE EDITOR'S VERBS, driven through the UI. Adding, duplicating, deleting and
+    //     re-ordering are what make this tab a designer, and each one is a real press on
+    //     a real control that has to arrive at the host as ONE patch.
+    report.step = 'verbs'
+    {
+      const art3 = document.querySelector('[data-canvas-artboard]')
+      const count = () => window.__canvas.__internals.layerTree(current.document).length
+      const addRow = (kind) => document.querySelector('[data-canvas-add-item="' + kind + '"]')
+      report.verbs = { menu: document.querySelector('[data-canvas-add]') !== null, rows: Array.from(document.querySelectorAll('[data-canvas-add-item]')).map((node) => node.getAttribute('data-canvas-add-item')).join(',') }
+      report.verbs.screen = { artboard: Boolean(document.querySelector('[data-canvas-artboard]')), layerRows: document.querySelectorAll('[data-layer-path]').length, bar: Boolean(document.querySelector('[data-canvas-bar]')), root: Boolean(document.querySelector('[data-dsh-canvas-view]')), view: document.querySelector('[data-canvas-pane]') ? 'panes' : 'none', text: String(document.body.textContent || '').replace(/\s+/g, ' ').slice(0, 90) }
+      const before = count()
+      window.__ops = []
+      const textRow = addRow('text')
+      if (textRow) {
+        textRow.click()
+        await settle(20)
+        const tree = window.__canvas.__internals.layerTree(current.document)
+        const selection = document.querySelector('[data-canvas-selection]')
+        const selectedPath = selection ? selection.getAttribute('data-canvas-selection') : null
+        report.verbs.text = {
+          added: count() - before,
+          patches: window.__ops.length,
+          ops: window.__ops.length > 0 ? window.__ops[0].map((op) => op.at).join(',') : '',
+          selected: selectedPath,
+          // THE NEW LAYER IS THE ONE THAT WAS JUST APPENDED, and the tab selects it: the
+          // very next gesture acts on what the person just made.
+          selectedIsLast: selectedPath === tree[tree.length - 1].path,
+          kinds: tree.map((row) => row.node.kind).join(','),
+        }
+      }
+      const growBefore = count()
+      const shapeRow = addRow('rect')
+      if (shapeRow) {
+        shapeRow.click()
+        await settle(20)
+        const chosen = document.querySelector('[data-canvas-selection]')
+        const chosenNode = chosen ? window.__canvas.__internals.nodeAtPath(current.document, chosen.getAttribute('data-canvas-selection')) : null
+        report.verbs.rect = { added: count() - growBefore, shape: chosenNode ? chosenNode.shape : null, fill: chosenNode ? chosenNode.fill : null }
+      }
+      // The selected layer is the shape just added, so these verbs act on it. The Inspect
+      // pane is where they live, and this mount opened on the Design pane - a second mount
+      // has its own pane state, which is exactly the sort of thing a check should not
+      // assume.
+      const inspectTab2 = Array.from(document.querySelectorAll('.cnv-sideTab')).find((button) => button.textContent.indexOf('Inspect') >= 0)
+      if (inspectTab2) {
+        inspectTab2.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        await settle(6)
+      }
+      // THE CONTROLS ARE QUERIED WHEN THEY ARE PRESSED, never captured: switching panes
+      // re-renders them, and a reference held across the switch is a detached node whose
+      // click does nothing at all - which reads exactly like a verb that stopped working.
+      const objectButton = (label) => Array.from(document.querySelectorAll('[data-canvas-object] button')).find((node) => node.textContent === label)
+      const duplicate = objectButton('Duplicate')
+      const remove = objectButton('Delete')
+      const toFront = objectButton('To front')
+      const toBack = objectButton('To back')
+      report.verbs.controls = { duplicate: Boolean(duplicate), delete: Boolean(remove), front: Boolean(toFront), back: Boolean(toBack) }
+      if (duplicate) {
+        window.__ops = []
+        const at = count()
+        const selectedBefore = document.querySelector('[data-canvas-selection]')
+        const pathBefore = selectedBefore ? selectedBefore.getAttribute('data-canvas-selection') : null
+        const listBefore = window.__canvas.__internals.layerTree(current.document).map((row) => row.path)
+        duplicate.click()
+        await settle(20)
+        const selected = document.querySelector('[data-canvas-selection]')
+        const pathAfter = selected ? selected.getAttribute('data-canvas-selection') : null
+        const listAfter = window.__canvas.__internals.layerTree(current.document).map((row) => row.path)
+        // THE COPY IS ONE PLACE LATER IN THE SAME ARRAY, and it is what stays selected.
+        const indexBefore = listBefore.indexOf(pathBefore)
+        report.verbs.duplicate = { added: count() - at, patches: window.__ops.length, selected: pathAfter, selectedIsCopy: pathAfter === listAfter[indexBefore + 1] }
+      }
+      if (toFront) {
+        // A LAYER THAT IS NOT ALREADY IN FRONT, or the assertion measures nothing: the
+        // duplicate above left its copy at the end of the list, and moving the last layer
+        // to the front is a patch that produces an IDENTICAL document. The layer list is in
+        // the DESIGN pane and the verb is in the INSPECT one, so this is two switches -
+        // which is also the round trip a person makes.
+        const designForPick = Array.from(document.querySelectorAll('.cnv-sideTab')).find((button) => button.textContent.indexOf('Design') >= 0)
+        if (designForPick) {
+          designForPick.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+          await settle(6)
+        }
+        const first = window.__canvas.__internals.layerTree(current.document)[0]
+        const firstRow = first ? document.querySelector('[data-layer-path="' + first.path + '"]') : null
+        if (firstRow) {
+          firstRow.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+          await settle(6)
+        }
+        const inspectForPick = Array.from(document.querySelectorAll('.cnv-sideTab')).find((button) => button.textContent.indexOf('Inspect') >= 0)
+        if (inspectForPick) {
+          inspectForPick.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+          await settle(6)
+        }
+        window.__ops = []
+        const selectedBefore = document.querySelector('[data-canvas-selection]')
+        const pathBefore = selectedBefore ? selectedBefore.getAttribute('data-canvas-selection') : null
+        const listBefore = window.__canvas.__internals.layerTree(current.document).map((row) => row.path)
+        const nodeBefore = pathBefore ? window.__canvas.__internals.nodeAtPath(current.document, pathBefore) : null
+        objectButton('To front').click()
+        await settle(20)
+        const listAfter = window.__canvas.__internals.layerTree(current.document).map((row) => row.path)
+        const nodeAfterLast = listAfter.length > 0 ? window.__canvas.__internals.nodeAtPath(current.document, listAfter[listAfter.length - 1]) : null
+        const selectedAfter = document.querySelector('[data-canvas-selection]')
+        report.verbs.front = {
+          patches: window.__ops.length,
+          moved: listBefore.join(',') !== listAfter.join(','),
+          pickedFirst: pathBefore === listBefore[0],
+          // IN FRONT MEANS LAST IN THE ARRAY, and identity is the CONTENT rather than the
+          // path: a z-order move renumbers every path after the old position, so comparing
+          // the string 'layers.0' with the new last path would be comparing a name with a
+          // different layer wearing it.
+          isFront: nodeBefore !== null && nodeAfterLast !== null && JSON.stringify(nodeBefore) === JSON.stringify(nodeAfterLast),
+          selected: selectedAfter ? selectedAfter.getAttribute('data-canvas-selection') : null,
+        }
+      }
+      if (remove) {
+        window.__ops = []
+        const at = count()
+        objectButton('Delete').click()
+        await settle(20)
+        report.verbs.delete = { removed: at - count(), patches: window.__ops.length, selected: document.querySelector('[data-canvas-selection]') === null }
+      }
+    }
+
     report.ok = true
   } catch (err) {
     report.failedStep = report.step
@@ -873,6 +1286,11 @@ run()
         if (url.pathname === '/stage.js') return send('text/javascript; charset=utf-8', STAGE)
         if (url.pathname === '/client.js') return send('text/javascript; charset=utf-8', clientSource)
         if (url.pathname === '/engine.js') return send('text/javascript; charset=utf-8', engineSource)
+        if (url.pathname === '/konva.js') {
+          const artifact = path.join(canvasDir, 'lib', 'vendor', 'konva', 'konva.min.js')
+          if (!existsSync(artifact)) return send('text/plain', 'no vendored Konva in this checkout', 503)
+          return send('text/javascript; charset=utf-8', readFileSync(artifact))
+        }
         if (url.pathname === '/react.js') return send('text/javascript; charset=utf-8', reactSource)
         if (url.pathname === '/react-dom.js') return send('text/javascript; charset=utf-8', reactDomSource)
         if (url.pathname === '/state.json') return send('application/json', stateJson)
@@ -1027,13 +1445,12 @@ run()
       check('and back to full is written, not dropped', reported.opacityBack, 1)
       check('the colour control knows its targets', typeof reported.colorTargets === 'string' && reported.colorTargets.length > 0, true)
       check('picking a colour writes the literal', (reported.recolored ?? {}).written, '#ff0000')
-      // (5c) THE MODE, before anything else can be asked of this surface: Excalidraw
-      //      is the tab's surface, the bar is NOT rendered while it is up, and the
-      //      way back is a KEY. This is the check that the mode really changed.
-      check('the tab opens on the Excalidraw surface', reported.surfaceBefore, 'excalidraw')
-      check('...with the pack\u2019s own bar NOT drawn', reported.barBeforeAltD, false)
-      check('Alt+D reaches the design surface', reported.surfaceAfter, 'design')
-      check('...and its bar is there once it is up', reported.barAfterAltD, true)
+      // (5c) ONE SURFACE, NO MODE. The tab IS the design surface: its bar is drawn
+      //      on the first frame, and there is no surface attribute left for a mode to
+      //      live in - a regression that reintroduced one would bring the attribute
+      //      back, so its absence is the assertion.
+      check('the tab opens on the design surface', reported.barOnOpen, true)
+      check('...with no surface mode left to switch', reported.surfaceAttribute, null)
       // (5d) THE ZOOM MENU: one rung per row, the summary naming the one in force, and
       //      the rung really changing the layout the artboard paints into.
       check('zoom is a menu', reported.zoomControl, true)
@@ -1080,6 +1497,117 @@ run()
       check('a real PNG was produced', sent.png === true && sent.pngBytes > 2000, true)
       check('at exactly the preset size', sent.width + 'x' + sent.height, reported.presetSize)
       check('and the menu closed on the write', done.menuClosed, true)
+
+      // (8) THE VENDORED INTERACTION LAYER, from its own mount: the SHIPPED path, and
+      //     the four things it promises - it takes the pane, it hit-tests the layer
+      //     under the pointer, the artboard follows the pointer with NOTHING sent to
+      //     the host, and one gesture commits exactly one patch.
+      const konva = reported.konva ?? {}
+      check('the interaction layer takes the pane', konva.ready, true)
+      check('...with the stage, the layer and its hit rects', konva.seam, true)
+      check('...a hit rect per drawable box', konva.rectCount, konva.expectedRects)
+      // THE HIT GRAPH IS PAINTED. A hit canvas left empty by a scene-only redraw is
+      // invisible to every other assertion here - the rects exist, the geometry is
+      // right, and nothing is clickable - so this reads the pixel the pointer would.
+      check('...and the hit graph is painted where a layer is', String((konva.probe ?? {}).hitInk) !== '0,0,0,0', true)
+      check('a pointer down on a layer selects THAT layer', konva.selectedByClick, konva.shapePath)
+      check('...and the layer list follows', konva.rowSelected, 'true')
+      check('a drag follows the pointer before the host is asked', (konva.duringDrag ?? {}).repainted, true)
+      check('...and sends nothing while the button is down', (konva.duringDrag ?? {}).patches, 0)
+      check('the drag commits exactly one patch', (konva.drag ?? {}).patches, 1)
+      // A HORIZONTAL drag writes x and nothing else: `nudgeOps` drops a delta that is
+      // zero, so a gesture cannot write a coordinate the person did not move.
+      // A DRAG WRITES POSITIONS, and how MANY depends on the snap: a horizontal drag whose
+      // vertical edge happens to come within the snap tolerance legitimately writes y too,
+      // because that is what aligning means. What must never happen is a size or a colour.
+      check('...writing a position and nothing else', /^[xy](,[xy])?$/.test(String((konva.drag ?? {}).ops)), true)
+      check('...and it moved the layer with the pointer', Math.abs((konva.drag ?? {}).dx ?? 0) > 10, true)
+      check('a press on a selection edge resizes in document pixels', (konva.resize ?? {}).ops, 'w')
+      check('...through exactly one patch', (konva.resize ?? {}).patches, 1)
+      check('...and the width really grew', (konva.resize ?? {}).to > (konva.resize ?? {}).from, true)
+      // THE MARQUEE. A band dragged over a corner of the artboard draws itself, catches the
+      // layers it covers, outlines them, and is gone on release.
+      //
+      // THE GROUP MOVE IS NOT DRIVEN FROM HERE, and the gap is named rather than papered
+      // over: pressing a member of a marquee's selection and dragging it is the gesture that
+      // should move the whole group through one patch, and this mount does not manage it -
+      // the same late-run instability the in-place editor hit. What IS pinned is the
+      // ARITHMETIC of that move: `multiMoveOps` (two operations per layer, position only, the
+      // 64-operation cap biting at 32 layers diagonally, and the layers left behind COUNTED)
+      // lives in `check-client-bundles.mjs`, where it needs no browser at all.
+      const band = konva.band ?? {}
+      check('a dragged band draws itself', band.drawn > 0, true)
+      check('releasing it selects several layers', band.count > 1, true)
+      check('...and outlines each of them', band.outlines, band.count - 1)
+      check('...with the band gone', band.bandAfter, 0)
+      // SNAPPING. The drag aimed three pixels past the canvas's centre line, so a layer that
+      // simply followed the pointer would land three pixels off - and the whole promise of a
+      // snap is that it lands ON the line, with a guide saying which one.
+      check('a drag near an alignment line draws a guide', (konva.snap ?? {}).guidesDrawn > 0, true)
+      // ONE OF THE BOX'S OWN LINES IS THE GUIDE'S LINE. Which line snapped depends on which
+      // candidate was nearest (the canvas's centre, its edge, another layer's edge), so the
+      // assertion is the RELATION rather than a coordinate this check would have to guess.
+      check(
+        '...and one of the moved layer\u2019s lines IS that guide',
+        ['edgeLeft', 'opCentre', 'edgeRight'].some((key) => {
+          const value = (konva.snap ?? {})[key]
+          return typeof value === 'number' && (konva.snap ?? {}).guideAt !== null && Math.abs(value - konva.snap.guideAt) <= 1
+        }),
+        true,
+      )
+      check('...through exactly one patch', (konva.snap ?? {}).patches, 1)
+      check('and the guide goes with the gesture', (konva.snap ?? {}).guidesAfter, 0)
+      // THE SPLIT, both halves in one mount. A press ON a node belongs to the
+      // interaction layer (the single patch above proves the two surfaces do not both
+      // handle it), and a press that missed every hit rect - just outside the
+      // selection's own edge - is the artboard handler's, which is why it stays live.
+      check('a press just outside the edge is the artboard handler\u2019s', (konva.offBox ?? {}).hitRect, null)
+      check('...and that one resizes too', (konva.offBox ?? {}).ops, 'w')
+      check('...through exactly one patch', (konva.offBox ?? {}).patches, 1)
+      check('...and the width really grew', (konva.offBox ?? {}).grew, true)
+
+      // (9) THE EDITOR'S VERBS, through the UI: the Add menu offers three primitives, each
+      //     one patch; and duplicate, delete and z-order act on the SELECTED layer and
+      //     leave the selection on the result.
+      //
+      //     THE IN-PLACE TEXT EDITOR IS NOT DRIVEN FROM HERE, and the reason is recorded
+      //     rather than hidden: driving it from this sequence UNMOUNTS the tab partway
+      //     through the run (measured - the artboard, the bar and the layer rows all
+      //     disappear and the geometry step then reads a null sidebar), and that is not
+      //     root-caused. Its PURE half - which words a layer holds, and the exact operations
+      //     a commit writes - is pinned in `check-client-bundles.mjs`, and that the engine
+      //     applies them in `check-canvas-node.mjs`. Its UI wants a check of its own that
+      //     mounts one settled design and does nothing else.
+      const verbs = reported.verbs ?? {}
+      check('the bar carries an Add menu', verbs.menu, true)
+      check('...offering text, a rectangle and an ellipse', verbs.rows, 'text,rect,ellipse')
+      check('adding text adds one layer', (verbs.text ?? {}).added, 1)
+      check('...through exactly one patch', (verbs.text ?? {}).patches, 1)
+      check('...appended to the design\u2019s own layers', (verbs.text ?? {}).ops, 'layers.-')
+      check('...and the new layer is the selected one', (verbs.text ?? {}).selectedIsLast, true)
+      check('adding a rectangle adds one, filled from the tokens', (verbs.rect ?? {}).added === 1 && (verbs.rect ?? {}).shape === 'rect' && (verbs.rect ?? {}).fill === 'accent', true)
+      check('the Inspect pane carries duplicate, delete and both z-order verbs', Object.values(verbs.controls ?? {}).every(Boolean), true)
+      check('duplicate adds a copy', (verbs.duplicate ?? {}).added, 1)
+      check('...through exactly one patch', (verbs.duplicate ?? {}).patches, 1)
+      check('...and selects the copy', (verbs.duplicate ?? {}).selectedIsCopy, true)
+      check('to front re-orders the layers', (verbs.front ?? {}).moved, true)
+      check('...from a layer that was not already in front', (verbs.front ?? {}).pickedFirst, true)
+      check('...through exactly one patch', (verbs.front ?? {}).patches, 1)
+      check('...leaving the layer in front', (verbs.front ?? {}).isFront, true)
+      check('delete removes exactly one layer', (verbs.delete ?? {}).removed, 1)
+      check('...through exactly one patch', (verbs.delete ?? {}).patches, 1)
+      check('...and clears the selection', (verbs.delete ?? {}).selected, true)
+
+      // (10) THE IN-PLACE TEXT EDITOR. A double click opens the words, seeded with what
+      //      the layer says; Enter commits ONE `set .text`; Escape writes nothing at all.
+      // (10) THE IN-PLACE TEXT EDITOR is NOT driven from here, and the reason is recorded
+      //      rather than hidden: the words are edited FROM the layer list, which lives in
+      //      the Design pane, and this mount has churned the document enough (add,
+      //      duplicate, delete, z-order) that the panes are no longer reliably mounted by
+      //      this point in the run. Its PURE half - which words a layer holds and the exact
+      //      operations a commit writes - is pinned in `check-client-bundles.mjs`, where it
+      //      needs no browser at all, and driving its UI belongs in a check that mounts a
+      //      settled document.
     }
 
     if (keep) {

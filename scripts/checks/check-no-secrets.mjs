@@ -78,15 +78,16 @@ export const RULES = [
     name: 'google-api-key',
     // A Google / Firebase API key: `AIza` plus 35 URL-safe characters. THIS IS
     // THE RULE THIS REPOSITORY LEARNED THE HARD WAY. A vendored third-party
-    // bundle carries its author's own credentials as a matter of course -
-    // Excalidraw's build ships its OSS Firebase config, api key included, in
-    // every published copy - so vendoring it put a key-shaped literal into
-    // `packages/dsh-canvas/lib/vendor/excalidraw/excalidraw.min.js`, and
-    // GitHub's secret scanning opened a `google_api_key` alert against a
-    // PUBLIC repository. The fix is never an ALLOWLIST entry: it is a build
-    // patch that removes the value from the artifact
-    // (`packages/dsh-canvas/vendor/excalidraw/patches/index.mjs`), because the
-    // alert names somebody else's live key, and no code in this pack needs it.
+    // bundle carries its author's own credentials as a matter of course - the
+    // Canvas tab's vendored Excalidraw shipped its OSS Firebase config, api key
+    // included, in every published copy - so vendoring it put a key-shaped
+    // literal into a PUBLIC repository and GitHub's secret scanning opened a
+    // `google_api_key` alert against it. That editor is gone (alpha.13), but the
+    // rule stays, because the lesson is about VENDORING and the next vendored
+    // bundle will arrive with whatever its author put in it. The fix is never an
+    // ALLOWLIST entry: it is a build patch that removes the value from the
+    // artifact, because the alert names somebody else's live key, and no code in
+    // this pack needs it.
     pattern: /\bAIza[0-9A-Za-z_-]{35}\b/g,
   },
   {

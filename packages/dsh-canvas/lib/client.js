@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
     /** The version marker shown in the toolbar, so a fresh bundle is easy to spot. */
-    const PLUGIN_VERSION = '0.1.0-alpha.12'
+    const PLUGIN_VERSION = '0.1.0-alpha.13'
     /** The conversation view this package adds to the chat panel's ring. */
     const VIEW_ID = 'canvas'
     /** Keep in sync with lib/index.js. */
@@ -57,6 +57,19 @@ window.__ModuleLoader__.load({
     const REPORT_ROUTE = API_ROOT + '/render-report'
     const WORKSPACE_ASSET_ROUTE = API_ROOT + '/workspace-asset'
     const ENGINE_ROUTE = API_ROOT + '/vendor/engine.js'
+    /**
+     * The vendored Konva interaction layer: one route, one classic script. It is a
+     * separate route from the engine because the tab survives without it - the engine
+     * paints and exports either way, and only the transform handles go.
+     */
+    const KONVA_JS_ROUTE = API_ROOT + '/vendor/konva.js'
+    /**
+     * The Konva PAINTER (lib/konva-paint.js): the module that turns the engine's draw ops into
+     * real Konva nodes. It is a separate route for the same reason the engine is - it has zero
+     * static imports, so the browser imports it from a blob URL - and it is the file that makes
+     * the artboard a Konva stage rather than a canvas Konva only listens to.
+     */
+    const KONVA_PAINT_ROUTE = API_ROOT + '/vendor/konva-paint.js'
     /** The tool names whose conversation cards this package draws. */
     const TOOL_NAMES = ['canvas_new', 'canvas_write', 'canvas_patch', 'canvas_read', 'canvas_style', 'canvas_set', 'canvas_publish', 'canvas_delete', 'canvas_render', 'canvas_export', 'canvas_assets']
     /** The zoom ladder. `fit` is resolved from the stage size at paint time. */
@@ -65,6 +78,12 @@ window.__ModuleLoader__.load({
     const FEED_SCALE = 0.25
     /** How close to an edge, in SCREEN pixels, a handle is grabbed. */
     const HANDLE_HIT = 9
+    /**
+     * How close, in SCREEN pixels, a dragged edge has to be to an alignment line before it
+     * snaps to it. Tighter than `HANDLE_HIT` on purpose: a snap is something that happens
+     * TO a person, and one that reaches as far as a handle would fight the pointer.
+     */
+    const SNAP_HIT = 6
     /** How long one long-poll hangs before the poller re-issues it. */
     const POLL_WAIT_MS = 20_000
 
@@ -179,6 +198,22 @@ window.__ModuleLoader__.load({
 .cnv-art[data-dragging=move]{cursor:grabbing}
 .cnv-art[data-dragging=resize]{cursor:nwse-resize}
 .cnv-art[data-empty=true]{box-shadow:none}
+/* THE INTERACTION LAYER. It is transparent - the engine paints the artboard
+   underneath - and it carries only Konva's own hit rects (a hair of alpha, so the hit
+   graph has something to test), the selection outline and the transform anchors.
+   z-index 3 puts it above the canvas, the origin marker (2) and the SVG overlay; the
+   artboard's own cursor is dropped while it is up, because the layer names the
+   gesture the pointer would start. */
+.cnv-konva{position:absolute;inset:0;z-index:3;touch-action:none}
+.cnv-konva[data-canvas-konva=failed]{pointer-events:none}
+.cnv-art[data-canvas-interactive=true]{cursor:default}
+/* THE IN-PLACE EDITOR. It is a real field over the layer's own box, in the layer's own
+   type, so the words being typed are the words that will be measured - and it is
+   translucent-free (an opaque field) because it is standing in for the paint under it. */
+.cnv-editor{position:absolute;z-index:4;box-sizing:border-box;margin:0;padding:0 2px;border:1px solid var(--dsw-alias-brand-primary,#4D6BFE);border-radius:3px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);resize:none;overflow:hidden;outline:none;white-space:pre-wrap;overflow-wrap:break-word}
+/* THE ADD MENU's rows are the export menu's rows: one control, one list. Only the
+   swatch differs, so a person can see which shape a row will draw. */
+.cnv-addSwatch{display:inline-block;width:11px;height:11px;border-radius:2px;border:.5px solid var(--dsw-alias-border-l3);margin-right:6px;vertical-align:-1px}
 /* The ORIGIN MARKER: the design's own (0, 0), drawn on the artboard's top-left corner
    so a layer's x/y means the same thing on screen as it does in the document. */
 .cnv-origin{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:2}
@@ -259,100 +294,9 @@ window.__ModuleLoader__.load({
 .cnv-cardTitle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dsw-alias-label-primary)}
 .cnv-cardBody{font-size:11.5px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;max-height:132px;overflow:hidden}
 .cnv-hidden{display:none}
-/* The Excalidraw surface (the Canvas tab's surface). It is an OVERLAY on purpose:
-   the design surface underneath stays mounted and untouched, so the migration is
-   reversible and this file never has to restructure the tab's tree for an editor
-   it does not own. In Excalidraw mode the pack's own bar is not rendered at all,
-   so the editor gets the WHOLE pane: no zoom menu, no overlays, no export menu -
-   Excalidraw brings its own. */
-.cnv-excalidraw{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,#fff)}
-.cnv-excalidrawHost{flex:1;min-height:0;position:relative}
-.cnv-excalidrawNote{flex:none;box-sizing:border-box;min-height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l2);font-size:11.5px;color:var(--dsw-alias-label-secondary)}
 `
     const CSS_TAG = 'dsh-canvas/canvas.css'
     const FONT_CSS_TAG = 'dsh-canvas/fonts.css'
-    /** The vendored Excalidraw surface's two artifacts, and where its assets come from. */
-    const EXCALIDRAW_JS_ROUTE = '/api/dsh-canvas/vendor/excalidraw.js'
-    const EXCALIDRAW_CSS_ROUTE = '/api/dsh-canvas/vendor/excalidraw.css'
-    /**
-     * Excalidraw builds its own runtime asset URLs as
-     * `new URL('fonts/<Family>/<file>', EXCALIDRAW_ASSET_PATH)`, and reads the global
-     * below ONCE, before the first mount. The base is the EDITOR'S OWN namespace
-     * rather than the vendor root: this package's own vendored faces live at
-     * `/api/dsh-canvas/vendor/fonts/<file>` (flat), so keeping Excalidraw's nested
-     * tree under `/vendor/excalidraw/fonts/...` stops the two from sharing a prefix -
-     * they would collide on a route count, and one day on a cache key. The locale
-     * modules are still stubbed (VERSION.json's `unshipped` says so), so a face is
-     * the only thing reached through here today.
-     */
-    const EXCALIDRAW_ASSET_PATH = '/api/dsh-canvas/vendor/excalidraw/'
-    /**
-     * The house examples become Excalidraw LIBRARY items, and these two numbers
-     * are the whole policy: a stable id prefix (so re-seeding MERGES instead of
-     * doubling the library) and a ceiling, because every example costs one layout
-     * pass and a library nobody can scroll is not a library.
-     */
-    const LIBRARY_ID_PREFIX = 'dsh-canvas/'
-    const LIBRARY_EXAMPLE_LIMIT = 12
-    /**
-     * Where the Excalidraw LIBRARY lives.
-     *
-     * WHY THE PACK PERSISTS IT. Excalidraw's library is not persisted by the
-     * component: its own embedding hook (`useHandleLibrary`) takes an ADAPTER the
-     * host supplies, which is exactly the seam it offers and exactly the seam this
-     * package fills - in the client bundle rather than in the vendored artifact, so
-     * the artifact stays upstream-plus-declared-trims. The adapter is this origin's
-     * `localStorage`, so the house examples a person drags out today are there
-     * tomorrow, in this app, without a store of our own.
-     *
-     * Every access is guarded, because a browser that blocks storage THROWS on it
-     * rather than answering null - the same discipline every other store in this
-     * pack follows, and the check drives both halves through a storage double,
-     * including one that throws.
-     */
-    const LIBRARY_STORAGE_KEY = 'dsh-canvas/excalidraw-library'
-
-    /** The library this origin stored, or an empty list. */
-    function readStoredLibrary(storage) {
-      if (storage === null || storage === undefined || typeof storage.getItem !== 'function') return []
-      let raw = null
-      try {
-        raw = storage.getItem(LIBRARY_STORAGE_KEY)
-      } catch (err) {
-        return []
-      }
-      if (typeof raw !== 'string' || raw === '') return []
-      try {
-        const parsed = JSON.parse(raw)
-        return Array.isArray(parsed) ? parsed : []
-      } catch (err) {
-        return []
-      }
-    }
-
-    /** Remember the library, best effort. */
-    function writeStoredLibrary(storage, items) {
-      if (storage === null || storage === undefined || typeof storage.setItem !== 'function') return false
-      if (!Array.isArray(items) || items.length === 0) return false
-      try {
-        storage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(items))
-        return true
-      } catch (err) {
-        // A full or blocked store is not a failure of the surface: the library still
-        // works for this session, and Excalidraw never learns about this.
-        return false
-      }
-    }
-
-    function localStorageNow() {
-      if (typeof window === 'undefined') return null
-      try {
-        return window.localStorage
-      } catch (err) {
-        return null
-      }
-    }
-
     // -----------------------------------------------------------------------
     // Small utilities
     // -----------------------------------------------------------------------
@@ -469,326 +413,338 @@ window.__ModuleLoader__.load({
     }
 
     // -----------------------------------------------------------------------
-    // The vendored Excalidraw surface
+    // The Konva painter
     // -----------------------------------------------------------------------
-    let excalidrawPromise = null
+    let konvaPaintPromise = null
+    /**
+     * The module that replays the engine's draw ops into Konva nodes.
+     *
+     * The same shape as `loadEngine`: fetched from this package's own route and imported from
+     * a blob URL, because the file has no static imports and must never reach into the shell's
+     * module table. A failed load is NOT cached, and the caller decides what to do without it.
+     */
+    function loadKonvaPaint() {
+      if (konvaPaintPromise === null) {
+        konvaPaintPromise = (async () => {
+          const response = await fetch(KONVA_PAINT_ROUTE + '?v=' + PLUGIN_VERSION, { credentials: 'same-origin' })
+          if (!response.ok) throw new Error('the Konva painter could not be loaded (' + response.status + ')')
+          const source = await response.text()
+          if (!source || source.length < 1000) throw new Error('the Konva painter route answered with something too small to be the painter')
+          const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
+          try {
+            return await import(/* webpackIgnore: true */ url)
+          } finally {
+            URL.revokeObjectURL(url)
+          }
+        })()
+        konvaPaintPromise.catch(() => {
+          konvaPaintPromise = null
+        })
+      }
+      return konvaPaintPromise
+    }
+
+    // -----------------------------------------------------------------------
+    // The vendored Konva interaction layer
+    // -----------------------------------------------------------------------
+    let konvaPromise = null
 
     /**
-     * The vendored Excalidraw surface, fetched once and left on the page.
+     * The vendored Konva surface, fetched once and left on the page.
      *
-     * A CLASSIC SCRIPT, not a module: the artifact is one iife bundle that leaves
-     * `globalThis.DSHExcalidraw` behind (it carries its own React, because
-     * Excalidraw takes React as a peer and a script tag cannot reach the shell's
-     * module table), so a `<script>` element is exactly the loader it wants - no
-     * blob URL, no import map, no bare specifiers. The stylesheet goes in first:
-     * Excalidraw is unusable without it (`--color-primary` and every layout rule
-     * live there), and a flash of unstyled editor is what loading it second looks
-     * like.
+     * IT IS AN INTERACTION LAYER AND NOT A PAINTER. The engine stays the only thing
+     * that paints a raster - on the artboard, in the render report the model reads
+     * and in the PNG export - so what a person drags and what the model is handed
+     * cannot drift. Konva supplies the one thing the engine deliberately does not
+     * have: an object model that hit-tests (deepest node first, the way the paint
+     * order reads), transform handles, and the marquee and snapping that grow on it.
+     * It draws transparent hit rects, the selection outline and the transform
+     * anchors, and nothing else.
      *
-     * A failed load is NOT cached: the promise is dropped so the next attempt can
-     * succeed, the same bargain `loadEngine` makes.
+     * A CLASSIC SCRIPT, not a module import: the artifact is upstream's own UMD
+     * browser build, which ends with `globalThis.Konva = ...`. The bytes are fetched
+     * through this bundle's own route (so it is a same-origin request that a
+     * profile's route table answers, and a check can serve it) and then executed as a
+     * classic script from a blob URL - `import()` would fail on a UMD file, and a
+     * `<script src>` pointing at the route could not be intercepted by a page whose
+     * fetch is a stand-in.
+     *
+     * A FAILED LOAD IS NOT CACHED, and it is not fatal: the tab paints, exports and
+     * edits through the panel without it, and the pointer gestures fall back to the
+     * artboard's own handlers. What is missing is the transform vocabulary, and the
+     * note says so rather than leaving a person clicking a handle that does nothing.
      */
-    function loadExcalidraw() {
-      if (excalidrawPromise === null) {
-        excalidrawPromise = new Promise((resolve, reject) => {
+    function loadKonva() {
+      if (konvaPromise === null) {
+        konvaPromise = (async () => {
           if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
-            reject(new Error('this surface needs a document'))
-            return
+            throw new Error('the Konva interaction layer needs a document')
           }
-          if (findStyleTag('dsh-canvas/excalidraw.css') === null) {
-            const link = document.createElement('link')
-            link.setAttribute('rel', 'stylesheet')
-            link.setAttribute('data-plugin-css', 'dsh-canvas/excalidraw.css')
-            link.setAttribute('href', EXCALIDRAW_CSS_ROUTE + '?v=' + PLUGIN_VERSION)
-            document.head.appendChild(link)
-          }
-          const script = document.createElement('script')
-          script.setAttribute('src', EXCALIDRAW_JS_ROUTE + '?v=' + PLUGIN_VERSION)
-          script.setAttribute('data-plugin-script', 'dsh-canvas/excalidraw.js')
-          script.addEventListener('load', () => {
-            const surface = window.DSHExcalidraw
-            if (surface === undefined || surface === null || typeof surface.mount !== 'function') {
-              reject(new Error('the Excalidraw route answered, but nothing registered a surface'))
-              return
-            }
-            // Read by Excalidraw once, before the first mount.
-            window.EXCALIDRAW_ASSET_PATH = EXCALIDRAW_ASSET_PATH
-            resolve(surface)
-          })
-          script.addEventListener('error', () => {
-            // The one failure that has nothing to do with the network: this package's
-            // ROUTES are composed at boot, so a profile that added them since it
-            // started answers 404 for them until it is restarted. A person seeing
-            // "it does not appear" deserves that sentence instead of a guess.
-            reject(
-              new Error(
-                'the Excalidraw surface could not be loaded (' +
-                  EXCALIDRAW_JS_ROUTE +
-                  ') \u2014 if this package was updated while the harness was running, restart it once: these routes are composed at boot',
-              ),
-            )
-          })
-          document.head.appendChild(script)
-        })
-        excalidrawPromise.catch(() => {
-          excalidrawPromise = null
-        })
-      }
-      return excalidrawPromise
-    }
-
-    /**
-     * One laid-out design as an Excalidraw scene skeleton.
-     *
-     * THE BRIDGE, and it is deliberately one-directional and lossy, because the
-     * alternative - an empty whiteboard next to designs nobody can see - is worse
-     * than an honest approximation. The engine has already laid the document out
-     * (boxes in DESIGN pixels, which is the same space Excalidraw works in), so
-     * every box becomes the nearest thing Excalidraw has:
-     *
-     *   - `shape` + `rect`    -> rectangle (the fill and stroke it was painted with)
-     *   - `shape` + `ellipse` -> ellipse
-     *   - any other shape     -> rectangle, because a hand-drawn polyline has no
-     *     exact counterpart and a box keeps the design's proportions readable
-     *   - `text`              -> a text element at the size the design asked for
-     *     (the engine hands over the string it measured, capped at 120 characters)
-     *   - `frame` / `art` / `svg` / `image` -> SKIPPED, and the note counts them:
-     *     those are containers, rasterized art and pictures, and pretending a
-     *     rectangle is a gradient would be a lie the person cannot see through.
-     *
-     * @returns `{ skeletons, skipped }`.
-     */
-    function sceneSkeletonsFor(prepared) {
-      const skeletons = []
-      let skipped = 0
-      for (const entry of (prepared && prepared.boxes) || []) {
-        const box = entry.box
-        if (!box || !(box.w > 0) || !(box.h > 0)) continue
-        const common = { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.w), height: Math.round(box.h) }
-        if (entry.kind === 'text') {
-          const size = entry.font && Number.isFinite(entry.font.size) ? Math.max(8, Math.round(entry.font.size)) : 16
-          skeletons.push({ ...common, type: 'text', text: String(entry.text ?? ''), fontSize: size })
-          continue
-        }
-        if (entry.kind === 'shape') {
-          if (entry.shape === 'ellipse') skeletons.push({ ...common, type: 'ellipse' })
-          else if (entry.shape === 'rect') skeletons.push({ ...common, type: 'rectangle' })
-          else {
-            skeletons.push({ ...common, type: 'rectangle' })
-            skipped += 1
-          }
-          continue
-        }
-        skipped += 1
-      }
-      return { skeletons, skipped }
-    }
-
-    /**
-     * The Excalidraw surface: the vendored editor, mounted in the pane and seeded
-     * with the design the agent wrote.
-     *
-     * It is a PREVIEW in exactly one respect and the note says so: the sync runs
-     * ONE WAY (a design becomes a scene) and it re-runs only when the design's
-     * REVISION moves, so a person's own drawing is never stomped by a re-render -
-     * but nothing they draw travels back to the design document yet, and the
-     * skipped element kinds are counted rather than quietly dropped.
-     */
-    function ExcalidrawSurface(props) {
-      const hostRef = useRef(null)
-      const apiRef = useRef(null)
-      const syncedRef = useRef(null)
-      const librarySeededRef = useRef(false)
-      const [note, setNote] = useState('Loading the Excalidraw surface\u2026')
-      const [ready, setReady] = useState(false)
-      const design = props.design ?? null
-      const sessionId = props.sessionId ?? null
-      const fonts = props.fonts ?? {}
-      const preset = props.preset ?? null
-      /** What this origin stored last time, read ONCE per mount. */
-      const storedLibraryRef = useRef(null)
-      if (storedLibraryRef.current === null) storedLibraryRef.current = readStoredLibrary(localStorageNow())
-      const storedLibrary = storedLibraryRef.current
-
-      useEffect(() => {
-        let live = true
-        let mounted = null
-        loadExcalidraw()
-          .then((surface) => {
-            if (!live || hostRef.current === null) return
-            mounted = surface.mount(hostRef.current, {
-              theme: 'light',
-              // THE LIBRARY'S TWO SEAMS: it is LOADED from what this origin stored
-              // (so the house examples are there on the next visit) and SAVED through
-              // the change callback. Excalidraw persists nothing by itself - its own
-              // hook takes an adapter, and this is that adapter, in this bundle.
-              ...(storedLibrary.length > 0 ? { initialData: { libraryItems: storedLibrary } } : {}),
-              onLibraryChange: (items) => {
-                if (Array.isArray(items) && items.length > 0) writeStoredLibrary(localStorageNow(), items)
-              },
-              excalidrawAPI: (api) => {
-                apiRef.current = api
-                if (!live) return
-                setReady(true)
-                setNote('Excalidraw ' + String(surface.version) + ' is live')
-              },
+          const response = await fetch(KONVA_JS_ROUTE + '?v=' + PLUGIN_VERSION, { credentials: 'same-origin' })
+          if (!response.ok) throw new Error('the Konva interaction layer could not be loaded (' + response.status + ')')
+          const source = await response.text()
+          if (!source || source.length < 10_000) throw new Error('the Konva route answered with something too small to be the library')
+          const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
+          try {
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script')
+              script.setAttribute('data-plugin-script', 'dsh-canvas/konva.js')
+              script.setAttribute('src', url)
+              script.addEventListener('load', resolve)
+              script.addEventListener('error', () => reject(new Error('the Konva interaction layer could not be executed')))
+              document.head.appendChild(script)
             })
-          })
-          .catch((err) => {
-            if (live) setNote(err && err.message ? err.message : 'the Excalidraw surface could not be loaded')
-          })
-        return () => {
-          live = false
-          apiRef.current = null
-          if (mounted !== null && mounted.root && typeof mounted.root.unmount === 'function') {
-            try {
-              mounted.root.unmount()
-            } catch (err) {
-              /* already gone */
-            }
-            if (hostRef.current !== null) hostRef.current.innerHTML = ''
+          } finally {
+            URL.revokeObjectURL(url)
           }
-        }
-      }, [])
-
-      /**
-       * Seed the scene from the design, ONCE PER REVISION. The design's revision
-       * is the agent's own write counter, so a design that has not changed never
-       * re-seeds - which is what keeps a person's edits on screen.
-       */
-      useEffect(() => {
-        if (!ready || design === null) return undefined
-        const key = String(design.id ?? '') + '@' + String(design.revision ?? 0)
-        if (syncedRef.current === key) return undefined
-        let live = true
-        ;(async () => {
-          try {
-            const surface = await loadExcalidraw()
-            const engine = await loadEngine()
-            const prepared = await prepareRender(engine, design.document, preset, sessionId, fonts)
-            if (!live) return
-            const api = apiRef.current
-            if (api === null) return
-            const { skeletons, skipped } = sceneSkeletonsFor(prepared)
-            const elements = surface.convertToExcalidrawElements(skeletons)
-            api.updateScene({ elements })
-            syncedRef.current = key
-            setNote(
-              'Synced ' +
-                String(design.name ?? design.id) +
-                ' rev ' +
-                String(design.revision ?? 0) +
-                ' \u00b7 ' +
-                String(skeletons.length) +
-                ' element(s)' +
-                (skipped > 0 ? ' \u00b7 ' + String(skipped) + ' box(es) this editor has no shape for' : '') +
-                ' \u00b7 one way: your drawing is not written back yet',
-            )
-          } catch (err) {
-            if (live) setNote('the design could not be laid out for this editor: ' + (err && err.message ? err.message : 'unknown error'))
+          const surface = window.Konva
+          if (surface === undefined || surface === null || typeof surface.Stage !== 'function') {
+            throw new Error('the Konva route answered, but nothing registered the library on this page')
           }
+          return surface
         })()
-        return () => {
-          live = false
-        }
-      }, [ready, design, preset, sessionId, fonts])
-
-      /**
-       * Seed Excalidraw's OWN LIBRARY with the house examples, once.
-       *
-       * WHY THE LIBRARY AND NOT A GALLERY OF OURS: a library item is exactly what a
-       * banner template IS - a reusable group of elements - and Excalidraw already
-       * persists the library by itself, in this origin's storage, so a person who
-       * drags "product-launch" onto a blank canvas tomorrow still finds it there.
-       * That is the "persistent across the app" ask, and it is Excalidraw's own
-       * storage doing the work rather than a second store of ours.
-       *
-       * IDEMPOTENCE is the ids: each item is named for the example it came from, and
-       * `merge: true` is a union keyed by id (Excalidraw's own `mergeLibraryItems`),
-       * so seeding twice cannot double the library. It still runs once per page
-       * load, because laying eight examples out is not free.
-       */
-      useEffect(() => {
-        if (!ready || librarySeededRef.current) return undefined
-        const api = apiRef.current
-        if (api === null || typeof api.updateLibrary !== 'function') return undefined
-        const examples = Array.isArray(props.examples) ? props.examples : []
-        if (examples.length === 0) return undefined
-        let live = true
-        librarySeededRef.current = true
-        ;(async () => {
-          try {
-            const surface = await loadExcalidraw()
-            const engine = await loadEngine()
-            const items = []
-            let skipped = 0
-            for (const entry of examples.slice(0, LIBRARY_EXAMPLE_LIMIT)) {
-              if (!entry || typeof entry.id !== 'string' || entry.document === undefined) continue
-              const preset = props.presets && props.presets[entry.preset] ? props.presets[entry.preset] : null
-              const prepared = await prepareRender(engine, entry.document, preset, sessionId, fonts)
-              const mapped = sceneSkeletonsFor(prepared)
-              skipped += mapped.skipped
-              if (mapped.skeletons.length === 0) continue
-              items.push({
-                id: LIBRARY_ID_PREFIX + entry.id,
-                // `published` is what makes it usable rather than a draft.
-                status: 'published',
-                name: String(entry.title ?? entry.id),
-                elements: surface.convertToExcalidrawElements(mapped.skeletons),
-                created: Date.now(),
-              })
-            }
-            if (!live || items.length === 0) return
-            await api.updateLibrary({ libraryItems: items, merge: true, openLibraryMenu: false })
-            setNote(
-              'Library: ' +
-                String(items.length) +
-                ' house example(s) ready' +
-                (skipped > 0 ? ' \u00b7 ' + String(skipped) + ' box(es) this editor has no shape for' : '') +
-                ' \u00b7 Excalidraw keeps them in this browser, so they are there next time',
-            )
-          } catch (err) {
-            librarySeededRef.current = false
-            if (live) setNote('the house examples could not be loaded into the Library: ' + (err && err.message ? err.message : 'unknown error'))
-          }
-        })()
-        return () => {
-          live = false
-        }
-      }, [ready, props.examples, props.presets, sessionId, fonts])
-
-      /**
-       * THE ONE WAY BACK TO THE DESIGN SURFACE, and it is a KEY rather than a
-       * button because the ask was "no buttons in the top bar": the bar is not
-       * rendered in this mode, so the pack's own surface would be unreachable
-       * without it. Alt+D is deliberately obscure - it is a migration handle, not a
-       * feature, and it goes when the agent tools speak the scene.
-       */
-      useEffect(() => {
-        if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
-        const onKeyDown = (event) => {
-          if (!event.altKey) return
-          if (event.key !== 'd' && event.key !== 'D') return
-          event.preventDefault()
-          if (typeof props.onEscapeToDesign === 'function') props.onEscapeToDesign()
-        }
-        document.addEventListener('keydown', onKeyDown, true)
-        return () => {
-          document.removeEventListener('keydown', onKeyDown, true)
-        }
-      }, [props.onEscapeToDesign])
-
-      return h(
-        'div',
-        { className: 'cnv-excalidraw', 'data-canvas-excalidraw': ready ? 'ready' : 'loading' },
-        h('div', { className: 'cnv-excalidrawHost', 'data-canvas-excalidraw-host': 'true', ref: hostRef }),
-        h('div', { className: 'cnv-excalidrawNote' }, h('span', { 'data-canvas-excalidraw-note': 'true' }, note)),
-      )
+        konvaPromise.catch(() => {
+          konvaPromise = null
+        })
+      }
+      return konvaPromise
     }
 
     // -----------------------------------------------------------------------
     // Fonts
     // -----------------------------------------------------------------------
+    /**
+     * The parent array of a document path, and the index inside it.
+     *
+     * `layers.1.children.0` -> `{ parentPath: 'layers.1.children', index: 0 }`. Every
+     * object verb needs both: a duplicate goes back into the SAME array one place later,
+     * and a z-order move takes a node out of an array and puts it back at an end of it.
+     */
+    function parentOf(path) {
+      const segments = String(path ?? '').split('.')
+      const last = segments.pop()
+      const index = Number(last)
+      return { parentPath: segments.join('.'), index: Number.isFinite(index) ? index : -1 }
+    }
+
+    /**
+     * THE OBJECT VERBS, as data.
+     *
+     * One pure function, five verbs, and every one of them is a `canvas_patch` the agent
+     * could have written - which is the point: a person adding, duplicating, deleting or
+     * re-ordering a layer goes through the same route, the same validator and the same
+     * store as the model, so a button press cannot produce a document the model's own
+     * tool would refuse.
+     *
+     * The ORDER inside a verb matters and is not cosmetic: a z-order move REMOVES first
+     * and inserts second, and the insert index is therefore read against the array as it
+     * stands AFTER the removal - which is why 'front' appends and 'back' inserts at 0.
+     *
+     * @returns an array of pointer operations (possibly empty for an unknown verb).
+     */
+    function objectOps(verb, subject) {
+      const { path, node, parentPath, index } = subject
+      if (verb === 'add') return typeof parentPath === 'string' && node ? [{ op: 'insert', at: parentPath + '.-', value: node }] : []
+      const at = typeof index === 'number' && index >= 0 ? index : parentOf(path).index
+      const parent = typeof parentPath === 'string' && parentPath.length > 0 ? parentPath : parentOf(path).parentPath
+      if (verb === 'delete') return [{ op: 'remove', at: path }]
+      if (verb === 'duplicate') return node ? [{ op: 'insert', at: parent + '.' + (at + 1), value: node }] : []
+      if (verb === 'front') return node ? [{ op: 'remove', at: path }, { op: 'insert', at: parent + '.-', value: node }] : []
+      if (verb === 'back') return node ? [{ op: 'remove', at: path }, { op: 'insert', at: parent + '.0', value: node }] : []
+      return []
+    }
+
+    /**
+     * A NEW LAYER, sized and coloured from the design's OWN tokens.
+     *
+     * WHY IT READS THE TOKENS. A layer added from a toolbar that painted `#ff0000` would
+     * be the one thing in the document that ignores the design's own palette, and a
+     * re-style (`canvas_style`) would leave it behind. So the colour is a TOKEN NAME when
+     * the document defines one and a literal only when it does not - and the same
+     * defensiveness applies to the type scale: a document whose tokens define no
+     * `display` role gets an explicit size instead of a role name nothing resolves.
+     *
+     * The size and position are centred thirds of the canvas, which is where a person
+     * expects a new block to appear and is always inside the artboard.
+     */
+    function newLayer(kind, document_) {
+      const tokens = (document_ && document_.tokens) || {}
+      const colors = tokens.color && typeof tokens.color === 'object' ? tokens.color : {}
+      const fonts = tokens.font && typeof tokens.font === 'object' ? tokens.font : {}
+      const radius = tokens.radius && typeof tokens.radius === 'object' ? tokens.radius : {}
+      const width = Math.max(80, Math.round(document_.canvas.width * 0.5))
+      const height = Math.max(60, Math.round(document_.canvas.height * 0.3))
+      const x = Math.max(0, Math.round((document_.canvas.width - width) / 2))
+      const y = Math.max(0, Math.round((document_.canvas.height - height) / 2))
+      const ink = typeof colors.ink === 'string' ? 'ink' : '#111111'
+      const accent = typeof colors.accent === 'string' ? 'accent' : ink
+      if (kind === 'text') {
+        const node = {
+          kind: 'text',
+          x,
+          y,
+          w: width,
+          text: 'New text',
+          // AN EXPLICIT SIZE, not a style role: a role is a name the document has to
+          // define, and a design that names its own scale would refuse the insert.
+          size: Math.max(16, Math.round(document_.canvas.height * 0.07)),
+          weight: 700,
+          color: ink,
+          align: 'center',
+        }
+        if (typeof fonts.display === 'string') node.family = 'display'
+        return node
+      }
+      if (kind === 'ellipse') {
+        const size = Math.min(width, height)
+        return { kind: 'shape', shape: 'ellipse', x: Math.round((document_.canvas.width - size) / 2), y, w: size, h: size, fill: accent }
+      }
+      const card = typeof radius.card === 'number' ? radius.card : 12
+      return { kind: 'shape', shape: 'rect', x, y, w: width, h: height, fill: accent, radius: card }
+    }
+
+    /**
+     * The words a TEXT node actually paints.
+     *
+     * The language gives a text layer two spellings and the model uses both: `text` for a
+     * plain string, and `runs` for rich text (which is what the example gallery and every
+     * archetype with a highlighted phrase carry). A person editing the layer in place means
+     * the words they can SEE, so a `runs` layer is seeded with its runs joined - and the
+     * commit writes `text` and removes `runs` in one patch, because a node carrying both
+     * would still paint the runs.
+     *
+     * @returns the plain string, or null when the node holds no words at all.
+     */
+    function nodeTextOf(node) {
+      if (!node || typeof node !== 'object') return null
+      if (typeof node.text === 'string') return node.text
+      if (Array.isArray(node.runs)) {
+        return node.runs.map((run) => (run && typeof run.text === 'string' ? run.text : '')).join('')
+      }
+      return null
+    }
+
+    /**
+     * WHAT A DRAG SHOULD SNAP TO, and the lines to draw while it does.
+     *
+     * The candidates are the lines a person actually aligns to: the canvas's own edges and
+     * its centre, and the edges and centres of every OTHER box the layout produced. The
+     * box being dragged offers its own two edges and its centre on each axis, so a left
+     * edge can snap to another layer's right edge and a centre to the canvas's centre.
+     *
+     * IT IS PURE DATA, and that is the point: the drag that MOVES a layer and the lines
+     * that SAY WHERE IT LANDED come from one call, so the guide cannot describe a snap the
+     * document did not get - and a check can pin the arithmetic without a browser.
+     *
+     * The nearest line wins on each axis independently, and only within `tolerance` design
+     * pixels, so a drag that is nowhere near an edge is left exactly where the pointer put
+     * it.
+     *
+     * @returns `{ dx, dy, guides }` - `dx`/`dy` are the ADDITIONAL movement to apply (0
+     *   when nothing is within tolerance), and each guide is `{ axis, at, from, to }` in
+     *   design pixels, ready to draw.
+     */
+    function snapFor(box, others, canvas, tolerance) {
+      const guides = []
+      const span = (min, max) => ({ from: Math.round(min), to: Math.round(max) })
+      const mineX = [{ at: box.x }, { at: box.x + box.w / 2 }, { at: box.x + box.w }]
+      const mineY = [{ at: box.y }, { at: box.y + box.h / 2 }, { at: box.y + box.h }]
+      /** Every candidate line on one axis, with the box it came from (null = the canvas). */
+      const targetsX = [{ at: 0, box: null }, { at: canvas.width / 2, box: null }, { at: canvas.width, box: null }]
+      const targetsY = [{ at: 0, box: null }, { at: canvas.height / 2, box: null }, { at: canvas.height, box: null }]
+      for (const other of others ?? []) {
+        if (!other || !other.box || other.box.w <= 0 || other.box.h <= 0) continue
+        const otherBox = other.box
+        targetsX.push({ at: otherBox.x, box: otherBox }, { at: otherBox.x + otherBox.w / 2, box: otherBox }, { at: otherBox.x + otherBox.w, box: otherBox })
+        targetsY.push({ at: otherBox.y, box: otherBox }, { at: otherBox.y + otherBox.h / 2, box: otherBox }, { at: otherBox.y + otherBox.h, box: otherBox })
+      }
+      const best = (mine, targets) => {
+        let found = null
+        for (const line of mine) {
+          for (const target of targets) {
+            const distance = target.at - line.at
+            if (Math.abs(distance) > tolerance) continue
+            if (found === null || Math.abs(distance) < Math.abs(found.distance)) found = { distance, target }
+          }
+        }
+        return found
+      }
+      const bestX = best(mineX, targetsX)
+      const bestY = best(mineY, targetsY)
+      if (bestX !== null) {
+        const other = bestX.target.box
+        const vertical = other === null
+          ? span(0, canvas.height)
+          : span(Math.min(box.y, other.y), Math.max(box.y + box.h, other.y + other.h))
+        guides.push({ axis: 'x', at: Math.round(bestX.target.at), from: vertical.from, to: vertical.to })
+      }
+      if (bestY !== null) {
+        const other = bestY.target.box
+        const horizontal = other === null
+          ? span(0, canvas.width)
+          : span(Math.min(box.x, other.x), Math.max(box.x + box.w, other.x + other.w))
+        guides.push({ axis: 'y', at: Math.round(bestY.target.at), from: horizontal.from, to: horizontal.to })
+      }
+      return { dx: bestX === null ? 0 : Math.round(bestX.distance), dy: bestY === null ? 0 : Math.round(bestY.distance), guides }
+    }
+
+    /** Whether two boxes overlap at all (a marquee catches what it touches). */
+    function boxesTouch(a, b) {
+      if (!a || !b) return false
+      return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+    }
+
+    /**
+     * WHICH LAYERS A MARQUEE CAUGHT.
+     *
+     * The hit test is the LAYOUT's own boxes, so what the band catches is what a person can
+     * see, and it is pure data for the same reason the drag's operations are: the band that
+     * is drawn and the selection it produces come from one description of the design.
+     *
+     * A layer with no drawable box (nothing laid out, zero size) is not caught - a marquee
+     * that selected something invisible would put handles on nothing.
+     *
+     * @returns the paths whose box overlaps the band, in the layout's own order.
+     */
+    function marqueeHits(entries, rect) {
+      const caught = []
+      for (const entry of entries ?? []) {
+        if (!entry || !entry.box || entry.box.w <= 0 || entry.box.h <= 0) continue
+        if (boxesTouch(entry.box, rect)) caught.push(entry.path)
+      }
+      return caught
+    }
+
+    /**
+     * ONE GESTURE OVER SEVERAL LAYERS, as ONE patch - and the cap said out loud.
+     *
+     * `canvas_patch` accepts at most 64 operations and a move is up to two of them per layer,
+     * so a marquee over more than thirty-odd layers cannot be a single patch. What this
+     * returns is therefore `{ ops, dropped }`: the operations that fit, and HOW MANY LAYERS
+     * WERE LEFT BEHIND - because a selection that moves some of itself and not the rest,
+     * silently, is worse than one that says so.
+     */
+    function multiMoveOps(paths, document_, boxes, dx, dy) {
+      const ops = []
+      let dropped = 0
+      for (const path of paths ?? []) {
+        if (ops.length + 2 > 64) {
+          dropped += 1
+          continue
+        }
+        const entry = (boxes ?? []).find((row) => row.path === path)
+        const node = nodeAtPath(document_, path)
+        if (!entry || !node) continue
+        const next = nudgeOps(path, node, entry, dx, dy)
+        if (ops.length + next.length > 64) {
+          dropped += 1
+          continue
+        }
+        ops.push(...next)
+      }
+      return { ops, dropped }
+    }
+
     /** Install the vendored faces once, from the URLs the state payload carries. */
     function installFonts(fonts) {
       const rules = []
@@ -1018,7 +974,34 @@ window.__ModuleLoader__.load({
         ms: Math.round(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt) * 10) / 10,
       }
       if (options.withFeed) metrics.feedScale = FEED_SCALE
-      return { ops: laid.ops, boxes: laid.boxes, lints, metrics, images, fontSpecs, width: laid.width, height: laid.height, warnings: laid.warnings }
+      // THE LAYOUT ENVIRONMENT TRAVELS WITH THE RESULT. A drag has to lay the same
+      // document out again sixty times a second, and `prepareRender` is async because
+      // it resolves faces and decodes images ONCE - work a drag must never repeat. So
+      // the measurer, the asset table and the font table are handed back beside the
+      // prepared design, and `paintDraft` below uses them for a repaint that fetches
+      // nothing.
+      const layoutEnv = { measure: measurer, assets, fonts }
+      return { ops: laid.ops, boxes: laid.boxes, lints, metrics, images, fontSpecs, width: laid.width, height: laid.height, warnings: laid.warnings, layoutEnv }
+    }
+
+    /**
+     * Lay a DRAFT of a document out with the environment the last prepare built, and
+     * paint it - synchronously, with nothing fetched.
+     *
+     * This is what makes a drag follow the pointer. The engine is pure layout plus one
+     * paint, so the same op list feeds the artboard and the export; a draft is just an
+     * earlier revision of that same pipeline, which is why a preview cannot disagree
+     * with what the host will store.
+     *
+     * @returns the laid-out result, whose `ops`/`boxes` the caller keeps so the
+     *   selection overlay and the hit rects describe the draft rather than the
+     *   committed revision.
+     */
+    function paintDraft(engine, canvas, prepared, document_, scale) {
+      const laid = engine.layout(document_, prepared.layoutEnv)
+      const next = { ...prepared, ops: laid.ops, boxes: laid.boxes, width: laid.width, height: laid.height, warnings: laid.warnings }
+      if (canvas) paintInto(engine, canvas, next, scale)
+      return next
     }
 
     /**
@@ -1365,10 +1348,19 @@ window.__ModuleLoader__.load({
     }
 
     /** A toolbar button. */
-    function Btn({ onClick, children, active, disabled, kind, title }) {
+    /**
+     * A button in the pack's own bar.
+     *
+     * UNKNOWN PROPS RIDE THROUGH, and that is not a convenience: every control a check
+     * drives carries a `data-canvas-*` marker, and a wrapper that silently DROPS the
+     * attribute it was handed is a control that exists on screen and cannot be found - or
+     * driven - by the check that is supposed to prove it works. The named props come
+     * after the spread so a caller cannot accidentally redefine the behaviour.
+     */
+    function Btn({ onClick, children, active, disabled, kind, title, ...rest }) {
       return h(
         'button',
-        { type: 'button', className: 'cnv-btn', onClick, disabled: disabled === true, 'data-active': active === true ? 'true' : 'false', 'data-kind': kind, title },
+        { ...rest, type: 'button', className: 'cnv-btn', onClick, disabled: disabled === true, 'data-active': active === true ? 'true' : 'false', 'data-kind': kind, title },
         children,
       )
     }
@@ -1382,7 +1374,7 @@ window.__ModuleLoader__.load({
      * zoomed design stays scrollable to its edge (this pack's rule from the image,
      * audio, video, PDF and diagram surfaces).
      */
-    function Artboard({ engine, document_, preset, sessionId, fonts, zoom, overlays, onLints, onMetrics, onPrepared, selectedPath, onSelect, onDeselect, onMove, onResize, triggerSelect }) {
+    function Artboard({ engine, document_, draft, revision, konva, editor, preset, sessionId, fonts, zoom, overlays, onLints, onMetrics, onPrepared, selectedPath, selectedPaths, onSelect, onSelectMany, onDeselect, onMove, onResize, onPreview, onCommit, onKonvaStatus, onEditText, triggerSelect }) {
       const canvasRef = useRef(null)
       const preparedRef = useRef(null)
       const [preparedVersion, setPreparedVersion] = useState(0)
@@ -1439,21 +1431,35 @@ window.__ModuleLoader__.load({
         }
       }, [engine, document_, preset, sessionId, fonts, onLints, onMetrics, onPrepared])
 
-      // Paint at the current zoom whenever either the prepared design or the zoom
+      // Paint at the current zoom whenever either the design to draw or the zoom
       // changes. There is no second canvas any more: the quarter-scale feed thumbnail
       // that used to live in the side panel showed nothing the artboard was not
       // already showing, and the model's own 25% feed is produced by the RENDERER,
       // not by this component.
+      //
+      // THE DRAFT IS LAID OUT DURING RENDER, not in an effect after it. A gesture
+      // produces a new draft many times a second, and the engine's layout is pure and
+      // synchronous once the environment exists (`paintDraft`), so the boxes the
+      // overlay and the selection draw from are the DRAFT's on the same frame the
+      // pointer moved - one render per frame, no second pass, no fetch.
+      const drawn = useMemo(() => {
+        const base = preparedRef.current
+        if (!base) return null
+        if (!draft || draft === document_) return base
+        return paintDraft(engine, null, base, draft, scale)
+      }, [engine, draft, document_, preparedVersion, scale])
+
       useEffect(() => {
-        const prepared = preparedRef.current
-        if (!prepared) return
-        if (canvasRef.current) paintInto(engine, canvasRef.current, prepared, zoom === 'fit' ? fit : zoom)
-      }, [engine, preparedVersion, zoom, fit])
+        if (!drawn) return
+        if (canvasRef.current) paintInto(engine, canvasRef.current, drawn, scale)
+      }, [engine, drawn, scale])
 
       // Safety areas, node boxes and THE SELECTION are drawn as an SVG overlay in
       // DESIGN pixels scaled by the same factor, so they line up at any zoom.
       const overlay = overlays && (overlays.safe || overlays.boxes)
-      const prepared = preparedRef.current
+      const prepared = drawn
+      /** The COMMITTED layout, which is what the interaction layer hit-tests. */
+      const committed = preparedRef.current
 
       /**
        * Which edge of the selection is under a point: the box the overlay drew, the
@@ -1603,6 +1609,28 @@ window.__ModuleLoader__.load({
         element.style.cursor = cursorFor(edges) ?? ''
       }
 
+      /**
+       * A DOUBLE CLICK ON A TEXT LAYER OPENS ITS WORDS, in place.
+       *
+       * The hit test is the one the drag uses - the boxes the layout produced - so what
+       * opens is what a person can see, and a double click on a shape or a frame does
+       * nothing, because there are no words in it. It works on BOTH pointer surfaces: the
+       * interaction layer consumes presses, and this is a click.
+       */
+      const onArtDoubleClick = (event) => {
+        const current = preparedRef.current
+        if (!current || !onEditText) return
+        const element = event.currentTarget
+        const { rect } = toleranceFor(element)
+        const point = pointIn(event, rect)
+        const candidates = current.boxes.filter((entry) => {
+          const box = entry.box
+          return entry.kind === 'text' && point.x >= box.x && point.x <= box.x + box.w && point.y >= box.y && point.y <= box.y + box.h
+        })
+        const chosen = candidates[candidates.length - 1]
+        if (chosen) onEditText(chosen.path)
+      }
+
       // THE RULERS READ THE PAGE'S OWN GEOMETRY, measured from the stage: where the
       // artboard's top-left corner sits in the scroller (which is the design's origin)
       // and how many screen pixels one design pixel takes. Both change with the zoom
@@ -1665,8 +1693,16 @@ window.__ModuleLoader__.load({
               'data-canvas-artboard': document_.preset ?? 'freeform',
               'data-canvas-origin': '0,0',
               'data-canvas-layout-origin': designOrigin ? designOrigin.x + ',' + designOrigin.y : '',
+              // THE PACK'S OWN HANDLERS STAY UP. The interaction layer owns a press that
+              // landed ON a node - it stops that event before this div sees it, and the
+              // library's hit test decides which node it was - so what reaches here is
+              // the press that missed every rect: a handle just OUTSIDE the selection's
+              // edge, and a click on empty canvas. Those are exactly what this handler
+              // was written for, and it reads the same two helpers the layer does.
               onPointerDown: onArtPointerDown,
               onPointerMove: onArtPointerMove,
+              onDoubleClick: onArtDoubleClick,
+              'data-canvas-interactive': konva ? 'true' : 'false',
               style: { width: Math.max(1, Math.round(document_.canvas.width * scale)) + 'px', height: Math.max(1, Math.round(document_.canvas.height * scale)) + 'px' },
             },
             h('canvas', { ref: canvasRef, 'data-canvas-art': 'true' }),
@@ -1678,6 +1714,31 @@ window.__ModuleLoader__.load({
               h('span', { className: 'cnv-originY' }),
               h('span', { className: 'cnv-originDot' }),
             ),
+            // THE INTERACTION LAYER sits over the paint. It hit-tests the COMMITTED
+            // layout (a gesture owns the geometry of what it is dragging) while the
+            // engine paints the draft underneath, and the two agree because both come
+            // from the same operations.
+            konva && committed
+              ? h(KonvaOverlay, {
+                  konva,
+                  boxes: committed.boxes,
+                  document_,
+                  width: document_.canvas.width,
+                  height: document_.canvas.height,
+                  scale,
+                  selectedPath: selectedPath ?? null,
+                  selectedPaths,
+                  revision,
+                  layoutVersion: preparedVersion,
+                  onSelect,
+                  onSelectMany,
+                  onDeselect,
+                  onPreview,
+                  onCommit,
+                  onStatus: onKonvaStatus,
+                  onEditText: onEditText,
+                })
+              : null,
             (overlay || selectedPath) && prepared
               ? h(Overlay, {
                   prepared,
@@ -1687,9 +1748,20 @@ window.__ModuleLoader__.load({
                   scale,
                   showSafe: Boolean(overlays && overlays.safe),
                   showBoxes: Boolean(overlays && overlays.boxes),
+                  // THE SELECTION OUTLINE AND THE HANDLES ARE THIS OVERLAY'S, always:
+                  // they are the vocabulary the interaction layer READS (it decides a
+                  // resize with `edgesAt` over the very box drawn here), and there is no
+                  // second set for them to disagree with.
                   selectedPath: selectedPath ?? null,
+                  // THE REST OF A GROUP: a marquee's layers get an outline each, so a person
+                  // can see what the next drag will move without hunting through the list.
+                  selectedPaths,
                 })
               : null,
+            // THE IN-PLACE EDITOR IS THE TOPMOST THING ON THE ARTBOARD, above the
+            // interaction layer, because while words are being typed the pointer belongs
+            // to the field and not to a hit rect.
+            editor ? h(TextEditor, { ...editor, scale }) : null,
           ),
           note ? h('div', { className: 'cnv-note' }, note) : null,
         ),
@@ -2016,7 +2088,7 @@ window.__ModuleLoader__.load({
     }
 
     /** The safe-area, node-box and SELECTION overlay, in design pixels. */
-    function Overlay({ prepared, preset, width, height, scale, showSafe, showBoxes, selectedPath }) {
+    function Overlay({ prepared, preset, width, height, scale, showSafe, showBoxes, selectedPath, selectedPaths }) {
       const children = []
       if (showSafe && preset && Array.isArray(preset.safeAreas)) {
         for (const area of preset.safeAreas) {
@@ -2054,6 +2126,27 @@ window.__ModuleLoader__.load({
       // The selection is always drawn when something is selected: it is the only
       // way to know which layer a drag will move.
       if (selectedPath) {
+        // THE REST OF A GROUP, first (so the primary's box and handles sit on top): a thin
+        // outline each, which is the whole difference between "the band caught these" and a
+        // selection count in a panel nobody is looking at.
+        for (const path of (Array.isArray(selectedPaths) ? selectedPaths : []).filter((entry) => entry !== selectedPath)) {
+          const other = prepared.boxes.find((box) => box.path === path)
+          if (!other) continue
+          children.push(
+            h('rect', {
+              key: 'group-' + path,
+              'data-canvas-group': path,
+              x: other.box.x - 1,
+              y: other.box.y - 1,
+              width: other.box.w + 2,
+              height: other.box.h + 2,
+              fill: 'none',
+              stroke: 'rgba(77,107,254,0.55)',
+              strokeDasharray: '4 3',
+              strokeWidth: Math.max(1, Math.round(1 / Math.max(0.2, scale))),
+            }),
+          )
+        }
         const entry = prepared.boxes.find((box) => box.path === selectedPath)
         if (entry) {
           children.push(
@@ -2083,6 +2176,7 @@ window.__ModuleLoader__.load({
         'svg',
         {
           'data-canvas-overlay': 'true',
+          'data-canvas-selection-count': String((Array.isArray(selectedPaths) ? selectedPaths : []).length),
           viewBox: '0 0 ' + width + ' ' + height,
           width: Math.round(width * scale),
           height: Math.round(height * scale),
@@ -2090,6 +2184,681 @@ window.__ModuleLoader__.load({
         },
         children,
       )
+    }
+
+    // -----------------------------------------------------------------------
+    // The Konva interaction layer
+    // -----------------------------------------------------------------------
+    /** `layers.0.children.2` -> `layers.0`. A top-level layer has no parent. */
+    function parentNodePath(path) {
+      const match = /^(.*)\.children\.\d+$/.exec(String(path ?? ''))
+      return match ? match[1] : null
+    }
+
+    /**
+     * THE INTERACTION LAYER.
+     *
+     * What this is FOR: the engine paints, and it deliberately has no object model - no
+     * hit testing, no notion of what is under the pointer. Konva supplies exactly that
+     * and nothing else. Its rects are invisible (a hair of alpha, so the hit graph has
+     * something to test) and grouped by the DOCUMENT's own nesting, so the deepest node
+     * under the pointer wins - the rule a person already expects from the paint order -
+     * and it supplies the drag that follows the pointer.
+     *
+     * WHAT IT DELIBERATELY DOES NOT DO: it does not draw the selection, the handles or
+     * the resize. Those are the pack's own and they stay the pack's own. Konva's
+     * Transformer was built here, measured and REMOVED: its anchors are positioned,
+     * visible, in the layer and listening, and they paint NOTHING in this embedding -
+     * `check-canvas-panel.mjs` reads `0,0,0,0` at an anchor's own centre on both its
+     * scene and its hit canvas, after an explicit `stage.draw()` - so a resize routed
+     * through it would be a gesture nobody can make. The vocabulary that IS shipped is
+     * the one this pack already had: which edges a box carries is `handlesFor`, which
+     * edge a press grabbed is `edgesAt`, what either writes is `resizeOps`. This layer
+     * hands that vocabulary a better pointer - a press ON a node is hit-tested by the
+     * library, and a press within the drawn handle's tolerance of the SELECTION's own
+     * edge is a resize instead of a drag, decided once, on pointer down.
+     *
+     * WHY THE RECTS ARE CENTRE-ORIGINED. The document rotates a node about the CENTRE
+     * of its box (`paintCanvas` translates to the centre, rotates, translates back), so
+     * Konva's node is placed by its centre too and the two agree about what a rotation
+     * means.
+     *
+     * DRAGS ARE LOCAL, COMMITS ARE HOST-SIDE. `onPreview` reports the operations a
+     * gesture WOULD write, and the tab applies them to a draft and repaints - so the
+     * design follows the pointer with no round trip. `onCommit` reports the SAME
+     * operations once, when the gesture ends, and they go through
+     * `/api/dsh-canvas/document` like any other edit: the validator is still the only
+     * thing that can put a document in the store. Preview and commit cannot disagree,
+     * because the operations are computed once, from the values the gesture started
+     * with, by the same pure helpers the panel uses.
+     */
+    function KonvaOverlay(props) {
+      const { konva, boxes, document_, width, height, scale, selectedPath, selectedPaths, revision, layoutVersion, onSelect, onSelectMany, onDeselect, onPreview, onCommit } = props
+      const hostRef = useRef(null)
+      const stageRef = useRef(null)
+      const layerRef = useRef(null)
+      const rectsRef = useRef(new Map())
+      const groupsRef = useRef(new Map())
+      const gestureRef = useRef(null)
+      /** The window listeners a resize owns for its whole length, or null. */
+      const resizeRef = useRef(null)
+      /** The Konva group the alignment guides are drawn in, created on first use. */
+      const guidesRef = useRef(null)
+      /** The Konva group the marquee band is drawn in, with `.band` while it is live. */
+      const marqueeRef = useRef(null)
+      const konvaRef = useRef(null)
+      const scaleRef = useRef(scale)
+      scaleRef.current = scale
+      const hitRef = useRef(false)
+      const [note, setNote] = useState('')
+      // Every handler reads the CURRENT props through this, so a stage built once never
+      // holds a stale document or a stale selection.
+      const propsRef = useRef(props)
+      propsRef.current = props
+
+      /** A client point in the design's own pixels. */
+      const designPoint = (clientX, clientY) => {
+        const stage = stageRef.current
+        if (!stage || typeof clientX !== 'number' || typeof clientY !== 'number') return null
+        const box = stage.container().getBoundingClientRect()
+        const zoom = Math.max(0.0001, stage.scaleX())
+        return { x: (clientX - box.left) / zoom, y: (clientY - box.top) / zoom }
+      }
+
+      /**
+       * The HANDLE_HIT tolerance in DESIGN pixels, measured against the zoom - the same
+       * conversion the artboard's own handler makes, so both surfaces grab a handle at
+       * the same distance on screen at every rung of the zoom ladder.
+       */
+      const designTolerance = () => {
+        const stage = stageRef.current
+        const zoom = stage ? Math.max(0.2, stage.scaleX()) : 1
+        return HANDLE_HIT / zoom
+      }
+
+      /**
+       * The SNAP tolerance in design pixels, measured against the zoom.
+       *
+       * It is deliberately tighter than the handle tolerance: a handle is something a person
+       * aims AT, while a snap is something that happens to them - and a snap that reaches
+       * 9 screen pixels would fight the pointer on every drag near a crowded edge.
+       */
+      const designSnapTolerance = () => {
+        const stage = stageRef.current
+        const zoom = stage ? Math.max(0.2, stage.scaleX()) : 1
+        return SNAP_HIT / zoom
+      }
+
+      /** The live box of a centre-origined rect, in DESIGN pixels. */
+      const liveBox = (rect) => ({ x: rect.x() - rect.width() / 2, y: rect.y() - rect.height() / 2, w: rect.width(), h: rect.height() })
+
+      /**
+       * Start a gesture: capture the values its operations are computed from.
+       *
+       * `paths` is the whole SELECTION the gesture acts on, which is one layer in the usual
+       * case and several when a marquee has caught a group: a drag then moves every layer in
+       * it, through one patch.
+       */
+      const beginGesture = (kind, path, edges, start, paths) => {
+        const current = propsRef.current
+        const entry = (current.boxes ?? []).find((row) => row.path === path)
+        const node = nodeAtPath(current.document_, path)
+        if (!entry || !node) return
+        gestureRef.current = {
+          path,
+          paths: Array.isArray(paths) && paths.length > 0 ? paths : [path],
+          entry,
+          node,
+          kind,
+          edges: edges ?? null,
+          start: start ?? null,
+          // THE BASE IS CAPTURED, NOT RE-READ. Every frame computes the operations from
+          // THESE values plus the pointer's total delta, so applying them to the document
+          // the gesture started from is idempotent - a preview frame cannot compound with
+          // the one before it, and the commit is the last preview.
+          baseBox: { x: entry.box.x, y: entry.box.y, w: entry.box.w, h: entry.box.h },
+          lastOps: [],
+          label: '',
+        }
+      }
+
+      const report = (ops, label) => {
+        const gesture = gestureRef.current
+        if (!gesture || ops.length === 0) return
+        gesture.lastOps = ops
+        gesture.label = label
+        if (propsRef.current.onPreview) propsRef.current.onPreview(ops)
+      }
+
+      const previewMove = (path) => {
+        const gesture = gestureRef.current
+        if (!gesture || gesture.kind !== 'move') return
+        const rect = rectsRef.current.get(path)
+        if (!rect) return
+        const live = liveBox(rect)
+        // THE SNAP IS DECIDED HERE, from the box the pointer has produced and every OTHER
+        // box in the layout - so the operations the drag writes and the lines it draws come
+        // from one call, and the layer lands where the guide said it would.
+        const current = propsRef.current
+        const others = (current.boxes ?? []).filter((row) => !gesture.paths.includes(row.path) && row.box && row.box.w > 0 && row.box.h > 0)
+        const snapped = snapFor(live, others, { width: current.width, height: current.height }, designSnapTolerance())
+        const dx = Math.round(live.x - gesture.baseBox.x) + snapped.dx
+        const dy = Math.round(live.y - gesture.baseBox.y) + snapped.dy
+        gesture.lastOps = []
+        if (gesture.paths.length > 1) {
+          // SEVERAL LAYERS, ONE PATCH - and the layers that did not fit in it are COUNTED,
+          // because a selection that moves some of itself silently is worse than one that
+          // says how many were left.
+          const moved = multiMoveOps(gesture.paths, current.document_, current.boxes, dx, dy)
+          report(moved.ops, 'Moved ' + gesture.paths.length + ' layers' + (moved.dropped > 0 ? ' (' + moved.dropped + ' left behind: one patch carries 32)' : ''))
+          drawGuides(snapped.guides)
+          return
+        }
+        report(nudgeOps(path, gesture.node, gesture.entry, dx, dy), 'Moved ' + layerLabel(gesture.node, path))
+        drawGuides(snapped.guides)
+      }
+
+      /** The guides, on the layer's own scene canvas: a hairline per axis, over the paint. */
+      const drawGuides = (guides) => {
+        const layer = layerRef.current
+        const konvaModule = konvaRef.current
+        if (!layer || !konvaModule) return
+        let group = guidesRef.current
+        if (!group) {
+          group = new konvaModule.Group({ name: 'guides', listening: false })
+          layer.add(group)
+          guidesRef.current = group
+        }
+        group.destroyChildren()
+        for (const guide of guides ?? []) {
+          const points = guide.axis === 'x' ? [guide.at, guide.from, guide.at, guide.to] : [guide.from, guide.at, guide.to, guide.at]
+          group.add(new konvaModule.Line({ points, stroke: '#4D6BFE', strokeWidth: 1 / Math.max(0.2, scaleRef.current), dash: [4 / Math.max(0.2, scaleRef.current), 4 / Math.max(0.2, scaleRef.current)], listening: false }))
+        }
+        layer.batchDraw()
+      }
+
+      /**
+       * A RESIZE, tracked from the POINTER rather than from the rect.
+       *
+       * The rect is not dragged for this gesture - the press was read as an edge grab, so
+       * Konva's drag was stopped before it began - which is why the deltas come from the
+       * pointer: the same two numbers the artboard's own handler computed, handed to the
+       * same `resizeOps`. That is what makes the two surfaces write the same document for
+       * the same gesture.
+       */
+      const previewResize = (clientX, clientY) => {
+        const gesture = gestureRef.current
+        if (!gesture || gesture.kind !== 'resize' || !gesture.edges || !gesture.start) return
+        const now = designPoint(clientX, clientY)
+        if (!now) return
+        const edges = gesture.edges
+        const dx = Math.round(now.x - gesture.start.x)
+        const dy = Math.round(now.y - gesture.start.y)
+        const corner = (edges.left || edges.right) && (edges.top || edges.bottom)
+        gesture.lastOps = []
+        report(resizeOps(gesture.path, gesture.node, gesture.entry, edges, dx, dy), (corner ? 'Resized ' : 'Stretched ') + layerLabel(gesture.node, gesture.path))
+      }
+
+      const endGesture = () => {
+        const gesture = gestureRef.current
+        gestureRef.current = null
+        // THE GUIDES GO WITH THE GESTURE: they describe a snap that is about to be written,
+        // and a line left standing over a finished drag is a claim about a position nobody
+        // is holding any more.
+        drawGuides([])
+        if (!gesture || gesture.lastOps.length === 0) return
+        // ONE PATCH, and it is the last preview: the document the person can see is the
+        // document the host is asked to store.
+        if (propsRef.current.onCommit) propsRef.current.onCommit(gesture.lastOps, gesture.label)
+      }
+
+      /** Stop a resize, wherever it ended, and settle it exactly once. */
+      const stopResize = () => {
+        const active = resizeRef.current
+        if (!active) return
+        resizeRef.current = null
+        window.removeEventListener('pointermove', active.move)
+        window.removeEventListener('pointerup', active.up)
+        window.removeEventListener('pointercancel', active.up)
+        endGesture()
+      }
+
+      /** Follow the pointer for the length of a resize, from the WINDOW. */
+      const startResize = () => {
+        const move = (event) => previewResize(event.clientX, event.clientY)
+        const up = () => stopResize()
+        resizeRef.current = { move, up }
+        window.addEventListener('pointermove', move)
+        window.addEventListener('pointerup', up)
+        window.addEventListener('pointercancel', up)
+      }
+
+      /**
+       * THE MARQUEE: the band that catches a group of layers.
+       *
+       * It is drawn in DESIGN pixels on a layer of its own, so it lines up with the paint at
+       * any zoom, and it is resolved on RELEASE by `marqueeHits` against the layout's own
+       * boxes - the same boxes the paint and the selection outline come from, so the band
+       * catches exactly what a person saw it cover.
+       *
+       * A band nobody dragged (a few pixels) is a CLICK ON NOTHING: it clears the selection,
+       * which is the behaviour an empty press has always had - so the marquee costs the
+       * existing gesture nothing.
+       */
+      const startMarquee = (start) => {
+        const layer = layerRef.current
+        const konvaModule = konvaRef.current
+        if (!layer || !konvaModule) return
+        let group = marqueeRef.current
+        if (!group) {
+          group = new konvaModule.Group({ name: 'marquee', listening: false })
+          layer.add(group)
+          marqueeRef.current = group
+        }
+        group.destroyChildren()
+        const zoom = Math.max(0.2, scaleRef.current)
+        const rect = new konvaModule.Rect({
+          x: start.x,
+          y: start.y,
+          width: 0,
+          height: 0,
+          stroke: '#4D6BFE',
+          strokeWidth: 1 / zoom,
+          dash: [4 / zoom, 3 / zoom],
+          fill: 'rgba(77,107,254,0.12)',
+          listening: false,
+        })
+        group.add(rect)
+        layer.drawHit()
+        layer.batchDraw()
+        const band = { start, rect, moved: false }
+        marqueeRef.current.band = band
+        const move = (event) => {
+          const now = designPoint(event.clientX, event.clientY)
+          if (!now) return
+          band.moved = true
+          rect.x(Math.min(band.start.x, now.x))
+          rect.y(Math.min(band.start.y, now.y))
+          rect.width(Math.abs(now.x - band.start.x))
+          rect.height(Math.abs(now.y - band.start.y))
+          layer.batchDraw()
+        }
+        const up = () => {
+          window.removeEventListener('pointermove', move)
+          window.removeEventListener('pointerup', up)
+          window.removeEventListener('pointercancel', up)
+          const box = { x: rect.x(), y: rect.y(), w: rect.width(), h: rect.height() }
+          const tiny = box.w < 3 || box.h < 3
+          group.destroyChildren()
+          marqueeRef.current.band = null
+          layer.batchDraw()
+          const current = propsRef.current
+          if (tiny) {
+            if (current.onDeselect) current.onDeselect()
+            return
+          }
+          const caught = marqueeHits(current.boxes, box)
+          if (caught.length === 0) {
+            if (current.onDeselect) current.onDeselect()
+            return
+          }
+          // ONE LAYER IS A SELECTION LIKE ANY OTHER: the band hands back a list, and the tab
+          // decides what a list of one means.
+          if (caught.length === 1) {
+            if (current.onSelect) current.onSelect(caught[0])
+            return
+          }
+          if (current.onSelectMany) current.onSelectMany(caught)
+        }
+        window.addEventListener('pointermove', move)
+        window.addEventListener('pointerup', up)
+        window.addEventListener('pointercancel', up)
+      }
+
+      /**
+       * A press on a node, read as ONE gesture.
+       *
+       * THE GESTURE IS DECIDED ONCE, ON POINTER DOWN, exactly as the artboard's own
+       * handler decides it. An edge of the CURRENT SELECTION wins over the node under the
+       * pointer, because a handle is drawn on top of the thing it shapes and within its
+       * own tolerance - so the gesture a person gets is the one the cursor promised.
+       *
+       * @returns 'resize' when the press began a resize, whose pointer tracking the caller
+       *   must start (Konva's own drag must not run).
+       */
+      const beginFromPress = (path, clientX, clientY) => {
+        const current = propsRef.current
+        const point = designPoint(clientX, clientY)
+        if (point) {
+          const target = current.selectedPath ? (current.boxes ?? []).find((row) => row.path === current.selectedPath) : null
+          if (target) {
+            const edges = edgesAt(target.box, point.x, point.y, designTolerance(), handlesFor(target))
+            if (edges) {
+              beginGesture('resize', target.path, edges, point)
+              return 'resize'
+            }
+          }
+        }
+        beginGesture('move', path, null, point, current.selectedPaths)
+        return 'move'
+      }
+
+      // ---- the stage, built once ------------------------------------------
+      useEffect(() => {
+        if (!konva || !hostRef.current) return undefined
+        let stage = null
+        try {
+          stage = new konva.Stage({ container: hostRef.current, width: 1, height: 1 })
+        } catch (err) {
+          const message = 'the Konva interaction layer could not take the pane: ' + (err && err.message ? err.message : 'unknown error')
+          setNote(message)
+          if (propsRef.current.onStatus) propsRef.current.onStatus('failed', message)
+          return undefined
+        }
+        const layer = new konva.Layer()
+        stage.add(layer)
+        stageRef.current = stage
+        layerRef.current = layer
+        konvaRef.current = konva
+        setNote('')
+        if (propsRef.current.onStatus) propsRef.current.onStatus('ready', '')
+
+        // A PRESS DECIDES THE SELECTION, and it is the only thing that does: the hit
+        // graph is grouped by the document's nesting, so the deepest node under the
+        // pointer wins. A press that MISSED every rect starts a MARQUEE - the band that
+        // catches a group of layers - and a band nobody dragged is a click on nothing,
+        // which clears the selection as it always did.
+        //
+        // `hitRef` is what the host element's own pointer handler reads to decide whether
+        // this press belongs to the node or to the artboard underneath it: a press ON a
+        // node is this layer's, and one that missed every rect is the artboard's (which
+        // is where a handle just OUTSIDE the selection's edge is grabbed).
+        stage.on('pointerdown', (event) => {
+          const current = propsRef.current
+          const shape = event.target && event.target !== stage ? event.target : null
+          const path = shape && typeof shape.getAttr === 'function' ? shape.getAttr('dshPath') : null
+          hitRef.current = Boolean(path)
+          if (path) {
+            // A PRESS INSIDE A GROUP KEEPS THE GROUP. Collapsing a marquee's selection to the
+            // one layer under the pointer would make the band useless: the whole point of
+            // catching several is to drag them together, and the drag begins with exactly this
+            // press. A press on a layer OUTSIDE the group replaces it, which is the rule every
+            // other editor has.
+            const group = Array.isArray(current.selectedPaths) ? current.selectedPaths : []
+            if (group.length < 2 || !group.includes(path)) {
+              if (current.onSelect) current.onSelect(path)
+            }
+            return
+          }
+          const native = event.evt ? event.evt : null
+          const start = native ? designPoint(native.clientX, native.clientY) : null
+          if (!start || gestureRef.current) {
+            if (current.onDeselect) current.onDeselect()
+            return
+          }
+          startMarquee(start)
+        })
+
+        // A DOUBLE CLICK OPENS A TEXT LAYER'S WORDS, and THIS layer owns it on the shipped
+        // path: the pointer is over Konva's canvas, so the event is dispatched there and a
+        // handler on the artboard underneath never hears it. The artboard keeps its own
+        // handler for the fallback path - two surfaces, one behaviour.
+        stage.on('dblclick', (event) => {
+          const shape = event.target && event.target !== stage ? event.target : null
+          const path = shape && typeof shape.getAttr === 'function' ? shape.getAttr('dshPath') : null
+          if (path && propsRef.current.onEditText) propsRef.current.onEditText(path)
+        })
+
+        // THE CURSOR NAMES THE GESTURE THE PRESS WOULD START, through the same two
+        // helpers that decide it: an edge of the selection reads as its resize cursor, a
+        // node reads as the grab hand, nothing reads as nothing. A cursor painted
+        // mid-gesture would describe the box the pointer has left.
+        stage.on('pointermove', (event) => {
+          if (gestureRef.current) return
+          const current = propsRef.current
+          const content = stage.content
+          if (!content) return
+          const point = designPoint(event.evt ? event.evt.clientX : undefined, event.evt ? event.evt.clientY : undefined)
+          const target = current.selectedPath ? (current.boxes ?? []).find((row) => row.path === current.selectedPath) : null
+          const edges = target && point ? edgesAt(target.box, point.x, point.y, designTolerance(), handlesFor(target)) : null
+          if (edges) {
+            content.style.cursor = cursorFor(edges) ?? ''
+            return
+          }
+          const shape = event.target && event.target !== stage ? event.target : null
+          content.style.cursor = shape && typeof shape.getAttr === 'function' && shape.getAttr('dshPath') ? 'move' : ''
+        })
+
+        // THE CHECK'S SEAM. What this layer produces is drawn on a canvas - the hit rects
+        // are invisible and the selection is the pack's own SVG - so a browser check
+        // cannot reach it with a selector the way it reaches the SVG handles. The stage
+        // and the rect map are published on the host element instead, which is how
+        // `check-canvas-panel.mjs` reads the hit graph and drives a real press at a
+        // node's own centre. It is a page-scoped property on one element, readable only
+        // by same-origin script, and it goes with the stage.
+        hostRef.current.__dshKonva = { stage, layer, boxes: propsRef.current.boxes, rects: rectsRef.current, groups: groupsRef.current }
+        return () => {
+          stopResize()
+          if (hostRef.current) delete hostRef.current.__dshKonva
+          stageRef.current = null
+          layerRef.current = null
+          rectsRef.current = new Map()
+          groupsRef.current = new Map()
+          try {
+            stage.destroy()
+          } catch (err) {
+            /* already gone */
+          }
+        }
+      }, [konva])
+
+      // ---- the stage's own geometry ----------------------------------------
+      useEffect(() => {
+        const stage = stageRef.current
+        if (!stage) return
+        stage.width(Math.max(1, Math.round(width * scale)))
+        stage.height(Math.max(1, Math.round(height * scale)))
+        stage.scale({ x: scale, y: scale })
+      }, [width, height, scale, konva])
+
+      // ---- the hit rects, reconciled against the COMMITTED layout ----------
+      //
+      // The boxes are the committed revision on purpose: during a gesture Konva owns the
+      // geometry of the rect it is dragging, and re-deriving it from a draft that the
+      // gesture itself produced would fight the drag. The engine paints the DRAFT
+      // underneath, and the two agree because both come from the same operations.
+      useEffect(() => {
+        const layer = layerRef.current
+        if (!konva || !layer) return
+        const rects = rectsRef.current
+        const groups = groupsRef.current
+        const live = new Set()
+        // PARENTS FIRST. A document node's box is pushed after its children's (that is
+        // the paint order), so sorting by path depth is what puts a container's own rect
+        // UNDER its children's in the hit graph - a click inside a frame's empty area
+        // selects the frame, a click on a child selects the child.
+        const ordered = (boxes ?? [])
+          .filter((entry) => entry && entry.box && entry.box.w > 0 && entry.box.h > 0)
+          .slice()
+          .sort((left, right) => pathDepth(left.path) - pathDepth(right.path))
+        for (const entry of ordered) {
+          const path = entry.path
+          live.add(path)
+          const parentPath = parentNodePath(path)
+          const parent = parentPath ? groups.get(parentPath) ?? layer : layer
+          let group = groups.get(path)
+          if (!group) {
+            group = new konva.Group({ name: 'node:' + path })
+            parent.add(group)
+            groups.set(path, group)
+          } else if (group.getParent() !== parent) {
+            parent.add(group)
+          }
+          let rect = rects.get(path)
+          if (!rect) {
+            rect = new konva.Rect({ fill: 'rgba(0,0,0,0.001)', strokeEnabled: false, draggable: true, name: 'hit:' + path })
+            rect.setAttr('dshPath', path)
+            // THE DRAG IS KONVA'S; THE RESIZE IS THE PACK'S. A press within the drawn
+            // handle's tolerance of the selection's edge is read as a resize, and Konva's
+            // own drag is stopped before it starts - so one press can never be two
+            // gestures, and the resize it starts writes through `resizeOps`.
+            rect.on('dragstart', (event) => {
+              const native = event && event.evt ? event.evt : null
+              const kind = beginFromPress(path, native ? native.clientX : undefined, native ? native.clientY : undefined)
+              if (kind === 'resize') {
+                rect.stopDrag()
+                startResize()
+              }
+            })
+            rect.on('dragmove', () => previewMove(path))
+            rect.on('dragend', () => endGesture())
+            rects.set(path, rect)
+          }
+          if (rect.getParent() !== group) group.add(rect)
+          // CENTRE-ORIGINED, so the node turns about the point the document turns it
+          // about, and `rotation` is the document's own number of degrees.
+          const node = nodeAtPath(document_, path)
+          rect.width(entry.box.w)
+          rect.height(entry.box.h)
+          rect.offsetX(entry.box.w / 2)
+          rect.offsetY(entry.box.h / 2)
+          rect.x(entry.box.x + entry.box.w / 2)
+          rect.y(entry.box.y + entry.box.h / 2)
+          rect.scaleX(1)
+          rect.scaleY(1)
+          rect.rotation(typeof node?.rotate === 'number' ? node.rotate : 0)
+          rect.draggable(!(props.readOnly === true))
+        }
+        for (const [path, group] of [...groups.entries()]) {
+          if (live.has(path)) continue
+          group.destroy()
+          groups.delete(path)
+          rects.delete(path)
+        }
+        for (const [path, rect] of [...rects.entries()]) {
+          if (live.has(path)) continue
+          rect.destroy()
+          rects.delete(path)
+        }
+        // THE HIT GRAPH IS DRAWN EXPLICITLY, and this is the one Konva detail that cost a
+        // debugging session: `batchDraw()` refreshes the SCENE canvas on the next
+        // animation frame and leaves the HIT canvas alone, and a pointer consults the hit
+        // canvas - so without this line every rect is present in `rects`, correct in the
+        // document's geometry, and completely un-clickable. Measured in
+        // `check-canvas-panel.mjs`: the same point reads `0,0,0,0` on the hit canvas
+        // before this call and the node's own colour key after it. It is a draw per
+        // GEOMETRY CHANGE (a mount, a commit, a selection), never per pointer move -
+        // Konva keeps its own hit canvas in step while a node is being dragged.
+        layer.batchDraw()
+        layer.drawHit()
+        // The seam reports what THIS reconcile was given, so a check can tell "the hit graph
+        // is empty because the document has no drawable box" from "the hit graph is empty
+        // because nothing reconciled it".
+        if (hostRef.current && hostRef.current.__dshKonva) {
+          hostRef.current.__dshKonva.boxes = boxes ?? []
+          hostRef.current.__dshKonva.reconciled = live.size
+        }
+        // `layoutVersion` IS A DEPENDENCY AND IT IS THE IMPORTANT ONE. The boxes arrive from
+        // an ASYNC layout pass, so a commit changes `document_` and `revision` a frame or
+        // two BEFORE the new boxes exist: reconciling on those alone leaves every hit rect
+        // at the previous revision's geometry - the paint moves, the visible selection
+        // moves (it is drawn from the same boxes), and a press on the layer a person can see
+        // hits nothing at all. The counter is what says "the layout these rectangles are
+        // derived from has arrived".
+        //
+        // `revision` stays because a commit that produces the SAME geometry (a drag that
+        // returns a node to where it was) changes no box, and the rect Konva moved would
+        // otherwise never be told so.
+      }, [konva, boxes, document_, selectedPath, revision, layoutVersion])
+
+      return h('div', {
+        className: 'cnv-konva',
+        ref: hostRef,
+        'data-canvas-konva': note ? 'failed' : 'ready',
+        'data-canvas-konva-note': note || undefined,
+        // A DRAG MUST NOT ALSO PAN THE STAGE. The scroller pans on a bare drag, and a
+        // gesture that started on a node belongs to the node: the hit is known by the time
+        // this runs, because Konva's own listener is on the container this element
+        // contains and fires first.
+        onPointerDown: (event) => {
+          if (hitRef.current) event.stopPropagation()
+        },
+      })
+    }
+    /**
+     * THE INLINE TEXT EDITOR: a textarea laid over the layer's own box, in the layer's own
+     * type.
+     *
+     * WHY A DOM FIELD AND NOT CANVAS TEXT. The engine measures, wraps and lints a
+     * paragraph with the design's own measurer; a canvas-side editor would need a second
+     * implementation of all three, and the two would disagree the moment a word wrapped.
+     * Typing into a real textarea and committing ONE `set .text` instead puts the words
+     * through the same layout the export uses - so the block re-wraps under the pointer
+     * and the lints (TEXT_TRUNCATED, TEXT_OVERFLOW) fire on what was typed.
+     *
+     * It sits at the layer's own box in DESIGN pixels scaled by the zoom, so it covers
+     * exactly the block it edits. Enter commits, Escape drops it, a click anywhere else
+     * commits through the blur - and the `done` latch is what stops the blur that follows
+     * a commit from writing the same words a second time.
+     */
+    function TextEditor(props) {
+      const { box, entry, node, scale, value, onChange, onCommit, onCancel } = props
+      const ref = useRef(null)
+      const done = useRef(false)
+      useEffect(() => {
+        const field = ref.current
+        if (!field) return undefined
+        field.focus()
+        if (typeof field.select === 'function') field.select()
+        return undefined
+      }, [])
+      const font = entry && entry.font ? entry.font : { family: 'inherit', weight: 400, size: 16 }
+      const lineHeight = entry && entry.lineHeight ? entry.lineHeight : Math.round(font.size * 1.3)
+      const zoom = Math.max(0.05, scale)
+      const finish = (write) => {
+        if (done.current) return
+        done.current = true
+        write()
+      }
+      return h('textarea', {
+        ref,
+        className: 'cnv-editor',
+        'data-canvas-editor': 'true',
+        spellCheck: false,
+        value,
+        style: {
+          left: Math.round(box.x * zoom) + 'px',
+          top: Math.round(box.y * zoom) + 'px',
+          width: Math.max(40, Math.round(box.w * zoom)) + 'px',
+          height: Math.max(Math.round(lineHeight * zoom) + 4, Math.round((entry && entry.contentHeight ? entry.contentHeight : box.h) * zoom) + 4) + 'px',
+          fontFamily: '"' + font.family + '", var(--dsw-font-family, sans-serif)',
+          fontWeight: font.weight,
+          fontSize: Math.max(6, font.size * zoom) + 'px',
+          lineHeight: Math.round(lineHeight * zoom) + 'px',
+          textAlign: node.align === 'center' ? 'center' : node.align === 'right' ? 'right' : 'left',
+        },
+        onChange: (event) => onChange(event.target.value),
+        onBlur: () => finish(onCommit),
+        onKeyDown: (event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            finish(onCancel)
+            return
+          }
+          // ENTER COMMITS. Shift+Enter is the line break the field itself inserts, which
+          // is the convention every other in-place editor on this machine already has.
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault()
+            finish(onCommit)
+          }
+        },
+      })
+    }
+
+    /** How deep a node path is: a parent is always shallower than its children. */
+    function pathDepth(path) {
+      return String(path ?? '').split('.').length
     }
 
     // -----------------------------------------------------------------------
@@ -2105,6 +2874,23 @@ window.__ModuleLoader__.load({
       const { state, error } = useCanvasStore(sessionId)
       const [engine, setEngine] = useState(null)
       const [engineNote, setEngineNote] = useState('')
+      /** The vendored Konva interaction layer: null until it loads, and null for good if it cannot. */
+      const [konva, setKonva] = useState(null)
+      const [konvaNote, setKonvaNote] = useState('')
+      /**
+       * THE GESTURE DRAFT, and it is not the source drawer's text draft below: this is
+       * the design a DRAG is producing, laid out locally so the artboard follows the
+       * pointer without a round trip, together with the operations that produced it -
+       * which are the ones committed when the gesture ends. Null whenever the committed
+       * revision is what is on screen.
+       */
+      const [gestureDraft, setGestureDraft] = useState(null)
+      /**
+       * THE INLINE TEXT EDITOR: `{ path, value }` while a text layer's words are being
+       * typed in place, or null. The value is here rather than in the DOM so the editor
+       * is a controlled field, and so Escape can drop it without touching the document.
+       */
+      const [editing, setEditing] = useState(null)
       const [selectedId, setSelectedId] = useState(null)
       const [zoom, setZoom] = useState('fit')
       const [overlays, setOverlays] = useState({ safe: true, boxes: false })
@@ -2117,14 +2903,6 @@ window.__ModuleLoader__.load({
       const [newOpen, setNewOpen] = useState(false)
       /** Which job the right bar is doing: shaping the design, or auditing it. */
       const [sideTab, setSideTab] = useState('design')
-      /**
-       * Which SURFACE the pane is showing. EXCALIDRAW IS THE DEFAULT: the vendored
-       * editor is the Canvas tab's surface now, and the pack's own design surface
-       * is a switch away for as long as the agent tools still write the design
-       * document. The editor is seeded from that document once per revision (see
-       * `sceneSkeletonsFor`), so what the agent wrote is what a person opens.
-       */
-      const [surface, setSurface] = useState('excalidraw')
       /**
        * The design the rail is asking about right now, as a two-step DELETE: the
        * first click arms the row, the second removes it. A design is somebody's
@@ -2143,8 +2921,17 @@ window.__ModuleLoader__.load({
       const [exporting, setExporting] = useState('')
       /** The step a nudge moves: 1px for placing, 10px for moving. */
       const [nudgeStep, setNudgeStep] = useState(1)
-      /** The node the layer list and the drag both address, as a document path. */
+      /**
+       * THE PRIMARY SELECTION: the layer the Inspect pane, the layer list and the object
+       * verbs act on. It is the newest layer a person touched.
+       */
       const [selectedPath, setSelectedPath] = useState(null)
+      /**
+       * THE WHOLE SELECTION, which is one layer in the usual case and several when a marquee
+       * caught a group. `selectedPath` stays the PRIMARY and this is what a DRAG moves, so the
+       * two cannot drift: selecting one layer is a selection of one.
+       */
+      const [selectedPaths, setSelectedPaths] = useState([])
       /**
        * Whether the surface already knows what is selected at the moment a pointer
        * lands.
@@ -2162,11 +2949,26 @@ window.__ModuleLoader__.load({
       const deselectPath = useCallback(() => {
         if (wrapRef.current) wrapRef.current.style.cursor = ''
         setSelectedPath(null)
+        setSelectedPaths([])
       }, [])
       const selectPath = useCallback((path) => {
         triggerSelect.current = true
         setSelectedPath(path)
+        // ONE LAYER IS A SELECTION OF ONE: the drag acts on `selectedPaths`, so a marquee's
+        // group must not survive a plain click on a single layer.
+        setSelectedPaths(path ? [path] : [])
       }, [])
+      /** A MARQUEE'S GROUP: several layers, the LAST of them primary. */
+      const selectMany = useCallback((paths) => {
+        const list = Array.isArray(paths) ? paths.filter((path) => typeof path === 'string') : []
+        if (list.length === 0) {
+          deselectPath()
+          return
+        }
+        triggerSelect.current = true
+        setSelectedPaths(list)
+        setSelectedPath(list[list.length - 1])
+      }, [deselectPath])
       const stageRef = useRef(null)
 
       useEffect(() => {
@@ -2178,6 +2980,23 @@ window.__ModuleLoader__.load({
         engineOrNull(setEngineNote).then((loaded) => {
           if (!cancelled && loaded) setEngine(loaded)
         })
+        return () => {
+          cancelled = true
+        }
+      }, [])
+
+      useEffect(() => {
+        let cancelled = false
+        loadKonva()
+          .then((loaded) => {
+            if (!cancelled) setKonva(loaded)
+          })
+          .catch((err) => {
+            // NOT FATAL, AND SAID ONCE: the design still paints, exports and edits
+            // through the panel. What is missing is the pointer vocabulary, and a
+            // person aiming at a handle that is not there deserves the sentence.
+            if (!cancelled) setKonvaNote(err && err.message ? err.message : 'the Konva interaction layer is unavailable')
+          })
         return () => {
           cancelled = true
         }
@@ -2208,9 +3027,52 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         setSelectedPath(null)
         setConfirmDelete(null)
+        setSelectedPaths([])
       }, [selectedId])
 
+      // A GESTURE DRAFT NEVER OUTLIVES ITS REVISION. The host is the only writer, so
+      // the moment the revision moves the draft is either committed (the usual case) or
+      // superseded by someone else's edit (the agent writing while a person drags) -
+      // and in both the committed document is the truth to draw.
+      useEffect(() => {
+        setGestureDraft(null)
+      }, [selectedRevision])
+
+      // AN EDIT BELONGS TO ONE LAYER OF ONE DESIGN. Switching designs or selecting a
+      // DIFFERENT layer closes it without writing - but selecting the layer being edited
+      // must NOT, and that is not a detail: the control that opens the editor is on the
+      // layer's own row, so opening it selects that row in the same press. A rule that
+      // cleared on any selection change would close the editor in the act of opening it.
+      useEffect(() => {
+        setEditing((current) => (current && current.path === selectedPath ? current : null))
+      }, [selectedId, selectedPath])
+
       const preset = selected && state && state.presets ? state.presets[selected.preset] ?? null : null
+
+      /**
+       * The in-place editor's four facts, or null when nothing is being edited.
+       *
+       * The BOX and the FONT come from the layout, not from the document: the field has to
+       * cover the block the engine actually produced - after wrapping, at the size the
+       * type role resolved to - or a person would be typing into a box that is not the one
+       * on screen.
+       */
+      const editor = (() => {
+        if (!editing || !selected) return null
+        const prepared = lastPreparedRef.current
+        const entry = prepared ? prepared.boxes.find((row) => row.path === editing.path) : null
+        const node = nodeAtPath(selected.document, editing.path)
+        if (!entry || !node || node.kind !== 'text') return null
+        return {
+          box: entry.box,
+          entry,
+          node,
+          value: editing.value,
+          onChange: (value) => setEditing((current) => (current ? { ...current, value } : current)),
+          onCommit: () => commitText(editing.path, editing.value),
+          onCancel: () => setEditing(null),
+        }
+      })()
 
       /**
        * Send pointer operations to the host.
@@ -2243,6 +3105,139 @@ window.__ModuleLoader__.load({
           }
         },
         [selected, sessionId],
+      )
+
+      /**
+       * A GESTURE'S PREVIEW: the operations the drag would write, applied to a LOCAL
+       * draft so the artboard follows the pointer.
+       *
+       * The base is the COMMITTED document, and the operations arrive cumulative from
+       * where the gesture started, so applying them here is idempotent - one preview
+       * frame cannot compound with the one before it. Nothing leaves the page: the
+       * host is not told anything until the gesture ends.
+       */
+      const previewGesture = useCallback(
+        (ops) => {
+          if (!engine || !selected || !Array.isArray(ops) || ops.length === 0) return
+          const patched = engine.applyPatches(selected.document, ops)
+          if (patched && patched.document) setGestureDraft(patched.document)
+        },
+        [engine, selected],
+      )
+
+      /**
+       * A GESTURE'S COMMIT: the same operations, once, through the same route and
+       * validator every other edit uses.
+       *
+       * The draft is deliberately NOT cleared here: the revision effect above clears it
+       * when the host's answer lands, so the artboard never snaps back to the old
+       * revision for the length of one request. A commit that the validator refuses
+       * leaves the draft standing until the same effect runs - which happens on the
+       * next revision change, and the note explains the refusal in the meantime.
+       */
+      const commitGesture = useCallback(
+        (ops, label) => {
+          if (!selected || !sessionId || !Array.isArray(ops) || ops.length === 0) return
+          applyOps(ops, label)
+        },
+        [applyOps, selected, sessionId],
+      )
+
+      /** The interaction layer reporting for duty, or saying why it could not. */
+      const konvaStatus = useCallback((status, message) => {
+        setKonvaNote(status === 'ready' ? '' : message || 'the Konva interaction layer is unavailable')
+      }, [])
+
+      /**
+       * OPEN A TEXT LAYER'S WORDS FOR EDITING, in place.
+       *
+       * Two ways in, one behaviour: a double click on the words (the pointer gesture every
+       * design tool has) and the Edit words button in the Layer section - which exists
+       * because a discoverable control beats a secret gesture, and because the button is
+       * what this package's own browser check can drive.
+       */
+      const startEditing = useCallback(
+        (path) => {
+          if (!selected || !path) return
+          const node = nodeAtPath(selected.document, path)
+          const value = nodeTextOf(node)
+          if (node && node.kind === 'text' && value !== null) setEditing({ path, value })
+        },
+        [selected],
+      )
+
+      /**
+       * ADD A LAYER, from the toolbar.
+       *
+       * INTO THE SELECTED FRAME when one is selected, and at the end of the design's own
+       * layer list otherwise - the same rule the agent's own patch follows, because it is
+       * the same patch. The new layer is SELECTED afterwards, so the very next thing the
+       * person does (drag it, restyle it) applies to what they just made.
+       */
+      const addLayer = useCallback(
+        async (kind) => {
+          if (!selected || !sessionId) return
+          const target = selectedPath ? nodeAtPath(selected.document, selectedPath) : null
+          const framePath = target && target.kind === 'frame' ? selectedPath : null
+          const parentPath = framePath ? framePath + '.children' : 'layers'
+          const siblings = framePath ? target.children : selected.document.layers
+          const index = Array.isArray(siblings) ? siblings.length : 0
+          const node = newLayer(kind, selected.document)
+          const answer = await applyOps(objectOps('add', { parentPath, node }), 'Added ' + (kind === 'text' ? 'text' : 'a ' + kind))
+          if (answer) setSelectedPath(parentPath + '.' + index)
+        },
+        [selected, selectedPath, sessionId, applyOps],
+      )
+
+      /**
+       * THE OBJECT VERBS on the selected layer: duplicate, delete, front, back.
+       *
+       * Each one is a `canvas_patch` (see `objectOps`), so nothing here can write a
+       * document the model's own tool would refuse - and the selection FOLLOWS the
+       * result: a duplicate selects the copy, because the thing you just made is the
+       * thing the next press should act on.
+       */
+      const objectVerb = useCallback(
+        async (verb) => {
+          if (!selected || !sessionId || !selectedPath) return
+          const node = nodeAtPath(selected.document, selectedPath)
+          if (!node) return
+          const { parentPath, index } = parentOf(selectedPath)
+          const siblings = nodeAtPath(selected.document, parentPath)
+          const total = Array.isArray(siblings) ? siblings.length : 0
+          const ops = objectOps(verb, { path: selectedPath, node, parentPath, index })
+          if (ops.length === 0) return
+          const labels = { delete: 'Deleted', duplicate: 'Duplicated', front: 'Brought to the front:', back: 'Sent to the back:' }
+          const answer = await applyOps(ops, labels[verb] + ' ' + layerLabel(node, selectedPath))
+          if (!answer) return
+          if (verb === 'delete') setSelectedPath(null)
+          else if (verb === 'duplicate') setSelectedPath(parentPath + '.' + (index + 1))
+          else if (verb === 'front') setSelectedPath(parentPath + '.' + Math.max(0, total - 1))
+          else if (verb === 'back') setSelectedPath(parentPath + '.0')
+        },
+        [selected, selectedPath, sessionId, applyOps],
+      )
+
+      /**
+       * COMMIT AN INLINE TEXT EDIT.
+       *
+       * The words go into the document, not into the picture: the engine re-measures the
+       * block, re-wraps it and re-runs the lints, so the paragraph a person typed is laid
+       * out by the same code the export uses. A node that carried `runs` (rich text from
+       * the model) has them removed in the SAME patch - otherwise the runs would still be
+       * what `textOf` prefers and the typed words would be invisible.
+       */
+      const commitText = useCallback(
+        (path, value) => {
+          setEditing(null)
+          const node = selected ? nodeAtPath(selected.document, path) : null
+          const current = nodeTextOf(node)
+          if (current === null || current === value) return
+          const ops = [{ op: 'set', at: path + '.text', value }]
+          if (Array.isArray(node.runs)) ops.push({ op: 'remove', at: path + '.runs' })
+          applyOps(ops, 'Edited the words of ' + layerLabel(node, path))
+        },
+        [selected, applyOps],
       )
 
       /** A drag on the artboard: move one node by a delta in design pixels. */
@@ -2638,17 +3633,37 @@ window.__ModuleLoader__.load({
           h(Btn, { active: overlays.safe, onClick: () => setOverlays((value) => ({ ...value, safe: !value.safe })), title: 'Show the preset\u2019s safe and keep-out areas' }, 'Safe areas'),
           h(Btn, { active: overlays.boxes, onClick: () => setOverlays((value) => ({ ...value, boxes: !value.boxes })), title: 'Show every node\u2019s box' }, 'Boxes'),
         ),
-        // THE SURFACE SWITCH. Excalidraw is the Canvas tab's surface; this is how a
-        // person reaches the pack's own design surface for as long as the agent
-        // tools still write the design document.
-        h('button', {
-          type: 'button',
-          className: 'cnv-btn',
-          'data-canvas-action': 'surface',
-          'data-active': surface === 'excalidraw' ? 'true' : 'false',
-          title: 'Switch between the Excalidraw editor and the design surface',
-          onClick: () => setSurface((value) => (value === 'excalidraw' ? 'design' : 'excalidraw')),
-        }, surface === 'excalidraw' ? 'Design' : 'Excalidraw'),
+        // THE ADD MENU. Three primitives, each one a `canvas_patch` the agent could have
+        // written, and an IMAGE row is deliberately absent: a picture has to come from the
+        // asset store or the conversation folder, which is a picker this round does not
+        // have yet - and a row that inserts a broken reference would be worse than no row.
+        h('details', { className: 'cnv-menu', 'data-canvas-add': 'true' },
+          h('summary', {
+            className: 'cnv-btn',
+            'data-kind': 'primary',
+            'aria-disabled': busy || !selected ? 'true' : 'false',
+            title: selected ? 'Add a layer to this design' : 'Nothing to add to yet',
+          }, '+ Add \u25be'),
+          h('div', { className: 'cnv-menuPanel' },
+            [['text', 'Text', 'A headline or a line of body copy, ready to type into'],
+             ['rect', 'Rectangle', 'A block, a card or a panel'],
+             ['ellipse', 'Ellipse', 'A circle or a soft accent']].map(([kind, label, hint]) =>
+              h('button', {
+                key: 'add-' + kind,
+                type: 'button',
+                className: 'cnv-menuItem',
+                'data-canvas-add-item': kind,
+                disabled: busy || !selected,
+                onClick: (event) => { event.preventDefault(); addLayer(kind); event.currentTarget.closest('details').open = false },
+              },
+                h('span', { className: 'cnv-menuLabel' },
+                  h('i', { className: 'cnv-addSwatch', style: { background: kind === 'text' ? 'transparent' : 'currentColor' } }),
+                  label,
+                ),
+                h('span', { className: 'cnv-menuHint' }, hint),
+              )),
+          ),
+        ),
         // ONE EXPORT CONTROL, not four buttons. Format and destination are two axes
         // of ONE decision, and four buttons for it was the first thing to wrap out of
         // the bar when the pane got narrow - so what is left in the bar is the
@@ -2773,6 +3788,10 @@ window.__ModuleLoader__.load({
           ? h(Artboard, {
               engine,
               document_: selected.document,
+              draft: gestureDraft,
+              revision: selected.revision,
+              konva,
+              editor,
               preset,
               sessionId,
               fonts: (state && state.fonts) || {},
@@ -2782,10 +3801,16 @@ window.__ModuleLoader__.load({
               onMetrics,
               onPrepared,
               selectedPath,
+              selectedPaths,
               onSelect: selectPath,
+              onSelectMany: selectMany,
               onDeselect: deselectPath,
               onMove: moveLayer,
               onResize: resizeLayer,
+              onPreview: previewGesture,
+              onCommit: commitGesture,
+              onKonvaStatus: konvaStatus,
+              onEditText: startEditing,
               triggerSelect,
             })
           : h('div', { className: 'cnv-padEmpty' }, h(EmptyState, { engineNote, error, state, onCreate: createDesign, onOpenNew: () => setNewOpen(true) })),
@@ -2842,6 +3867,20 @@ window.__ModuleLoader__.load({
                       h('span', { className: 'cnv-layerKind' }, layerKindBadge(row.node.kind)),
                       h('span', { className: 'cnv-layerName' }, layerLabel(row.node, row.path)),
                       h('span', { className: 'cnv-layerTools' },
+                        // THE WORDS ARE EDITED FROM THE LAYER'S OWN ROW, which is where a
+                        // person is already looking when they decide a line needs changing -
+                        // and the button is always on screen, unlike a control inside one
+                        // pane or a gesture nobody was told about.
+                        row.node.kind === 'text'
+                          ? h('button', {
+                              type: 'button',
+                              className: 'cnv-mini',
+                              'data-canvas-edit-row': row.path,
+                              title: 'Edit this layer\u2019s words on the canvas',
+                              disabled: busy,
+                              onClick: (event) => { event.stopPropagation(); setSelectedPath(row.path); startEditing(row.path) },
+                            }, '\u270e')
+                          : null,
                         h('button', { type: 'button', className: 'cnv-mini', title: 'Move up in this array', disabled: busy || row.path.endsWith('.0'), onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'up') } }, '\u2191'),
                         h('button', { type: 'button', className: 'cnv-mini', title: 'Move down in this array', disabled: busy, onClick: (event) => { event.stopPropagation(); reorderLayer(row.path, 'down') } }, '\u2193'),
                       ),
@@ -2885,6 +3924,25 @@ window.__ModuleLoader__.load({
         : h(
             React.Fragment,
             null,
+            // THE OBJECT VERBS, first, because they are what a person reaches for while
+            // COMPOSING: a layer just added or just placed is duplicated or removed far
+            // more often than it is nudged by one pixel.
+            h('div', { className: 'cnv-section', 'data-canvas-object': 'true' },
+              h('div', { className: 'cnv-sectionHead' }, h('span', null, 'Layer'), h('span', null, layerKindBadge(selectedNode.kind))),
+              h('div', { className: 'cnv-row2' },
+                h(Btn, { onClick: () => objectVerb('duplicate'), disabled: busy, title: 'Add a copy of this layer right after it' }, 'Duplicate'),
+                h(Btn, { onClick: () => objectVerb('delete'), disabled: busy, title: 'Remove this layer from the design' }, 'Delete'),
+              ),
+              h('div', { className: 'cnv-row2' },
+                h(Btn, { onClick: () => objectVerb('front'), disabled: busy, title: 'Move this layer to the front' }, 'To front'),
+                h(Btn, { onClick: () => objectVerb('back'), disabled: busy, title: 'Move this layer to the back' }, 'To back'),
+              ),
+              selectedNode.kind === 'text'
+                ? h('div', { className: 'cnv-row2' },
+                    h(Btn, { onClick: () => startEditing(selectedPath), disabled: busy, title: 'Type over this layer\u2019s words in place', 'data-canvas-edit-words': 'true' }, 'Edit words'),
+                  )
+                : null,
+            ),
             h('div', { className: 'cnv-section', 'data-canvas-transform': 'true' },
               h('div', { className: 'cnv-sectionHead' }, h('span', null, 'Move'), h('span', null, nudgeStep + 'px')),
               // THE FOUR DIRECTIONS IN ONE ROW. A cross is the gesture a gamepad has,
@@ -3030,12 +4088,11 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { className: 'cnv-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true', 'data-canvas-version': PLUGIN_VERSION, 'data-canvas-surface': surface },
-        // THE PACK'S OWN BAR IS NOT RENDERED IN EXCALIDRAW MODE. The editor owns the
-        // pane: its own toolbar, its own zoom, its own export and Library. Keeping
-        // this bar above it was a strip of controls for a surface the person is no
-        // longer looking at - so it exists only while the design surface is up.
-        surface === 'design' ? toolbar : null,
+        { className: 'cnv-root', 'data-conversation-composer-overlay': '', 'data-dsh-canvas-view': 'true', 'data-canvas-version': PLUGIN_VERSION },
+        // THE BAR IS THE TAB'S OWN. The Canvas tab is the design surface and nothing
+        // else, so the toolbar is always drawn: there is no second surface for it to
+        // get out of the way of.
+        toolbar,
         h('div', { className: 'cnv-body' }, rail, stage, side),
         drawer && selected
           ? h(
@@ -3050,28 +4107,7 @@ window.__ModuleLoader__.load({
           : null,
         note ? h('div', { className: 'cnv-note', 'data-kind': note.kind }, note.text) : null,
         engineNote ? h('div', { className: 'cnv-note', 'data-kind': 'info' }, engineNote) : null,
-        // The Excalidraw surface replaces the DESIGN surface visually while
-        // leaving it mounted: the overlay is a sibling, so switching back is a
-        // state change, the design keeps its zoom/selection/exports, and the
-        // editor never sees a half-torn-down tree. It is seeded from the design
-        // the tab already selected, so the agent's work is what opens.
-        surface === 'excalidraw'
-          ? h(ExcalidrawSurface, {
-              sessionId,
-              design: selected,
-              preset,
-              fonts: (state && state.fonts) || {},
-              // The house examples ride the state payload's document field, so the
-              // Library can be seeded without a second round trip.
-              examples: (state && state.examples) || [],
-              presets: (state && state.presets) || {},
-              // THE WAY BACK, and it is deliberately not a button: the bar is gone in
-              // this mode, so the design surface would otherwise be unreachable. The
-              // shortcut costs no pixels, and it exists for the migration - when the
-              // agent tools speak the scene, the design surface and this line both go.
-              onEscapeToDesign: () => setSurface('design'),
-            })
-          : null,
+        konvaNote ? h('div', { className: 'cnv-note', 'data-kind': 'info', 'data-canvas-konva-note': 'true' }, konvaNote + ' \u2014 the design still paints and exports: the layer list and the Inspect panel move and resize it without it.') : null,
       )
     }
 
@@ -3358,15 +4394,8 @@ window.__ModuleLoader__.load({
     exports.__internals = {
       VIEW_ID,
       PLUGIN_VERSION,
-      /** The bridge's mapping, so the check can drive it without a browser. */
-      sceneSkeletonsFor,
-      /** The Library's persistence, so the check drives it with a storage double. */
-      readStoredLibrary,
-      writeStoredLibrary,
-      LIBRARY_STORAGE_KEY,
-      LIBRARY_ID_PREFIX,
-      /** The vendored surface's route, so the check can hold both halves to it. */
-      ROUTES: { STATE_ROUTE, DOCUMENT_ROUTE, DELETE_ROUTE, PUBLISH_ROUTE, ASSET_ROUTE, QUEUE_ROUTE, REPORT_ROUTE, WORKSPACE_ASSET_ROUTE, ENGINE_ROUTE, EXCALIDRAW_JS_ROUTE, EXCALIDRAW_CSS_ROUTE },
+      /** The engine route, so a check can hold both halves to the same path. */
+      ROUTES: { STATE_ROUTE, DOCUMENT_ROUTE, DELETE_ROUTE, PUBLISH_ROUTE, ASSET_ROUTE, QUEUE_ROUTE, REPORT_ROUTE, WORKSPACE_ASSET_ROUTE, ENGINE_ROUTE, KONVA_JS_ROUTE, KONVA_PAINT_ROUTE },
       TOOL_NAMES,
       ZOOM_STEPS,
       FEED_SCALE,
@@ -3400,7 +4429,22 @@ window.__ModuleLoader__.load({
       createMeasurer,
       ensureFonts,
       prepareRender,
+      paintDraft,
       paintInto,
+      loadKonva,
+      loadKonvaPaint,
+      parentNodePath,
+      parentOf,
+      objectOps,
+      newLayer,
+      nodeTextOf,
+      snapFor,
+      marqueeHits,
+      multiMoveOps,
+      boxesTouch,
+      pathDepth,
+      KonvaOverlay,
+      TextEditor,
       CanvasView,
       ToolCard,
       startRenderer,

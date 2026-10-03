@@ -64,13 +64,13 @@ export function exampleIds() {
  * The gallery rows the browser and the model read: what it is, when to use it, which
  * preset/archetype/style it was built from, and the copy to write into it.
  *
- * THE DOCUMENT TRAVELS TOO (alpha.10), and it is what makes the house examples
- * usable as Excalidraw LIBRARY items: the browser cannot lay an example out - and
- * therefore cannot turn it into elements - from a title and a preset, and asking
- * the host for eight documents one at a time would be eight round trips for data
- * this file already has in memory. The cost is stated: the payload grows by the
- * examples' own JSON (tens of KB), and `exampleLines()` - what the MODEL reads -
- * still carries no document, so a tool answer stays prose.
+ * THE DOCUMENT TRAVELS TOO (alpha.10), and it is what lets the tab's own New
+ * gallery OPEN an example without a round trip: the browser cannot lay an example
+ * out from a title and a preset, and asking the host for eight documents one at a
+ * time would be eight round trips for data this file already has in memory. The
+ * cost is stated: the payload grows by the examples' own JSON (tens of KB), and
+ * `exampleLines()` - what the MODEL reads - still carries no document, so a tool
+ * answer stays prose.
  */
 export function exampleGallery() {
   return EXAMPLES.map((entry) => ({

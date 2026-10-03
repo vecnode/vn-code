@@ -1,0 +1,11 @@
+{
+  "name": "dsh-canvas-konva-vendor",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Build inputs for the vendored Konva surface shipped inside dsh-canvas (lib/vendor/konva/). Rebuild: node build.mjs (see packages/dsh-canvas/README.md). Never published, and never shipped: a distribution carries lib/vendor/, and this folder is not part of the package's `files` list - the same bargain the vendored fonts make. There is deliberately no package-lock.json and no node_modules: build.mjs reads the artifact straight out of the pinned npm TARBALL, so vendoring needs no install step and no dependency tree.",
+  "type": "module",
+  "license": "MIT",
+  "pins": {
+    "konva": "10.7.0"
+  }
+}

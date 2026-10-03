@@ -1,4 +1,4 @@
-# dsh-canvas (alpha.12)
+# dsh-canvas (alpha.13)
 
 **The Canvas tab: a design page the agent drives, in the chat panel's own view ring
 to the right of Trajectory.**
@@ -32,6 +32,40 @@ page answering within 20 s says so.
   imports (the browser imports it from a blob URL); the layout is pure with the
   text measurer **injected**, and one draw-op list feeds the canvas painter (which
   serves the artboard **and** the PNG export) and the SVG serializer.
+- **The interaction layer** (alpha.13): a vendored Konva 10.7.0 (188 KB, one UMD
+  script, no dependencies) draws nothing anybody sees - one invisible hit rect per
+  laid-out box, nested exactly like the document, so the deepest node under the
+  pointer wins - and it is what makes a drag follow the pointer: the tab applies the
+  operations locally (`engine.applyPatches` -> `engine.layout` -> one paint) and
+  commits **one** patch when the gesture ends, through the same route and validator
+  as every other edit. Resizing stays the pack's own vocabulary (`handlesFor`,
+  `edgesAt`, `resizeOps`) on both pointer surfaces. Konva's Transformer was built,
+  measured and removed: its anchors paint nothing in this embedding (see
+  `check-canvas-panel.mjs`) - and the engine remains the only painter.
+- **The Konva painter** (`lib/konva-paint.js`, alpha.13): the module that replays the engine's
+  draw-op list into **real Konva nodes** - `Konva.Rect`, `Konva.Ellipse`, `Konva.Line`,
+  `Konva.Path`, `Konva.Image`, and a `Konva.Shape` whose `sceneFunc` draws a line of text by the
+  engine's own rules (baseline, font shorthand, per-character tracking). It has zero static
+  imports, is served by this package and imported from a blob URL, and `stageFor()` is the one
+  entry point the artboard and an export would share. **Its parity against the engine's painter
+  is measured, not assumed**: `check-canvas-browser.mjs` renders the same ops through both and
+  compares the pixels per op kind - solid rects and every line of text are pixel-identical
+  (worst channel delta 0-1), and an **ellipse's gradient fill is an open gap that the check
+  records and refuses to hide**. Until that gap closes, engine.js remains the painter of the
+  artboard, the render report and the PNG export.
+- **Snapping** (alpha.13): a dragged layer aligns to the canvas's own edges and centre and
+  to every other layer's edges and centres, within 6 screen pixels - and the guide line it
+  draws comes from the SAME pure call that decides the movement (`snapFor`), so a line can
+  never describe a snap the document did not get. The guide goes with the gesture.
+- **The object verbs and the in-place text editor** (alpha.13): `+ Add` (text, a
+  rectangle, an ellipse - sized and coloured from the design's OWN tokens), and
+  Duplicate / Delete / To front / To back on the selected layer. Every one is a
+  `canvas_patch` the agent could have written (`lib/client.js`'s `objectOps`), so a
+  button press cannot produce a document the model's own tool would refuse. A text
+  layer's words are edited **on the canvas**: the field is laid over the block's own
+  box in the block's own type, Enter commits one `set .text`, Escape writes nothing -
+  and a rich-text layer (the model's `runs`) is seeded with its runs joined and
+  committed as `text` with `runs` removed in the same patch.
 - **The render queue**: `canvas_render` enqueues the document and its revision, the
   page paints and posts back the PNG, a 25%-scale feed thumbnail, the measurements
   and the lints; the verdict is `drawn` / `failed` / `stale` / `pending`.
@@ -44,10 +78,12 @@ page answering within 20 s says so.
 - **Assets**: a stored image content-addressed by SHA-256, or a workspace-relative
   path resolved on the host with `realpath` containment - a remote URL is not a
   thing a design can name.
-- **Excalidraw, the second surface** (preview): a vendored 3.07 MiB artifact and 141 KiB
-  stylesheet rendered **over** the design surface, so the design keeps its zoom, selection
-  and exports; `lib/scene.js` validates its skeleton scenes on the host while the tools
-  still speak the document language.
+
+There is **one surface**, and it is this one. The vendored Excalidraw editor that
+alpha.10-12 mounted over the design page is gone (alpha.13): a second editor with its
+own element model cannot be kept in step with a document the host validates, and the
+tab's contract is that what the model wrote is what the person edits. The engine is
+the only painter, on screen and in the exported file.
 
 ## How it plugs in
 
@@ -64,9 +100,9 @@ Routes are exact paths, `GET`/`HEAD`/`POST` only:
 
 | Method | Paths |
 |---|---|
-| `GET` | `/api/dsh-canvas/state`, `/health`, `/render-queue?session=*`, `/workspace-asset`, `/vendor/engine.js`, `/vendor/excalidraw.js`, `/vendor/excalidraw.css` |
+| `GET` | `/api/dsh-canvas/state`, `/health`, `/render-queue?session=*`, `/workspace-asset`, `/vendor/engine.js`, `/vendor/konva.js` |
 | `POST` | `/api/dsh-canvas/document`, `/delete`, `/publish`, `/render-report` |
-| both | `/api/dsh-canvas/asset`; one immutable route per vendored face under `/vendor/fonts/<file>` and `/vendor/excalidraw/fonts/<Family>/<file>` |
+| both | `/api/dsh-canvas/asset`; one immutable route per vendored font file under `/vendor/fonts/<file>` |
 
 ## Limits
 
@@ -83,8 +119,18 @@ Routes are exact paths, `GET`/`HEAD`/`POST` only:
 
 ```
 node scripts/checks/check-canvas-node.mjs
-node scripts/checks/check-canvas-scene.mjs
-node scripts/checks/check-canvas-excalidraw.mjs   # needs a Chromium-family browser
 node scripts/checks/check-client-bundles.mjs
+node scripts/checks/check-canvas-panel.mjs        # needs a Chromium-family browser
+node scripts/checks/check-canvas-browser.mjs      # needs a Chromium-family browser
 node scripts/checks/check-skill-examples.mjs
 ```
+
+`packages/dsh-canvas/vendor/konva/build.mjs --check` re-hashes the vendored
+interaction layer offline, and `check-canvas-panel.mjs` drives BOTH of the tab's
+pointer surfaces in one run - its own handlers (the fallback when the interaction
+layer cannot load) and the vendored layer (the shipped path) - plus the Add menu and
+the layer verbs through the real UI. The in-place text editor's UI needs a mount of a
+SETTLED document (its control is in the layer list, which those verbs churn), so what
+is pinned today is its pure half: which words a layer holds and the exact operations a
+commit writes (`check-client-bundles.mjs`), and that the engine applies them
+(`check-canvas-node.mjs`).

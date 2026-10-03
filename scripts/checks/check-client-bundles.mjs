@@ -6318,87 +6318,167 @@ check('the prose gesture helper is gone', canvasSource.includes('Drag a layer to
 check('the style card keeps one rule per heading', canvasSource.includes('(currentStyle.do || []).slice(0, 1)') && canvasSource.includes('(currentStyle.gates || []).slice(0, 1)'), true)
 check('the canvas tool list carries canvas_style', canvasInternals.TOOL_NAMES.includes('canvas_style'), true)
 
-// --- the vendored Excalidraw surface (alpha.10)
+// --- ONE SURFACE (alpha.13)
 //
-// TWO things are pinned here and neither is about the artifact's bytes (that is
-// `check-canvas-excalidraw.mjs`, which serves the committed bundle to a real
-// browser): the bridge that turns a laid-out DESIGN into an Excalidraw scene, and
-// the wiring that makes Excalidraw the tab's surface. Every branch of the bridge
-// is a decision worth pinning, because it is what a person sees when the tab
-// opens: a shape becomes the nearest thing Excalidraw has, text keeps the string
-// and the size the design measured, and the kinds with no counterpart are SKIPPED
-// AND COUNTED rather than drawn as a rectangle pretending to be art.
-check('the Excalidraw surface is the tab\u2019s default', canvasSource.includes("const [surface, setSurface] = useState('excalidraw')"))
-// NO BUTTONS IN THE TOP BAR, by not drawing the bar at all in this mode: the editor
-// owns the pane, and the pack's own bar exists only while the design surface is up.
-check('...and the pack\u2019s own bar is NOT rendered in that mode', canvasSource.includes("surface === 'design' ? toolbar : null") && canvasSource.includes("'data-canvas-surface': surface"))
-check('...so the way back to the design surface is a KEY, not a button', canvasSource.includes("event.key !== 'd' && event.key !== 'D'") && canvasSource.includes('onEscapeToDesign'))
-check('...and the note strip is the 30px one', canvasCss.includes('.cnv-excalidrawNote{flex:none;box-sizing:border-box;min-height:30px'), true)
-check('...and the editor gets the WHOLE pane', canvasCss.includes('.cnv-excalidraw{position:absolute;inset:0;'), true)
-check('...and it is seeded from the design the tab selected', canvasSource.includes('design: selected,') && canvasSource.includes('examples: (state && state.examples) || []'))
-// THE LIBRARY IS PERSISTED BY THIS PACK, because Excalidraw persists nothing by
-// itself (its own hook takes an adapter the host supplies). Both halves are driven
-// here against a storage double - including a store that THROWS, which is what a
-// browser with storage blocked does instead of answering null.
-const canvasLibraryStore = { map: {}, getItem(key) { return Object.prototype.hasOwnProperty.call(this.map, key) ? this.map[key] : null }, setItem(key, value) { this.map[key] = String(value) } }
-check('an empty store is an empty library', canvasInternals.readStoredLibrary(canvasLibraryStore).length, 0)
-check(
-  'a library round-trips through storage',
-  canvasInternals.writeStoredLibrary(canvasLibraryStore, [{ id: 'dsh-canvas/x', elements: [] }]) === true && canvasInternals.readStoredLibrary(canvasLibraryStore).length === 1,
-)
-check('...under the pack\u2019s own key', canvasLibraryStore.map[canvasInternals.LIBRARY_STORAGE_KEY] !== undefined, true)
-check('corrupt storage is an empty library, not a crash', canvasInternals.readStoredLibrary({ getItem: () => '{ not json' }).length, 0)
-const throwingStore = { getItem() { throw new Error('blocked') }, setItem() { throw new Error('blocked') } }
-check('a BLOCKED store is survivable in both directions', canvasInternals.readStoredLibrary(throwingStore).length === 0 && canvasInternals.writeStoredLibrary(throwingStore, [{ id: 'x' }]) === false)
-check('no storage at all is survivable too', canvasInternals.readStoredLibrary(null).length === 0 && canvasInternals.writeStoredLibrary(null, [{ id: 'x' }]) === false)
-check(
-  'the surface hands the stored library in and saves what comes back',
-  canvasSource.includes('initialData: { libraryItems: storedLibrary }') && canvasSource.includes('onLibraryChange: (items) =>') && canvasSource.includes('writeStoredLibrary(localStorageNow(), items)'),
-)
-check(
-  'the house examples are merged into that library, once, under stable ids',
-  canvasSource.includes("const LIBRARY_ID_PREFIX = 'dsh-canvas/'") &&
-    canvasSource.includes('id: LIBRARY_ID_PREFIX + entry.id') &&
-    canvasSource.includes('updateLibrary({ libraryItems: items, merge: true, openLibraryMenu: false })'),
-)
-const sceneSkeletonsFor = canvasInternals.sceneSkeletonsFor
-const bridged = sceneSkeletonsFor({
-  boxes: [
-    { path: 'a', kind: 'shape', shape: 'rect', box: { x: 10.4, y: 20.6, w: 100, h: 50 } },
-    { path: 'b', kind: 'shape', shape: 'ellipse', box: { x: 0, y: 0, w: 40, h: 40 } },
-    { path: 'c', kind: 'shape', shape: 'path', box: { x: 5, y: 5, w: 20, h: 20 } },
-    { path: 'd', kind: 'text', box: { x: 1, y: 2, w: 30, h: 12 }, text: 'Ship plugins', font: { size: 21.6 } },
-    { path: 'e', kind: 'frame', box: { x: 0, y: 0, w: 1280, h: 640 } },
-    { path: 'f', kind: 'image', box: { x: 0, y: 0, w: 10, h: 10 } },
-    { path: 'g', kind: 'art', box: { x: 0, y: 0, w: 10, h: 10 } },
-    { path: 'h', kind: 'shape', shape: 'rect', box: { x: 0, y: 0, w: 0, h: 10 } },
-  ],
-})
-check('the bridge maps a design box to the nearest Excalidraw shape', bridged.skeletons.length, 4)
-check('...in DESIGN pixels, rounded', JSON.stringify(bridged.skeletons[0]), JSON.stringify({ x: 10, y: 21, width: 100, height: 50, type: 'rectangle' }))
-check('...an ellipse stays an ellipse', bridged.skeletons[1].type, 'ellipse')
-check('...a path becomes a rectangle, which the note counts', bridged.skeletons[2].type, 'rectangle')
-check(
-  '...text keeps the string and the size the design measured',
-  JSON.stringify(bridged.skeletons[3]),
-  JSON.stringify({ x: 1, y: 2, width: 30, height: 12, type: 'text', text: 'Ship plugins', fontSize: 22 }),
-)
-// The zero-width box produced no skeleton either (four arcs in, four out), and the
-// count is the four kinds this editor has no shape for: the path approximation,
-// plus the frame, the image and the art node.
-check('...a zero-width box is dropped, not drawn', bridged.skeletons.length, 4)
-check('...and every kind without a counterpart is counted', bridged.skipped, 4)
-// The loader is a CLASSIC script and the design is re-seeded ONCE PER REVISION,
-// which is what keeps a person's own drawing on screen instead of being stomped
-// by a re-render.
-check(
-  'the surface re-seeds only when the design\u2019s revision moves',
-  canvasSource.includes("const key = String(design.id ?? '') + '@' + String(design.revision ?? 0)") && canvasSource.includes('if (syncedRef.current === key) return undefined'),
-)
-// Unload the row: the renderer's own effect returned a stopper, which is what the
-// shell calls when the plugin goes away (and what lets this process exit).
-for (const dispose of canvasDisposers) dispose()
-check('the renderer stopped with its row', canvasEffects.length >= 11, true)
+// The Canvas tab used to carry a SECOND surface: a vendored Excalidraw mounted over
+// the design surface, seeded from the layout one way, with its own library kept in
+// this origin's storage. It is gone, and the tab is the design surface and nothing
+// else. What is pinned here is that the bundle carries no trace of it - no loader,
+// no bridge, no storage key, no overlay stylesheet, no surface mode for the toolbar
+// to hide behind - because the tab's whole contract is that the document the host
+// validates is the document the person edits, and a second editor with its own
+// element model is exactly what that contract cannot survive.
+check('the bundle carries no Excalidraw reference at all', /excalidraw/i.test(canvasSource), false)
+check('...and no overlay stylesheet for one', /cnv-excalidraw/.test(canvasCss), false)
+check('...and no second surface for the toolbar to hide behind', canvasSource.includes("'data-canvas-surface'"), false)
+check('...and no storage of its own', canvasSource.includes('localStorage'), false)
+check('...and the scene bridge went with it', canvasInternals.sceneSkeletonsFor === undefined, true)
+check('...and so did the library persistence', canvasInternals.readStoredLibrary === undefined && canvasInternals.LIBRARY_STORAGE_KEY === undefined, true)
+check('...and the vendored routes went with them', Object.values(canvasInternals.ROUTES).join(',').includes('excalidraw'), false)
+
+// --- THE OBJECT VERBS (alpha.13)
+//
+// Adding, duplicating, deleting and re-ordering a layer are the verbs that make the tab
+// a DESIGNER rather than a nudger, and every one of them is a `canvas_patch` the agent
+// could have written - so they are pinned here as pure data, before any UI is involved:
+// what each verb emits, and that a verb with nothing to act on emits NOTHING rather than
+// a patch the host would refuse.
+{
+  const { objectOps, parentOf, newLayer } = canvasInternals
+  check('the pure verb layer is exported', typeof objectOps === 'function' && typeof parentOf === 'function' && typeof newLayer === 'function', true)
+  check('a path splits into its parent array and its index', JSON.stringify(parentOf('layers.1.children.0')), JSON.stringify({ parentPath: 'layers.1.children', index: 0 }))
+  check('...and a top-level layer keeps the array it lives in', parentOf('layers.3').parentPath, 'layers')
+  const node = { kind: 'shape', shape: 'rect', w: 10, h: 10 }
+  check('add appends to the array it is given', JSON.stringify(objectOps('add', { parentPath: 'layers', node })), JSON.stringify([{ op: 'insert', at: 'layers.-', value: node }]))
+  check('...and into a frame\u2019s children when that is the parent', JSON.stringify(objectOps('add', { parentPath: 'layers.2.children', node })), JSON.stringify([{ op: 'insert', at: 'layers.2.children.-', value: node }]))
+  check('duplicate lands directly after its original', JSON.stringify(objectOps('duplicate', { path: 'layers.1', node })), JSON.stringify([{ op: 'insert', at: 'layers.2', value: node }]))
+  check('delete removes the path', JSON.stringify(objectOps('delete', { path: 'layers.1' })), JSON.stringify([{ op: 'remove', at: 'layers.1' }]))
+  // A Z-ORDER MOVE IS TWO OPS AND THE ORDER MATTERS: the insert index is read against the
+  // array AFTER the removal, which is why both ends are what they are.
+  check('to front removes and then appends', JSON.stringify(objectOps('front', { path: 'layers.0', node })), JSON.stringify([{ op: 'remove', at: 'layers.0' }, { op: 'insert', at: 'layers.-', value: node }]))
+  check('to back removes and then inserts at the head', JSON.stringify(objectOps('back', { path: 'layers.4', node })), JSON.stringify([{ op: 'remove', at: 'layers.4' }, { op: 'insert', at: 'layers.0', value: node }]))
+  check('a verb with no node writes nothing', objectOps('duplicate', { path: 'layers.1' }).length, 0)
+  check('an unknown verb writes nothing', objectOps('explode', { path: 'layers.1', node }).length, 0)
+  check('add without a parent writes nothing', objectOps('add', { node }).length, 0)
+  // A NEW LAYER, and the two properties that make it belong to the design rather than to
+  // the toolbar: it is INSIDE the canvas, and its colour is the document's own token when
+  // the document defines one.
+  const fixture = { canvas: { width: 1280, height: 640 }, tokens: { color: { ink: '#111111', accent: '#4D6BFE' }, font: { display: 'Space Grotesk' }, radius: { card: 20 } } }
+  const added = { text: newLayer('text', fixture), rect: newLayer('rect', fixture), ellipse: newLayer('ellipse', fixture) }
+  check('a new text layer is a text node with words to replace', added.text.kind === 'text' && added.text.text.length > 0, true)
+  check('...sized from an explicit size, not a style role', typeof added.text.size === 'number' && added.text.style === undefined, true)
+  check('...and naming a family only because the document has that role', added.text.family, 'display')
+  check('a new rectangle is a shape with the document\u2019s own accent', added.rect.shape === 'rect' && added.rect.fill === 'accent', true)
+  check('...and the document\u2019s own corner radius', added.rect.radius, 20)
+  check('a new ellipse is square', added.ellipse.shape === 'ellipse' && added.ellipse.w === added.ellipse.h, true)
+  check('every new layer starts inside the canvas', Object.values(added).every((entry) => entry.x >= 0 && entry.y >= 0 && entry.x < 1280 && entry.y < 640), true)
+  const bare = newLayer('text', { canvas: { width: 400, height: 300 }, tokens: {} })
+  check('a document with no tokens gets a literal colour and no family role', bare.color === '#111111' && bare.family === undefined, true)
+
+  // --- SNAPPING, as pure data
+  //
+  // A drag aligns to the canvas's own edges and centre and to every OTHER box's edges and
+  // centre, and the LINES THAT ARE DRAWN come from the same call that decides the movement -
+  // so a guide can never describe a snap the document did not get. Pinned here without a
+  // browser, because it is arithmetic.
+  const { snapFor } = canvasInternals
+  check('the snap helper is exported', typeof snapFor === 'function', true)
+  const canvas = { width: 1000, height: 500 }
+  const dragged = { x: 494, y: 100, w: 100, h: 50 }
+  const ownCentre = snapFor(dragged, [], canvas, 8)
+  check('a box near the canvas centre snaps its centre onto it', ownCentre.dx, 6)
+  check('...and draws the guide it snapped to', JSON.stringify(ownCentre.guides), JSON.stringify([{ axis: 'x', at: 500, from: 0, to: 500 }]))
+  check('a box near a canvas edge snaps its own edge', snapFor({ x: 3, y: 100, w: 100, h: 50 }, [], canvas, 8).dx, -3)
+  check('...and the guide runs the full height', JSON.stringify(snapFor({ x: 3, y: 100, w: 100, h: 50 }, [], canvas, 8).guides[0]), JSON.stringify({ axis: 'x', at: 0, from: 0, to: 500 }))
+  // A box whose six lines are ALL far from every candidate: nothing moves and nothing is
+  // drawn. (The earlier fixture taught the difference: a box whose top edge lands exactly on
+  // the canvas's middle line has dy 0 and STILL gets a guide - an edge already on a line is
+  // exactly the fact a guide exists to show.)
+  check('nothing within tolerance moves nothing and draws nothing', JSON.stringify(snapFor({ x: 250, y: 180, w: 100, h: 50 }, [], canvas, 8)), JSON.stringify({ dx: 0, dy: 0, guides: [] }))
+  check('...while an edge already ON a line draws a guide without moving it', JSON.stringify(snapFor({ x: 250, y: 250, w: 100, h: 50 }, [], canvas, 8).guides), JSON.stringify([{ axis: 'y', at: 250, from: 0, to: 1000 }]))
+  const other = { path: 'layers.0', box: { x: 200, y: 40, w: 100, h: 400 } }
+  const toOther = snapFor({ x: 203, y: 250, w: 100, h: 50 }, [other], canvas, 8)
+  check('a box snaps to ANOTHER box\u2019s edge', toOther.dx, -3)
+  check('...and the guide spans both boxes', JSON.stringify(toOther.guides[0]), JSON.stringify({ axis: 'x', at: 200, from: 40, to: 440 }))
+  // THREE candidates are within reach and the smallest distance wins: the dragged box's left
+  // edge is 4px from the other box's right edge (300), 46 from its centre line (250) and 96
+  // from its left edge (200) - so the answer is +4 and not -46.
+  check('the NEAREST of several candidate lines wins', snapFor({ x: 296, y: 250, w: 100, h: 50 }, [{ path: 'a', box: { x: 200, y: 0, w: 100, h: 10 } }], { width: 1000, height: 500 }, 60).dx, 4)
+  const both = snapFor({ x: 494, y: 246, w: 100, h: 50 }, [], canvas, 8)
+  check('the two axes are decided independently', both.dx + '/' + both.dy, '6/4')
+  check('...with one guide each', both.guides.length, 2)
+  check('a zero-sized box offers no lines to snap to', snapFor({ x: 100, y: 100, w: 10, h: 10 }, [{ path: 'z', box: { x: 100, y: 100, w: 0, h: 0 } }], { width: 1000, height: 500 }, 8).guides.length, 0)
+  check('a box already ON a line is not moved', snapFor({ x: 500, y: 100, w: 100, h: 50 }, [], canvas, 8).dx, 0)
+
+  // --- THE MARQUEE, as pure data
+  //
+  // The band that catches a group of layers and the patch that MOVES that group are both
+  // arithmetic, and they are pinned here without a browser for the same reason the snap is:
+  // what a check can prove exactly, it should.
+  const { marqueeHits, multiMoveOps, boxesTouch } = canvasInternals
+  check('the marquee helpers are exported', typeof marqueeHits === 'function' && typeof multiMoveOps === 'function' && typeof boxesTouch === 'function', true)
+  const layout = [
+    { path: 'layers.0', box: { x: 0, y: 0, w: 100, h: 100 } },
+    { path: 'layers.1', box: { x: 90, y: 90, w: 100, h: 100 } },
+    { path: 'layers.2', box: { x: 400, y: 400, w: 100, h: 100 } },
+    { path: 'layers.3', box: { x: 10, y: 10, w: 0, h: 0 } },
+  ]
+  check('two boxes that merely touch still overlap', boxesTouch({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 }), true)
+  check('...and two that do not, do not', boxesTouch({ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 0, w: 10, h: 10 }), false)
+  check('a band catches every layer it touches', marqueeHits(layout, { x: 50, y: 50, w: 100, h: 100 }).join(','), 'layers.0,layers.1')
+  check('...in the layout\u2019s own order', marqueeHits(layout, { x: 0, y: 0, w: 600, h: 600 }).join(','), 'layers.0,layers.1,layers.2')
+  check('...and leaves out what it did not reach', marqueeHits(layout, { x: 0, y: 0, w: 600, h: 600 }).includes('layers.3'), false)
+  check('a layer with no drawable box is never caught', marqueeHits(layout, { x: 0, y: 0, w: 20, h: 20 }).includes('layers.3'), false)
+  check('a band over nothing catches nothing', marqueeHits(layout, { x: 900, y: 900, w: 10, h: 10 }).length, 0)
+  // ONE GESTURE OVER SEVERAL LAYERS IS ONE PATCH, up to the cap - and the layers that did not
+  // fit are COUNTED, because moving some of a selection silently is worse than saying so.
+  const movables = Array.from({ length: 40 }, (unused, index) => ({ path: 'layers.' + index, box: { x: index * 10, y: 0, w: 8, h: 8 } }))
+  const moveDoc = { layers: movables.map((row, index) => ({ kind: 'shape', shape: 'rect', x: index * 10, y: 0, w: 8, h: 8 })) }
+  const two = multiMoveOps(['layers.0', 'layers.1'], moveDoc, movables, 5, 7)
+  check('a move of two layers is four operations', two.ops.length, 4)
+  check('...two per layer, position only', two.ops.map((op) => op.at.split('.').pop()).join(','), 'x,y,x,y')
+  check('...and nothing was left behind', two.dropped, 0)
+  // A MOVE ALONG ONE AXIS IS ONE OPERATION PER LAYER, a diagonal one is two: the cap bites
+  // at 64 operations, which is 32 layers diagonally - and the layers that did not fit are
+  // counted so the tab can say how many were left behind.
+  const flat = multiMoveOps(movables.map((row) => row.path), moveDoc, movables, 5, 0)
+  check('a move of forty layers along one axis fits in one patch', flat.ops.length, 40)
+  check('...and leaves nobody behind', flat.dropped, 0)
+  const diagonal = multiMoveOps(movables.map((row) => row.path), moveDoc, movables, 5, 7)
+  check('a DIAGONAL move of forty layers is capped at the patch\u2019s 64 operations', diagonal.ops.length, 64)
+  check('...so thirty-two layers move', diagonal.ops.length / 2, 32)
+  check('...and the eight that did not are counted', diagonal.dropped, 8)
+  check('a move of nothing writes nothing', multiMoveOps([], moveDoc, movables, 5, 5).ops.length, 0)
+  check('a path that is not in the document is skipped, not counted as dropped', multiMoveOps(['layers.999'], moveDoc, movables, 5, 5).dropped, 0)
+
+  // --- THE IN-PLACE TEXT EDITOR'S PURE HALF
+  //
+  // A text layer has TWO spellings in this language - `text` for a plain string and `runs`
+  // for rich text, which is what the archetypes carry - and the editor has to open on the
+  // words a person can SEE either way: a model-authored rich-text block used to be
+  // uneditable in place, because the editor only looked at `text`.
+  const { nodeTextOf } = canvasInternals
+  check('the editor\u2019s word reader is exported', typeof nodeTextOf === 'function', true)
+  check('a plain text layer reads its own string', nodeTextOf({ kind: 'text', text: 'Hello' }), 'Hello')
+  check('a rich-text layer reads its runs joined', nodeTextOf({ kind: 'text', runs: [{ text: 'Ship ' }, { text: 'plugins', color: '#f00' }, { text: ', not patches.' }] }), 'Ship plugins, not patches.')
+  check('plain text wins when a layer carries both', nodeTextOf({ text: 'plain', runs: [{ text: 'rich' }] }), 'plain')
+  check('a run with no words contributes nothing', nodeTextOf({ runs: [{ text: 'a' }, {}, { text: 'b' }] }), 'ab')
+  check('a layer with no words at all reads as null', nodeTextOf({ kind: 'text' }), null)
+  check('...and so does a shape', nodeTextOf({ kind: 'shape', shape: 'rect' }), null)
+  check('...and nothing at all', nodeTextOf(null), null)
+  // AND THE COMMIT. A rich-text layer is edited by WRITING `text` AND REMOVING `runs` in
+  // one patch - a node that kept both would still paint the runs, so the words a person
+  // typed would be invisible. This is the same shape the tab sends.
+  const richEdit = [{ op: 'set', at: 'layers.2.text', value: 'Edited' }, { op: 'remove', at: 'layers.2.runs' }]
+  check('an edit of a plain layer writes one field', JSON.stringify([{ op: 'set', at: 'layers.2.text', value: 'Edited' }].map((op) => op.at)), JSON.stringify(['layers.2.text']))
+  check('...and an edit of a rich-text layer clears the runs in the SAME patch', richEdit.length, 2)
+  // THAT THIS PATCH IS ONE THE ENGINE APPLIES is proved where the engine is:
+  // `check-canvas-node.mjs` runs it through `applyPatches` and reads the result back.
+  // Unload the row: the renderer's own effect returned a stopper, which is what the
+  // shell calls when the plugin goes away (and what lets this process exit).
+  for (const dispose of canvasDisposers) dispose()
+  check('the renderer stopped with its row', canvasEffects.length >= 11, true)
+}
 
 // ---------------------------------------------------------------------------
 // NO TWO BUNDLES MAY DRESS THE SAME CLASS

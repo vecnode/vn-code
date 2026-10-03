@@ -1,0 +1,31 @@
+{
+  "generatedBy": "packages/dsh-canvas/vendor/konva/build.mjs",
+  "note": "The vendored Konva surface for the Canvas tab: ONE self-contained UMD browser build and the MIT text that covers it, taken out of the pinned npm tarball. Nothing is forked and nothing is patched - the only mechanical change is CRLF-to-LF with one trailing newline, because .gitattributes stores text as LF and these bytes are hashed, so a CRLF-hashed file would report phantom drift on every clean checkout. `--check` re-hashes both files OFFLINE from this record; the tarball itself is verified against the registry’s published sha512 before a byte is extracted.",
+  "pins": {
+    "konva": "10.7.0"
+  },
+  "integrity": "sha512-2CwuytBrOlTh7WHCSeXyUeysB2rpwHruUUDD5etYtrzijkCVH+00+CQz5fJUGI0hm7mzxxDLYLw4Wpo+8QGJ4g==",
+  "licence": "MIT",
+  "homepage": "https://konvajs.org/",
+  "global": "Konva",
+  "route": "/api/dsh-canvas/vendor/konva.js",
+  "files": {
+    "konva.min.js": {
+      "from": "package/konva.min.js",
+      "url": "https://registry.npmjs.org/konva/-/konva-10.7.0.tgz",
+      "sha256": "bdd5bb015d2ba3d93d6a9082fdb14c305369b3df6e6d9b2610c3f8c4b4190895",
+      "bytes": 192899,
+      "lf": true,
+      "note": "upstream’s own UMD browser build: one self-contained file that leaves `globalThis.Konva` behind"
+    },
+    "LICENSE-konva.txt": {
+      "from": "package/LICENSE",
+      "url": "https://registry.npmjs.org/konva/-/konva-10.7.0.tgz",
+      "sha256": "f7cef0a46594ad495f30a37df7c218e90d5b3de0eb962da526b58ba10ee49fc3",
+      "bytes": 1173,
+      "lf": true,
+      "note": "Konva is MIT; this is the text the distribution ships beside the artifact"
+    }
+  },
+  "digest": "f834416d28ea9b089f2dff6a59dce3202d95fde830664dcfedb6eedb0476f877"
+}

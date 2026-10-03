@@ -42,8 +42,8 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
    `scripts/run-web.sh`.
 6. **No secrets, ever.** Run `node scripts/checks/check-no-secrets.mjs` before
    pushing. A vendored bundle can ship its author's own credentials: redact them
-   in the **build** (see `packages/dsh-canvas/vendor/excalidraw/patches/`), never
-   with an allowlist entry.
+   in the **build** (a patch under that engine's `vendor/<name>/patches/`, read
+   before the artifact is committed), never with an allowlist entry.
 7. **Zero npm dependencies** in shipped packages, and no network egress a plugin
    starts on its own. Engines are vendored under `lib/vendor/` or resolved from
    the harness already on disk.
@@ -77,9 +77,9 @@ Run the check that owns the area, and say which ones you ran:
 - `check-node-routes.mjs` — every Node route, the manifest, the pack-wide patches;
 - `check-client-bundles.mjs` — every browser bundle, loaded and driven for real;
 - `check-media-node.mjs`, `check-pdf-node.mjs`, `check-canvas-node.mjs`,
-  `check-canvas-scene.mjs`, `check-browser-node.mjs`, `check-splash.mjs` — the tool
+  `check-browser-node.mjs`, `check-splash.mjs` — the tool
   and host halves;
-- `check-canvas-excalidraw.mjs`, `check-canvas-panel.mjs`,
+- `check-canvas-panel.mjs`,
   `check-canvas-browser.mjs`, `check-audio-browser.mjs` — the checks that drive a
   real browser (with none installed they skip loudly);
 - `check-skill-examples.mjs`, `check-media-examples.mjs` — every fenced example in

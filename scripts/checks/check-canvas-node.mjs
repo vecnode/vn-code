@@ -196,6 +196,25 @@ check('a canonical document re-validates', twice.problems.length, 0)
 check('a canonical document is a fixed point', engine.stableJson(twice.document) === engine.stableJson(valid.document), true)
 const patchedRoundTrip = engine.applyPatches(valid.document, [{ op: 'set', at: 'layers.1.children.0.text', value: 'x' }])
 check('a patched canonical document still validates', engine.documentErrors(patchedRoundTrip.document, { presets: PRESETS, fonts: FONTS }).length, 0)
+// THE EDITOR'S PATCHES ARE PATCHES LIKE ANY OTHER, and this is where that is proved: the
+// tab's object verbs (add, duplicate, delete, z-order) and its in-place text edit all go
+// through `applyPatches`, so a shape the UI can produce that the engine refuses would be a
+// button that silently does nothing.
+const addLayer = engine.applyPatches(valid.document, [{ op: 'insert', at: 'layers.-', value: { kind: 'shape', shape: 'ellipse', x: 10, y: 10, w: 40, h: 40, fill: 'accent' } }])
+check('adding a layer applies', addLayer.document !== null && engine.documentErrors(addLayer.document, { presets: PRESETS, fonts: FONTS }).length === 0, true)
+check('...and it lands at the end', addLayer.document.layers[addLayer.document.layers.length - 1].shape, 'ellipse')
+const zOrder = engine.applyPatches(valid.document, [{ op: 'remove', at: 'layers.0' }, { op: 'insert', at: 'layers.-', value: valid.document.layers[0] }])
+check('a z-order move applies, and the document still validates', zOrder.document !== null && engine.documentErrors(zOrder.document, { presets: PRESETS, fonts: FONTS }).length === 0, true)
+check('...moving the first layer to the last place', JSON.stringify(zOrder.document.layers[zOrder.document.layers.length - 1]), JSON.stringify(valid.document.layers[0]))
+// AN IN-PLACE TEXT EDIT OF A RICH-TEXT LAYER: `text` is written and `runs` REMOVED in the
+// same patch, because a node that kept both would still paint the runs - the words a person
+// typed would be invisible.
+const richEdit = engine.applyPatches(
+  { preset: 'github-social', layers: [{ kind: 'shape', shape: 'rect', w: 4, h: 4 }, { kind: 'shape', shape: 'rect', w: 4, h: 4 }, { kind: 'text', runs: [{ text: 'rich ' }, { text: 'old' }] }] },
+  [{ op: 'set', at: 'layers.2.text', value: 'Edited' }, { op: 'remove', at: 'layers.2.runs' }],
+)
+check('an in-place text edit applies as one patch', richEdit.document !== null, true)
+check('...leaving the typed words and no runs', JSON.stringify(richEdit.document.layers[2]), JSON.stringify({ kind: 'text', text: 'Edited' }))
 
 const refusalCases = [
   ['UNKNOWN_PRESET', { preset: 'nope' }],
@@ -1011,6 +1030,17 @@ check('both skills registered', registered.skills.length, 2)
 check('the view routes plus every font file registered', registered.routes.length > 8, true)
 check('the engine route is registered', registered.routes.some((route) => route.path === '/api/dsh-canvas/vendor/engine.js'), true)
 check('one route per font file', registered.routes.filter((route) => route.path.includes('/vendor/fonts/')).length, 5)
+// THE VENDORED EXCALIDRAW SURFACE IS GONE (alpha.13): two artifact routes plus one
+// route per face were the bulk of this row's route table, and the tree behind them
+// was 3.8 MB of a browser bundle. The absence is asserted by NAME rather than by a
+// route count, because a count a regression could satisfy by registering something
+// else is not a test of anything.
+check('no Excalidraw route is registered', registered.routes.filter((route) => route.path.includes('excalidraw')).map((route) => route.path).join(', '), '')
+// THE INTERACTION LAYER'S ONE ROUTE. It is a classic script rather than a module,
+// so what matters is that the route exists, answers with the committed artifact and
+// carries the sha256 VERSION.json records as its ETag - a stale copy of the
+// interaction layer is a stale editor.
+check('the interaction layer route is registered', registered.routes.some((route) => route.path === '/api/dsh-canvas/vendor/konva.js'), true)
 // THE REGISTRATION SHAPE IS THE REGISTRY'S: a missing `methods` array is a
 // BOOT-TIME TypeError inside the registry, which the contained boot test found -
 // the row loaded, the harness started, and every canvas route was absent.

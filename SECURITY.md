@@ -154,8 +154,8 @@ restart does not log a browser out — rotate the secret for that.
 
 - **Nothing to trust at install time**: no shipped package declares a runtime
   dependency, and the bundles are installed as live links.
-- **Vendored engines are pinned and hashed**: CodeMirror 6, Mermaid, pdf.js and
-  Excalidraw are built from their `vendor/` folders and served by the packages
+- **Vendored engines are pinned and hashed**: CodeMirror 6, Mermaid and pdf.js are
+  built from their `vendor/` folders and served by the packages
   themselves — no CDN, no runtime download. Each records a sha256 per file and a
   digest in `lib/vendor/…/VERSION.json`, re-hashed offline by `build.mjs --check`;
   forked bundles carry a GENERATED banner and are checked by
@@ -184,15 +184,15 @@ bearer JWT, plus a missing `.gitignore` credential rule. It never prints what it
 found (file, line, rule and a masked preview only), its allowlist is empty by
 design, and it self-tests that it fires.
 
-**A vendored bundle carries its author's credentials.** Excalidraw's published build
-ships its OSS Firebase config — Google api key included, and Firebase web api keys
-are public by design — so vendoring it put a `google_api_key` in this public
-repository and GitHub's scanning opened a `public leak` alert naming *Excalidraw's*
-key, which this repository can neither rotate nor revoke. The fix is a **build
-patch**, never an allowlist entry:
-`packages/dsh-canvas/vendor/excalidraw/patches/index.mjs` blanks the `apiKey` value
-in every file read from the pinned package's `dist/`, matched by key name so a
-rotated key is redacted the same. Read what a third-party build ships before
+**A vendored bundle carries its author's credentials.** The Canvas tab's vendored
+Excalidraw (removed in alpha.13) shipped its OSS Firebase config — Google api key
+included, and Firebase web api keys are public by design — so vendoring it put a
+`google_api_key` in this public repository and GitHub's scanning opened a
+`public leak` alert naming *Excalidraw's* key, which this repository can neither
+rotate nor revoke. The fix is a **build patch**, never an allowlist entry: a patch
+under the engine's own `vendor/<name>/patches/` blanks the `apiKey` value in every
+file read from the pinned package's `dist/`, matched by key name so a rotated key
+is redacted the same. Read what a third-party build ships before
 committing it. **If a credential is ever committed:** rotate it first (assume it is
 public), then remove it from history (`git filter-repo` or the BFG) and force-push —
 deleting the file in a new commit does not remove it. Enable GitHub's secret
