@@ -49,7 +49,7 @@ is in the state you think it is.
   `latest`.
 - **Zero npm dependencies.** No shipped package declares a runtime dependency, so
   installing the pack installs nothing new. The engines it needs are either
-  vendored files in this repo (Mermaid, CodeMirror, pdf.js) or resolved from the
+  vendored files in this repo (Mermaid, CodeMirror, pdf.js, Excalidraw) or resolved from the
   harness installation already on disk. (Terminal alpha.12 removed the last one
   that was resolved rather than vendored — `node-pty` and `ws`, for the dock's own
   PTY — and the xterm.js entry with it: the dock is a read-only transcript now.)
@@ -464,8 +464,10 @@ would stage, so an unignored credentials file is caught *before* it is committed
 It fails on:
 
 - a key-shaped string, a credential ref with a value attached, a generic
-  `apiKey`/`password`/`client_secret` assignment, a launch token pasted into a URL,
-  a GitHub/AWS/Slack/Stripe key, a private-key block or a bearer JWT;
+  `apiKey`/`password`/`client_secret` assignment (**quoted name or not** — the
+  serialized `"apiKey":"…"` form is what a vendored bundle contains), a launch
+  token pasted into a URL, a Google/Firebase api key (`AIza…`), a
+  GitHub/AWS/Slack/Stripe key, a private-key block or a bearer JWT;
 - a missing credential rule in `.gitignore` (`.env`, `.credentials.yaml`,
   `*.pem`, `*.key`, `id_rsa*`, `.npmrc`, …);
 - **its own silence** — a self-test asserts the scanner fires on a synthetic key
@@ -484,11 +486,51 @@ screenshots are reviewed by hand** — they are whole-screen captures and can sh
 session, a path, a notification or a key. And it sees the working tree, not the
 past.
 
+**A VENDORED BUNDLE CARRIES ITS AUTHOR'S CREDENTIALS — the incident this check
+learned from.** Alpha.11 of `dsh-canvas` vendored Excalidraw 0.18.1, and
+Excalidraw's own published build ships its OSS **Firebase configuration** as a
+string literal, Google api key included, because Firebase **web** api keys are
+public by design: they name a project, and access is decided by Firebase security
+rules and App Check, not by the key. The result was a `google_api_key` in a
+**public** repository, and GitHub's secret scanning opened a `public leak` alert
+against `packages/dsh-canvas/lib/vendor/excalidraw/excalidraw.min.js` — naming
+**Excalidraw's** key, which this repository can neither rotate nor revoke, so the
+usual "rotate, then revoke" resolution is not available to it.
+
+Three things came out of that, and all three are load-bearing:
+
+1. **The artifact is fixed by a BUILD PATCH, never by an allowlist entry.**
+   `packages/dsh-canvas/vendor/excalidraw/patches/index.mjs`
+   (`firebase-api-key-redacted`) is an esbuild `onLoad` that blanks the `apiKey`
+   **value** in every file read from the pinned package's `dist/`, matched by key
+   NAME rather than by the secret's text, so a version bump that rotates the key
+   is redacted the same. The constant keeps its exact shape, the artifact hash
+   proves what produced it, and `VERSION.json.patches` records it.
+2. **The scanner was wrong in two ways, and both are fixed.** It had no
+   Google/Firebase api-key shape at all, and its generic-assignment rule required
+   the colon to follow the *bare* key name — so the serialized `"apiKey":"AIza…"`
+   form that a bundle actually contains matched **nothing**. There is now a
+   `google-api-key` rule, the assignment rule tolerates a quoted name, and the
+   self-test drives that exact shape.
+3. **The check is not the only guard.** `check-canvas-excalidraw.mjs` asserts the
+   artifact's own contract — the record still names the patch, the bundle carries
+   no Google-key-shaped literal, and the api key Excalidraw shipped is blanked —
+   so the failure names the cause as well as the file.
+
+What this means for any future vendored bundle: **read what a third-party build
+ships before committing it.** A minified file is not exempt from review just
+because it is minified, and a build root is where a redaction belongs — a hand
+edit to a hashed artifact rots on the next version bump.
+
 **If a credential is ever committed.** Rotate it **first** — assume it is public
 the moment it is pushed, because it is. Then remove it from history
 (`git filter-repo` or the BFG) and force-push; deleting the file in a new commit
 does not remove it. GitHub's own secret scanning and push protection are worth
-enabling on this repository as a second net behind this check.
+enabling on this repository as a second net behind this check. The one case where
+rotation is impossible is somebody else's key, as above: there the honest
+resolution is the build patch plus closing the alert as *revoked* (the key cannot
+be used by this repository any more because it no longer ships in it), with the
+history caveat stated rather than hidden.
 
 ## What this pack does not do
 

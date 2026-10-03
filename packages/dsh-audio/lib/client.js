@@ -41,8 +41,10 @@
  * HOW THE BYTES ARRIVE. This package is CLIENT-ONLY: it ships no route, no host
  * state and no path policy of its own, and its Node half is one no-op row whose
  * only job is to put this bundle in the boot graph. Bytes come from the
- * harness's own `workspaceFiles` remote - `readBytes` for a window and `readAll`
- * for a whole file - which already resolves the path inside the conversation
+ * harness's own `workspaceFiles` remote - `readBytes` with a window for a
+ * streaming pass and `readBytes` with EMPTY options for a whole file (the
+ * namespace has no `readAll` at all; see the face comment below) - which already
+ * resolves the path inside the conversation
  * workspace, refuses a symlink out of it, requires a regular file and enforces
  * its byte caps on the HOST side. Reading in WINDOWS is what lets a file far
  * past the 32 MiB single-read cap still draw a waveform: the decoder consumes
@@ -110,7 +112,7 @@ window.__ModuleLoader__.load({
     /** The tab kind this package owns. */
     const KIND = 'audio'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.3'
+    const PLUGIN_VERSION = '0.1.0-alpha.4'
     /** Address grammar owned by @deepseek-ai/dsh-util-workspace-path. */
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
@@ -331,9 +333,14 @@ window.__ModuleLoader__.load({
     // inject`, the guard below swallowed it into null, and every audio tab
     // reported that the harness exposed no workspaceFiles remote.
     //
-    // `readBytes(scopeId, path, { offset, length }, signal)` and
-    // `readAll(scopeId, path, signal)` resolve to `{ ok: true, value }` or
-    // `{ ok: false, error }`, and reject only for an assembly fault.
+    // `readBytes(scopeId, path, { offset, length }, signal)` reads a window and
+    // `readBytes(scopeId, path, {}, signal)` reads the whole file; each resolves
+    // to `{ ok: true, value }` or `{ ok: false, error }`, and rejects only for
+    // an assembly fault. THERE IS NO `readAll` on this namespace (the generated
+    // Remote declares `changes`, `list`, `read`, `readBytes` and `stat`), and
+    // the whole-file path used to call one - which is why no FLAC could be
+    // decoded. The payload's `data` is a `Uint8Array` and `bytesOf` accepts the
+    // other shapes a carrier could use, so a window is never fed to `atob`.
     // ---------------------------------------------------------------------
     let workspaceFiles = null
 
@@ -1300,6 +1307,30 @@ window.__ModuleLoader__.load({
       return bytes
     }
 
+    /**
+     * The bytes of one `readBytes` payload, in whichever shape the carrier
+     * delivered them.
+     *
+     * The generated result codec declares `data` as `z.instanceof(Uint8Array)`
+     * (the carrier decodes its binary frame into one, and the shipped preview
+     * hands it straight to `new Blob`), but a window is read once per 2 MiB and
+     * the whole substrate of this tab is those bytes, so the decode accepts the
+     * other shapes a carrier could plausibly use rather than throwing
+     * `InvalidCharacterError` out of `atob(String(uint8array))` - which is what
+     * the base64-only decode did, and why a waveform could not be drawn from a
+     * window the host had handed over correctly.
+     *
+     * @param data - the result's `data` field.
+     * @returns the bytes, or null for a payload that is not bytes at all.
+     */
+    function bytesOf(data) {
+      if (data instanceof Uint8Array) return data
+      if (data instanceof ArrayBuffer) return new Uint8Array(data)
+      if (Array.isArray(data)) return Uint8Array.from(data)
+      if (typeof data === 'string' && data !== '') return decodeBase64(data)
+      return null
+    }
+
     /** The sentence a failed Remote call gets, from its own failure code. */
     function remoteErrorText(error) {
       const code = error && typeof error.code === 'string' ? error.code : ''
@@ -1340,8 +1371,10 @@ window.__ModuleLoader__.load({
       for (let attempt = 0; attempt < 8; attempt += 1) {
         const result = await workspaceFiles.readBytes(sessionId, path, { offset: offset, length: size }, signal)
         if (result && result.ok === true) {
+          const bytes = bytesOf(result.value.data)
+          if (bytes === null) throw new Error('The host handed over a window of this file in a shape this tab cannot read.')
           windowCap = Math.max(WINDOW_FLOOR, size)
-          return { bytes: decodeBase64(result.value.data), eof: result.value.eof === true }
+          return { bytes: bytes, eof: result.value.eof === true }
         }
         const error = result ? result.error : null
         const smaller = refusedWindow(error, size)
@@ -1354,11 +1387,26 @@ window.__ModuleLoader__.load({
       throw new Error('This harness would not hand over even a small window of the file.')
     }
 
-    /** Read the whole file through the Remote (the FLAC path). */
+    /**
+     * Read the whole file through the Remote (the FLAC path).
+     *
+     * `readBytes` with EMPTY options is the namespace's whole-file read - the
+     * generated Remote has no `readAll` at all, and asking for one threw the
+     * "no workspaceFiles remote" sentence at every FLAC. The payload must also
+     * reach EOF: a file past the host's single-read ceiling arrives TRUNCATED
+     * with `eof: false`, and a browser decoder handed a truncated FLAC would
+     * report a decode fault instead of the size that caused it.
+     * @returns the file's bytes.
+     */
     async function readWhole(sessionId, path, signal) {
-      const result = await workspaceFiles.readAll(sessionId, path, signal)
-      if (result && result.ok === true) return decodeBase64(result.value.data)
-      throw new Error(remoteErrorText(result ? result.error : null))
+      const result = await workspaceFiles.readBytes(sessionId, path, {}, signal)
+      if (!result || result.ok !== true) throw new Error(remoteErrorText(result ? result.error : null))
+      if (result.value && result.value.eof === false) {
+        throw new Error('This file is larger than this harness will hand over in one read, so it cannot be decoded.')
+      }
+      const bytes = bytesOf(result.value ? result.value.data : null)
+      if (bytes === null) throw new Error('The host returned no bytes for this file.')
+      return bytes
     }
 
     /** The file's size, or 0 when the host will not say. */
@@ -4917,6 +4965,8 @@ window.__ModuleLoader__.load({
       MIN_PPS: MIN_PPS,
       MAX_PPS: MAX_PPS,
       MEDIA_TYPES: MEDIA_TYPES,
+      decodeBase64: decodeBase64,
+      bytesOf: bytesOf,
       parseWav: parseWav,
       parseAiff: parseAiff,
       parseFlacInfo: parseFlacInfo,

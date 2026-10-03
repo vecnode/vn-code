@@ -75,7 +75,7 @@
       ]
     },
     "dsh-image": {
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.2",
       "rows": [
         "image"
       ],
@@ -87,7 +87,7 @@
       ]
     },
     "dsh-audio": {
-      "version": "0.1.0-alpha.3",
+      "version": "0.1.0-alpha.4",
       "rows": [
         "audio"
       ],
@@ -267,7 +267,7 @@
       "vendoredPatches": 2
     },
     "dsh-canvas": {
-      "version": "0.1.0-alpha.10",
+      "version": "0.1.0-alpha.11",
       "rows": [
         "canvas"
       ],
@@ -280,6 +280,7 @@
       ],
       "vendors": [
         "Inter 400/600/700 + Space Grotesk 500/700 Latin WOFF2 subsets (lib/vendor/fonts/, SIL OFL 1.1 with both licence texts committed; VERSION.json records each file's upstream URL, bytes and sha256, and vendor/build.mjs --check is part of the tracked check)",
+        "Excalidraw 0.18.1 + React 18.3.1 + react-dom 18.3.1 (lib/vendor/excalidraw/excalidraw.min.js and excalidraw.css built by vendor/excalidraw/build.mjs from pinned npm versions, plus the 25 Latin woff2 faces it fetches at runtime and the three licence texts; VERSION.json records a sha256 per artifact, per licence and per font, the digest of the whole surface, and the trims AND repository patches that produced it, and build.mjs --check re-hashes all of it offline as a tracked check). ALPHA.11 adds the first repository patch, `firebase-api-key-redacted`: Excalidraw's published build ships its OWN OSS Firebase config - api key included - in a string literal, so vendoring it put a `google_api_key` in this PUBLIC repository and GitHub's secret scanning opened an alert that names Excalidraw's key rather than this pack's (a key this repository can neither rotate nor revoke). patches/index.mjs is an esbuild onLoad that blanks the `apiKey` VALUE in every file read from the pinned package's dist/ before bundling, so the constant keeps its exact shape, no collaboration is enabled by this surface anyway, and the artifact carries no key-shaped literal - proven on both sides: check-no-secrets.mjs gained the google-api-key rule (plus a quoted-name fix in the assignment rule and a self-test for the exact serialized-JSON shape that got past it), and check-canvas-excalidraw.mjs asserts the record still names the patch, the bundle carries no Google key, and the api key it shipped is blanked. The artifact was rebuilt with the patch and the whole surface re-verified in a real browser afterwards",
         "the canvas-design and social-banners skills, copied into $DSH_HOME/skills by both installers"
       ]
     }

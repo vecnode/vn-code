@@ -1,4 +1,4 @@
-# dsh-audio (alpha.3)
+# dsh-audio (alpha.4)
 
 **Audio opens as a waveform, not as a file whose bytes happen to be sound - and
 the machine's own audio devices live one click away in the left column.**
@@ -22,6 +22,23 @@ meter off the chosen microphone. See
 It is a **client-only** package: bytes come from the harness's own
 `workspaceFiles` remote, so there is no route, no host-side state, and no path
 policy of its own to get wrong.
+
+**Alpha.4 fixes the two halves of reading those bytes**, and both were failures
+against the real Remote rather than against this package's own logic:
+
+- the **whole-file** read (the FLAC path) asked for `readAll`, which the
+  namespace does not have - it declares `changes`, `list`, `read`, `readBytes`
+  and `stat` - so no FLAC could be decoded; it is now `readBytes(sessionId,
+  path, {}, signal)` (empty options), and a payload that arrives truncated
+  (`eof: false`) is refused instead of handed to the browser's decoder;
+- every **window** was decoded as base64 text (`atob(String(...))`) although the
+  generated result codec declares `value.data` as a `Uint8Array` (the carrier
+  decodes its binary frame into one, and the shipped preview hands it straight
+  to `new Blob`), so a correctly delivered window threw `InvalidCharacterError`
+  instead of drawing a waveform. Both paths now go through `bytesOf`, which
+  accepts a `Uint8Array`, an `ArrayBuffer`, a byte array and base64 text, and
+  the tracked check drives that decode in all four shapes instead of grepping
+  for a call.
 
 ## What it adds
 
@@ -111,8 +128,18 @@ opened by whatever surface had it.
 and a refusal carries `details.limit`, so the window is halved and asked for
 again). The decoder consumes one window at a time, folds the samples into the
 peak pyramid and **drops them**, which is what lets a 2 GiB WAV draw a waveform
-at a bounded memory cost - a cap that a single `readAll` (32 MiB by default)
-would have imposed on every file.
+at a bounded memory cost - a cap that a single whole-file read (32 MiB by
+default) would have imposed on every file.
+
+**The whole-file read is `readBytes` with empty options.** The namespace has no
+`readAll` (the generated Remote declares `changes`, `list`, `read`, `readBytes`
+and `stat`), so the FLAC path - the one that hands the whole file to the
+browser's decoder - asks for `readBytes(sessionId, path, {}, signal)` and
+refuses a payload that arrived truncated (`eof: false`) instead of letting the
+decoder report a fault the size caused. Every window and every whole-file
+payload goes through `bytesOf`, which accepts the `Uint8Array` the generated
+result codec declares as well as an `ArrayBuffer`, a byte array and base64 text:
+feeding a window to `atob` is a waveform that cannot be drawn.
 
 **WAV and AIFF are decoded here.** They are the two the browser cannot both do -
 Chrome decodes WAV but not AIFF - and both are simple containers. What is

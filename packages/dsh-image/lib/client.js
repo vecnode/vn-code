@@ -29,8 +29,10 @@
  *     disk, its format, and the source pixel under the pointer with its colour.
  *
  * Bytes come from the harness's own `workspaceFiles` remote
- * (`ctx.get('remote.workspaceFiles').readAll`), the same call the shipped preview
- * makes for a "bytes-complete" document. That call already enforces the
+ * (`ctx.get('remote.workspaceFiles').readBytes(sessionId, path, {}, signal)`),
+ * the same call the shipped preview makes for a "bytes-complete" document - not
+ * `readAll`, which is not a method of that namespace at all and left every image
+ * with "This harness exposes no workspaceFiles remote". That call already enforces the
  * workspace path policy and the single-file byte cap on the HOST side, so this
  * package needs no route of its own, no policy of its own to get wrong, and a
  * Node half that does nothing but ship the browser bundle.
@@ -57,7 +59,7 @@ window.__ModuleLoader__.load({
     /** The tab kind this package owns. */
     const KIND = 'image'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.1'
+    const PLUGIN_VERSION = '0.1.0-alpha.2'
     /** Address grammar owned by @deepseek-ai/dsh-util-workspace-path. */
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
@@ -206,9 +208,26 @@ window.__ModuleLoader__.load({
     //
     // `inject` waits for `remote.workspaceFiles`, and the Gateway installs a
     // namespace's whole method group synchronously inside its fiber's apply, so
-    // a plugin parked on the namespace never observes it without `readAll`:
-    // `readAll(scopeId, path, signal)` resolves to `{ ok: true, value }` or
-    // `{ ok: false, error }`, and rejects only for an assembly fault.
+    // a plugin parked on the namespace never observes it without its methods:
+    // `readBytes(scopeId, path, options, signal)` resolves to
+    // `{ ok: true, value: { data, eof, version, bytes, absolutePath, offset } }`
+    // or `{ ok: false, error }`, and rejects only for an assembly fault.
+    //
+    // THERE IS NO `readAll`. The namespace is the generated Remote's own
+    // (`changes`, `list`, `read`, `readBytes`, `stat` - read out of the pinned
+    // line's `typert.remote-client.js`), and a "bytes-complete" document is
+    // `readBytes` with EMPTY options, which is exactly what the shipped
+    // document preview passes for its own bytes-complete mode. Calling the
+    // absent `readAll` is what produced this tab's failure message: the guard
+    // below tested `typeof workspaceFiles.readAll !== 'function'`, which is TRUE
+    // on every harness line, so every image reported that no Remote existed
+    // while the Remote was there the whole time.
+    //
+    // `value.data` is a `Uint8Array` on the wire (`z.instanceof(Uint8Array)` in
+    // the generated result codec, which the carrier decodes from its binary
+    // frame) - the shipped preview hands it straight to `new Blob([data])`.
+    // `bytesOf` below accepts that shape AND a base64 string, so a carrier that
+    // ever hands the payload over as text cannot break the picture either.
     // ---------------------------------------------------------------------
     let workspaceFiles = null
 
@@ -308,7 +327,7 @@ window.__ModuleLoader__.load({
      * a mapper once per byte, for up to 32 million bytes, is the difference
      * between an instant open and a visible stall on a large photograph.
      *
-     * @param base64 - the Host's `data` field.
+     * @param base64 - a base64 payload.
      * @returns the bytes.
      */
     function decodeBase64(base64) {
@@ -316,6 +335,27 @@ window.__ModuleLoader__.load({
       const bytes = new Uint8Array(binary.length)
       for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
       return bytes
+    }
+
+    /**
+     * The bytes of one `readBytes` payload, in whichever shape the carrier
+     * delivered them: a `Uint8Array` (what the generated result codec declares
+     * and what the shipped preview hands to `new Blob`), an `ArrayBuffer`, a
+     * plain byte array, or base64 text.
+     *
+     * The read is the whole file, so a shape this returns null for is a shape
+     * nothing here can picture - and the caller says so instead of building a
+     * Blob out of whatever `String(value)` happens to be.
+     *
+     * @param data - the result's `data` field.
+     * @returns the bytes, or null for a payload that is not bytes at all.
+     */
+    function bytesOf(data) {
+      if (data instanceof Uint8Array) return data
+      if (data instanceof ArrayBuffer) return new Uint8Array(data)
+      if (Array.isArray(data)) return Uint8Array.from(data)
+      if (typeof data === 'string' && data !== '') return decodeBase64(data)
+      return null
     }
 
     /** The sentence a failed read gets, from the Remote's own failure code. */
@@ -424,7 +464,7 @@ window.__ModuleLoader__.load({
           setState({ phase: 'failed', url: '', bytes: 0, error: 'This image format is not one the viewer claims.' })
           return undefined
         }
-        if (workspaceFiles === null || typeof workspaceFiles.readAll !== 'function') {
+        if (workspaceFiles === null || typeof workspaceFiles.readBytes !== 'function') {
           setState({ phase: 'failed', url: '', bytes: 0, error: 'This harness exposes no workspaceFiles remote, so the file cannot be read.' })
           return undefined
         }
@@ -436,7 +476,7 @@ window.__ModuleLoader__.load({
           if (!controller.signal.aborted) setState(next)
         }
         workspaceFiles
-          .readAll(sessionId, parsed.path, controller.signal)
+          .readBytes(sessionId, parsed.path, {}, controller.signal)
           .then((result) => {
             if (controller.signal.aborted) return
             if (!result || result.ok !== true) {
@@ -444,8 +484,25 @@ window.__ModuleLoader__.load({
               return
             }
             const value = result.value
+            // The read is the WHOLE file or it is a refusal: `eof === false`
+            // means the host stopped at its per-read ceiling, and half a
+            // photograph drawn as if it were the picture is worse than one
+            // sentence saying so.
+            if (value && value.eof === false) {
+              settle({
+                phase: 'failed',
+                url: '',
+                bytes: 0,
+                error: 'This image is larger than this harness will hand over in one read, so only part of it arrived.',
+              })
+              return
+            }
+            const bytes = bytesOf(value ? value.data : null)
+            if (bytes === null) {
+              settle({ phase: 'failed', url: '', bytes: 0, error: 'The harness returned no image bytes for this file.' })
+              return
+            }
             try {
-              const bytes = decodeBase64(value.data)
               objectUrl = URL.createObjectURL(new Blob([bytes], { type: mediaType }))
               settle({ phase: 'ready', url: objectUrl, bytes: bytes.length, error: '' })
             } catch (err) {
@@ -1071,6 +1128,19 @@ window.__ModuleLoader__.load({
     exports.name = 'dsh-image'
     exports.inject = inject
     exports.apply = apply
+    // The bundle's PURE half, so the tracked check can DRIVE the payload decode
+    // (a `Uint8Array`, an `ArrayBuffer`, a byte array and base64 text must all
+    // answer the same bytes) instead of grepping for a call shape - which is
+    // exactly the kind of assertion that let the absent `readAll` ship.
+    exports.__internals = {
+      parseImageAddress: parseImageAddress,
+      isImageAddress: isImageAddress,
+      mediaTypeFor: mediaTypeFor,
+      baseNameOf: baseNameOf,
+      decodeBase64: decodeBase64,
+      bytesOf: bytesOf,
+      readFailureText: readFailureText,
+    }
     return module.exports
   },
 })

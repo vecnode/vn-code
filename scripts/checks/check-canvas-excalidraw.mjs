@@ -52,6 +52,22 @@ check('it pins the versions the build used', record.pins?.['@excalidraw/excalidr
 check('it names the trims it applied', (record.trims ?? []).join(','), 'locales-stubbed,mermaid-dialog-stubbed')
 check('the bundle is committed at the size the record states', statSync(path.join(vendorDir, 'excalidraw.min.js')).size, record.files?.['excalidraw.min.js']?.bytes)
 check('the stylesheet is committed too', statSync(path.join(vendorDir, 'excalidraw.css')).size, record.files?.['excalidraw.css']?.bytes)
+// NO CREDENTIAL SHIPS IN THE ARTIFACT. Excalidraw's published build carries its
+// own OSS Firebase config - api key included - so the vendored copy put a
+// `google_api_key` in this PUBLIC repository and GitHub's secret scanning opened
+// an alert against it. The value is removed by a BUILD PATCH
+// (`vendor/excalidraw/patches/index.mjs`, named in the record's `patches`), and
+// these two assertions are what keeps it removed: the record must still name the
+// patch, and the artifact itself must contain no Google-key-shaped literal and
+// must carry the blanked api key. `check-no-secrets.mjs` scans every staged file
+// for the same shape; this one is here so the failure names the CAUSE.
+check('the record names the repository patch that was applied', (record.patches ?? []).join(','), 'firebase-api-key-redacted')
+{
+  const bundleText = readFileSync(path.join(vendorDir, 'excalidraw.min.js'), 'utf8')
+  const googleKey = bundleText.match(/\bAIza[0-9A-Za-z_-]{35}\b/g) || []
+  check('the bundle carries no Google API key', googleKey.length, 0)
+  check('...and the api key it shipped is blanked, not restructured', bundleText.includes('"apiKey":""'))
+}
 check(
   'every licence the artifact needs travels with it',
   ['LICENSE-excalidraw.txt', 'LICENSE-react.txt', 'LICENSE-react-dom.txt'].filter((name) => existsSync(path.join(vendorDir, name))).length,

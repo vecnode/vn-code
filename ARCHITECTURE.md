@@ -388,8 +388,11 @@ Remote (`list(sessionId, path, signal)`), one level at a time; a file row calls
 `tabActions.openResource(fileAddressFor(sessionId, root, path))`. Routing that
 address to a viewer is the registry's job - which is exactly the hook §6 uses.
 
-That Remote is read-only: `read`, `readBytes`, `readAll`, `readRelated`,
-`stat`, `list`, `changes` - and **no mutation operation**. The editor's save
+That Remote is read-only: `read`, `readBytes`, `stat`, `list`, `changes` - and
+**no mutation operation**. `readBytes(sessionId, path, {}, signal)` is the
+whole-file read; there is no `readAll` (`readRelated` is a preview *hook*, not a
+Remote method), and a plugin that calls one gets a failure that reads like a
+missing Remote rather than like a wrong method name. The editor's save
 path therefore needs a route of its own (§6).
 
 ## 6. The editor tab type (dsh-editor)
