@@ -16,8 +16,11 @@ that URL in a native window. It installs nothing and touches no profile file.)
   few bundles marked GENERATED, which are forks of shipped ones or vendored
   engines.
 - The installer live-links the package folders into the profile. A bundle edit
-  shows up on a **page refresh**; a change to a *row* is composed at boot, so it
-  needs a **restart**.
+  shows up on a **page refresh** — the host stat-polls every client bundle
+  (`dsh-client-hmr`, 500 ms) and republishes it through `rebuilt()`, re-reading
+  the file, so nothing has to be restarted for it; a change to a *row*, or to a
+  package's `lib/index.js` host half, is composed at boot, so it needs a
+  **restart**.
 
 ## Rows, and who owns them
 

@@ -75,4 +75,4 @@ added; both installers prune the retired names `dsh-files` and `dsh-focus` first
 | the run launcher says the port is in use | 3080 is taken; use that instance or pass `-Port 3099` |
 | `scripts\run-web.bat` flashes and closes, or no browser opens | run it from the repo root (the worker reads `.dsh-version.json` there) with `node`/`npx` on `PATH`; the URL is in the app's own output |
 | `Permission denied` on a `.sh` | `chmod +x scripts/*.sh` |
-| an edited plugin never appears after a refresh | the host snapshots every `client.js` at boot: restart the process serving the page, then reload |
+| an edited plugin never appears after a refresh | it should: the host stat-polls every plugin's `client.js` (500 ms) and republishes it, so reload the page - and hard-reload if it still shows the old build, because the index ships no cache headers. A `lib/index.js` change (routes, tools) and any row/profile change DO need a host restart. `document.querySelector('[data-dsh-cmdbar-dock]').dataset.dshCmdbarVersion` names the build a page is running |

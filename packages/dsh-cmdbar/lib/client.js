@@ -125,7 +125,7 @@ window.__ModuleLoader__.load({
      * control, a facts line that ellipsises instead of running over its
      * neighbours, and the WHOLE command on hover (see `commandCard`).
      */
-    const PLUGIN_VERSION = '0.1.0-alpha.15'
+    const PLUGIN_VERSION = '0.1.0-alpha.16'
     /** The header list this control joins (Open In... is -10). */
     const HEADER_SLOT = 'conversation.session.header.utilities'
     /** The root-scoped overlay list the layout package renders inside the frame. */
@@ -316,10 +316,20 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
    dsc- class name containing "chip" fails the tracked check - and that pin is
    what keeps the emulator this package used to carry from coming back. Naming a
    seat after its occupant would either fail the check or get the check relaxed,
-   which is a worse trade than one unusual class name. */
+   which is a worse trade than one unusual class name.
+
+   The two classes in .dsc-dock .dsc-pillSeat>* are the other half of that
+   trade, and they are load-bearing: the shipped chip's own rule is
+   .pill{height:24px} in the shell's static stylesheet, so a ONE-class seat rule
+   has the same specificity as it and the winner is whichever stylesheet the
+   browser injected last. (Today the shell's is a link element in <head> and every
+   plugin's tag is appended later, so the bar wins the tie - but a 25px row must
+   not be a fact about injection order, and the order a bundle is re-injected in
+   after an HMR reload is not ours to promise.) Two classes settle it either way,
+   and the tracked check pins the selector for that reason. */
 .dsc-filters{flex:none;display:inline-flex;align-items:center;gap:6px}
 .dsc-pillSeat{flex:none;display:inline-flex;align-items:center;min-width:0}
-.dsc-pillSeat>*{height:var(--dsc-control-h,22px);padding:0 8px;font-size:11px;line-height:17px}
+.dsc-dock .dsc-pillSeat>*{height:var(--dsc-control-h,22px);padding:0 8px;font-size:11px;line-height:17px}
 .dsc-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;height:var(--dsc-control-h,22px);box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#1f1f1f);font:inherit;font-size:12px;padding:0 8px;cursor:pointer;white-space:nowrap;gap:5px}
 .dsc-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
 .dsc-btn:disabled{opacity:.45;cursor:default}
@@ -2123,12 +2133,23 @@ body.dsc-dragging{cursor:row-resize;user-select:none}
       // is no way to answer the question this release made urgent: WHICH bundle is
       // the running host actually serving?
       //
-      // That is not a hypothetical. The host SNAPSHOTS each `client.js` at boot and
-      // republishes it only through its HMR hook (`dsh-client-modules`: "bundle
-      // content changes reach the graph only through rebuilt()"), so editing this
-      // file does NOT change what a running `dsh web` serves - a page refresh
-      // cannot, and only a host restart (or the dev watcher) can. The attribute
-      // makes the served revision answerable from the page instead of guessed at:
+      // That is not a hypothetical - and alpha.15's first version of this comment
+      // got the MECHANISM backwards, which cost a reader a round of "it doesn't
+      // show". It said the host snapshots each `client.js` at boot and that only a
+      // restart could republish it. MEASURED against a running 0.2.0-rc.2 host:
+      // `dsh-client-hmr` stat-polls every graph row's bundle every 500 ms and
+      // calls `clientModules.rebuilt(id)`, which re-reads the file - one comment
+      // line appended here appeared in the bytes that host served a second later,
+      // with no restart, and the graph's rev moved with it (and moved back when
+      // the file was restored). The pack already pinned this rule in dsh-editor:
+      // "Restarting `dsh web` neither helps nor is needed". What DOES need a host
+      // restart is this package's HOST half (`lib/index.js`: routes, tools) and any
+      // profile/row change, both of which are composed once at boot.
+      //
+      // The attribute stays, because the question it answers is still real: a PAGE
+      // can be older than the host it is talking to - it holds whatever bundle it
+      // fetched, and a document served with no cache headers is not obliged to
+      // revalidate.
       //   document.querySelector('[data-dsh-cmdbar-dock]').dataset.dshCmdbarVersion
       //
       // alpha.13: with NO conversation on screen there are no commands to count,

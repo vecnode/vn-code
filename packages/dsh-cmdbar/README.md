@@ -1,4 +1,4 @@
-# dsh-cmdbar (alpha.15)
+# dsh-cmdbar (alpha.16)
 
 **A bottom dock for the vncode Web GUI: the commands this conversation's agent ran, in the app, under the conversation.**
 

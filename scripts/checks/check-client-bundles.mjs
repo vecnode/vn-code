@@ -2025,17 +2025,36 @@ check('cmdbar adopt: another window still moves the dock', adopt({ shared: 350, 
 // alpha.15: the version left the bar for the BRAND's tooltip - a 24-character
 // build string was a third of the header row's right-hand half - so the check
 // reads it where a reader finds it now: in the title a hover opens. It is ALSO on
-// the dock ROOT as `data-dsh-cmdbar-version`, and that is not decoration: the host
-// snapshots every `client.js` at boot and republishes it only through its HMR hook
-// (`dsh-client-modules`), so "which bundle is the running host actually serving?"
-// is a real question this package has to let a reader answer from the page.
+// the dock ROOT as `data-dsh-cmdbar-version`, and that is not decoration: a PAGE
+// can be older than the host it talks to (it holds whatever bundle it fetched,
+// and a document served with no cache headers need not revalidate), so "which
+// bundle is this page running?" is a real question this package has to let a
+// reader answer from the page - see the alpha.16 note below for how the host
+// itself does and does not republish a change.
 check(
   'cmdbar dock names the version',
-  cmdbarDockMarkup.includes('dsh-cmdbar 0.1.0-alpha.15') &&
-    cmdbarDockMarkup.includes('title="dsh-cmdbar 0.1.0-alpha.15"') &&
-    cmdbarDockMarkup.includes('data-dsh-cmdbar-version="0.1.0-alpha.15"'),
+  cmdbarDockMarkup.includes('dsh-cmdbar 0.1.0-alpha.16') &&
+    cmdbarDockMarkup.includes('title="dsh-cmdbar 0.1.0-alpha.16"') &&
+    cmdbarDockMarkup.includes('data-dsh-cmdbar-version="0.1.0-alpha.16"'),
 )
-check('cmdbar bar no longer prints the version as text', cmdbarDockMarkup.includes('>dsh-cmdbar 0.1.0-alpha.15<') === false && cmdbarSource.includes('dsc-ver') === false)
+// alpha.16: WHAT ACTUALLY REPUBLISHES A CLIENT BUNDLE. alpha.15 asserted, in the
+// bundle's own comment, that the host snapshots every `client.js` at boot and that
+// a page refresh cannot pick up an edit - advice that sent its reader looking for a
+// restart it did not need. Measured against a running host: `dsh-client-hmr`
+// stat-polls every graph row's bundle every 500 ms and republishes through
+// `clientModules.rebuilt(id)`, which re-reads the file, so an edit reaches a page on
+// a RELOAD. dsh-editor already pinned the same rule ("Restarting `dsh web` neither
+// helps nor is needed"); this check keeps the two halves of the pack from
+// disagreeing about it again.
+check(
+  'cmdbar reports which build is running without asking for a restart',
+  cmdbarSource.includes('dsh-client-hmr') &&
+    cmdbarSource.includes('rebuilt(id)') &&
+    cmdbarSource.includes('Restarting `dsh web` neither helps nor is needed') &&
+    cmdbarSource.includes('only a host restart') === false &&
+    cmdbarSource.includes('SNAPSHOTS each') === false,
+)
+check('cmdbar bar no longer prints the version as text', cmdbarDockMarkup.includes('>dsh-cmdbar 0.1.0-alpha.16<') === false && cmdbarSource.includes('dsc-ver') === false)
 // alpha.14: the RENAME. The bundle, its row id, its two seats, the one route it
 // reads and the data-* attributes a person or a test can find it by all moved
 // from `dsh-terminal` to `dsh-cmdbar`, because the old name described the
@@ -2443,14 +2462,25 @@ check(
 // (a 31px row, the app's 24px Pill untouched) and said it was still too tall, so
 // the row's height became ONE knob - `--dsc-control-h:20px` on `.dsc-dock`, which
 // is `primitives.Tag`'s own density rather than an invented number - and the app's
-// chip is resized STRUCTURALLY, through a wrapper this package owns
-// (`.dsc-pillSeat>*`). Never by a hashed class name: the app's bundler renames
-// those, so a rule keyed on one would break on the next harness release, and the
-// seat is not named after its occupant for the alpha.12 reason above it.
+// chip is resized STRUCTURALLY, through a wrapper this package owns. Never by a
+// hashed class name: the app's bundler renames those, so a rule keyed on one would
+// break on the next harness release, and the seat is not named after its occupant
+// for the alpha.12 reason above it.
+//
+// alpha.16: the seat's rule carries TWO classes, and the check reads both. The
+// shipped chip's own rule is `.pill{height:24px}` - a single class, in the shell's
+// static stylesheet - so `.dsc-pillSeat>*` had the SAME specificity as the rule it
+// is meant to override, and which of the two won was decided by whichever
+// stylesheet the browser injected last. `.dsc-dock .dsc-pillSeat>*` decides it in
+// any order, which is what makes "a 25px row" a fact about this stylesheet instead
+// of a fact about load order.
 check(
   'cmdbar bar controls wear the app\u2019s own dense scale',
   cmdbarCss.includes('--dsc-control-h:20px') &&
-    cmdbarCss.includes('.dsc-pillSeat>*{height:var(--dsc-control-h,22px);padding:0 8px;font-size:11px;line-height:17px}') &&
+    cmdbarCss.includes('.dsc-dock .dsc-pillSeat>*{height:var(--dsc-control-h,22px);padding:0 8px;font-size:11px;line-height:17px}') &&
+    // ...and no LINE may open the same rule with one class, which is the tie the
+    // extra class exists to break (the substring alone matches both spellings).
+    /^\.dsc-pillSeat>\*\{/m.test(cmdbarCss) === false &&
     cmdbarCss.includes('.dsc-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;height:var(--dsc-control-h,22px);') &&
     cmdbarCss.includes('.dsc-btnIcon{width:var(--dsc-control-h,22px);padding:0}') &&
     cmdbarCss.includes('.dsc-bar{flex:none;display:flex;flex-wrap:nowrap;align-items:center;gap:8px;min-width:0;padding:2px 8px 2px 10px;') &&
