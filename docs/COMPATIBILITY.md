@@ -32,7 +32,6 @@ profile file).
 | `dsh-browser` | `browser` | the pack's own Browser tab, rendering pages on the host; disables `ui-sidebar-browser` (currently disabled again by the master) |
 | `dsh-diagrams` | `diagrams` | Mermaid and TikZ tools, one tab per diagram, an index page and a shared library |
 | `dsh-pdf` | `pdf` | the five `pdf_*` tools plus the PDF reader and workspace index |
-| `dsh-canvas` | `canvas` | the canvas design surface: presets, archetypes, a style library and the `canvas_*` tools |
 | `dsh-cmdbar` | `cmdbar` | the command bar: a read-only transcript of the agent's own commands |
 | `dsh-themes` | `themes` | header controls (page zoom, Screenshot, Themes, session-log download) and the pack's appearance overrides |
 | `dsh-skills` | `skills` | the Skills browser: list, read and edit the skills this conversation loads |

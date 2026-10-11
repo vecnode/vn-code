@@ -184,8 +184,8 @@ bearer JWT, plus a missing `.gitignore` credential rule. It never prints what it
 found (file, line, rule and a masked preview only), its allowlist is empty by
 design, and it self-tests that it fires.
 
-**A vendored bundle carries its author's credentials.** The Canvas tab's vendored
-Excalidraw (removed in alpha.13) shipped its OSS Firebase config — Google api key
+**A vendored bundle carries its author's credentials.** A vendored Excalidraw this
+pack shipped once carried its OSS Firebase config — Google api key
 included, and Firebase web api keys are public by design — so vendoring it put a
 `google_api_key` in this public repository and GitHub's scanning opened a
 `public leak` alert naming *Excalidraw's* key, which this repository can neither

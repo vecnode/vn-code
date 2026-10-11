@@ -75,6 +75,5 @@ node scripts/checks/check-node-routes.mjs      # every Node route, the manifest,
 node scripts/checks/check-client-bundles.mjs   # every browser bundle, driven for real
 node scripts/checks/check-media-node.mjs       # dsh-media's host half and its ffmpeg pin
 node scripts/checks/check-pdf-node.mjs         # the five pdf tools and their routes
-node scripts/checks/check-canvas-node.mjs      # the canvas host half, tools and routes
 node scripts/checks/check-skill-examples.mjs   # every example in the shipped skills
 ```

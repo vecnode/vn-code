@@ -158,8 +158,7 @@ export function registerSkills(ctx, log) {
  *
  * The pack has no SSE and no browser WebSocket anywhere, so this is a
  * long-poll: the client asks with the cursor it has, and the answer either
- * carries what is new or waits a few seconds for something to arrive. The
- * `waitFor` shape is what `dsh-canvas` uses for its render queue.
+ * carries what is new or waits a few seconds for something to arrive.
  */
 export class ConsoleState {
   /**

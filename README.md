@@ -8,7 +8,7 @@
 
 Agent IDE with core [DSH](https://www.deepseek.com/harness/en/).
 
-![vncode: 21 plugins, no core patches - the vncode README header](./assets/vncode-banner2.png)
+![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner2.png)
 
 A native cross-platform app plus a pack of standard **dsh bundles**. The plugins
 are plain JavaScript with **zero npm dependencies**; the launchers run on
@@ -55,7 +55,6 @@ way and what it touches. The exact versions are in
 | [`dsh-diagrams`](packages/dsh-diagrams/README.md) | Mermaid and TikZ as tabs *and* six agent tools, every write validated before it is stored |
 | [`dsh-pdf`](packages/dsh-pdf/README.md) | PDF as a surface the agent can read and **scan**, plus a reader tab with thumbnails and bookmarks |
 | [`dsh-ocr`](packages/dsh-ocr/README.md) | the agent can read a **picture**: one `ocr` tool over `tesseract` from PATH or — on Windows, with **nothing installed at all** — the OCR engine Windows ships, which rasterizes a PDF page itself. Names the engine, the language and the page count, refuses a language this host has no data for with the list of what it CAN read, and says every answer is a transcription |
-| [`dsh-canvas`](packages/dsh-canvas/README.md) | the **Canvas** tab, in the chat panel's own view ring to the right of Trajectory: a design page the agent drives with nine tools, for GitHub and LinkedIn banners and posters. The browser is the rasterizer, so the model renders a design, reads its own PNG back with `read_image` and fixes it; presets fix each destination's pixels and safe areas, and two bundled skills carry the craft and the per-network delivery rules. Ships the two OFL font families it renders with, pinned by SHA-256 |
 | [`dsh-browser`](packages/dsh-browser/README.md) | the **Browser** tab, replacing the shipped iframe one: the page is rendered on the host in a disposable engine behind an https-only egress gate (screenshot, post-script text, measured styles) for the tab and for `browser_render` / `browser_query` / `browser_text` — **built and shipped, but turned OFF**: the master layer disables the row, so a profile loads no tab, no routes, no tools and no client bundle |
 | [`dsh-skills`](packages/dsh-skills/README.md) | the **Skills browser**: a header button left of the zoom control opens every skill this conversation loads, with its markdown and inline editing |
 | [`dsh-cmdbar`](packages/dsh-cmdbar/README.md) | the **command bar**: the agent's own commands in a bottom dock (a read-only transcript of the conversation's log — the terminals were removed in alpha.12; the panel follows whichever conversation is on screen) |

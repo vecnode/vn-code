@@ -60,9 +60,6 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   over a warm `sclang` session and a hand-written OSC client, the `.schelp`
   reference indexed, five skills whose every example a check compiles, one small
   console tab — host half plus UI, no bundled binary), `dsh-diagrams`, `dsh-pdf`,
-  `dsh-canvas`,
-  `dsh-writing` (the Writing tab, the pack's only `.docx` codec and its only
-  method skill — `research`, the one that teaches a practice rather than a tool),
   `dsh-browser`, `dsh-themes`, `dsh-cmdbar`, `dsh-modal`, `dsh-skills`,
   `dsh-ui-state`, `dsh-open-in-app`.
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with
@@ -86,12 +83,11 @@ Run the check that owns the area, and say which ones you ran:
 - `check-dist-layout.mjs` — the distribution, the console contract, the ship list;
 - `check-node-routes.mjs` — every Node route, the manifest, the pack-wide patches;
 - `check-client-bundles.mjs` — every browser bundle, loaded and driven for real;
-- `check-media-node.mjs`, `check-pdf-node.mjs`, `check-canvas-node.mjs`,
+- `check-media-node.mjs`, `check-pdf-node.mjs`,
   `check-browser-node.mjs`, `check-splash.mjs` — the tool
   and host halves;
-- `check-canvas-panel.mjs`,
-  `check-canvas-browser.mjs`, `check-audio-browser.mjs` — the checks that drive a
-  real browser (with none installed they skip loudly);
+- `check-audio-browser.mjs` — the check that drives a
+  real browser (with none installed it skips loudly);
 - `check-skill-examples.mjs`, `check-media-examples.mjs` — every fenced example in
   the shipped skills (parsed, compiled, or actually run);
 - `npm run check` **in a package folder that ships its own** — today
