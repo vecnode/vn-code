@@ -22,7 +22,8 @@
     "check:examples": "node checks/check-lab-examples.mjs",
     "check:render": "node checks/check-lab-render.mjs",
     "check:vendor": "node vendor/build.mjs --check",
-    "check": "node vendor/build.mjs --check && node checks/check-lab-node.mjs && node checks/check-lab-examples.mjs && node checks/check-lab-render.mjs"
+    "check": "node vendor/build.mjs --check && node checks/check-lab-node.mjs && node checks/check-lab-examples.mjs",
+    "check:all": "npm run check && node checks/check-lab-render.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -447,7 +447,11 @@ document.addEventListener('DOMContentLoaded', function () {
     'lab-reroll': function () { labContract.reload(); },
     'lab-reset': function () { labContract.reload({{SEED}}); },
     'lab-png': function () {
-      if (typeof window.saveCanvas === 'function') window.saveCanvas('{{SLUG}}-seed-' + labContract.seed, 'png');
+      // NAMED SO IT IS FINDABLE. A browser may only ever write to its own Downloads
+      // folder, so a print has to say which run and which seed made it - and then it
+      // can be moved into the lab's prints folder (`lab_open` prints that path)
+      // without anyone guessing which file was which.
+      if (typeof window.saveCanvas === 'function') window.saveCanvas('vncode-lab-{{SLUG}}-seed-' + labContract.seed, 'png');
     }
   };
   Object.keys(buttons).forEach(function (id) {

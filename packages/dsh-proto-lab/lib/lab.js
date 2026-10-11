@@ -27,6 +27,7 @@
  */
 
 import fsp from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 
 import { digest, integerOf, isSlug, slugify } from './util.js'
@@ -35,6 +36,8 @@ import { digest, integerOf, isSlug, slugify } from './util.js'
 export const CATALOG_VERSION = 1
 /** Where the lab lives, relative to a workspace root. */
 export const LAB_DIRNAME = 'lab'
+/** The folder this lab owns on a Desktop: runs, prints and compiled apps inside it. */
+export const DESKTOP_DIRNAME = 'vncode-lab'
 /** The environment override, for a lab that lives somewhere else entirely. */
 export const ROOT_ENV = 'DSH_PROTO_LAB_ROOT'
 /** How many runs the catalog remembers before the oldest are dropped. */
@@ -105,22 +108,29 @@ async function looksLikeThisRepo(dir) {
 }
 
 /**
- * The lab root: an explicit override, else `<workspace>/lab`.
+ * The lab root, the PRINTS folder and the APPS folder.
  *
  * Resolution order, and the provenance is returned rather than implied because
- * `lab_open` prints it and a user pointing DSH_PROTO_LAB_ROOT at a folder needs
- * to see that the tool agreed with them:
+ * `lab_open` prints it and a user pointing DSH_PROTO_LAB_ROOT at a folder needs to
+ * see that the tool agreed with them:
  *
- *   1. `env[ROOT_ENV]` when it is a non-empty string (absolute, or relative to
- *      the workspace);
- *   2. `<workspace>/lab`.
+ *   1. `env[ROOT_ENV]` when it is a non-empty string (absolute, or relative to the
+ *      workspace) - the lab is then exactly where that says, and prints and apps
+ *      live inside it;
+ *   2. the DESKTOP, which is where the things this lab makes are meant to arrive:
+ *      a prototype is a thing you open, and a print is a thing you look at, so they
+ *      belong where a person can see them rather than buried in the checkout. The
+ *      folder is `~/Desktop/vncode-lab/` with `runs/` (the prototypes), `prints/`
+ *      (saved PNGs) and `apps/` (compiled binaries) inside it;
+ *   3. `<workspace>/lab` when there is no Desktop to write to - a container, a CI
+ *      machine, a server. The lab still works; it is simply not on a desktop.
  *
  * `workspace` is the session's own `cwd` when the caller could supply it (the
  * harness validates and stores it), else the process working directory - which is
  * what the harness runs each conversation's tools with.
  *
- * @param options - `{ env, workspace }`.
- * @returns `{ root, workspace, source, repo }`.
+ * @param options - `{ env, workspace, home }`.
+ * @returns `{ root, prints, apps, workspace, source, repo }`.
  */
 export async function resolveLabRoot(options = {}) {
   const env = options.env ?? process.env
@@ -128,17 +138,67 @@ export async function resolveLabRoot(options = {}) {
     typeof options.workspace === 'string' && options.workspace.trim() !== ''
       ? path.resolve(options.workspace)
       : process.cwd()
+  const repo = await looksLikeThisRepo(workspace)
   const configured = typeof env[ROOT_ENV] === 'string' ? env[ROOT_ENV].trim() : ''
   if (configured !== '') {
     const root = path.resolve(workspace, configured)
-    return { root, workspace, source: ROOT_ENV, repo: await looksLikeThisRepo(workspace) }
+    return { root, prints: path.join(root, 'prints'), apps: path.join(root, 'apps'), workspace, source: ROOT_ENV, repo }
+  }
+  const desktop = await desktopRoot({ env, home: options.home })
+  if (desktop !== null) {
+    const root = path.join(desktop, DESKTOP_DIRNAME, 'runs')
+    return {
+      root,
+      prints: path.join(desktop, DESKTOP_DIRNAME, 'prints'),
+      apps: path.join(desktop, DESKTOP_DIRNAME, 'apps'),
+      workspace,
+      source: 'desktop',
+      repo,
+    }
   }
   return {
     root: path.join(workspace, LAB_DIRNAME),
+    prints: path.join(workspace, LAB_DIRNAME, 'prints'),
+    apps: path.join(workspace, LAB_DIRNAME, 'apps'),
     workspace,
     source: 'workspace',
-    repo: await looksLikeThisRepo(workspace),
+    repo,
   }
+}
+
+/**
+ * The Desktop this machine actually has, or null.
+ *
+ * The variable is tried first because Linux distributions disagree about the
+ * folder's name and a user who has said where it is should be believed; the
+ * conventional locations come after it. Existence is what decides - a Desktop path
+ * that is not there would silently become a new folder one level up, which is the
+ * wrong answer to "where is the desktop".
+ *
+ * @param options - `{ env, home }`.
+ * @returns the absolute path, or null.
+ */
+export async function desktopRoot(options = {}) {
+  const env = options.env ?? process.env
+  const home = typeof options.home === 'string' && options.home !== '' ? options.home : os.homedir()
+  const candidates = []
+  const configured = typeof env.XDG_DESKTOP_DIR === 'string' ? env.XDG_DESKTOP_DIR.trim() : ''
+  if (configured !== '') candidates.push(path.resolve(home, configured))
+  candidates.push(path.join(home, 'Desktop'))
+  candidates.push(path.join(home, 'OneDrive', 'Desktop'))
+  candidates.push(path.join(home, 'OneDrive - Personal', 'Desktop'))
+  if (typeof env.USERPROFILE === 'string' && env.USERPROFILE !== '') {
+    candidates.push(path.join(env.USERPROFILE, 'Desktop'))
+    candidates.push(path.join(env.USERPROFILE, 'OneDrive', 'Desktop'))
+  }
+  for (const candidate of candidates) {
+    const ok = await fsp
+      .stat(candidate)
+      .then((stat) => stat.isDirectory())
+      .catch(() => false)
+    if (ok) return candidate
+  }
+  return null
 }
 
 /**

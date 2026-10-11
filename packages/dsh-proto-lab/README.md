@@ -18,7 +18,7 @@ browser and reads the canvas back.
   ship), `lab_new` (write a run), `lab_read` (show me one), `lab_lint` (is it
   still sound). The pack's rule: six near-synonyms for "make a sketch" would spend
   the model's attention on the choice instead of the sketch.
-- **A run is a real folder**, at `<workspace>/lab/<runtime>/<slug>/`:
+- **A run is a real folder**, on the DESKTOP by default - `~/Desktop/vncode-lab/runs/<runtime>/<slug>/`, with `prints/` and `apps/` beside it:
   - **p5.js** — `sketch.js` (the prototype), `index.html` (a generated shell:
     library, seed, controls from the sketch's own `params`), `p5.min.js` (vendored
     so the run is offline), `README.md`, `NOTES.md`.
@@ -95,12 +95,22 @@ installed — and the runtimes use it:
 | `GET /api/dsh-proto-lab/preview?run=&seed=` | ONE self-contained page for a run: the library and the sketch inlined, with a CSP that permits no network at all |
 | `GET /api/dsh-proto-lab/vendor/p5.js` | the pinned p5.js, for anything that wants the same bytes a run carries |
 
-**The lab is not in git, and that is the design.** `.gitignore` carries `/lab/`:
-the bundle ships the generator, the conventions and the checked examples, never
-the runs. A run is reproducible from its name — `lab_new` derives the seed from
-the run id, so `slug=flow-field` gives the same first frame in a year — and a run
-worth keeping is *promoted* into the example library (the `prototyping-lab` skill
-has the recipe).
+**The lab lives on the Desktop, and never in git.** A prototype is a thing you
+open and a print is a thing you look at, so both arrive where a person can see
+them: `~/Desktop/vncode-lab/` holds `runs/` (the prototypes), `prints/` (saved
+PNGs) and `apps/` (compiled binaries). `DSH_PROTO_LAB_ROOT` overrides all of it,
+and a machine with no Desktop — a container, CI — falls back to `<workspace>/lab`.
+`.gitignore` carries `/lab/` so even that fallback stays out of the repository: the
+bundle ships the generator, the conventions and the checked examples, never the
+runs. A run is reproducible from its name — `lab_new` derives the seed from the run
+id, so `slug=flow-field` gives the same first frame in a year — and a run worth
+keeping is *promoted* into the example library (the `prototyping-lab` skill has the
+recipe).
+
+A **print** is the one thing a browser insists on placing itself: `Save PNG` writes
+to the browser's Downloads folder, and the file is named
+`vncode-lab-<slug>-seed-<n>.png` so the run and the seed are on the filename and it
+can be moved into `prints/` without guesswork.
 
 ## Requirements
 
@@ -140,12 +150,18 @@ has the recipe).
 The checks live **inside this package**, so they travel with it:
 
 ```
-npm run check              # all of it, in order
+npm run check              # the default: offline, seconds, no browser
 npm run check:vendor       # the vendored p5.js against its recorded hashes, offline
 npm run check:node         # the engine: registry, path policy, both runtimes, the tools
 npm run check:examples     # every skill example and every fenced snippet, executed
 npm run check:render       # a REAL browser draws the runs and the pixels are measured
+npm run check:all          # the default PLUS the browser render
 ```
+
+**`npm run check` deliberately does NOT open a browser.** The render check spawns a
+headless Chrome and loads several pages in it; that is the right cost for a release
+and the wrong cost for every edit, so it is its own script and `check:all` is the
+one that runs everything.
 
 `check-lab-render.mjs` skips **loudly** (exit 0, with the reason) when there is no
 browser — and also when the environment refuses to launch one, which is a fact

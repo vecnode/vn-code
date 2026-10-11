@@ -173,9 +173,17 @@ export function buildTools(deps = {}) {
         const resolved = await rootFor(exec)
         const exists = await present(resolved.root)
         let created = false
-        if (args.action === 'create' && !exists) {
-          await fsp.mkdir(resolved.root, { recursive: true })
-          created = true
+        if (args.action === 'create') {
+          // All three, because ction=create is the one call that makes the lab.
+          for (const dir of [resolved.root, resolved.prints, resolved.apps]) {
+            const present = await fsp
+              .stat(dir)
+              .then((stat) => stat.isDirectory())
+              .catch(() => false)
+            if (present) continue
+            await fsp.mkdir(dir, { recursive: true })
+            if (dir === resolved.root) created = true
+          }
         }
         const directory = created || exists
         const { runs, notes } = directory ? await listRuns(resolved.root) : { runs: [], notes: [] }
@@ -184,8 +192,17 @@ export function buildTools(deps = {}) {
         const lines = []
         lines.push('Prototyping lab')
         lines.push('- root: ' + resolved.root + (created ? '  (created just now)' : exists ? '' : '  (does not exist yet - action=create makes it)'))
-        lines.push('- root comes from: ' + (resolved.source === 'DSH_PROTO_LAB_ROOT' ? 'DSH_PROTO_LAB_ROOT' : 'the workspace (' + resolved.workspace + ')'))
-        lines.push('- workspace looks like the vncode repository: ' + (resolved.repo ? 'yes - so `lab/` is the ignored folder beside `packages/`' : 'no'))
+        lines.push(
+          '- root comes from: ' +
+            (resolved.source === 'DSH_PROTO_LAB_ROOT'
+              ? 'DSH_PROTO_LAB_ROOT'
+              : resolved.source === 'desktop'
+                ? 'the DESKTOP (' + path.dirname(resolved.root) + ') - prototypes are things a person opens, so they arrive on the desktop, not in the checkout'
+                : 'the workspace (' + resolved.workspace + ') - no Desktop on this machine'),
+        )
+        lines.push('- prints go to: ' + resolved.prints + (resolved.source === 'desktop' ? ' (a browser Save PNG lands in Downloads; the filename carries the run)' : ''))
+        lines.push('- compiled apps go to: ' + resolved.apps)
+        lines.push('- workspace looks like the vncode repository: ' + (resolved.repo ? 'yes - and nothing this lab writes is in it (.gitignore carries /lab/)' : 'no'))
         lines.push('- runs on disk: ' + runs.length + (catalogNote === null ? '' : '  (' + catalogNote + ')'))
         if (runs.length > 0) {
           lines.push('')
@@ -423,7 +440,11 @@ export function buildTools(deps = {}) {
         if (action === 'create' && concept !== '' && slug === '') slug = slugify(concept, 48)
         if (slug === '') throw new LabError('that name reduces to no usable slug - use lower case letters and digits', 'NO_SLUG')
 
+        // The three folders this lab owns, made together: runs, prints and apps are
+        // one destination in a person's head even though they are three paths.
         await fsp.mkdir(resolved.root, { recursive: true })
+        await fsp.mkdir(resolved.prints, { recursive: true })
+        await fsp.mkdir(resolved.apps, { recursive: true })
 
         if (action === 'example') {
           const found = await entry.examples()

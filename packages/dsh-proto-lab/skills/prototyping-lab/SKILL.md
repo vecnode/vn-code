@@ -12,22 +12,35 @@ is to extend or maintain the place rather than to write a sketch.
 ## Where the lab is, and why it is not in git
 
 ```
-<workspace>/lab/<runtime>/<slug>/          one folder per run
-<workspace>/lab/catalog.json               what the lab has made (seed, concept, files)
+~/Desktop/vncode-lab/runs/<runtime>/<slug>/   one folder per run
+~/Desktop/vncode-lab/runs/catalog.json        what the lab has made (seed, concept, files)
+~/Desktop/vncode-lab/prints/                  saved PNGs
+~/Desktop/vncode-lab/apps/                    compiled binaries
 ```
 
 Resolution, in order:
 
 1. `DSH_PROTO_LAB_ROOT` — an explicit root: an absolute path, or one relative to
-   the workspace (a standalone clone, a different project);
-2. otherwise `<workspace>/lab`, where the workspace is the session's own `cwd`
-   (what the harness runs a conversation's tools with).
+   the workspace (a standalone clone, a different project). Prints and apps then
+   live inside it;
+2. otherwise `~/Desktop/vncode-lab/` — because a prototype is a thing you open and
+   a print is a thing you look at, so both belong where a person can see them
+   rather than buried in a checkout;
+3. otherwise `<workspace>/lab` on a machine with no Desktop at all (a container, a
+   CI runner). The lab still works there; it is simply not on a desktop.
 
-`lab/` is in the repository's `.gitignore`, deliberately: **the lab is a
-workshop, not an exhibit.** Runs are generated on this machine, they are
-throwaway by design, and a repository that accumulated every sketch anyone tried
-would stop being a plugin pack. What ships is the generator, the conventions and
-the example library; what you make with them stays local.
+The desktop folder is what `lab_open` prints, and it is the answer to "where did my
+run go". A **print** is the one artifact a browser places itself: `Save PNG` writes
+to the browser's Downloads folder under `vncode-lab-<slug>-seed-<n>.png`, so the
+filename says which run and which seed made it and it can be moved into `prints/`
+without guesswork. A compiled openFrameworks binary is built inside the run's own
+`bin/`; `apps/` is where copies for keeping belong.
+
+`/lab/` is in the repository's `.gitignore`, deliberately: **the lab is a
+workshop, not an exhibit.** Runs are generated on this machine, they are throwaway
+by design, and a repository that accumulated every sketch anyone tried would stop
+being a plugin pack. What ships is the generator, the conventions and the example
+library; what you make with them stays local - and now, on the desktop.
 
 The consequence to hold on to: **a run can be deleted and regenerated, and that
 is not a loss.** `lab_new` derives a run's seed from its name (unless you pass

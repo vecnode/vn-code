@@ -141,9 +141,21 @@ console.log('  temp root ' + root)
 {
   const explicit = await lab.resolveLabRoot({ env: { DSH_PROTO_LAB_ROOT: 'elsewhere/lab' }, workspace: root })
   check('the root override wins and its provenance is reported', explicit.source + ' ' + explicit.root, 'DSH_PROTO_LAB_ROOT ' + path.join(root, 'elsewhere', 'lab'))
+  // With no override the lab goes to the DESKTOP when there is one, and to
+  // `<workspace>/lab` when there is not. Both are asserted, because both are a
+  // supported machine and a check that only knows one of them would fail on the
+  // other - a container or a CI runner is exactly where "no Desktop" happens.
   const fallback = await lab.resolveLabRoot({ env: {}, workspace: root })
-  check('with no override the root is <workspace>/lab', fallback.root, path.join(root, 'lab'))
-  check('the resolved root need not exist yet', (await lab.canonicalRoot(fallback.root)).endsWith(path.join('lab')), true)
+  check(
+    'with no override the lab is on the Desktop when the machine has one',
+    fallback.source === 'desktop' ? path.basename(path.dirname(fallback.root)) + '/' + path.basename(fallback.root) : fallback.source,
+    'vncode-lab/runs',
+  )
+  check('and it carries a prints and an apps folder with it', path.basename(fallback.prints) + '/' + path.basename(fallback.apps), 'prints/apps')
+  const headless = await lab.resolveLabRoot({ env: {}, workspace: root, home: path.join(root, 'no-such-home') })
+  check('a machine with no Desktop falls back to <workspace>/lab', headless.root, path.join(root, 'lab'))
+  check('and that fallback also carries prints and apps', path.basename(headless.prints) + '/' + path.basename(headless.apps), 'prints/apps')
+  check('the resolved root need not exist yet', (await lab.canonicalRoot(headless.root)).endsWith('lab'), true)
 }
 
 // ---------------------------------------------------------------------------
