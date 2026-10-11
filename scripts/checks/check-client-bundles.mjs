@@ -3022,6 +3022,78 @@ check(
   check('supercollider console renders its frame', scMarkup.includes('class="dsu-console"') && scMarkup.includes('sclang — Enter to send') && scMarkup.includes('>Stop<'))
 }
 
+// ----------------------------------------------------------- dsh-proto-lab
+// The Lab tab: a frame with a run picker, over the host's own composed preview.
+//
+// The interesting claim is `canOpen`, which is where this tab could take over
+// EVERY `.html` in the workspace if it were written carelessly. It is narrowed to
+// an address that resolves to a run, and both directions are driven below - a run
+// address opens, an ordinary page does not.
+{
+  const dpl = loadBundle('packages/dsh-proto-lab/lib/client.js', {})
+  check('proto-lab bundle id', dpl.id, 'dsh-proto-lab')
+  check('proto-lab inject', JSON.stringify(dpl.exports.inject), '["slots","sidebarRightTabs"]')
+  const dplCssTag = dpl.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-proto-lab/lab.css').pop()
+  check('proto-lab stylesheet injected', dplCssTag !== undefined && dplCssTag.textContent.includes('.dpl-frame iframe{') && dplCssTag.textContent.includes('.dpl-list{'))
+  const dplTypes = []
+  const dplSeats = {}
+  dpl.exports.apply({
+    slots: {
+      inject: (name, fn) => fn(),
+      register(spec, component) {
+        dplSeats[spec.name + (spec.key ? '#' + spec.key : '')] = { spec, component }
+        return () => {}
+      },
+    },
+    sidebarRightTabs: { register: (definition) => (dplTypes.push(definition), () => {}), entries: () => [] },
+    effect: (fn) => fn(),
+    logger: { debug() {}, warn() {} },
+  })
+  check('proto-lab type registered', dplTypes.length === 1 && dplTypes[0].id + '/' + dplTypes[0].kind, 'dsh-proto-lab/dsh-proto-lab')
+  check(
+    'proto-lab seats',
+    Object.keys(dplSeats).sort().join(','),
+    'sidebar.right.pane.tab#dsh-proto-lab,sidebar.right.pane.tab.title#dsh-proto-lab',
+  )
+  const dplSeatsOk = dplSeats['sidebar.right.pane.tab#dsh-proto-lab'] !== undefined && dplSeats['sidebar.right.pane.tab.title#dsh-proto-lab'] !== undefined
+  check('proto-lab seats a body and a title', dplSeatsOk, true)
+
+  // THE NARROWING, both ways. A run's entry point opens; anything else does not -
+  // including an `.html` that merely sits beside a run rather than inside one.
+  const open = dplTypes[0].canOpen
+  const opens = [
+    'lab/p5js/flow-field/index.html',
+    '/abs/workspace/lab/openframeworks/drifting-field/index.html',
+    'lab\\p5js\\flow-field\\index.html',
+    'lab/p5js/flow-field/notes.html?v=2',
+  ]
+  const refuses = [
+    'index.html',
+    'docs/guide.html',
+    'packages/dsh-proto-lab/README.md',
+    'lab/p5js/index.html',
+    'lab/flow-field/index.html',
+    'lab/p5js/flow-field/sketch.js',
+  ]
+  check('proto-lab opens a run entry point', opens.every((address) => open(address) === true), true)
+  check('proto-lab refuses everything that is not a run', refuses.every((address) => open(address) === false), true)
+  check('proto-lab reads the run out of the address', dpl.exports.__internals.runFromAddress('lab/p5js/flow-field/index.html').run, 'p5js/flow-field')
+
+  // The capsule, CALLED - the two expressions the Start page evaluates.
+  const dplCapsule = (dplTypes[0].guide ?? [])[0] ?? {}
+  check(
+    'proto-lab guide capsule answers the Start page',
+    typeof dplCapsule.title === 'function' && typeof dplCapsule.description === 'function' && dplCapsule.title() === 'Lab' && dplCapsule.description().length > 0 && Number.isFinite(dplCapsule.order),
+  )
+  check('proto-lab capsule carries no bare `label`', dplCapsule.label === undefined, true)
+
+  const dplTitle = dplSeats['sidebar.right.pane.tab.title#dsh-proto-lab'].component
+  const dplBody = dplSeats['sidebar.right.pane.tab#dsh-proto-lab'].component
+  check('proto-lab title seat renders', renderToStaticMarkup(h(dplTitle, { address: 'lab/p5js/flow-field/index.html' })).includes('flow-field'))
+  const dplMarkup = renderToStaticMarkup(h(dplBody, { address: null }))
+  check('proto-lab lab renders its frame', dplMarkup.includes('class="dpl"') && dplMarkup.includes('class="dpl-bar"') && dplMarkup.includes('Reroll'))
+}
+
 // -------------------------------------------------------------- dsh-browser
 // The Browser tab, and the REPLACEMENT for the shipped iframe one. This bundle
 // is hand-written (no generated fork), so these are source-level pins on the two

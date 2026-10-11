@@ -1,0 +1,98 @@
+/**
+ * {{LABEL}} — an openFrameworks prototype ({{RUNTIME}} / {{SLUG}}).
+ *
+ * {{CONCEPT}}
+ *
+ * EDIT THIS FILE. In openFrameworks the class is declared here and defined in
+ * ofApp.cpp, and the virtuals below are the ones worth having in every prototype:
+ *
+ *   setup()         runs once - build the system
+ *   update()        runs once per frame BEFORE draw() - advance time
+ *   draw()          runs once per frame - draw the state update() reached
+ *   keyPressed()    one key, one visible change
+ *   windowResized() the field is a function of the window
+ *
+ * The one rule that matters: TIME BELONGS IN update(), NEVER IN draw(). A
+ * prototype that advances its own state while drawing ties the simulation to the
+ * frame rate and to the render path; the moment anything expensive enters draw(),
+ * the behaviour changes with it. update() moves the system, draw() reports it.
+ *
+ * A note on randomness, because it is where a C++ prototype usually stops being
+ * reproducible: `ofSeedRandom` seeds `ofRandom` and is called once in setup(),
+ * but `ofNoise` is NOT seeded - it is a pure function of its coordinates. The
+ * seed therefore enters the noise field as an offset (`seedOffset`), which is
+ * what makes the same seed give the same picture on any machine and any run.
+ */
+#pragma once
+
+#include "ofMain.h"
+
+#include <cstdint>
+
+class ofApp : public ofBaseApp {
+public:
+    /// What main.cpp passes in: the seed, the window, and how to stop.
+    struct RunOptions {
+        int seed = 0;
+        int width = 1280;
+        int height = 720;
+        /// Stop after this many frames. 0 means "until the window closes".
+        int frames = 0;
+        /// Save the last frame here and exit, when it is not empty.
+        std::string framePath;
+    };
+
+    /// The seed this prototype was generated with. main.cpp uses it as the
+    /// default for `--seed`.
+    static int defaultSeed();
+
+    /// Take the run's options. Called by main.cpp before the loop starts.
+    void configure(const RunOptions& options);
+
+    void setup() override;
+    void update() override;
+    void draw() override;
+    void keyPressed(int key) override;
+    void windowResized(int w, int h) override;
+
+private:
+    /// One particle: where it is, how far it has come, how long it has left. A
+    /// particle is REBORN, never deleted, so the cost of a frame is constant.
+    struct Particle {
+        glm::vec2 position{0.0f, 0.0f};
+        float age = 0.0f;
+        float life = 1.0f;
+        float speed = 1.0f;
+    };
+
+    /// The tunables. These are the numbers worth moving first when the result is
+    /// close but not right - cheap to reason about, and they do not change the
+    /// structure of the algorithm.
+    struct Params {
+        int particles = 2600;
+        float noiseScale = 0.0018f;
+        float flow = 1.6f;
+        float speed = 1.0f;
+        float life = 1.6f;
+        float weight = 1.0f;
+        float veil = 9.0f;
+    };
+
+    RunOptions options;
+    Params params;
+
+    /// The canvas, in pixels, and the seed's own offset into the noise field.
+    glm::vec2 field{1280.0f, 720.0f};
+    float seedOffset = 0.0f;
+
+    /// The simulation clock in seconds, and how many frames have been drawn.
+    float time = 0.0f;
+    std::uint32_t frames = 0;
+
+    std::vector<Particle> particles;
+
+    /// The field is a function of position and time, so it is never stored.
+    float angleAt(const glm::vec2& point) const;
+    void respawn(Particle& particle);
+    void populate();
+};

@@ -1,0 +1,9 @@
+{
+  "name": "dsh-proto-lab-vendor",
+  "private": true,
+  "description": "Build root for the vendored p5.js library. Run `node build.mjs` from this folder (see packages/dsh-proto-lab/README.md).",
+  "type": "module",
+  "dependencies": {
+    "p5": "1.11.13"
+  }
+}

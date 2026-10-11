@@ -7,7 +7,7 @@
 ![Platforms: Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 Agent-Human IDE ⌨️    
-Web and Desktop versions, bundles [`Plugins`](packages/),  [`Skills`](docs/) and [`Interfaces`](docs/).
+Web and Desktop versions, bundles [`Plugins`](packages/),  [`Skills`](docs/) and [`Interfaces`](docs/)
 
 ![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner2.png)
 
@@ -52,6 +52,7 @@ way and what it touches. The exact versions are in
 | [`dsh-diagrams`](packages/dsh-diagrams/README.md) | Mermaid, TikZ **and the Diagram Design kit** as tabs *and* seven agent tools — the kit's 204 examples and 44 documented types are vendored at a pinned commit, browsable on the index page, insertable in one call, and every write (a self-contained HTML document included) is validated before it is stored |
 | [`dsh-pdf`](packages/dsh-pdf/README.md) | PDF as a surface the agent can read and **scan**, plus a reader tab with thumbnails and bookmarks |
 | [`dsh-ocr`](packages/dsh-ocr/README.md) | the agent can read a **picture**: one `ocr` tool over `tesseract` from PATH or — on Windows, with **nothing installed at all** — the OCR engine Windows ships, which rasterizes a PDF page itself. Names the engine, the language and the page count, refuses a language this host has no data for with the list of what it CAN read, and says every answer is a transcription |
+| [`dsh-proto-lab`](packages/dsh-proto-lab/README.md) | a **prototyping lab** the agent fills: five `lab_*` tools write a run into the workspace's own `<workspace>/lab/<runtime>/<slug>/` — p5.js sketches a browser opens, and openFrameworks projects that are three real C++ files (`src/main.cpp`, `src/ofApp.h`, `src/ofApp.cpp`) built with your own projectGenerator and `make`. A **runtime registry** makes a third language one module and one line (Processing in Rust, Cinder), a committed example library sits beside each skill and is driven by the checks, and verification is an explicit ladder — structure, parse, compile, render, measure — whose answer always names the tier that was actually reached. The lab itself is **gitignored**: the bundle ships the generator and the examples, never the runs |
 | [`dsh-browser`](packages/dsh-browser/README.md) | the **Browser** tab, replacing the shipped iframe one: the page is rendered on the host in a disposable engine behind an https-only egress gate (screenshot, post-script text, measured styles) for the tab and for `browser_render` / `browser_query` / `browser_text` — **built and shipped, but turned OFF**: the master layer disables the row, so a profile loads no tab, no routes, no tools and no client bundle |
 | [`dsh-skills`](packages/dsh-skills/README.md) | the **Skills browser**: a header button left of the zoom control opens every skill this conversation loads, with its markdown and inline editing |
 | [`dsh-cmdbar`](packages/dsh-cmdbar/README.md) | the **command bar**: the agent's own commands in a bottom dock (a read-only transcript of the conversation's log — the terminals were removed in alpha.12; the panel follows whichever conversation is on screen) |
@@ -76,6 +77,7 @@ upstream `LICENSE` beside its bytes.
 | **Mermaid** 11.17.2 (`lib/vendor/mermaid.min.js`) | `dsh-diagrams` | `node packages/dsh-diagrams/vendor/build.mjs --check` re-hashes the recorded sha256 |
 | **Diagram Design** — 204 worked examples, 44 documented visual types, 62 reference documents, MIT, [`cathrynlavery/diagram-design`](https://github.com/cathrynlavery/diagram-design) | `dsh-diagrams` | `node packages/dsh-diagrams/vendor/design/build.mjs --check` re-hashes the whole 277-file tree OFFLINE against a pinned commit |
 | **pdf.js** 6.3.289 (`lib/vendor/pdf.min.mjs` + worker, cmaps, fonts, wasm) | `dsh-pdf` | `node packages/dsh-pdf/vendor/build.mjs --check`, per-file hashes plus a digest per tree |
+| **p5.js** 1.11.13 (`lib/vendor/p5.min.js`, LGPL-2.1) | `dsh-proto-lab` | `node packages/dsh-proto-lab/vendor/build.mjs --check` re-hashes the recorded bytes offline. 1.x on purpose: it is the last line with a self-contained classic-script browser build, which is what a run opened straight off the filesystem needs |
 | **CodeMirror 6** (`lib/vendor/cm6.min.js`) and the forked shipped client bundles | `dsh-editor`, `dsh-rightbar`, `dsh-open-in-app` | the bundle's own version marker and the forked trees' hashes, both asserted by `scripts/checks/` |
 
 A vendored tree names its pin in a `SOURCE.json`/`VERSION.json` and — where the

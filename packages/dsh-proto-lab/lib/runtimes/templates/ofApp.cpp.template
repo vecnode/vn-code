@@ -1,0 +1,172 @@
+/**
+ * {{LABEL}} — an openFrameworks prototype ({{RUNTIME}} / {{SLUG}}).
+ *
+ * {{CONCEPT}}
+ *
+ * The algorithm, in one paragraph: a population of particles is carried by a
+ * flow field. The field is not stored - it is `ofNoise` evaluated at each
+ * particle's position, so it is free and infinite and it has structure at every
+ * scale. Each particle draws a short line along the field and fades where it has
+ * been; a veil over the whole frame instead of a clear is what turns those lines
+ * into density. Nothing here is animated by a stored animation: the picture is
+ * what the system looks like after N frames, and it looks different every frame
+ * because the field drifts through its third dimension.
+ *
+ * Reproducibility: `ofSeedRandom(seed)` in setup() and the seed as an OFFSET into
+ * the noise coordinates (`seedOffset`). Both are needed. Without the first, a
+ * particle's respawn position is machine-dependent; without the second,
+ * `ofNoise` - being a pure function of its coordinates - would give the same
+ * field to every seed.
+ */
+#include "ofApp.h"
+
+#include <cmath>
+
+/// The seed this file was generated with. main.cpp's `--seed` overrides it.
+int ofApp::defaultSeed() {
+    return {{SEED}};
+}
+
+void ofApp::configure(const RunOptions& runOptions) {
+    options = runOptions;
+}
+
+void ofApp::setup() {
+    field = glm::vec2(static_cast<float>(options.width), static_cast<float>(options.height));
+    // The one call that makes a run reproducible: everything `ofRandom` returns
+    // from here on is a function of this number.
+    ofSeedRandom(static_cast<std::uint32_t>(options.seed));
+    // The seed's own place in the noise field, so two seeds are two fields.
+    seedOffset = static_cast<float>(options.seed % 4096) * 0.37f;
+
+    ofSetFrameRate(60);
+    ofSetVerticalSync(true);
+    ofSetBackgroundAuto(true);
+    ofSetBackgroundColor(8, 8, 10);
+    ofEnableAlphaBlending();
+    ofSetLineWidth(params.weight);
+    ofSetCircleResolution(24);
+
+    populate();
+    ofLogNotice("{{SLUG}}") << "seed " << options.seed << ", " << params.particles << " particles";
+}
+
+void ofApp::update() {
+    // Everything that moves moves HERE, at the frame's own dt, so the prototype
+    // behaves the same at 30 and at 120 fps.
+    const float dt = ofClamp(static_cast<float>(ofGetLastFrameTime()), 0.0f, 0.1f);
+    time += dt * params.speed;
+
+    const float step = params.flow * dt * 60.0f;
+    for (auto& particle : particles) {
+        const float angle = angleAt(particle.position);
+        particle.position.x += std::cos(angle) * particle.speed * step;
+        particle.position.y += std::sin(angle) * particle.speed * step;
+        particle.age += dt;
+        if (particle.age > particle.life) respawn(particle);
+    }
+}
+
+void ofApp::draw() {
+    // A veil, not a clear: the field keeps a memory of where it has been, which
+    // is the whole difference between paths and density.
+    ofSetColor(8, 8, 10, static_cast<int>(params.veil));
+    ofDrawRectangle(0.0f, 0.0f, field.x, field.y);
+
+    const float margin = 40.0f;
+    for (std::size_t index = 0; index < particles.size(); index++) {
+        Particle& particle = particles[index];
+        const float angle = angleAt(particle.position);
+        const float step = params.flow * 2.2f * particle.speed;
+        const glm::vec2 next = particle.position + glm::vec2(std::cos(angle), std::sin(angle)) * step;
+        const float remaining = 1.0f - particle.age / particle.life;
+        const float brightness = 60.0f + 110.0f * remaining;
+
+        ofSetColor(static_cast<int>(brightness * 0.7f), static_cast<int>(brightness), 255, 150);
+        ofSetLineWidth(params.weight * remaining + 0.35f);
+        ofDrawLine(particle.position, next);
+
+        // Leaving the field is just another way to die, and respawning here
+        // keeps update() free of a second bounds check.
+        if (particle.position.x < -margin || particle.position.x > field.x + margin ||
+            particle.position.y < -margin || particle.position.y > field.y + margin) {
+            respawn(particle);
+        }
+    }
+
+    frames++;
+    // The first frame tells the headless render check that this prototype really
+    // drew something - an app that opens a window and draws nothing is a bug that
+    // otherwise looks identical from the outside.
+    if (frames == 1) {
+        ofLogNotice("{{SLUG}}") << "first frame drawn, seed " << options.seed;
+    }
+
+    if (options.frames > 0 && static_cast<int>(frames) >= options.frames) {
+        if (!options.framePath.empty()) {
+            ofSaveScreen(options.framePath);
+            ofLogNotice("{{SLUG}}") << "saved " << options.framePath;
+        }
+        ofExit(0);
+    }
+}
+
+void ofApp::keyPressed(int key) {
+    switch (key) {
+        case 'r':
+            // A new field without a restart: reseed and rebuild.
+            ofSeedRandom(static_cast<std::uint32_t>(ofGetSystemTimeMillis()));
+            seedOffset = ofRandom(4096.0f) * 0.37f;
+            populate();
+            break;
+        case 'n':
+            params.noiseScale = params.noiseScale > 0.004f ? 0.0008f : params.noiseScale * 1.35f;
+            break;
+        case 'f':
+            params.flow = params.flow > 3.2f ? 0.6f : params.flow * 1.25f;
+            break;
+        case 'c':
+            ofBackground(8, 8, 10);
+            break;
+        case ' ':
+            ofSaveScreen("{{SLUG}}-seed-" + ofToString(options.seed) + ".png");
+            break;
+        default:
+            break;
+    }
+}
+
+void ofApp::windowResized(int w, int h) {
+    // The field is the window. Rebuilding the population is what keeps the
+    // density the same when the window changes shape.
+    field = glm::vec2(static_cast<float>(w), static_cast<float>(h));
+    populate();
+}
+
+float ofApp::angleAt(const glm::vec2& point) const {
+    // Layered noise: one octave gives a smooth sheet, two give it weather.
+    const float scale = params.noiseScale;
+    const float drift = time * 0.06f + seedOffset;
+    const float coarse = ofNoise(point.x * scale + seedOffset, point.y * scale, drift);
+    const float fine = ofNoise(point.x * scale * 3.1f, point.y * scale * 3.1f, drift * 1.7f);
+    return (coarse * 0.75f + fine * 0.25f) * TWO_PI * 3.0f;
+}
+
+void ofApp::respawn(Particle& particle) {
+    particle.position = glm::vec2(ofRandom(field.x), ofRandom(field.y));
+    particle.life = ofRandom(0.6f, 2.4f) * params.life;
+    particle.age = 0.0f;
+    particle.speed = ofRandom(0.55f, 1.45f);
+}
+
+void ofApp::populate() {
+    particles.clear();
+    particles.reserve(static_cast<std::size_t>(params.particles));
+    for (int i = 0; i < params.particles; i++) {
+        Particle particle;
+        respawn(particle);
+        // Stagger the ages so the population does not pulse in unison.
+        particle.age = ofRandom(particle.life);
+        particles.push_back(particle);
+    }
+}

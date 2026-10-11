@@ -424,7 +424,9 @@ check_sentinels() {
     packages/dsh-diagrams/lib/vendor/design/assets/example-architecture.html \
     packages/dsh-diagrams/lib/vendor/design/references/style-guide.md \
     packages/dsh-pdf/lib/vendor/pdf.min.mjs \
-    packages/dsh-pdf/skills/pdf-analysis/SKILL.md; do
+    packages/dsh-pdf/skills/pdf-analysis/SKILL.md \
+    packages/dsh-proto-lab/lib/vendor/p5.min.js \
+    packages/dsh-proto-lab/skills/p5js-prototypes/SKILL.md; do
     if [ ! -f "$dist_dir/$_sent" ]; then _sent_missing="$_sent_missing $_sent"; fi
   done
   if [ "$no_shell" = 1 ]; then

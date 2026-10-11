@@ -70,6 +70,31 @@ app/src-tauri/target/
 # capability of its own - so they are build output, not content.
 app/src-tauri/gen/
 
+# The PROTOTYPING LAB (`dsh-proto-lab`) is a workshop, not an exhibit: `lab_new`
+# generates runs into `<workspace>/lab/` for the agent to try things in, and a
+# repository that accumulated every sketch anyone ever generated would stop being
+# a plugin pack. What ships is the GENERATOR and the checked example library, not
+# what was made with them - the examples live in
+# `packages/dsh-proto-lab/skills/*/examples/` and ARE committed.
+#
+# Anchored, for the reason the `/dsh-diagrams/` rule documents below: an
+# unanchored `lab/` also matches any `lab/` directory inside a package.
+# `DSH_PROTO_LAB_ROOT` can point the lab somewhere else entirely; this rule is
+# what keeps the DEFAULT location out of every commit.
+/lab/
+
+# The browser profile `check-lab-render.mjs` builds while it drives a headless
+# Chrome. A profile is a hundred files of cache and it is created per run; the
+# check removes it itself, and this is the belt for the run that is killed.
+packages/dsh-proto-lab/checks/.tmp/
+
+# The vendoring DOWNLOAD CACHE, the same shape as the diagrams rule further down:
+# `vendor/build.mjs` installs the pinned p5 once into `vendor/node_modules` and
+# reads two published files out of it. What is committed is the generated
+# `lib/vendor/p5.min.js` beside its `VERSION.json`; the install is an input.
+packages/dsh-proto-lab/vendor/node_modules/
+packages/dsh-proto-lab/vendor/.cache/
+
 # The diagram DATABASE must never be committed. dsh-diagrams keeps one file per
 # conversation plus one shared library under $DSH_HOME/dsh-diagrams/, and
 # $DSH_HOME defaults to ~/.dsh (outside this repo). These rules are the belt for

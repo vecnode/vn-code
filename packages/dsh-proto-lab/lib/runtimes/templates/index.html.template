@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{LABEL}} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â p5.js prototype</title>
+<!--
+  A dsh-proto-lab run. This file is the whole viewer: it loads the p5 library
+  that sits BESIDE it on disk (p5.min.js, vendored by the plugin - there is no
+  CDN and no network), then runs sketch.js in p5's global mode.
+
+  The contract between this shell and sketch.js is one object:
+
+      window.__dshProtoLab__ = { seed, params, slug, label, run }
+
+  `seed` comes from ?seed= in the URL, so opening this file with no query gives
+  the run's own seed and opening it with ?seed=7 explores the space. Any global
+  parameter name given in the query string after that overrides the value in
+  `params`. sketch.js reads `window.__dshProtoLab__` - that is what
+  makes the picture reproducible from a name.
+
+  Buttons do not reach into the sketch: the whole file reloads with a new seed,
+  so every sketch behaves the same way here whatever it keeps in global state.
+-->
+<style>
+  :root { color-scheme: dark; --ink: #e9e6df; --quiet: #8b877c; --line: #2a2926; --panel: #17171a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #101012; color: var(--ink);
+    font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  body { display: flex; flex-direction: column; }
+  #lab-bar { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline;
+    padding: 7px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #lab-bar .title { font-weight: 600; letter-spacing: .01em; }
+  #lab-bar .quiet { color: var(--quiet); }
+  #lab-bar .spacer { flex: 1 1 auto; }
+  #lab-bar button, #lab-bar input { font: inherit; color: var(--ink); background: #22222a;
+    border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; }
+  #lab-bar button:hover { background: #2c2c36; }
+  #lab-frame { flex: 1 1 auto; min-height: 0; position: relative; background: #0b0b0d; }
+  #lab-stage { position: absolute; inset: 0; }
+  #lab-stage canvas { display: block; }
+  #lab-params { display: flex; flex-direction: column; gap: 5px; padding: 9px 12px;
+    border-top: 1px solid var(--line); background: var(--panel); max-height: 9.5em; overflow: auto; }
+  #lab-params .row { display: flex; align-items: center; gap: 10px; }
+  #lab-params .row label { min-width: 10em; color: var(--quiet); }
+  #lab-params .row input { flex: 1 1 auto; }
+  #lab-params .row output { min-width: 4.5em; text-align: right; }
+  #lab-problem { position: absolute; inset: 0; display: none; place-content: center;
+    padding: 24px; text-align: center; color: #ff8f6b; background: rgba(11,11,13,.94); }
+  #lab-problem.show { display: grid; }
+  #lab-problem code { color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="lab-bar">
+  <span class="title">{{LABEL}}</span>
+  <span class="quiet">{{RUNTIME}} Ãƒâ€šÃ‚Â· {{SLUG}}</span>
+  <span class="spacer"></span>
+  <button id="lab-reroll" title="reload with a new random seed">Reroll</button>
+  <button id="lab-reset" title="reload with the run's own seed">Reset</button>
+  <button id="lab-png" title="save the current frame">Save PNG</button>
+</div>
+<div id="lab-frame">
+  <div id="lab-stage"></div>
+  <div id="lab-problem"><div>
+    <p><strong>p5 could not start.</strong></p>
+    <p><code>p5.min.js</code> must sit beside this file (the plugin's <code>lab_new</code> writes it there),
+       and <code>sketch.js</code> must exist and parse.</p>
+    <p class="quiet" id="lab-problem-detail"></p>
+  </div></div>
+</div>
+<div id="lab-params"></div>
+
+<script>
+// THE FRAME LOOP IS DECIDED FIRST, before the library loads, because p5 captures
+// `window.requestAnimationFrame` when it starts.
+//
+// The fallback lives in THIS block as a hoisted function declaration, and that is
+// not tidiness: the probe below runs on a timer, and a probe that calls a fallback
+// defined in a LATER script block finds `undefined` and throws inside a timer
+// callback - where the error is swallowed and the page silently draws nothing.
+// Measured exactly that. One block, one unit of code, no ordering to get wrong.
+window.__dshProtoLabTimerLoop__ = function installTimerLoop() {
+  if (window.__dshProtoLabRafInstalled__ === true) return;
+  window.__dshProtoLabRafInstalled__ = true;
+  var next = 1;
+  var timers = {};
+  window.requestAnimationFrame = function (callback) {
+    var id = next++;
+    timers[id] = window.setTimeout(function () {
+      delete timers[id];
+      // The callback gets the time the browser would have given it.
+      callback(window.performance && window.performance.now ? window.performance.now() : Date.now());
+    }, 16);
+    return id;
+  };
+  window.cancelAnimationFrame = function (id) {
+    if (timers[id] !== undefined) {
+      window.clearTimeout(timers[id]);
+      delete timers[id];
+    }
+  };
+  window.__dshProtoLabRafMode__ = 'timer (nothing renders this page)';
+};
+
+(function () {
+  var query = new URLSearchParams(location.search);
+  if (query.get('raf') === 'real') {
+    window.__dshProtoLabRafMode__ = 'real (asked for)';
+    return;
+  }
+  var answered = false;
+  try {
+    window.requestAnimationFrame(function () {
+      answered = true;
+    });
+  } catch (err) {
+    answered = false;
+  }
+  window.setTimeout(function () {
+    if (answered) {
+      window.__dshProtoLabRafMode__ = 'real';
+      return;
+    }
+    // Nothing rendered within the probe's window, so p5's own loop would never
+    // run: the timer loop takes over, and p5 picks it up on its next frame.
+    window.__dshProtoLabTimerLoop__();
+    // A page that renders AFTER the probe is still fine: the shim delegates to a
+    // timer, which fires, so the sketch draws either way.
+  }, 150);
+  window.__dshProtoLabRafMode__ = 'probing';
+})();
+</script>
+
+<!--
+  THE LIBRARY IS LOADED BEFORE THE SKETCH, and that is necessary but not
+  sufficient: this tag DEFINES the p5 constructor, and the globals a sketch calls
+  (`createCanvas`, `randomSeed`, `noiseSeed`) are installed by `new p5()` - which
+  the shell does once it has the sketch's lifecycle in hand. See the note above
+  `window.__dshProtoLabSketch__` for the two measurements behind that.
+-->
+<script src="p5.min.js" onerror="labContract && (labContract.loadFailed = true)"></script>
+
+<script>
+// The run's own data. Values in the query string win, so the same file is both
+// the committed run and a seed scrubber.
+//
+// WHY THE NAME IS WRONG ON PURPOSE, and why it is frozen. p5's global mode copies
+// its whole PROTOTYPE onto `window`, so any short name a lab contract might want is
+// already p5's: measured, `window.__LAB` was silently replaced by
+// `p5.prototype.color`, and the sketch's parameters became a color function -
+// `P('particles')` returned 0, so the run drew zero particles while looking
+// perfectly healthy. A long, namespaced, frozen property cannot be claimed by
+// accident, and a future p5 that adds a global will not take this one with it.
+const labContract = {
+  runtime: {{RUNTIME_JSON}},
+  slug: {{SLUG_JSON}},
+  label: {{LABEL_JSON}},
+  concept: {{CONCEPT_JSON}},
+  seed: {{SEED}},
+  params: {{PARAMS_JSON}}
+};
+Object.defineProperty(window, '__dshProtoLab__', { value: labContract, writable: false, configurable: false, enumerable: false });
+const contract = window.__dshProtoLab__;
+(function () {
+  var query = new URLSearchParams(location.search);
+  var seed = Number(query.get('seed'));
+  // The preview hands the seed in directly (its framed document has no URL to
+  // read), so an override wins over the query string and over the run's own seed.
+  if (typeof window.__dshProtoLabSeed__ === 'number' && Number.isFinite(window.__dshProtoLabSeed__)) {
+    labContract.seed = Math.trunc(window.__dshProtoLabSeed__);
+  } else if (Number.isFinite(seed) && seed !== 0) {
+    labContract.seed = Math.trunc(seed);
+  }
+  for (var i = 0; i < labContract.params.length; i += 1) {
+    var slot = labContract.params[i];
+    // `Number(null)` is 0 and `Number.isFinite(0)` is TRUE, so asking only whether
+    // the parsed number is finite set EVERY parameter to zero when the query
+    // string carried nothing - measured on a generated run: seven parameters, all
+    // zero, and a sketch that then drew zero particles into a black canvas while
+    // its seed, label and files were all perfectly correct. The absence of the key
+    // is the thing to test.
+    var raw = query.get(slot.name);
+    if (raw === null || raw.trim() === '') continue;
+    var given = Number(raw);
+    if (Number.isFinite(given)) slot.value = Math.min(slot.max, Math.max(slot.min, given));
+  }
+  labContract.param = function (name) {
+    for (var j = 0; j < labContract.params.length; j += 1) {
+      if (labContract.params[j].name === name) return labContract.params[j].value;
+    }
+    return undefined;
+  };
+  labContract.setParam = function (name, value) {
+    for (var j = 0; j < labContract.params.length; j += 1) {
+      if (labContract.params[j].name === name) { labContract.params[j].value = value; return true; }
+    }
+    return false;
+  };
+  labContract.reload = function (next) {
+    var wanted = next === undefined ? Math.floor(Math.random() * 100000) : next;
+    // Standalone (a real URL): a reload with the seed in the query string. In the
+    // preview (no URL, a hand-composed document): the seed through the one global
+    // the host reads, because there is nothing to navigate.
+    if (location.search !== '' || /^https?:$/.test(location.protocol)) {
+      query.set('seed', String(wanted));
+      location.search = query.toString();
+      return;
+    }
+    window.__dshProtoLabSeed__ = wanted;
+    location.reload();
+  };
+})();
+</script>
+
+<script>
+// The parameter console, generated from the run's own params - which is why a
+// control can never disagree with what the sketch reads.
+(function () {
+  var host = document.getElementById('lab-params');
+  if (labContract.params.length === 0) {
+    host.innerHTML = '<div class="row quiet">This run declares no parameters. Edit sketch.js to add some: ' +
+      'a parameter is an entry in the params array of index.html.</div>';
+    return;
+  }
+  labContract.params.forEach(function (slot) {
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<label for="lab-p-' + slot.name + '">' + slot.name + '</label>' +
+      '<input id="lab-p-' + slot.name + '" type="range" min="' + slot.min + '" max="' + slot.max +
+      '" step="' + slot.step + '" value="' + slot.value + '">' +
+      '<output>' + slot.value + '</output>';
+    var input = row.querySelector('input');
+    var out = row.querySelector('output');
+    input.addEventListener('input', function () {
+      var value = Number(input.value);
+      out.textContent = String(value);
+      labContract.setParam(slot.name, value);
+      if (typeof window.labOnParam === 'function') window.labOnParam(slot.name, value);
+    });
+    host.appendChild(row);
+  });
+})();
+</script>
+
+<script>
+(function () {
+  var problem = document.getElementById('lab-problem');
+  var detail = document.getElementById('lab-problem-detail');
+  window.addEventListener('error', function (event) {
+    if (problem.classList.contains('show')) return;
+    detail.textContent = String((event && (event.message || event.error)) || 'a script failed');
+    problem.classList.add('show');
+  });
+  if (typeof window.p5 === 'undefined') {
+    detail.textContent = 'p5 is not loaded: p5.min.js is missing beside this file.';
+    problem.classList.add('show');
+  }
+})();
+</script>
+<script>
+// THE SKETCH GOES LAST *AND* THROUGH THE QUEUE, and both halves are load-bearing.
+//
+// The library tag above DEFINES the p5 constructor and does NOT install its
+// globals, and p5's own auto-start never runs in this page shape. Both were
+// measured in a headless Chrome against a generated run:
+//
+//   - `typeof window.randomSeed` is `undefined` after the library tag AND after
+//     DOMContentLoaded AND after `load` AND a second later. p5 1.x only ever
+//     installs the globals when an INSTANCE is constructed, and its auto-start
+//     (a promise that resolves to `new p5()` when `window.setup` or
+//     `window.draw` exists) never fires here.
+//   - so a sketch that called `randomSeed(...)` at its top level - the shape every
+//     p5 sketch in the world has - died with
+//     "Uncaught ReferenceError: randomSeed is not defined".
+//
+// The fix is therefore explicit, and it is the same four lines the p5 wiki
+// suggests for `instance mode`, used to keep GLOBAL mode alive: the sketch is
+// wrapped in a factory, the factory installs `setup`/`draw` on `window`, and then
+// ONE `new p5()` installs the globals and starts calling them. Nothing about how a
+// sketch is written changes.
+window.__dshProtoLabLog__ = [];
+// The sketch hands its lifecycle over HERE rather than leaving it on window; the
+// reason is written out at the hand-over below.
+window.__dshProtoLabLifecycle__ = {};
+
+window.__dshProtoLabSketch__ = function (factory) {
+  window.__dshProtoLabPhase__ = 'factory';
+  window.__dshProtoLabLog__.push('sketch: factory');
+  try {
+    factory();
+  } catch (err) {
+    window.__dshProtoLabPhase__ = 'factory threw';
+    window.__dshProtoLabLog__.push('sketch: threw: ' + String((err && err.message) || err));
+    // The ERROR and its stack, not just its message: a name that is not defined in
+    // a browser and IS defined under the checker's stub is exactly the class of bug
+    // this shell has to report well enough to fix in one pass.
+    window.__dshProtoLabError__ = {
+      message: String((err && err.message) || err),
+      name: String((err && err.name) || ''),
+      stack: String((err && err.stack) || '').split('\n').slice(0, 4).join(' | '),
+    };
+    return report('sketch.js threw while loading: ' + String(window.__dshProtoLabError__.message));
+  }
+  const lifecycle = window.__dshProtoLabLifecycle__;
+  if (lifecycle === undefined || (typeof lifecycle.setup !== 'function' && typeof lifecycle.draw !== 'function')) {
+    window.__dshProtoLabPhase__ = 'no lifecycle';
+    window.__dshProtoLabLog__.push('sketch: no lifecycle was handed over');
+    return report('sketch.js defines neither setup() nor draw() - there is nothing for p5 to run.');
+  }
+  window.__dshProtoLabPhase__ = 'hand-over';
+  window.__dshProtoLabLog__.push('sketch: lifecycle taken (' + typeof lifecycle.setup + '/' + typeof lifecycle.draw + ')');
+
+  // P5 STARTS THE SKETCH; THE SHELL ATTACHES TO WHAT IT STARTED.
+  //
+  // This is the shape that works, and it was reached by measuring four others:
+  //
+  //   lifecycle on `window` + the shell's own `new p5()`
+  //       -> p5's auto-start (a promise on `load` that constructs an instance as
+  //          soon as `window.setup` is a function) beats the shell to it: the page
+  //          draws, but the object the shell holds is a SECOND instance with
+  //          `frameCount === null`, so a measurement reads the wrong instance and
+  //          reports "it never drew".
+  //   `new p5({ setup, draw })`  -> throws inside p5 ("e is not a function"); the
+  //          constructor expects a sketch FUNCTION when its argument is callable.
+  //   `new p5(function (p) { … })`  -> works, but installs NO globals, so a sketch
+  //          dies on "randomSeed is not defined".
+  //   `new p5({})` / `new p5()` bare  -> constructs an instance that runs nothing:
+  //          p5's boot path claims global mode only when it finds a lifecycle on
+  //          `window`, which is why the lifecycle has to go there after all.
+  //
+  // So the lifecycle is published on `window` exactly as every p5 sketch in the
+  // world writes it, p5's own boot does the constructing, and the listener below
+  // takes the instance from the `p5Ready` event p5 dispatches just before it. One
+  // instance, global mode, and nothing left to race.
+  window.setup = lifecycle.setup;
+  window.draw = lifecycle.draw;
+  delete window.__dshProtoLabLifecycle__;
+  window.__dshProtoLabLog__.push('p5: lifecycle published on window, waiting for p5Ready');
+  window.__dshProtoLabInstalling__ = true;
+};
+
+/**
+ * Put one sentence in the page where a person will see it - and never throw.
+ *
+ * The first version of this function assumed the two elements were there. They
+ * are, in this document; but a `catch` path that THROWS turns a reported failure
+ * into an unreported one, and the page then says nothing at all while the real
+ * error is swallowed. Measured: that is exactly what happened - the sketch threw,
+ * the reporter threw on top of it, and the tab reported "p5 did not start".
+ */
+function report(message) {
+  // The text goes on `window` as well as into the page: a check that measures the
+  // page can read one string instead of parsing the DOM, and the reason a run
+  // failed is worth more than the fact that it did.
+  window.__dshProtoLabReport__ = String(message);
+  try {
+    var problem = document.getElementById('lab-problem');
+    var detail = document.getElementById('lab-problem-detail');
+    if (detail !== null) detail.textContent = message;
+    if (problem !== null) problem.classList.add('show');
+  } catch (err) {
+    /* nothing left to report with */
+  }
+}
+
+// p5's OWN BOOT HANDS US THE INSTANCE - but not in the event payload, and not yet.
+//
+// p5 dispatches `p5Ready` and constructs its instance in the SAME turn, with the
+// dispatch FIRST (`e=new Event("p5Ready"), window.dispatchEvent(e), … && new p5()`).
+// A listener that reads `p5.instance` inside the event therefore finds null -
+// measured. So the listener only starts the hunt, and the hunt polls: the instance
+// appears within the same task, a poll catches it, and there is no ordering left to
+// get wrong. The listener is registered here, while the document is still parsing,
+// so it is always in place before p5's promise on `load` runs.
+window.addEventListener('p5Ready', function () {
+  window.__dshProtoLabLog__.push('p5: p5Ready fired, looking for the instance');
+  var waited = 0;
+  var hunt = window.setInterval(function () {
+    var instance = typeof window.p5 !== 'undefined' ? window.p5.instance : undefined;
+    if (instance === undefined || instance === null) {
+      waited += 1;
+      if (waited > 100) {
+        window.clearInterval(hunt);
+        window.__dshProtoLabPhase__ = 'no-instance';
+        report('p5 announced itself but published no instance, so the run cannot be measured.');
+      }
+      return;
+    }
+    window.clearInterval(hunt);
+    window.__dshProtoLabP5__ = instance;
+    window.__dshProtoLabPhase__ = 'started';
+    window.__dshProtoLabLog__.push('p5: instance taken (frameCount=' + String(instance.frameCount) + ')');
+
+    // WATCH THE LOOP. Nearly every failure this shell has had to explain was a loop
+    // that never ran, and p5 swallows the browser's own error while doing it. One
+    // timer sampling the frame counter turns "it did not draw" into "setup never
+    // ran" or "setup ran and the loop is stalled" - different bugs, different fixes.
+    var lastCount = -1;
+    var stalled = 0;
+    var watcher = window.setInterval(function () {
+      var count = typeof instance.frameCount === 'number' ? instance.frameCount : 0;
+      if (count !== lastCount) {
+        if (lastCount < 0) window.__dshProtoLabLog__.push('loop: first frame (frameCount=' + count + ')');
+        lastCount = count;
+        stalled = 0;
+        return;
+      }
+      stalled += 1;
+      if (stalled === 2) {
+        window.__dshProtoLabLog__.push(
+          'loop: STALLED at frameCount=' + count +
+            ', isLooping=' + String(typeof instance.isLooping === 'function' ? instance.isLooping() : '?') +
+            ', setupDone=' + String(window._setupDone),
+        );
+      }
+      if (stalled > 20) window.clearInterval(watcher);
+    }, 500);
+  }, 50);
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof window.__dshProtoLabP5__ === 'undefined' && window.__dshProtoLabInstalling__ !== true) {
+    report('p5 did not start: p5.min.js is missing beside this file, or sketch.js did not load.');
+  }
+});
+</script>
+<script src="sketch.js" onerror="(function () {
+  var problem = document.getElementById('lab-problem');
+  document.getElementById('lab-problem-detail').textContent = 'sketch.js is missing beside this file, or would not parse.';
+  problem.classList.add('show');
+})()"></script>
+<script>
+// A sketch that threw during setup() leaves p5 defined and the frame black, so
+// "did anything draw" is answered by the sketch's own flag, which every lab
+// sketch sets at the end of its first draw().
+(function () {
+  setTimeout(function () {
+    if (labContract.drew === true) return;
+    if (document.getElementById('lab-problem').classList.contains('show')) return;
+    var problem = document.getElementById('lab-problem');
+    document.getElementById('lab-problem-detail').textContent =
+      'sketch.js loaded but nothing drew in five seconds.';
+    problem.classList.add('show');
+  }, 5000);
+  var buttons = {
+    'lab-reroll': function () { labContract.reload(); },
+    'lab-reset': function () { labContract.reload({{SEED}}); },
+    'lab-png': function () {
+      // NAMED SO IT IS FINDABLE. A browser may only ever write to its own Downloads
+      // folder, so a print has to say which run and which seed made it - and then it
+      // can be moved into the lab's prints folder (`lab_open` prints that path)
+      // without anyone guessing which file was which.
+      if (typeof window.saveCanvas === 'function') window.saveCanvas('vncode-lab-{{SLUG}}-seed-' + labContract.seed, 'png');
+    }
+  };
+  Object.keys(buttons).forEach(function (id) {
+    document.getElementById(id).addEventListener('click', buttons[id]);
+  });
+})();
+</script>
+</body>
+</html>

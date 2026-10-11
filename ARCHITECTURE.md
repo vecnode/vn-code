@@ -53,6 +53,7 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
 | `dsh-diagrams` | `diagrams` | Mermaid + TikZ + the vendored **Diagram Design** kit (204 examples, 44 documented types) and the seven `diagram_*` tools, validated on the host |
 | `dsh-pdf` | `pdf` | PDF reader tab + `pdf_info` / `pdf_read` / `pdf_find` / `pdf_render` / `pdf_scan` over vendored pdf.js |
 | `dsh-ocr` | `ocr` | the pack's OCR owner: one tool, `ocr`, over `tesseract` from PATH or the OCR engine Windows itself ships (`lib/win-ocr.ps1` + `Windows.Media.Ocr`, which rasterizes a PDF page through `Windows.Data.Pdf`). Host-only — no client, no route |
+| `dsh-proto-lab` | `proto-lab` | the **prototyping lab**: five `lab_*` tools write a run into the workspace's own `lab/<runtime>/<slug>/` (gitignored — the bundle ships the generator, not the runs), a runtime registry (`p5js`, `openframeworks`, and a template for the third) whose every module the checks drive, a committed example library beside each skill, an offline-vendored p5.js, and verification as an explicit ladder — `t0-structure` → `t4-measure` — that always names the tier it reached |
 | `dsh-browser` | `browser` | web surface: the host fetches and renders a page in a disposable sandboxed browser (**currently disabled by the master**) |
 | `dsh-themes` | `themes` | extra palettes (Nord, Monokai, Hacker, Cyber), header controls, branding, account-menu trimming |
 | `dsh-cmdbar` | `cmdbar` | the command bar: a read-only transcript of the agent's own commands |

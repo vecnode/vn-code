@@ -1,0 +1,154 @@
+/**
+ * {{LABEL}} — a p5.js prototype ({{RUNTIME}} / {{SLUG}}).
+ *
+ * {{CONCEPT}}
+ *
+ * EDIT THIS FILE. index.html is the shell (it owns the library, the seed and the
+ * controls); this file is the prototype. The rules that make it reproducible:
+ *
+ *   - the seed comes from `window.__PROTO.seed` and is applied to BOTH
+ *     `randomSeed` and `noiseSeed` before anything is drawn;
+ *   - every tunable is a named entry in that same object, read through
+ *     `P('name')` - the shell generates a slider for it, so a control and the
+ *     value the sketch reads can never disagree;
+ *   - `window.__dshProtoLab__.drew = true` at the end of the first `draw()` is how the
+ *     shell (and the headless render check) knows the sketch really drew
+ *     something rather than sitting on a black canvas.
+ */
+
+// Handed to the shell's queue, which runs it once p5's global mode is actually
+// initialized - see the load-order note in index.html. Everything inside runs in
+// the same scope it would have at top level, so nothing else about the sketch
+// changes; the wrapper is what makes `randomSeed()` legal on the first line.
+window.__dshProtoLabSketch__(function () {
+  // The run's contract. The long name is deliberate: p5's global mode copies its
+  // prototype onto window, so window.color (and anything else short) is p5's.
+  const spec = window.__dshProtoLab__;
+
+  /** One parameter by name, as the shell currently has it. */
+  const P = (name) => spec.param(name);
+
+  /** Draw again from the top, e.g. after rebuilding a grid in labOnParam. */
+  let dirty = true;
+
+  // -- the algorithm's own state ---------------------------------------------
+  // Nothing here is "the picture": these are the quantities the picture emerges
+  // from. A still image is written once; a system is steered.
+  /** The flow field is drawn from noise at a scale, so it is rebuilt, not stored. */
+  const state = {
+    particles: [],
+    frames: 0,
+  };
+
+  // NO p5 CALL MAY RUN AT THIS POINT, and that is not a style rule - it is when the
+  // globals exist. `randomSeed`, `noiseSeed`, `createCanvas` and the rest are
+  // installed by `new p5()`, which the shell does AFTER this factory returns (it
+  // has to: p5 reads `window.setup` and `window.draw` when it starts). Measured:
+  // a `randomSeed(spec.seed)` up here threw "ReferenceError: randomSeed is not
+  // defined" on a real page while the same line was harmless under the checker's
+  // stub. So the seeding lives in setup(), one line below, where it belongs.
+
+  /** Angle of the field at one point. Layered noise, so it has calm and turbulence. */
+  function angleAt(x, y) {
+    const scale = P('scale');
+    const t = state.frames * P('speed') * 0.00035;
+    return noise(x * scale, y * scale, t) * TWO_PI * 3;
+  }
+
+  /** A particle, reborn at a random point when its life runs out. */
+  function respawn(particle) {
+    particle.x = random(width);
+    particle.y = random(height);
+    particle.life = random(0.4, 1) * P('life');
+    particle.age = 0;
+    particle.speed = P('flow') * random(0.6, 1.4);
+  }
+
+  /** Build the population for the current canvas and parameters. */
+  function populate() {
+    const wanted = P('particles');
+    while (state.particles.length > wanted) state.particles.pop();
+    while (state.particles.length < wanted) {
+      const particle = { x: 0, y: 0, age: 0, life: 1, speed: 1 };
+      respawn(particle);
+      particle.age = random(particle.life);
+      state.particles.push(particle);
+    }
+  }
+
+  // -- p5's lifecycle --------------------------------------------------------
+  // `window.setup` and not a local `function setup()`: this factory's body is a
+  // FUNCTION SCOPE, so a declaration here is invisible to the global mode p5 reads
+  // when it starts - measured as "p5 did not start ... sketch.js did not load",
+  // because p5 found no lifecycle at all. The lifecycle goes on `window`.
+  // Handed over, NOT left on window: p5's auto-start would race the shell for it.
+  // See the note above window.__dshProtoLabLifecycle__ in index.html.
+  window.__dshProtoLabLifecycle__.setup = function () {
+    // The seed FIRST, before anything is drawn - and here rather than at the top of
+    // the factory, because these globals only exist once p5 has started.
+    randomSeed(spec.seed);
+    noiseSeed(spec.seed);
+    const canvas = createCanvas(windowWidth, windowHeight);
+    // The shell's stage div: the canvas fills the frame and the controls keep
+    // their own row, which is what makes the page usable at any window size.
+    canvas.parent('lab-stage');
+    pixelDensity(1);
+    populate();
+    background(0);
+    strokeCap(ROUND);
+  }
+
+  window.__dshProtoLabLifecycle__.draw = function () {
+    if (dirty) {
+      populate();
+      background(0);
+      state.frames = 0;
+      dirty = false;
+    }
+    state.frames += 1;
+
+    // A veil instead of a clear: the field keeps a memory of where it has been,
+    // which is what turns paths into density.
+    noStroke();
+    fill(0, P('veil'));
+    rect(0, 0, width, height);
+
+    const weight = P('weight');
+    for (const particle of state.particles) {
+      const angle = angleAt(particle.x, particle.y);
+      const nextX = particle.x + Math.cos(angle) * particle.speed;
+      const nextY = particle.y + Math.sin(angle) * particle.speed;
+      const speed = Math.hypot(nextX - particle.x, nextY - particle.y);
+      const brightness = 45 + speed * 26;
+
+      stroke(brightness, brightness * 1.6, 255 - brightness * 0.4, 120);
+      strokeWeight(weight * (1 - particle.age / particle.life) + 0.3);
+      line(particle.x, particle.y, nextX, nextY);
+
+      particle.x = nextX;
+      particle.y = nextY;
+      particle.age += 1;
+      if (particle.age > particle.life || particle.x < -20 || particle.x > width + 20 || particle.y < -20 || particle.y > height + 20) {
+        respawn(particle);
+      }
+    }
+
+    // The first frame is what the shell and the render check wait for.
+    if (state.frames === 1) spec.drew = true;
+  }
+
+  window.windowResized = function () {
+    resizeCanvas(windowWidth, windowHeight);
+    dirty = true;
+  }
+
+  // The shell's slider calls this. Rebuilding the population here is what makes
+  // the control feel like part of the algorithm rather than a filter over it.
+  window.labOnParam = function (name) {
+    if (name === 'particles' || name === 'life' || name === 'flow' || name === 'scale') dirty = true;
+    if (name === 'veil') return;
+  };
+
+  // Nothing to export: the lifecycle is already ON `window`, where p5's global
+  // mode looks for it the moment the shell constructs the instance.
+});

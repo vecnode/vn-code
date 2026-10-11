@@ -1,0 +1,7 @@
+{
+  "slug": "attractor-nodes",
+  "label": "Attractor nodes",
+  "concept": "Particles are pulled toward moving attractors and their short trails accumulate into the basins between them.",
+  "seed": 20260402,
+  "params": "`attractors` is how many bodies the particles feel; `pull` is the force constant (raise it and the particles collapse onto the nearest body); `drag` is how quickly velocity decays, which is what makes the paths curl rather than run straight; `wobble` is the noise added to the pull, and it is what makes the basins legible; `veil` is how much history one frame keeps."
+}
