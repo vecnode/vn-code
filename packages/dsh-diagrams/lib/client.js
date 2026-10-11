@@ -3,22 +3,26 @@
  *
  * One bundle, five registrations, no build step:
  *
- *   1. the **`diagram` tab type** (a resource address,
- *      `dsh-resource://diagram/session/<session>/<id>`) - one tab per diagram,
- *      showing the rendered picture at 80% of the pane width with a zoom ladder
+ *   1. the **`diagram` tab type** — one tab per diagram, for THREE address
+ *      shapes: `dsh-resource://diagram/session/<session>/<id>`,
+ *      `.../library/<id>`, and `.../example/<name>` for a vendored Diagram
+ *      Design example (which is why the kit registers no tab type of its own).
+ *      It shows the rendered picture at 80% of the pane width with a zoom ladder
  *      (25%-400%), a source drawer, and an export menu whose every format is
  *      saved to the **Desktop of the machine running the harness** by the host
  *      (the browser download stays as the fallback for a profile without it);
  *   2. the **`diagrams` tab type** (a page address, `sidebar://diagrams`) -
- *      the conversation's diagram index, and the type whose `guide` entry puts
- *      "Diagrams" on the tab strip's "+" / Start page (order 40, after Files,
- *      Editor and History);
+ *      the conversation's diagram index, the **design kit browser** (71 example
+ *      keys, filterable, openable, forkable), and the type whose `guide` entry
+ *      puts "Diagrams" on the tab strip's "+" / Start page (order 40, after
+ *      Files, Editor and History);
  *   3. the **keyed tab bodies and titles** those two types need
  *      (`sidebar.right.pane.tab` / `.title`), the two-stage contract every tab
  *      type in this bar follows;
  *   4. a **`tool.call.toolview` entry per tool** (`diagram_write`,
- *      `diagram_patch`, `diagram_read`, `diagram_delete`) so every call draws
- *      its diagram inline in the conversation with a link that opens its tab.
+ *      `diagram_patch`, `diagram_read`, `diagram_verify`, `diagram_publish`,
+ *      `diagram_delete`, `diagram_kit`) so every call draws its diagram inline
+ *      in the conversation with a link that opens its tab.
  *
  * Everything the surfaces read comes from one module-level store keyed by
  * session, filled from the plugin's own authenticated routes. The store is the
@@ -31,7 +35,11 @@
  * editor's CodeMirror), themed off the app's light/dark scheme. TikZ is drawn
  * from the **host's cached artifact** - the compiled SVG, fetched with
  * credentials as a blob and shown through an `<img>`, so the picture is the
- * engine's own vector output and not a re-drawing.
+ * engine's own vector output and not a re-drawing. An `html` diagram is a
+ * **sandboxed `<iframe>`** on the host's frame route: the document keeps its own
+ * stylesheet and its own motion controls, and the frame's opaque origin plus the
+ * response's `default-src 'none'` policy are what keep a document from reaching
+ * anything.
  */
 /* global window, document, fetch, URL, Blob */
 window.__ModuleLoader__.load({
@@ -56,6 +64,11 @@ window.__ModuleLoader__.load({
     const INDEX_ID = 'dsh-diagrams-index'
     const INDEX_KIND = 'diagrams'
     /**
+     * The `diagram` type's OTHER two address shapes are declared where they are
+     * built: `ADDRESS_PREFIX` / `LIBRARY_PREFIX` / `EXAMPLE_PREFIX` below. All
+     * three open the same tab type, which is why the kit adds no tab kind.
+     */
+    /**
      * Address grammar of one diagram. Two shapes, because a diagram lives in one
      * of two places: `dsh-resource://diagram/session/<session>/<id>` for this
      * conversation, and `dsh-resource://diagram/library/<id>` for the shared
@@ -64,6 +77,13 @@ window.__ModuleLoader__.load({
      */
     const ADDRESS_PREFIX = 'dsh-resource://diagram/session/'
     const LIBRARY_PREFIX = 'dsh-resource://diagram/library/'
+    /**
+     * The third address shape: a VENDORED Diagram Design example, opened in the
+     * same `diagram` tab so the kit needs no tab type of its own. It names no
+     * conversation because it names no diagram - it is a file in the plugin, and
+     * the tab draws it the same way it draws a stored one.
+     */
+    const EXAMPLE_PREFIX = 'dsh-resource://diagram/example/'
     const LIBRARY_SCOPE = 'library'
     /** Keep in sync with lib/index.js. */
     const STATE_ROUTE = '/api/dsh-diagrams/state'
@@ -72,8 +92,11 @@ window.__ModuleLoader__.load({
     const EXPORT_ROUTE = '/api/dsh-diagrams/export'
     const REPORT_ROUTE = '/api/dsh-diagrams/render-report'
     const VENDOR_ROUTE = '/api/dsh-diagrams/vendor/mermaid.js'
+    /** The two kit frames: a vendored example, and this conversation's own document. */
+    const EXAMPLE_ROUTE = '/api/dsh-diagrams/example'
+    const DOCUMENT_ROUTE = '/api/dsh-diagrams/document'
     /** Version marker shown in the panel footer, so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.7'
+    const PLUGIN_VERSION = '0.1.0-alpha.8'
     /**
      * The zoom ladder the diagram tab steps through, the share of the pane a
      * picture occupies at 100%, and the last zoom each tab was left at.
@@ -88,7 +111,19 @@ window.__ModuleLoader__.load({
     const ZOOM_FIT_WIDTH = 80
     const zoomMemory = new Map()
     /** The tools this package registers conversation cards for. */
-    const TOOL_NAMES = ['diagram_write', 'diagram_patch', 'diagram_read', 'diagram_verify', 'diagram_publish', 'diagram_delete']
+    const TOOL_NAMES = ['diagram_write', 'diagram_patch', 'diagram_read', 'diagram_verify', 'diagram_publish', 'diagram_delete', 'diagram_kit']
+    /**
+     * The label one diagram kind wears in a chip.
+     *
+     * Three kinds, three labels: `html` used to fall through the `tikz ? ... :
+     * 'Mermaid'` ternary and would have been chipped "Mermaid", which is the kind
+     * of small lie the panel exists to avoid.
+     */
+    function kindLabel(kind) {
+      if (kind === 'tikz') return 'TikZ'
+      if (kind === 'html') return 'Design'
+      return 'Mermaid'
+    }
     /** Client services, all resolved lazily (none of them is required to draw). */
     const SIDEBAR_SERVICE = 'sidebarRight'
     const THEME_SERVICE = 'theme'
@@ -201,6 +236,24 @@ window.__ModuleLoader__.load({
 .dsd-cardBody{padding:10px 12px 12px;border-top:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.14));display:flex;flex-direction:column;gap:10px;max-height:460px;overflow:auto}
 .dsd-cardPre{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary,#666)}
 .dsd-inlineLink{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-link,#3b7ddd);font:inherit;font-size:12px;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+/* A framed Design document. The frame is the picture: it is given the whole
+   canvas and no padding, because the document inside owns its own margins.
+   "Fit" passes a scale to the route, which applies it as a zoom on the
+   document's own root - a layout scale, so the document keeps its layout and its
+   Play/Pause controls stay where they are. "Actual" passes none, and the canvas
+   scrolls, because a kit page is 900-1200px wide and a right-bar pane is not. */
+.dsd-canvas[data-frame]{padding:0;align-items:stretch;justify-content:stretch;overflow:auto;background:var(--dsw-alias-surface-l1,transparent)}
+.dsd-frame{flex:0 0 auto;min-width:0;min-height:100%;width:100%;border:0;display:block;background:#f5f5f5}
+.dsd-canvas[data-frame="scroll"] .dsd-frame{width:1100px}
+/* The design-kit section of the index: a filter, a count and one row per
+   example key. It scrolls with the rest of the page, so it has no box of its
+   own - only a hairline above it to separate the kit from the conversation. */
+.dsd-kit{flex:none;display:flex;flex-direction:column;gap:4px;padding:6px 10px 12px;border-top:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18))}
+.dsd-kitBar{display:flex;align-items:center;gap:6px;padding:2px 0 4px}
+.dsd-kitSearch{flex:1;min-width:0;height:24px;box-sizing:border-box;padding:0 8px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.22));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#1f1f1f);font:inherit;font-size:12px;outline:none}
+.dsd-kitSearch:focus{border-color:var(--dsw-alias-border-l4,rgba(127,127,127,.44))}
+/* The badge carries the kind, so three kinds are readable at a glance. */
+.dsd-badge[data-kind="html"],.dsd-badge[data-kind="kit"]{background:rgba(191,69,32,.12);color:#b05a34}
 `
     /** Inject the stylesheet once per document. */
     function injectStyles() {
@@ -311,6 +364,11 @@ window.__ModuleLoader__.load({
     function parseDiagramAddress(address) {
       const text = String(address ?? '')
       try {
+        // A kit example first: it is the one shape that carries neither a session
+        // nor a stored diagram, only the name of a vendored file.
+        if (text.startsWith(EXAMPLE_PREFIX)) {
+          return { scope: 'example', sessionId: null, diagramId: null, exampleId: decodeURIComponent(text.slice(EXAMPLE_PREFIX.length)) }
+        }
         if (text.startsWith(LIBRARY_PREFIX)) {
           return { scope: LIBRARY_SCOPE, sessionId: null, diagramId: decodeURIComponent(text.slice(LIBRARY_PREFIX.length)) }
         }
@@ -322,6 +380,11 @@ window.__ModuleLoader__.load({
       } catch (err) {
         return { scope: null, sessionId: null, diagramId: null }
       }
+    }
+
+    /** The tab address of one vendored kit example. */
+    function exampleAddressFor(exampleId) {
+      return EXAMPLE_PREFIX + encodeURIComponent(exampleId)
     }
 
     // ---------------------------------------------------------------------
@@ -1131,6 +1194,104 @@ window.__ModuleLoader__.load({
       return h('img', { className: 'dsd-picture', src: state.url, alt: props.alt || 'TikZ diagram', draggable: false })
     }
 
+    /**
+     * One `html` diagram: a self-contained document in a sandboxed frame.
+     *
+     * WHY A FRAME. A Design document is not an image: it carries its own
+     * stylesheet, its own `<svg>`, and - for an animated one - the kit's motion
+     * controller, whose Play/Prev/Next buttons have to work. Extracting the SVG
+     * would mean re-deriving the design system in this stylesheet and
+     * re-implementing the controller; framing the document is less code and more
+     * faithful, and the frame is where the isolation comes from:
+     *
+     *   - `sandbox="allow-scripts"` and deliberately NOT `allow-same-origin`, so
+     *     the document runs on an opaque origin with no access to this app's
+     *     storage, cookies or DOM;
+     *   - the document itself is served by the plugin's own route with
+     *     `default-src 'none'` (see `contentSecurityPolicy` on the host), so it
+     *     cannot fetch anything whatever it contains;
+     *   - the only channel back is `postMessage`, used for two things: the theme
+     *     the panel is in, and a measurement it does not really need.
+     *
+     * A kit example (`source` absent, `exampleId` set) and a stored document go
+     * through the same component - they differ only in which route the frame
+     * loads, because they answer different questions on the host (a pinned file
+     * vs. this conversation's revision).
+     */
+    function HtmlPicture(props) {
+      const frameRef = useRef(null)
+      const dark = useDark()
+      const revision = props.revision ?? 0
+      const theme = props.theme ?? (dark ? 'dark' : 'light')
+      const fonts = props.fonts ?? 'system'
+      const scale = props.scale ?? 1
+      const [measured, setMeasured] = useState(null)
+
+      // The URL is the state: the route, the revision and the three view
+      // parameters. React re-renders the `src`, the frame reloads, and a stale
+      // document can never be shown for a source that has since changed.
+      const source = props.exampleId
+        ? EXAMPLE_ROUTE + '?id=' + encodeURIComponent(props.exampleId) + (props.variant ? '&variant=' + encodeURIComponent(props.variant) : '')
+        : DOCUMENT_ROUTE + '?session=' + encodeURIComponent(props.sessionId ?? '') + '&id=' + encodeURIComponent(props.diagramId ?? '') + '&revision=' + revision + (props.scope ? '&scope=' + props.scope : '')
+      const url = source + '&theme=' + theme + '&fonts=' + fonts + (scale !== 1 ? '&scale=' + scale : '')
+
+      /** The frame's own report about what it drew: the render ledger. */
+      useEffect(() => {
+        if (props.exampleId || !props.sessionId || !props.diagramId) return undefined
+        if (props.status === 'error') return undefined
+        const onMessage = (event) => {
+          const data = event.data
+          if (!data || data.source !== 'dsh-diagrams' || data.type !== 'measured') return
+          setMeasured({ width: data.width, height: data.height })
+        }
+        window.addEventListener('message', onMessage)
+        return () => window.removeEventListener('message', onMessage)
+      }, [props.exampleId, props.sessionId, props.diagramId, props.status])
+
+      useEffect(() => {
+        if (props.exampleId || !props.sessionId || !props.diagramId) return
+        if (props.status === 'error') {
+          postRenderReport(
+            props.sessionId,
+            props.diagramId,
+            revision,
+            { kind: 'html', ok: false, phase: 'validate', error: 'the document was refused by the safety check', theme },
+            props.scope,
+          )
+          return
+        }
+        // A framed document that LOADED is a drawn picture: the host has already
+        // validated the source, and the frame is the renderer. The report is sent
+        // once per revision+theme, exactly like the Mermaid and TikZ paths.
+        postRenderReport(props.sessionId, props.diagramId, revision, { kind: 'html', ok: true, phase: 'frame', theme }, props.scope)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [props.exampleId, props.sessionId, props.diagramId, revision, props.status, theme, props.scope])
+
+      /** Ask the frame to switch theme without reloading it. */
+      useEffect(() => {
+        const frame = frameRef.current
+        if (!frame || !frame.contentWindow) return
+        try {
+          frame.contentWindow.postMessage({ source: 'dsh-diagrams', type: 'theme', theme }, '*')
+        } catch (err) {
+          /* an opaque origin that refuses the message simply keeps its own theme */
+        }
+      }, [theme, url])
+
+      return h('iframe', {
+        ref: frameRef,
+        className: 'dsd-frame',
+        src: url,
+        title: props.alt || 'Diagram document',
+        // Scripts, and nothing else. No same-origin: the document is untrusted
+        // input that this app then displays.
+        sandbox: 'allow-scripts',
+        loading: 'eager',
+        referrerPolicy: 'no-referrer',
+        'data-measured-width': measured ? String(measured.width) : undefined,
+      })
+    }
+
     /** One picture, dispatched by kind. */
     function Picture(props) {
       if (props.kind === 'tikz') {
@@ -1140,6 +1301,21 @@ window.__ModuleLoader__.load({
           revision: props.revision,
           scope: props.scope,
           format: 'svg',
+          alt: props.title,
+        })
+      }
+      if (props.kind === 'html') {
+        return h(HtmlPicture, {
+          sessionId: props.sessionId,
+          diagramId: props.diagramId,
+          revision: props.revision,
+          scope: props.scope,
+          exampleId: props.exampleId,
+          variant: props.variant,
+          theme: props.theme,
+          fonts: props.fonts,
+          scale: props.scale,
+          status: props.status,
           alt: props.title,
         })
       }
@@ -1178,6 +1354,17 @@ window.__ModuleLoader__.load({
           'This diagram does not parse, so there is nothing to draw. The parser\u2019s own words are below - fix them and apply, or ask for it again.',
         )
       }
+      // A refused Design document is NOT framed. It is the one case where the
+      // host's verdict has to gate the renderer rather than inform it: the
+      // document failed the safety contract, so it is served to no one - not even
+      // into a sandbox, where it would still be a page the user is looking at.
+      if (entry.kind === 'html' && entry.status === 'error') {
+        return h(
+          'div',
+          { className: 'dsd-notice', 'data-tone': 'error' },
+          'This document was refused, so it is not drawn. The findings below say which rule it broke; the common ones are a remote asset, an executable attribute, or a script that is not the kit\u2019s own motion controller.',
+        )
+      }
       return h(Picture, {
         kind: entry.kind,
         source: entry.source,
@@ -1186,6 +1373,10 @@ window.__ModuleLoader__.load({
         revision: entry.revision,
         scope: props.scope,
         title: entry.title,
+        status: entry.status,
+        theme: props.theme,
+        fonts: props.fonts,
+        scale: props.scale,
         onEdit: props.onEdit,
         onOpen: props.onOpen,
       })
@@ -1197,6 +1388,50 @@ window.__ModuleLoader__.load({
     /** The stored diagram of a conversation, or null. Library-first, like the host. */
     function diagramNow(sessionId, diagramId, scope) {
       return entryNow(sessionId, diagramId, scope)
+    }
+
+    /**
+     * One entry of the VENDORED design kit, from whatever the host last reported.
+     *
+     * The catalog travels on the state route's `capabilities.designKit.types`, so
+     * an example tab draws from the same list the index section does - one shape
+     * of the truth, and no second request for a tab that is opened by name.
+     */
+    function exampleNow(sessionId, exampleId, kit = null) {
+      const store = stores.get(String(sessionId ?? '')) || stores.get('')
+      const found = kit || (store && store.capabilities && store.capabilities.designKit) || null
+      if (!found || !Array.isArray(found.types)) return null
+      const wanted = String(exampleId ?? '').trim().toLowerCase()
+      return found.types.find((one) => one.id === wanted) ?? null
+    }
+
+    /** The kit's own catalogue from the store, or null when it is not vendored. */
+    function kitNow(sessionId) {
+      const store = stores.get(String(sessionId ?? ''))
+      const kit = (store && store.capabilities && store.capabilities.designKit) || null
+      return kit && kit.available === true ? kit : null
+    }
+
+    /**
+     * Adopt a state answer that arrived WITH the tab instead of over the wire.
+     *
+     * A pane body is handed live props by the shell, and an embedder (or a test
+     * renderer, where no effect ever runs) may already hold the host's own
+     * answer. When it hands one over, the shared store takes it - once per
+     * payload, guarded by identity - and the pane has something to draw on its
+     * FIRST render, because a body that shows "loading" forever outside a
+     * browser is a real difference and not a test convenience.
+     */
+    function usePreloaded(sessionId, preloaded) {
+      const [, bump] = useState(0)
+      const applied = useRef(null)
+      useEffect(() => {
+        if (!sessionId || !preloaded || applied.current === preloaded) return
+        applied.current = preloaded
+        applyState(sessionId, preloaded)
+        bump((value) => value + 1)
+      }, [sessionId, preloaded])
+      return preloaded ?? null
     }
 
     /** The source of one diagram: the panel prefers its own edited copy, then the store. */
@@ -1232,6 +1467,23 @@ window.__ModuleLoader__.load({
       const trimmed = String(text ?? '').trim()
       const fence = /^```[^\n]*\n([\s\S]*?)\n?```$/.exec(trimmed)
       return fence ? fence[1] : text
+    }
+
+    /**
+     * Copy one vendored example's source.
+     *
+     * There is no stored entry for an example tab to read, so the source comes
+     * from the frame route - the same bytes the frame is showing, which is the
+     * only copy the client has any business holding.
+     */
+    async function copyExampleText(exampleId) {
+      try {
+        const response = await fetch(EXAMPLE_ROUTE + '?id=' + encodeURIComponent(exampleId) + '&viewer=0', { credentials: 'same-origin' })
+        if (!response.ok) return false
+        return await copyText(await response.text())
+      } catch (err) {
+        return false
+      }
     }
 
     /** Copy text to the clipboard, falling back to a hidden textarea. */
@@ -1333,16 +1585,44 @@ window.__ModuleLoader__.load({
       const scope = parsed.scope
       const sessionId = parsed.sessionId || props.sessionId
       const diagramId = parsed.diagramId
-      const { store, version } = useDiagramStore(sessionId)
-      const entry = entryNow(sessionId, diagramId, scope)
+      /** A tab opened on a VENDORED kit example rather than on a stored diagram. */
+      const exampleId = parsed.exampleId ?? null
+      const isExample = scope === 'example' && typeof exampleId === 'string' && exampleId.length > 0
+      const { store, version } = useDiagramStore(isExample ? null : sessionId)
+      const preloaded = usePreloaded(isExample ? null : sessionId, props.preloaded)
+      // The kit rides every state answer, so a tab opened on a diagram carries it
+      // too: the viewer's example lookup and the index's kit section read the
+      // same `capabilities.designKit`, whichever copy arrived first.
+      const viewerKit =
+        (preloaded && preloaded.capabilities && preloaded.capabilities.designKit) ||
+        (store.capabilities && store.capabilities.designKit) ||
+        null
+      const entry = isExample ? null : entryNow(sessionId, diagramId, scope) ?? (preloaded && Array.isArray(preloaded.diagrams) ? preloaded.diagrams.find((one) => one.id === diagramId) : null)
       const [drawer, setDrawer] = useState(false)
       const [draft, setDraft] = useState('')
       const [status, setStatus] = useState('')
       const [busy, setBusy] = useState(false)
       const [menu, setMenu] = useState(false)
+      /**
+       * How a framed document is laid out, per tab and never sent to the host.
+       *
+       * The kit's pages are 900-1200px drawings, and a right-bar pane is a few
+       * hundred: `wide` scales the frame down so the picture is read whole,
+       * `scroll` leaves it at its own size in a scrollport for reading the
+       * detail. The document's own Play/Pause controls work in both.
+       */
+      const [frameMode, setFrameMode] = useState('wide')
+      const [frameFonts, setFrameFonts] = useState('system')
+      const [frameTheme, setFrameTheme] = useState(null)
       const revision = entry ? entry.revision : 0
       const dark = useDark()
       const source = entry ? entry.source : ''
+      const kind = isExample ? 'html' : entry ? entry.kind : 'mermaid'
+      const example = isExample ? exampleNow(sessionId, exampleId, viewerKit) : null
+      const frameScale = frameMode === 'wide' ? 0.62 : 1
+      // One theme for every framed document, defaulting to whatever this app is
+      // in and following it until the reader overrules it for this tab.
+      const exampleTheme = frameTheme ?? (dark ? 'dark' : 'light')
       /** The zoom this tab is at, remembered per diagram across tab switches. */
       const zoomKey = sessionId + '/' + diagramId
       const [zoom, setZoomState] = useState(() => zoomMemory.get(zoomKey) ?? ZOOM_DEFAULT)
@@ -1474,7 +1754,7 @@ window.__ModuleLoader__.load({
       // write in the chat may have rewritten it since this body last rendered.
       const visible = info ? info.tab.visible !== false : true
       useEffect(() => {
-        if (sessionId && visible) refresh(sessionId)
+        if (sessionId && visible && !preloaded) refresh(sessionId)
         // eslint-disable-next-line react-hooks/exhaustive-deps
       }, [sessionId, visible])
 
@@ -1597,6 +1877,110 @@ window.__ModuleLoader__.load({
         [sessionId, diagramId, entry, dark],
       )
 
+      /** Put one vendored example into this conversation, then open it. */
+      const insertExample = useCallback(async () => {
+        if (!sessionId || !exampleId) {
+          setStatus('open a conversation to insert a kit example')
+          return
+        }
+        setBusy(true)
+        setStatus('inserting...')
+        try {
+          const answer = await apiFetch(DIAGRAM_ROUTE, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ session: sessionId, kitExample: exampleId, variant: example ? example.defaultVariant : undefined }),
+          })
+          if (answer && answer.diagram) {
+            upsertDiagram(sessionId, answer.diagram)
+            openDiagram(sessionId, answer.diagram.id, 'conversation')
+            setStatus('')
+          } else {
+            setStatus('the host did not return the new diagram')
+          }
+        } catch (err) {
+          setStatus(err && err.message ? err.message : 'could not insert the example')
+        } finally {
+          setBusy(false)
+        }
+      }, [sessionId, exampleId, example])
+
+      if (isExample) {
+        return h(
+          'div',
+          { className: 'dsd-root' },
+          h(
+            'div',
+            { className: 'dsd-tools' },
+            h('span', { className: 'dsd-badge', 'data-kind': 'kit' }, 'Kit example'),
+            h('span', { className: 'dsd-cardId' }, exampleId),
+            h('span', { className: 'dsd-toolsSpacer' }),
+            h('span', { className: 'dsd-status' }, status),
+            h(
+              Button,
+              { title: 'Copy the document source', onClick: () => copyExampleText(exampleId).then((ok) => setStatus(ok ? 'source copied' : 'copy failed')) },
+              'Copy',
+            ),
+            h(
+              Button,
+              { active: frameMode === 'wide', title: 'Scale the frame so the whole picture is visible', onClick: () => setFrameMode('wide') },
+              'Fit',
+            ),
+            h(
+              Button,
+              { active: frameMode === 'scroll', title: 'Draw the frame at its own size, scrolling if it is wider than the pane', onClick: () => setFrameMode('scroll') },
+              'Actual',
+            ),
+            h(
+              Button,
+              {
+                active: frameFonts === 'kit',
+                title: frameFonts === 'kit' ? 'Using the kit\u2019s own fonts where this machine has them' : 'Using this machine\u2019s fonts',
+                onClick: () => setFrameFonts((value) => (value === 'kit' ? 'system' : 'kit')),
+              },
+              'Fonts',
+            ),
+            dark !== undefined
+              ? h(
+                  Button,
+                  { title: 'Draw the example in the other theme', onClick: () => setFrameTheme((value) => ((value ?? (dark ? 'dark' : 'light')) === 'dark' ? 'light' : 'dark')) },
+                  exampleTheme === 'dark' ? 'Light' : 'Dark',
+                )
+              : null,
+            h(Button, { disabled: busy, title: 'Copy this example into this conversation as a real diagram', onClick: insertExample }, 'Use this'),
+          ),
+          h(
+            'div',
+            { className: 'dsd-filebar' },
+            h('b', null, example ? example.name : exampleId),
+            h(
+              'span',
+              null,
+              'vendored Diagram Design example' +
+                (example ? ' \u00b7 ' + example.variants.join(' / ') + (example.documented ? ' \u00b7 documented type' : '') : '') +
+                ' \u00b7 editing it here would change the kit, so use "Use this" to fork it',
+            ),
+          ),
+          h(
+            'div',
+            { className: 'dsd-body' },
+            h(
+              'div',
+              { className: 'dsd-canvas', 'data-frame': frameMode },
+              h(HtmlPicture, {
+                exampleId,
+                variant: example ? example.defaultVariant : undefined,
+                theme: exampleTheme,
+                fonts: frameFonts,
+                scale: frameScale,
+                alt: example ? example.name : exampleId,
+              }),
+            ),
+          ),
+          h('div', { className: 'dsd-filebar', style: { paddingTop: '4px' } }, 'dsh-diagrams ' + PLUGIN_VERSION),
+        )
+      }
+
       if (!sessionId || !diagramId) {
         return h('div', { className: 'dsd-root' }, h('div', { className: 'dsd-empty' }, 'This diagram tab carries no diagram address.'))
       }
@@ -1612,14 +1996,14 @@ window.__ModuleLoader__.load({
         )
       }
 
-      const formats = entry.kind === 'tikz' ? ['tex', 'pdf', 'svg', 'png'] : ['mmd', 'md', 'svg', 'png']
+      const formats = kind === 'tikz' ? ['tex', 'pdf', 'svg', 'png'] : kind === 'html' ? ['html', 'svg'] : ['mmd', 'md', 'svg', 'png']
       return h(
         'div',
         { className: 'dsd-root' },
         h(
           'div',
           { className: 'dsd-tools' },
-          h('span', { className: 'dsd-badge' }, entry.kind === 'tikz' ? 'TikZ' : 'Mermaid'),
+          h('span', { className: 'dsd-badge', 'data-kind': kind }, kindLabel(kind)),
           h('span', { className: 'dsd-cardId' }, entry.id),
           h(StatusPill, { status: entry.status, title: verdictTitle(entry) }),
           h(RenderPill, { entry }),
@@ -1631,6 +2015,13 @@ window.__ModuleLoader__.load({
             { title: 'Edit the source in this panel', active: drawer, onClick: () => setDrawer((value) => !value) },
             drawer ? 'Close source' : 'Source',
           ),
+          kind === 'html'
+            ? h(
+                Button,
+                { active: frameMode === 'wide', title: 'Scale the frame so the whole picture is visible', onClick: () => setFrameMode((value) => (value === 'wide' ? 'scroll' : 'wide')) },
+                frameMode === 'wide' ? 'Fit' : 'Actual',
+              )
+            : null,
           entry.kind === 'tikz'
             ? h(
                 Button,
@@ -1674,6 +2065,7 @@ window.__ModuleLoader__.load({
             {
               className: 'dsd-canvas',
               'data-drawer': drawer ? 'true' : undefined,
+              'data-frame': kind === 'html' ? frameMode : undefined,
               'data-pannable': pannable ? 'true' : undefined,
               'data-panning': panning ? 'true' : undefined,
               ref: canvasRef,
@@ -1693,7 +2085,15 @@ window.__ModuleLoader__.load({
                 'data-zoomed': zoom > ZOOM_DEFAULT ? 'true' : undefined,
                 style: { width: ZOOM_FIT_WIDTH * zoom + '%' },
               },
-              h(StoredPicture, { entry, sessionId, scope, onEdit: () => setDrawer(true) }),
+              h(StoredPicture, {
+                entry,
+                sessionId,
+                scope,
+                theme: kind === 'html' ? exampleTheme : undefined,
+                fonts: frameFonts,
+                scale: kind === 'html' ? frameScale : undefined,
+                onEdit: () => setDrawer(true),
+              }),
               entry.status === 'unavailable'
                 ? h('div', { className: 'dsd-notice' }, 'This diagram was stored but could not be validated on this host.')
                 : null,
@@ -1801,18 +2201,104 @@ window.__ModuleLoader__.load({
     // The index page
     // ---------------------------------------------------------------------
     /** The body of the "Diagrams" page: every diagram of the conversation. */
+    /**
+     * The Design kit section of the index.
+     *
+     * The kit travels on the state route with every answer, so this section costs
+     * no request: a machine with the vendored tree lists its 71 example keys, and
+     * one without simply never draws the section. Each row opens the example in a
+     * `diagram` tab (the third address shape), which is where it is read and
+     * where "Use this" forks it into the conversation.
+     */
+    function KitSection(props) {
+      const sessionId = props.sessionId
+      const setStatus = props.setStatus
+      const [query, setQuery] = useState('')
+      const [onlyDocumented, setOnlyDocumented] = useState(true)
+      const [open, setOpen] = useState(false)
+      const types = Array.isArray(props.kit.types) ? props.kit.types : []
+      const needle = query.trim().toLowerCase()
+      const shown = types.filter((entry) => {
+        if (onlyDocumented && entry.documented !== true) return false
+        if (needle.length === 0) return true
+        return (entry.id + ' ' + entry.name + ' ' + (entry.subject ?? '')).toLowerCase().includes(needle)
+      })
+      const list = open ? shown : shown.slice(0, 12)
+      return h(
+        'div',
+        { className: 'dsd-kit' },
+        h(
+          'div',
+          { className: 'dsd-listHead' },
+          'Design kit \u00b7 ' +
+            types.length +
+            ' example keys from Diagram Design (upstream ' +
+            String(props.kit.upstream?.commit ?? '').slice(0, 10) +
+            ', ' +
+            (props.kit.upstream?.license ?? 'MIT') +
+            ')',
+        ),
+        h(
+          'div',
+          { className: 'dsd-kitBar' },
+          h('input', {
+            className: 'dsd-kitSearch',
+            type: 'search',
+            value: query,
+            placeholder: 'filter the kit...',
+            onChange: (event) => setQuery(event.target.value),
+          }),
+          h(
+            Button,
+            { active: onlyDocumented, title: 'Show only the keys with a written type reference', onClick: () => setOnlyDocumented((value) => !value) },
+            onlyDocumented ? 'Documented' : 'All',
+          ),
+          needle.length > 0 || shown.length !== types.length ? h('span', { className: 'dsd-rowMeta' }, shown.length + ' match') : null,
+        ),
+        list.length === 0 ? h('div', { className: 'dsd-empty' }, 'Nothing in the kit matches "' + query + '".') : null,
+        list.map((entry) =>
+          h(
+            'div',
+            {
+              key: 'kit/' + entry.id,
+              className: 'dsd-row',
+              title: 'Open the vendored example',
+              onClick: () => openExampleFrom(sessionId, entry.id, setStatus),
+            },
+            h('span', { className: 'dsd-badge', 'data-kind': 'kit' }, entry.documented ? 'Type' : 'Look'),
+            h(
+              'div',
+              { className: 'dsd-rowMain' },
+              h('div', { className: 'dsd-rowTitle' }, entry.name || entry.id),
+              h('div', { className: 'dsd-rowMeta' }, entry.id + ' \u00b7 ' + entry.variants.join(' / ') + ' \u00b7 ' + Math.round((entry.bytes ?? 0) / 1024) + ' KiB'),
+            ),
+          ),
+        ),
+        shown.length > 12
+          ? h(
+              Button,
+              { onClick: () => setOpen((value) => !value) },
+              open ? 'Show the first 12' : 'Show all ' + shown.length,
+            )
+          : null,
+      )
+    }
+
     function IndexBody(props) {
       const sessionId = props.sessionId
+      const preloaded = usePreloaded(sessionId, props.preloaded)
       const { store } = useDiagramStore(sessionId)
       const [busy, setBusy] = useState(false)
       const [status, setStatus] = useState('')
 
       // Coming back to a tab that stayed mounted must show what happened while
-      // it was in the background, so becoming visible re-reads the host.
+      // it was in the background, so becoming visible re-reads the host - unless
+      // the caller already handed this render the host's own answer, in which
+      // case there is nothing to ask for.
       const info = tabInfoNow(props)
       const visible = info ? info.tab.visible !== false : true
       useEffect(() => {
-        if (sessionId && visible) refresh(sessionId)
+        if (sessionId && visible && !preloaded) refresh(sessionId)
         // eslint-disable-next-line react-hooks/exhaustive-deps
       }, [sessionId, visible])
 
@@ -1845,14 +2331,17 @@ window.__ModuleLoader__.load({
 
       if (!sessionId) return h('div', { className: 'dsd-root' }, h('div', { className: 'dsd-empty' }, 'Open a conversation to see its diagrams.'))
 
-      const capabilities = store.capabilities
+      const capabilities = (preloaded && preloaded.capabilities) || store.capabilities
       const texNote = capabilities && capabilities.tex && capabilities.tex.available === false
+      const kit = capabilities && capabilities.designKit && capabilities.designKit.available === true ? capabilities.designKit : null
+      const diagrams = preloaded && Array.isArray(preloaded.diagrams) ? preloaded.diagrams : store.diagrams
+      const library = preloaded && Array.isArray(preloaded.library) ? preloaded.library : store.library
       /** One list row; the scope decides which tab address it opens. */
       const row = (entry, scope) =>
         h(
           'div',
           { key: scope + '/' + entry.id, className: 'dsd-row', onClick: () => openDiagramFrom(sessionId, entry.id, setStatus, scope) },
-          h('span', { className: 'dsd-badge' }, entry.kind === 'tikz' ? 'TikZ' : 'Mermaid'),
+          h('span', { className: 'dsd-badge', 'data-kind': entry.kind }, kindLabel(entry.kind)),
           h(
             'div',
             { className: 'dsd-rowMain' },
@@ -1862,7 +2351,7 @@ window.__ModuleLoader__.load({
           h(StatusPill, { status: entry.status, title: verdictTitle(entry) }),
           h(RenderPill, { entry }),
         )
-      const nothing = store.diagrams.length === 0 && store.library.length === 0
+      const nothing = diagrams.length === 0 && library.length === 0
       return h(
         'div',
         { className: 'dsd-root' },
@@ -1874,12 +2363,14 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dsd-toolsSpacer' }),
           h(Button, { disabled: busy, title: 'Create a Mermaid diagram in this conversation', onClick: () => create('mermaid') }, 'New Mermaid'),
           h(Button, { disabled: busy || texNote, title: texNote ? 'No TeX engine on this host' : 'Create a TikZ diagram in this conversation', onClick: () => create('tikz') }, 'New TikZ'),
+          kit ? h(Button, { disabled: busy, title: 'Insert one of the 44 documented Diagram Design types', onClick: () => openExampleFrom(sessionId, 'architecture', setStatus) }, 'Design kit') : null,
         ),
         h(
           'div',
           { className: 'dsd-filebar' },
-          h('b', null, store.diagrams.length + ' here'),
-          h('span', null, store.library.length + ' in the library'),
+          h('b', null, diagrams.length + ' here'),
+          h('span', null, library.length + ' in the library'),
+          kit ? h('span', null, kit.documented + ' design types ready to insert') : null,
           texNote ? h('span', null, 'no TeX engine on this host: TikZ diagrams are stored and exported as .tex only') : null,
         ),
         nothing
@@ -1889,6 +2380,8 @@ window.__ModuleLoader__.load({
               'Nothing yet: this conversation has no diagrams and the library is empty.',
               h('br', null),
               'Ask for one in the chat, or start a blank one above - the model can edit whatever you create here.',
+              kit ? h('br', null) : null,
+              kit ? 'The design kit below has ' + kit.documented + ' ready-made types; open one and press "Use this".' : null,
             )
           : h(
               'div',
@@ -1896,12 +2389,15 @@ window.__ModuleLoader__.load({
               // The LIBRARY first: it is the half that is the same in every
               // conversation, and the half whose ids are worth citing.
               h('div', { className: 'dsd-listHead' }, 'Library - every conversation sees these, and their ids are citable from any chat'),
-              store.library.length === 0 ? h('div', { className: 'dsd-empty' }, 'Nothing published yet. Ask the model to publish a diagram, and it becomes citable from any chat.') : null,
-              store.library.map((entry) => row(entry, LIBRARY_SCOPE)),
+              library.length === 0 ? h('div', { className: 'dsd-empty' }, 'Nothing published yet. Ask the model to publish a diagram, and it becomes citable from any chat.') : null,
+              library.map((entry) => row(entry, LIBRARY_SCOPE)),
               h('div', { className: 'dsd-listHead' }, 'This conversation'),
-              store.diagrams.length === 0 ? h('div', { className: 'dsd-empty' }, 'No diagrams in this conversation yet.') : null,
-              store.diagrams.map((entry) => row(entry, 'conversation')),
+              diagrams.length === 0 ? h('div', { className: 'dsd-empty' }, 'No diagrams in this conversation yet.') : null,
+              diagrams.map((entry) => row(entry, 'conversation')),
             ),
+        // The kit is DATA the host reports, so a machine without the vendored
+        // tree simply never draws the section - no error, no empty frame.
+        kit ? h(KitSection, { kit, sessionId, setStatus }) : null,
         h('div', { className: 'dsd-filebar', style: { paddingTop: '4px' } }, 'dsh-diagrams ' + PLUGIN_VERSION),
       )
     }
@@ -1911,6 +2407,22 @@ window.__ModuleLoader__.load({
       const controller = sidebarRightNow()
       if (!controller) throw new Error('The right bar is not mounted.')
       controller.openResource(addressFor(sessionId, diagramId, scope))
+    }
+
+    /** Open one VENDORED kit example in the same `diagram` tab type. */
+    function openExample(sessionId, exampleId) {
+      const controller = sidebarRightNow()
+      if (!controller) throw new Error('The right bar is not mounted.')
+      controller.openResource(exampleAddressFor(exampleId))
+    }
+
+    /** Open a kit example from a surface that shows a message instead of throwing. */
+    function openExampleFrom(sessionId, exampleId, setStatus) {
+      try {
+        openExample(sessionId, exampleId)
+      } catch (err) {
+        if (typeof setStatus === 'function') setStatus(err && err.message ? err.message : 'could not open the example')
+      }
     }
 
     /** Open a diagram from a surface that shows a message instead of throwing. */
@@ -1969,7 +2481,7 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The conversation card for the four diagram tools. It draws from the tool
+     * The conversation card for the diagram tools. It draws from the tool
      * call itself - so it is correct on replay - and merges what it sees into
      * the shared store, which is what keeps an open diagram tab in step.
      */
@@ -2123,12 +2635,17 @@ window.__ModuleLoader__.load({
       return {
         id: VIEWER_ID,
         kind: VIEWER_KIND,
-        // Two address shapes: one tab per conversation diagram, and one tab per
-        // LIBRARY diagram - the same tab, opened from any chat.
-        patterns: [ADDRESS_PREFIX + '**', LIBRARY_PREFIX + '**'],
+        // THREE address shapes, one tab type: a conversation diagram, a LIBRARY
+        // diagram (the same tab, opened from any chat), and a VENDORED Diagram
+        // Design example - which is why the kit needs no tab kind of its own.
+        patterns: [ADDRESS_PREFIX + '**', LIBRARY_PREFIX + '**', EXAMPLE_PREFIX + '**'],
         priority: 'extension',
         title: (address) => {
           const parsed = parseDiagramAddress(address)
+          if (parsed.exampleId) {
+            const example = exampleNow(parsed.sessionId, parsed.exampleId)
+            return example ? example.id : parsed.exampleId
+          }
           const entry = parsed.diagramId ? entryNow(parsed.sessionId, parsed.diagramId, parsed.scope) : null
           if (entry && entry.title) return entry.title
           return parsed.diagramId || 'Diagram'

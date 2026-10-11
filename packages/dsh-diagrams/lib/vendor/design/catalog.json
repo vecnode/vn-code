@@ -1,0 +1,2251 @@
+{
+  "generated": "by vendor/design/build.mjs - never hand-edit",
+  "upstream": {
+    "repo": "cathrynlavery/diagram-design",
+    "commit": "7a2e22170ee838e859d8142ba825d83f8b6375e6",
+    "version": "2.6",
+    "license": "MIT"
+  },
+  "types": [
+    {
+      "id": "architecture",
+      "name": "Architecture · Diagram Design",
+      "subject": "Content site in production",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-architecture-dark.html",
+          "bytes": 12036,
+          "sha256": "b471f857f2d8745705925ee49659d8506de291c3a7b3761a3fb47a0394b9c8df"
+        },
+        "full": {
+          "file": "assets/example-architecture-full.html",
+          "bytes": 14981,
+          "sha256": "6c3951cbb3cdb94b1825efbfabbf5dda996c20106f00fa1d06511d58792b0248"
+        },
+        "plain": {
+          "file": "assets/example-architecture.html",
+          "bytes": 12099,
+          "sha256": "a9e8b59854d31e70288abba522509494f82a319bc684c3694e08e67dfc990bc5"
+        }
+      },
+      "references": [
+        "references/type-architecture.md"
+      ],
+      "documented": true,
+      "bytes": 39116
+    },
+    {
+      "id": "architecture-delta",
+      "name": "Architecture delta · Diagram Design",
+      "subject": "Order fulfilment, before and after",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-architecture-delta-dark.html",
+          "bytes": 20558,
+          "sha256": "d3f0984c7ff145656bb400ff294e9595d7f5f1209d156edbb5e5676e8ee199b9"
+        },
+        "full": {
+          "file": "assets/example-architecture-delta-full.html",
+          "bytes": 22225,
+          "sha256": "cd23ff4b3dcc2a734a13ab31807ce46c1e26dd82c3a91bac7b161f0d3abaeea0"
+        },
+        "plain": {
+          "file": "assets/example-architecture-delta.html",
+          "bytes": 20459,
+          "sha256": "0a88e1e44fcac97be87accccb429c4930380938f59534468090e82c45ceabfc6"
+        }
+      },
+      "references": [
+        "references/type-architecture-delta.md"
+      ],
+      "documented": true,
+      "bytes": 63242
+    },
+    {
+      "id": "axonometric-plan",
+      "name": "Axonometric plan · Diagram Design",
+      "subject": "Level 3 office · Where the team actually sits",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-axonometric-plan-dark.html",
+          "bytes": 28850,
+          "sha256": "fa041519f9e71e518069334397886c6e545f9286b28dcdbc254a6aaa96a1034a"
+        },
+        "full": {
+          "file": "assets/example-axonometric-plan-full.html",
+          "bytes": 31351,
+          "sha256": "13a7506ec0f4576a4f10313ba954b9c85a88bda258542c0c2017189f15a06adc"
+        },
+        "plain": {
+          "file": "assets/example-axonometric-plan.html",
+          "bytes": 28651,
+          "sha256": "1ffd4767dbb9c0fd49190582a7304d0aac4cd6df7cd7d538eb6e84cd1803f30a"
+        }
+      },
+      "references": [
+        "references/type-axonometric-plan.md"
+      ],
+      "documented": true,
+      "bytes": 88852
+    },
+    {
+      "id": "axonometric-plan-campus",
+      "name": "Axonometric plan · Diagram Design",
+      "subject": "North campus · Three phases, six buildings",
+      "variants": [
+        "plain",
+        "full",
+        "dark",
+        "animated"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "animated": {
+          "file": "assets/example-axonometric-plan-campus-animated.html",
+          "bytes": 47875,
+          "sha256": "72420915d79afb6daaa6f6215ac08754b4d2dc02b8c844cb5e25b52771002350"
+        },
+        "dark": {
+          "file": "assets/example-axonometric-plan-campus-dark.html",
+          "bytes": 31662,
+          "sha256": "7d13e33fcfa93e177179c357c0ad884fbb73d826ba79123420ad513ea174ba7c"
+        },
+        "full": {
+          "file": "assets/example-axonometric-plan-campus-full.html",
+          "bytes": 34299,
+          "sha256": "e1d28913537b8e206af137c8e6fbc212cb47203de3f69baa4fac2cee96beea19"
+        },
+        "plain": {
+          "file": "assets/example-axonometric-plan-campus.html",
+          "bytes": 31659,
+          "sha256": "5d03a724dd85ec929dd17643294dbec7a6fd6165ee010fd0fef44dc72bdf1e31"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 145495
+    },
+    {
+      "id": "axonometric-plan-coffee-shop",
+      "name": "Axonometric plan · Diagram Design",
+      "subject": "Corner coffee shop · From the door to a seat",
+      "variants": [
+        "plain",
+        "full",
+        "dark",
+        "animated"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "animated": {
+          "file": "assets/example-axonometric-plan-coffee-shop-animated.html",
+          "bytes": 55593,
+          "sha256": "7c948dc5daf9c9568c6ce1b22fae4c2b0c0c330794785f767655ebaf7da6e70e"
+        },
+        "dark": {
+          "file": "assets/example-axonometric-plan-coffee-shop-dark.html",
+          "bytes": 39572,
+          "sha256": "0d5836e9b4ca2f85c4a1fd976ef0b7f89a29a29fb169dcb59b483a4e731bd46b"
+        },
+        "full": {
+          "file": "assets/example-axonometric-plan-coffee-shop-full.html",
+          "bytes": 42146,
+          "sha256": "ba03f90070b4bda66dc8cdbe3ba8334fadfa77e94f8ddde3d3aa3aa6b4d97e5a"
+        },
+        "plain": {
+          "file": "assets/example-axonometric-plan-coffee-shop.html",
+          "bytes": 39381,
+          "sha256": "90f8f78c306ea5b96b64c6c5c5e68c85e13fdd9a4f40aecc25dccf1f9b34283e"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 176692
+    },
+    {
+      "id": "axonometric-plan-warehouse",
+      "name": "Axonometric plan · Diagram Design",
+      "subject": "Fulfillment floor · Dock to dock",
+      "variants": [
+        "plain",
+        "full",
+        "dark",
+        "animated"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "animated": {
+          "file": "assets/example-axonometric-plan-warehouse-animated.html",
+          "bytes": 54978,
+          "sha256": "e43acc91d852143ea615cd30b4251627a3e1224c95e433565c185bb4045620f6"
+        },
+        "dark": {
+          "file": "assets/example-axonometric-plan-warehouse-dark.html",
+          "bytes": 39154,
+          "sha256": "a85d79254ec2e1813a13055efb9951b84ea55a04f43aa6fb6c880aa448924d38"
+        },
+        "full": {
+          "file": "assets/example-axonometric-plan-warehouse-full.html",
+          "bytes": 41540,
+          "sha256": "596cf38433b5c5a3c0a1af348863a61e6c31ecff3c1b46e04d989b10822c37a5"
+        },
+        "plain": {
+          "file": "assets/example-axonometric-plan-warehouse.html",
+          "bytes": 38780,
+          "sha256": "aed38ba8afc9c560fe22c7cbba1448e3c8f0efe43853d2c457b32e76d1bfef76"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 174452
+    },
+    {
+      "id": "bar",
+      "name": "Bar · Diagram Design",
+      "subject": "Sprint velocity · 8-sprint view",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-bar-dark.html",
+          "bytes": 8993,
+          "sha256": "17175ed34c9588f3d5902ed97f5718a47d8c17fbad4326056f47d2131d060304"
+        },
+        "full": {
+          "file": "assets/example-bar-full.html",
+          "bytes": 11252,
+          "sha256": "ac8eff087cc5f2f04cffda1cb63b4e95641e9b05ca151a580e4df0016ddd08e1"
+        },
+        "plain": {
+          "file": "assets/example-bar.html",
+          "bytes": 8917,
+          "sha256": "b82fea59d393f0754f1543cf1e8d9189542fb93cf458bcd256a0c56fa060461b"
+        }
+      },
+      "references": [
+        "references/type-bar.md"
+      ],
+      "documented": true,
+      "bytes": 29162
+    },
+    {
+      "id": "beeswarm",
+      "name": "Beeswarm · Diagram Design",
+      "subject": "The median hides the tail",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-beeswarm-dark.html",
+          "bytes": 32654,
+          "sha256": "597cf05ad582eb0dbe8040949c6f164096ce84631e6d3ba85d5fbf778d2b1dc7"
+        },
+        "full": {
+          "file": "assets/example-beeswarm-full.html",
+          "bytes": 36450,
+          "sha256": "515edbc59376ad9bc99afc8cf9d55c0fa6a7e68f8eca95a02cf282086857e6cc"
+        },
+        "plain": {
+          "file": "assets/example-beeswarm.html",
+          "bytes": 32180,
+          "sha256": "e69a9b7ac33fae509c02a1ef06b39e1a548cd3925644e7cefd3ff2119a88a060"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 101284
+    },
+    {
+      "id": "bubble",
+      "name": "Bubble · Diagram Design",
+      "subject": "The biggest risk is not the slowest service",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-bubble-dark.html",
+          "bytes": 11428,
+          "sha256": "e5297625f2a81cebcd63250dcd7455f5c84160da501354f530dfcf59baf0ab9e"
+        },
+        "full": {
+          "file": "assets/example-bubble-full.html",
+          "bytes": 15124,
+          "sha256": "6aaf526da9c9eccb82c3f88d502e831268003c01f1de6cdc171b2a8970b03b99"
+        },
+        "plain": {
+          "file": "assets/example-bubble.html",
+          "bytes": 11335,
+          "sha256": "48f6b009e1a05d780a66a8f9f3c3c9323da5aa3a6f7f6c50003558b4ba163657"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 37887
+    },
+    {
+      "id": "bump",
+      "name": "Bump chart · Diagram Design",
+      "subject": "The default everyone stopped choosing",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-bump-dark.html",
+          "bytes": 12926,
+          "sha256": "0e1ed31a2850405f60a00df02942532642bcd1bd5c2d728721e2087045c12840"
+        },
+        "full": {
+          "file": "assets/example-bump-full.html",
+          "bytes": 16635,
+          "sha256": "aa62110a0d9dc11b19477013de1da1e09d37efb58f1b56b4af47fe9e80a7de0f"
+        },
+        "plain": {
+          "file": "assets/example-bump.html",
+          "bytes": 12807,
+          "sha256": "cdf62733836ff70f2b04e3a9062609b24f17d3b8be60d110a8182f9bc12a02a7"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 42368
+    },
+    {
+      "id": "data-flow",
+      "name": "Data flow · Diagram Design",
+      "subject": "Role-scoped analytics pipeline",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-data-flow-dark.html",
+          "bytes": 12966,
+          "sha256": "a3f5f27b4a690a6d806c735bf2db42b1e3d7f235387018200830329379829917"
+        },
+        "full": {
+          "file": "assets/example-data-flow-full.html",
+          "bytes": 15830,
+          "sha256": "606d1f7650ea6db8e84f977beb591616fa32df9bc3085c09072da81885db5133"
+        },
+        "plain": {
+          "file": "assets/example-data-flow.html",
+          "bytes": 12798,
+          "sha256": "f65978b77410fff9993fc099f4cf0d25bcaf67ce98fea2e281976e2406783b99"
+        }
+      },
+      "references": [
+        "references/type-data-flow.md"
+      ],
+      "documented": true,
+      "bytes": 41594
+    },
+    {
+      "id": "datalake",
+      "name": "Architecture · Diagram Design",
+      "subject": "Open data lake · End-to-end stack",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-datalake-dark.html",
+          "bytes": 24849,
+          "sha256": "1f4a64b1fb3e24808d85617f3fb0a76a496929c3c9b3ba4cfc7e769e343c1def"
+        },
+        "full": {
+          "file": "assets/example-datalake-full.html",
+          "bytes": 28350,
+          "sha256": "ba943db97ffe83cea198fc8b56d4e7c350fd129b869c23339b6bcf552ee5e7f3"
+        },
+        "plain": {
+          "file": "assets/example-datalake.html",
+          "bytes": 26405,
+          "sha256": "579fe3bc65fc82d342e00c565a2d0d6cc5f5c81ca51d6b832beb9a78ba3b959a"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 79604
+    },
+    {
+      "id": "db-schema",
+      "name": "Database schema · Diagram Design",
+      "subject": "Commerce schema · public + billing",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-db-schema-dark.html",
+          "bytes": 24740,
+          "sha256": "c1f566f092642c8c58969b7609598272ea78eae5beb172f35afe1d1366078c6a"
+        },
+        "full": {
+          "file": "assets/example-db-schema-full.html",
+          "bytes": 27627,
+          "sha256": "897c88e8cde6537409e0b0359495dfa33e658dc40581fdf0039bc65a0433cd25"
+        },
+        "plain": {
+          "file": "assets/example-db-schema.html",
+          "bytes": 24523,
+          "sha256": "5b65adae081c31b8f4a9772d8ba4a4066e759625197e2111885ac503cf8c2104"
+        }
+      },
+      "references": [
+        "references/type-db-schema.md"
+      ],
+      "documented": true,
+      "bytes": 76890
+    },
+    {
+      "id": "dependency",
+      "name": "Dependency · Diagram Design",
+      "subject": "TypeScript monorepo dependency graph",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-dependency-dark.html",
+          "bytes": 17822,
+          "sha256": "2e7f6d263d67bd751ca8d00111dcccd4a6a18d4d4241a709321cd043b630785d"
+        },
+        "full": {
+          "file": "assets/example-dependency-full.html",
+          "bytes": 21122,
+          "sha256": "8498d290f2a74e85e99836ca1146879c6068e476ac8f2a847daa837c4cd1cd7d"
+        },
+        "plain": {
+          "file": "assets/example-dependency.html",
+          "bytes": 17607,
+          "sha256": "c75e1d72834ed4bbdd57f7470136d272f13d0cc7c41b02e84ae187553a6e893b"
+        }
+      },
+      "references": [
+        "references/type-dependency.md"
+      ],
+      "documented": true,
+      "bytes": 56551
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment · Diagram Design",
+      "subject": "Checkout service, production",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-deployment-dark.html",
+          "bytes": 13554,
+          "sha256": "2c0c99d16f6d85fac54552bd4fe102ce9e0286fdf8eabd97ab4d90e5a97667e6"
+        },
+        "full": {
+          "file": "assets/example-deployment-full.html",
+          "bytes": 16827,
+          "sha256": "9187eaafb9107e979c2e43bcde77edf63e974fc59cf72a50fef33ea8df460650"
+        },
+        "plain": {
+          "file": "assets/example-deployment.html",
+          "bytes": 13448,
+          "sha256": "8e4cee0bc1105dcd040b19d0000f84c69f81bde75d4cb16d2261fab617a7aee5"
+        }
+      },
+      "references": [
+        "references/type-deployment.md"
+      ],
+      "documented": true,
+      "bytes": 43829
+    },
+    {
+      "id": "dp-integration",
+      "name": "DP Integration · Diagram Design",
+      "subject": "Generic data platform integration topology",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-dp-integration-dark.html",
+          "bytes": 14745,
+          "sha256": "b139d91cf88a77b4dbf202da4a1ec21e29ca1862f2e8249925b605ce25fe97f6"
+        },
+        "full": {
+          "file": "assets/example-dp-integration-full.html",
+          "bytes": 17262,
+          "sha256": "17cd685b6bd522a5eb7ae972f76787b57383779c2f0b9f08de32a7d8d9e49f94"
+        },
+        "plain": {
+          "file": "assets/example-dp-integration.html",
+          "bytes": 14714,
+          "sha256": "d1624ee510d25780522637141e89dd95165d6cefa6b5aded0c0ad1beca2ecf24"
+        }
+      },
+      "references": [
+        "references/type-dp-integration.md"
+      ],
+      "documented": true,
+      "bytes": 46721
+    },
+    {
+      "id": "dp-security-matrix",
+      "name": "DP security matrix · Diagram Design",
+      "subject": "Data platform access matrix",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-dp-security-matrix-dark.html",
+          "bytes": 10279,
+          "sha256": "1d93ac4553013cbb5d5fe962517601a0dadf03a8d1bf9ae522f10d7a83e05968"
+        },
+        "full": {
+          "file": "assets/example-dp-security-matrix-full.html",
+          "bytes": 12601,
+          "sha256": "8f34f504368ba9fd13c2bb20b028d2fc27800fbb46c238e73b0aa65101ca4ad0"
+        },
+        "plain": {
+          "file": "assets/example-dp-security-matrix.html",
+          "bytes": 10905,
+          "sha256": "9ae674dcec652483ea75a9368f88fd4c61a447b34354b2f2386049c10491e83f"
+        }
+      },
+      "references": [
+        "references/type-dp-security-matrix.md"
+      ],
+      "documented": true,
+      "bytes": 33785
+    },
+    {
+      "id": "er",
+      "name": "ER · Diagram Design",
+      "subject": "Content platform · data model",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-er-dark.html",
+          "bytes": 14198,
+          "sha256": "c007c14d88a48a8ea30b1144dd4ac392ee7891a2278262e2a6f6836b43aa7fdf"
+        },
+        "full": {
+          "file": "assets/example-er-full.html",
+          "bytes": 17123,
+          "sha256": "e778b7e790c3fd3f9219807aef3115bda4d7b1efb9998df413bcd224f77ed163"
+        },
+        "plain": {
+          "file": "assets/example-er.html",
+          "bytes": 14134,
+          "sha256": "dcbca24c5eeeb84711510a60fae190754503f9b57d9551936b086f3fb589f617"
+        }
+      },
+      "references": [
+        "references/type-er.md"
+      ],
+      "documented": true,
+      "bytes": 45455
+    },
+    {
+      "id": "exploded",
+      "name": "Exploded axonometric · Diagram Design",
+      "subject": "App stack · Three layers, one product",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-exploded-dark.html",
+          "bytes": 8543,
+          "sha256": "408cdc4779bf0db7456cdda4651cd1678adbb129c5c06ba6bf0d6632b544770c"
+        },
+        "full": {
+          "file": "assets/example-exploded-full.html",
+          "bytes": 11447,
+          "sha256": "3f1ab91f536a6dd3547a61e2150b31a49bf9ba154ecc6f3bb813fd3d9269f16c"
+        },
+        "plain": {
+          "file": "assets/example-exploded.html",
+          "bytes": 8724,
+          "sha256": "07eb320afdaa31516c221a80a9ae6a8e72be62185a8b790841237db823ef638a"
+        }
+      },
+      "references": [
+        "references/type-exploded.md"
+      ],
+      "documented": true,
+      "bytes": 28714
+    },
+    {
+      "id": "exploded-ai-stack",
+      "name": "Exploded axonometric · Diagram Design",
+      "subject": "AI agent stack · What sits under the prompt",
+      "variants": [
+        "plain",
+        "full",
+        "dark",
+        "animated"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "animated": {
+          "file": "assets/example-exploded-ai-stack-animated.html",
+          "bytes": 53486,
+          "sha256": "f8448f23ac359dc698cf19a1288080f1f804fb8f157fbc830aa7d50fc1c930a0"
+        },
+        "dark": {
+          "file": "assets/example-exploded-ai-stack-dark.html",
+          "bytes": 36043,
+          "sha256": "2c249164a0959ad426b7d6e071c5c66fc05037e6a425601ea1b90025b81f29b0"
+        },
+        "full": {
+          "file": "assets/example-exploded-ai-stack-full.html",
+          "bytes": 38911,
+          "sha256": "0f1ba200c4f6391fde4e1b350889ec50d63c4c1ead0fee680b1bcf4b4e9cce6f"
+        },
+        "plain": {
+          "file": "assets/example-exploded-ai-stack.html",
+          "bytes": 36058,
+          "sha256": "d2ac4530f8e3fb8eb9b4f344704ab9c36c3e983e6e5f8725250df1aa06b0ef2b"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 164498
+    },
+    {
+      "id": "exploded-keyboard",
+      "name": "Exploded axonometric · Diagram Design",
+      "subject": "Mechanical keyboard · Five layers under your fingers",
+      "variants": [
+        "plain",
+        "full",
+        "dark",
+        "animated"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "animated": {
+          "file": "assets/example-exploded-keyboard-animated.html",
+          "bytes": 208294,
+          "sha256": "7fac285e6daf22592a35cf1dedd6c54673923815b6c1f2ab20477464978e7566"
+        },
+        "dark": {
+          "file": "assets/example-exploded-keyboard-dark.html",
+          "bytes": 180795,
+          "sha256": "95ab0d91853a75c45e8b66de73373ae55bcd71fb722fda15ad586b6b0c04b0b4"
+        },
+        "full": {
+          "file": "assets/example-exploded-keyboard-full.html",
+          "bytes": 193684,
+          "sha256": "8b1fb4cee1d8a80f710296cdf25e3985ae4041a3b6a3084b35e8e695de3527ca"
+        },
+        "plain": {
+          "file": "assets/example-exploded-keyboard.html",
+          "bytes": 190868,
+          "sha256": "858d60f2af6025301751a296125aca03cd7ea253d3efa8fef0e74df953992dc8"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 773641
+    },
+    {
+      "id": "exploded-phone",
+      "name": "Exploded axonometric · Diagram Design",
+      "subject": "Phone teardown · What sits under the glass",
+      "variants": [
+        "plain",
+        "full",
+        "dark",
+        "animated"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "animated": {
+          "file": "assets/example-exploded-phone-animated.html",
+          "bytes": 34616,
+          "sha256": "de0bb80121f68b34449a08f028da0d1b5007aae88848ae79c8db7419a8d77067"
+        },
+        "dark": {
+          "file": "assets/example-exploded-phone-dark.html",
+          "bytes": 17431,
+          "sha256": "7dc2c3785b4456b54229f8c5fe56a22253614fc464ba7550e7f73c0619c21731"
+        },
+        "full": {
+          "file": "assets/example-exploded-phone-full.html",
+          "bytes": 20048,
+          "sha256": "87c750c84a4e8811e09eef44cb9fba5567ff7fbc559718683b92922b954f6c4f"
+        },
+        "plain": {
+          "file": "assets/example-exploded-phone.html",
+          "bytes": 17302,
+          "sha256": "3866a52045df1b95333b09347b010871a73422f785bd7aad5de14fcf1f2189ef"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 89397
+    },
+    {
+      "id": "exploded-unboxing",
+      "name": "Exploded axonometric · Diagram Design",
+      "subject": "Unboxing · What you see, in the order you see it",
+      "variants": [
+        "plain",
+        "full",
+        "dark",
+        "animated"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "animated": {
+          "file": "assets/example-exploded-unboxing-animated.html",
+          "bytes": 34065,
+          "sha256": "b0b081c3435ec728c776638757f69b8bbe286d40eadcafb0c1816d65b315eb00"
+        },
+        "dark": {
+          "file": "assets/example-exploded-unboxing-dark.html",
+          "bytes": 16707,
+          "sha256": "3bbe1e9be1c611e49796bdfe47bf69c714ec5e0ff5a13921cce548cfafe94f0b"
+        },
+        "full": {
+          "file": "assets/example-exploded-unboxing-full.html",
+          "bytes": 19391,
+          "sha256": "601554b9fc46d378031b89f78454a595821a0a693d4eeb916c088d2ec157c628"
+        },
+        "plain": {
+          "file": "assets/example-exploded-unboxing.html",
+          "bytes": 16644,
+          "sha256": "9cbec60cb42ca24315f5e3392485699d24a3d22cd0879e128eae5d3988b4333f"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 86807
+    },
+    {
+      "id": "fishbone",
+      "name": "Fishbone · Diagram Design",
+      "subject": "Checkout p99 latency · Root-cause fishbone",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-fishbone-dark.html",
+          "bytes": 8675,
+          "sha256": "f884b81b83f7ce40cf85b8aa6c3a55db99b7fb2d38502deff222aaff36d7db47"
+        },
+        "full": {
+          "file": "assets/example-fishbone-full.html",
+          "bytes": 11407,
+          "sha256": "cb55d2df262eec426d61503758aaef8c1f31322e71ac8fec5a2912655bfc337c"
+        },
+        "plain": {
+          "file": "assets/example-fishbone.html",
+          "bytes": 8648,
+          "sha256": "d0925f006f7ae339b7e3467886dc069e73def905e1316a5de00b2baeb61a63b2"
+        }
+      },
+      "references": [
+        "references/type-fishbone.md"
+      ],
+      "documented": true,
+      "bytes": 28730
+    },
+    {
+      "id": "flowchart",
+      "name": "Flowchart · Diagram Design",
+      "subject": "Should you write this as a skill?",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-flowchart-dark.html",
+          "bytes": 9446,
+          "sha256": "9b69415f880744d1c3dff23cf1dfa6bfbcc3bf38178456ce6668a74b783647ef"
+        },
+        "full": {
+          "file": "assets/example-flowchart-full.html",
+          "bytes": 12295,
+          "sha256": "68bdada8201f46df8c76aa27be10194bc8d870a683696d400435817a19f0b696"
+        },
+        "plain": {
+          "file": "assets/example-flowchart.html",
+          "bytes": 9395,
+          "sha256": "f9c92596d77b010417b78f710ae96cf161395831ad8e51153caa41fa4a31446c"
+        }
+      },
+      "references": [
+        "references/type-flowchart.md"
+      ],
+      "documented": true,
+      "bytes": 31136
+    },
+    {
+      "id": "gantt",
+      "name": "Gantt · Diagram Design",
+      "subject": "Q2 product launch · 12-week plan",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-gantt-dark.html",
+          "bytes": 10194,
+          "sha256": "5859b97315691859d777479a22641e8bd7324f9bc48aa6c4a9f2e31185613c1c"
+        },
+        "full": {
+          "file": "assets/example-gantt-full.html",
+          "bytes": 11895,
+          "sha256": "171c7bed870d24976124e3f56aa884bd107d46380dd212bb0300fd92badd91b2"
+        },
+        "plain": {
+          "file": "assets/example-gantt.html",
+          "bytes": 10072,
+          "sha256": "4e017a543771aec9338e15df3be5f9278fa4883e306373c4ea0555b65c7c43a4"
+        }
+      },
+      "references": [
+        "references/type-gantt.md"
+      ],
+      "documented": true,
+      "bytes": 32161
+    },
+    {
+      "id": "heatmap",
+      "name": "Heatmap · Diagram Design",
+      "subject": "The week payments went dark",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-heatmap-dark.html",
+          "bytes": 18248,
+          "sha256": "6ec2953db65dbabcdbd5abe3d43f7e001524317ddd3e1230398f9de927e547c0"
+        },
+        "full": {
+          "file": "assets/example-heatmap-full.html",
+          "bytes": 22036,
+          "sha256": "f3b92bf979a5504fd2c5bc4c107830ec50b43cc6685f662976a28739c9691f2d"
+        },
+        "plain": {
+          "file": "assets/example-heatmap.html",
+          "bytes": 18108,
+          "sha256": "18ee707bd2235b0530250218a4aa98574db42abcbfa02dae92c70b48cb0261da"
+        }
+      },
+      "references": [
+        "references/type-heatmap.md"
+      ],
+      "documented": true,
+      "bytes": 58392
+    },
+    {
+      "id": "high-level",
+      "name": "Architecture · Diagram Design",
+      "subject": "High-level architecture · End-to-end stack",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-high-level-dark.html",
+          "bytes": 24080,
+          "sha256": "d47d9056f2972d8ae68ddaabefdaf65c644cfafa2e19123e9ee0a675d19a0438"
+        },
+        "full": {
+          "file": "assets/example-high-level-full.html",
+          "bytes": 28360,
+          "sha256": "359dc10e77c8de97550dbfab993c4ce4d683bd089a44302e20c1dcd4ad27501e"
+        },
+        "plain": {
+          "file": "assets/example-high-level.html",
+          "bytes": 26902,
+          "sha256": "7fc2cd00413de7a5221dde192403f87a8bef883984f8331f64c56f3bc387fa5e"
+        }
+      },
+      "references": [
+        "references/type-high-level.md"
+      ],
+      "documented": true,
+      "bytes": 79342
+    },
+    {
+      "id": "high-level-vertical",
+      "name": "Architecture · Diagram Design · Parametric",
+      "subject": "High-level architecture · Vertical Orchestration + Security",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-high-level-vertical-dark.html",
+          "bytes": 24854,
+          "sha256": "aabf08d05808d96ef6c5b16395830234022ce1f48abf8c56b2719acdde9a8aa2"
+        },
+        "full": {
+          "file": "assets/example-high-level-vertical-full.html",
+          "bytes": 28619,
+          "sha256": "70a7fd733caba9e8c1bd05ea96b10bb22cb15594f24435058acfd4735f6fa3ae"
+        },
+        "plain": {
+          "file": "assets/example-high-level-vertical.html",
+          "bytes": 30391,
+          "sha256": "4a11a730ccfffc6b3e4daf92c6402122c0db7f70e5b11253b021c0227e557769"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 83864
+    },
+    {
+      "id": "import-drawio",
+      "name": "Architecture · Imported from draw.io · doc-inline · balanced",
+      "subject": "Order platform — request path",
+      "variants": [
+        "plain"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "plain": {
+          "file": "assets/example-import-drawio.html",
+          "bytes": 12079,
+          "sha256": "4404af257bf1216ef9959f3340cd82f2117d29d548b571e94ccf7931d4dd6bcd"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 12079
+    },
+    {
+      "id": "import-excalidraw",
+      "name": "Flowchart · Imported from Excalidraw · doc-inline · balanced",
+      "subject": "Lead capture and CRM intake",
+      "variants": [
+        "plain"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "plain": {
+          "file": "assets/example-import-excalidraw.html",
+          "bytes": 7689,
+          "sha256": "8a09e53ae6b0efbb9360784917117e784f90da53a4cc1de2a838e3ccef57d712"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 7689
+    },
+    {
+      "id": "import-mermaid",
+      "name": "Flowchart · Imported from Mermaid · doc-inline · balanced",
+      "subject": "Request validation and order storage",
+      "variants": [
+        "plain"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "plain": {
+          "file": "assets/example-import-mermaid.html",
+          "bytes": 8105,
+          "sha256": "ed6109da74fe8fa2f5d6385ef1dda20e1b2d95c3e3d2d274499362de1aa20db9"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 8105
+    },
+    {
+      "id": "it-state",
+      "name": "IT current-state · Northwind Retail",
+      "subject": "Legacy retail reporting landscape",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-it-state-dark.html",
+          "bytes": 11992,
+          "sha256": "3b571ce2bc0810586d8c125936fa1d90a898bad74b1079a6d8c6699024ae4c15"
+        },
+        "full": {
+          "file": "assets/example-it-state-full.html",
+          "bytes": 14223,
+          "sha256": "ca864942c8d70da13e2ee19a35661c45be8c42ae79317eb08da2b1f5689a51ba"
+        },
+        "plain": {
+          "file": "assets/example-it-state.html",
+          "bytes": 12498,
+          "sha256": "9a91ec8959b77734745ddfa19f3dbf2992a3bf1134cb7352b9778ab3253e8d5b"
+        }
+      },
+      "references": [
+        "references/type-it-state.md"
+      ],
+      "documented": true,
+      "bytes": 38713
+    },
+    {
+      "id": "journey",
+      "name": "User journey · Diagram Design",
+      "subject": "Trial to paid: the first week",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-journey-dark.html",
+          "bytes": 9153,
+          "sha256": "c1866ca355d8859d27f6e99d9e2415daf204c313ed4463ae9663ba9e930a9949"
+        },
+        "full": {
+          "file": "assets/example-journey-full.html",
+          "bytes": 11721,
+          "sha256": "e739a7a1dbdd24bd3d9faae798ca02ed7d25b6e6944db1f43307287d541b348d"
+        },
+        "plain": {
+          "file": "assets/example-journey.html",
+          "bytes": 9109,
+          "sha256": "3703a5f553e1daabbf17d9785626ab63508bde326967bbce1390c1a72a0f2b37"
+        }
+      },
+      "references": [
+        "references/type-journey.md"
+      ],
+      "documented": true,
+      "bytes": 29983
+    },
+    {
+      "id": "kanban",
+      "name": "Kanban · Diagram Design",
+      "subject": "Platform team board",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-kanban-dark.html",
+          "bytes": 11036,
+          "sha256": "30809cae8600a1852131362df275d9ab1c6aeedc65d3855caed264d48e19f5dc"
+        },
+        "full": {
+          "file": "assets/example-kanban-full.html",
+          "bytes": 13899,
+          "sha256": "e557f78ae75b4f088f148ff7e3006d8c4aa0f8dfc0824e237ba656eb566021f8"
+        },
+        "plain": {
+          "file": "assets/example-kanban.html",
+          "bytes": 10945,
+          "sha256": "9171e229f6ca68c228a8ab3f47bd4a4b69f2ea77c2738282713a5f6271b32e1e"
+        }
+      },
+      "references": [
+        "references/type-kanban.md"
+      ],
+      "documented": true,
+      "bytes": 35880
+    },
+    {
+      "id": "layers",
+      "name": "Layer stack · Diagram Design",
+      "subject": "AI app stack · Where the work actually happens",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-layers-dark.html",
+          "bytes": 6913,
+          "sha256": "412df7b0710cf14cd95c1e806e708241bda6b3bc8e1f142107adf857ed6aa7d1"
+        },
+        "full": {
+          "file": "assets/example-layers-full.html",
+          "bytes": 10023,
+          "sha256": "6d9a2dc1eaa4f2d7309d93b8dedb9e379bb9debe42787030ee474725d26e68d8"
+        },
+        "plain": {
+          "file": "assets/example-layers.html",
+          "bytes": 6875,
+          "sha256": "e4edabd125d9d9de3e27d2a530b7e791042910e97ec71c3d8e23912eafda5082"
+        }
+      },
+      "references": [
+        "references/type-layers.md"
+      ],
+      "documented": true,
+      "bytes": 23811
+    },
+    {
+      "id": "line",
+      "name": "Line · Diagram Design",
+      "subject": "Weekly signups · Organic leads the growth",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-line-dark.html",
+          "bytes": 7499,
+          "sha256": "a9615747b04505d9d3875b70d9e8a85328c362833bf965798456146701015a81"
+        },
+        "full": {
+          "file": "assets/example-line-full.html",
+          "bytes": 10051,
+          "sha256": "d121a15bc242986e2ce490ea34623ceba4eca96d6e16a531ab985fbc60dfd079"
+        },
+        "plain": {
+          "file": "assets/example-line.html",
+          "bytes": 7440,
+          "sha256": "8d53adb388306a8593a72c4eea063b8a95a0ba79d2134f51313a645c2554e227"
+        }
+      },
+      "references": [
+        "references/type-line.md"
+      ],
+      "documented": true,
+      "bytes": 24990
+    },
+    {
+      "id": "loop",
+      "name": "Loop · Diagram Design",
+      "subject": "The self-improving loop",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-loop-dark.html",
+          "bytes": 6821,
+          "sha256": "8ef6feecb47dc6043e1a7714fd0a795e357d484d38df35b594be85105029eb01"
+        },
+        "full": {
+          "file": "assets/example-loop-full.html",
+          "bytes": 9964,
+          "sha256": "975a0d3e2954b928473fdc4e6e1720c84ebf23a84cc295434ea2ec74894d4cc5"
+        },
+        "plain": {
+          "file": "assets/example-loop.html",
+          "bytes": 6789,
+          "sha256": "7346157c67b6994b274772d0ffeb6c5ae2e935991246bd541e4aab84e31f3a8d"
+        }
+      },
+      "references": [
+        "references/type-loop.md"
+      ],
+      "documented": true,
+      "bytes": 23574
+    },
+    {
+      "id": "loop-terminal",
+      "name": "The self-improving loop",
+      "subject": "The self-improving loop",
+      "variants": [
+        "plain"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "plain": {
+          "file": "assets/example-loop-terminal.html",
+          "bytes": 9993,
+          "sha256": "93a2f86cca043537bf472973c6c1d51de54d85208ec54cd448c40e3f09aa73e8"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 9993
+    },
+    {
+      "id": "marimekko",
+      "name": "Marimekko · Diagram Design",
+      "subject": "One pipeline on one runner is a fifth of all CI time",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-marimekko-dark.html",
+          "bytes": 13604,
+          "sha256": "91371c8c9915cd5a9fa5d04ddd425d2a17df8b495e2c1a195de8e73130bb3f44"
+        },
+        "full": {
+          "file": "assets/example-marimekko-full.html",
+          "bytes": 17040,
+          "sha256": "e809f059a9df5634a62bcf0444311bb391b2168b45f4c4d4842a2692f1ff48b5"
+        },
+        "plain": {
+          "file": "assets/example-marimekko.html",
+          "bytes": 13496,
+          "sha256": "2b1407bcdc69114d3c74ac4a7e257d5081212b87c2aff05913044fc622c46b4a"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 44140
+    },
+    {
+      "id": "medallion",
+      "name": "Medallion · Diagram Design",
+      "subject": "Five-tier e-commerce analytics storage",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-medallion-dark.html",
+          "bytes": 13052,
+          "sha256": "de936de0ee480c4fe9d789f576e1f9bbbc69613c903b73435879f5cbf02cb23e"
+        },
+        "full": {
+          "file": "assets/example-medallion-full.html",
+          "bytes": 15894,
+          "sha256": "8d75d30cb7ae0d3a5479a929d0b288b8ec8cc9072e1ed167d68e97c64321b376"
+        },
+        "plain": {
+          "file": "assets/example-medallion.html",
+          "bytes": 12861,
+          "sha256": "ccd63d89878af1f9d1bcc83e126ea11254f4bbfedb3d87a21e7242793cb2c526"
+        }
+      },
+      "references": [
+        "references/type-medallion.md"
+      ],
+      "documented": true,
+      "bytes": 41807
+    },
+    {
+      "id": "nested",
+      "name": "Nested · Diagram Design",
+      "subject": "The Project Guidance Hierarchy",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-nested-dark.html",
+          "bytes": 6735,
+          "sha256": "8c9862a5a41d2fc5485b51cb9aab318595ceadd2f799ccab7b57e3183906c4c5"
+        },
+        "full": {
+          "file": "assets/example-nested-full.html",
+          "bytes": 9844,
+          "sha256": "2b87e484fee759346562080dc7639549176af7998389cb0a8be7303649246494"
+        },
+        "plain": {
+          "file": "assets/example-nested.html",
+          "bytes": 6854,
+          "sha256": "fd4001be8af64a8aeae2c9b46e6f476030fcd8791ea3f9b508a503fc5bc70ffb"
+        }
+      },
+      "references": [
+        "references/type-nested.md"
+      ],
+      "documented": true,
+      "bytes": 23433
+    },
+    {
+      "id": "org-chart",
+      "name": "Org chart · Diagram Design",
+      "subject": "Agent team responsibility map",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-org-chart-dark.html",
+          "bytes": 11599,
+          "sha256": "2cb9f912a9ab635fe72924425a23aabb3ddfcbc704e6fdbc12cd0399b2d1de5f"
+        },
+        "full": {
+          "file": "assets/example-org-chart-full.html",
+          "bytes": 12049,
+          "sha256": "f74b14ed6e30a7cf8bcdc8e78dd97c7549d6c73187dea81a13c06edb6e6b1d78"
+        },
+        "plain": {
+          "file": "assets/example-org-chart.html",
+          "bytes": 11527,
+          "sha256": "82356766f5d5af0c10fa60a728c784674138c45416933c15f58d5553a7f4b9b4"
+        }
+      },
+      "references": [
+        "references/type-org-chart.md"
+      ],
+      "documented": true,
+      "bytes": 35175
+    },
+    {
+      "id": "paved-road",
+      "name": "Paved road",
+      "subject": "",
+      "variants": [
+        "animated"
+      ],
+      "defaultVariant": "animated",
+      "examples": {
+        "animated": {
+          "file": "assets/example-paved-road-animated.html",
+          "bytes": 28321,
+          "sha256": "a17f220a610f0616a1d416bde05cb8591182293ac6cd25e3746eaaf08663fc19"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 28321
+    },
+    {
+      "id": "polar",
+      "name": "Polar · Diagram Design",
+      "subject": "Request demand by UTC window",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-polar-dark.html",
+          "bytes": 10447,
+          "sha256": "7c284696cfed61e832dd4dde814840901967cca64bd54a4cddfff7cbeaddb04e"
+        },
+        "full": {
+          "file": "assets/example-polar-full.html",
+          "bytes": 12653,
+          "sha256": "be8080fa08a05dd27191d3a26585d1246153f9fbdcd5122533833ae57eb016b0"
+        },
+        "plain": {
+          "file": "assets/example-polar.html",
+          "bytes": 10385,
+          "sha256": "3bbfe08f63c9be96cecfdb7432b8236d2f0788bf6008e69254cbbef18cd3fc39"
+        }
+      },
+      "references": [
+        "references/type-polar.md"
+      ],
+      "documented": true,
+      "bytes": 33485
+    },
+    {
+      "id": "policy-trace",
+      "name": "Policy trace",
+      "subject": "",
+      "variants": [
+        "animated"
+      ],
+      "defaultVariant": "animated",
+      "examples": {
+        "animated": {
+          "file": "assets/example-policy-trace-animated.html",
+          "bytes": 25465,
+          "sha256": "1303da75c366e6013dadbc4be0126ab9db34ed0c7a2fdae507c9bd449e871307"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 25465
+    },
+    {
+      "id": "process",
+      "name": "Process · Diagram Design",
+      "subject": "Order fulfillment across four teams",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-process-dark.html",
+          "bytes": 15033,
+          "sha256": "eb0a12c31ab57cce1f300e03c40aedb6d1a2d035320901688b12f32a3805475d"
+        },
+        "full": {
+          "file": "assets/example-process-full.html",
+          "bytes": 17467,
+          "sha256": "801c93a1cde612566800cf6a07dd77ce5c030d4d065153946bdb84d2d88b8bf8"
+        },
+        "plain": {
+          "file": "assets/example-process.html",
+          "bytes": 14997,
+          "sha256": "7c336a00d6a63fbebd2f9055af8df1b421f25a209900aa70c4028cd747982fb5"
+        }
+      },
+      "references": [
+        "references/type-process.md"
+      ],
+      "documented": true,
+      "bytes": 47497
+    },
+    {
+      "id": "pyramid",
+      "name": "Pyramid · Diagram Design",
+      "subject": "Content pyramid · what compounds",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-pyramid-dark.html",
+          "bytes": 6682,
+          "sha256": "831bc6531d0b3b0eba1b348722a0b3e4d5548f287f5380ddb7e26d3f5edcb80c"
+        },
+        "full": {
+          "file": "assets/example-pyramid-full.html",
+          "bytes": 9731,
+          "sha256": "ca4c4c9a61072c25ec6e3446c8247f201b89d781d3d2000783fb7a4d50680e1f"
+        },
+        "plain": {
+          "file": "assets/example-pyramid.html",
+          "bytes": 6576,
+          "sha256": "a49c1dd8f932ea82253c7fbbec54365cb722ae65fba975a15c2aa392c27c5fbf"
+        }
+      },
+      "references": [
+        "references/type-pyramid.md"
+      ],
+      "documented": true,
+      "bytes": 22989
+    },
+    {
+      "id": "quadrant",
+      "name": "Quadrant · Diagram Design",
+      "subject": "Content ideas · Impact × Effort",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-quadrant-dark.html",
+          "bytes": 6606,
+          "sha256": "ac1edf5d9c1251a51a93eb82db17fc1820811f1934ec59c1272ea7f89c501465"
+        },
+        "full": {
+          "file": "assets/example-quadrant-full.html",
+          "bytes": 9620,
+          "sha256": "b4182d3f570e7379b0124667a3268b41f704541d6c6b2e44a4bede954b851457"
+        },
+        "plain": {
+          "file": "assets/example-quadrant.html",
+          "bytes": 6573,
+          "sha256": "95f6100d6059a773bcce44d42a9eedba925226c65cacf6613b8488330ae09934"
+        }
+      },
+      "references": [
+        "references/type-quadrant.md"
+      ],
+      "documented": true,
+      "bytes": 22799
+    },
+    {
+      "id": "quadrant-consultant",
+      "name": "THE HEADLINE",
+      "subject": "Workplace 2030 · Remote × AI automation",
+      "variants": [
+        "plain"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "plain": {
+          "file": "assets/example-quadrant-consultant.html",
+          "bytes": 11881,
+          "sha256": "0eff4b878e56a0ca3104457128254b1c5b329dc7ed6f891c10807063ccdfb983"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 11881
+    },
+    {
+      "id": "queue",
+      "name": "Queue",
+      "subject": "",
+      "variants": [
+        "animated"
+      ],
+      "defaultVariant": "animated",
+      "examples": {
+        "animated": {
+          "file": "assets/example-queue-animated.html",
+          "bytes": 30003,
+          "sha256": "826566166454ba86fafd1731f6e591bbdbae0cb6bb49f5968222c49660d5535f"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 30003
+    },
+    {
+      "id": "radar",
+      "name": "Radar · Diagram Design",
+      "subject": "Storage backends · Capability radar",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-radar-dark.html",
+          "bytes": 7687,
+          "sha256": "e24eabbc722e67b83ac498407247e1c09d162ff19e047944a323d44594a68258"
+        },
+        "full": {
+          "file": "assets/example-radar-full.html",
+          "bytes": 10429,
+          "sha256": "5a95adc1d24f5f02b0e5f2c27d901b8c221f50d5586da0e387cc58ecbf34976b"
+        },
+        "plain": {
+          "file": "assets/example-radar.html",
+          "bytes": 7863,
+          "sha256": "9572164b5aa0d8d1e0e713e8ffb7ef750d0b04e06d3eb842829fa4bdaaaff2c1"
+        }
+      },
+      "references": [
+        "references/type-radar.md"
+      ],
+      "documented": true,
+      "bytes": 25979
+    },
+    {
+      "id": "ridgeline",
+      "name": "Ridgeline · Diagram Design",
+      "subject": "Checkout is slow in two different ways",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-ridgeline-dark.html",
+          "bytes": 10354,
+          "sha256": "b430c4ec58ab69c044cba2eb39e20adbc8769cbd85fb5f41d8c3f75136d62f90"
+        },
+        "full": {
+          "file": "assets/example-ridgeline-full.html",
+          "bytes": 14273,
+          "sha256": "33fd98b39d5316ca4b65a65c8cd331c55d032ae5d7de3c94feb5e506168718b9"
+        },
+        "plain": {
+          "file": "assets/example-ridgeline.html",
+          "bytes": 10281,
+          "sha256": "8c6a17edea0742642bfa991ba353c414d2e7608fff09c073d52c3f9de2d71337"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 34908
+    },
+    {
+      "id": "sankey",
+      "name": "Sankey · Diagram Design",
+      "subject": "CI compute budget · a month of pipeline minutes",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-sankey-dark.html",
+          "bytes": 8969,
+          "sha256": "4c2a4ff17cfba1412aee8b6569e76c1d314d9ce64d6038c99e89505225b9baf1"
+        },
+        "full": {
+          "file": "assets/example-sankey-full.html",
+          "bytes": 11814,
+          "sha256": "33f52288399db22c20374ecbfd26ec597b77f3512c03115cea240ece21485bb9"
+        },
+        "plain": {
+          "file": "assets/example-sankey.html",
+          "bytes": 8921,
+          "sha256": "5997eca7d06b41cc779abed904ef1b782a5d9be160f9dffcb0fef067142b904f"
+        }
+      },
+      "references": [
+        "references/type-sankey.md"
+      ],
+      "documented": true,
+      "bytes": 29704
+    },
+    {
+      "id": "scatter",
+      "name": "Scatter · Diagram Design",
+      "subject": "Deploy frequency vs. lead time · 12 teams",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-scatter-dark.html",
+          "bytes": 9525,
+          "sha256": "2ddaddaff0268f8668dde187319af30da00bcdb1f2fa5b6f7c3974a4c884faf4"
+        },
+        "full": {
+          "file": "assets/example-scatter-full.html",
+          "bytes": 11577,
+          "sha256": "af03bf90e91b1a4449ee5b776f08df07a40dec1c1fa27457dc75540c8fa4e379"
+        },
+        "plain": {
+          "file": "assets/example-scatter.html",
+          "bytes": 9423,
+          "sha256": "baa3fe5115e6a0448fd90629c20729b78eb735d5d95b74501f8d3d0fd8183980"
+        }
+      },
+      "references": [
+        "references/type-scatter.md"
+      ],
+      "documented": true,
+      "bytes": 30525
+    },
+    {
+      "id": "sequence",
+      "name": "Sequence · Diagram Design",
+      "subject": "Article request, cold cache",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-sequence-dark.html",
+          "bytes": 13794,
+          "sha256": "f2c0fc2e127bce07c78ff09e6b8540f4993d1d85deafbca73af4834b8944e89b"
+        },
+        "full": {
+          "file": "assets/example-sequence-full.html",
+          "bytes": 18212,
+          "sha256": "8e891b0498e318431dbf0a87c7e5a15d4ab51ff513cfea1fc7a71a68642143c9"
+        },
+        "plain": {
+          "file": "assets/example-sequence.html",
+          "bytes": 13723,
+          "sha256": "aac9bfcad5a001206567a577e9816e3d0904bb3e1afc9d8505fb576b93292db8"
+        }
+      },
+      "references": [
+        "references/type-sequence.md"
+      ],
+      "documented": true,
+      "bytes": 45729
+    },
+    {
+      "id": "sequence-oauth",
+      "name": "Sequence · Diagram Design · Special",
+      "subject": "Bearer call with refresh",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-sequence-oauth-dark.html",
+          "bytes": 12113,
+          "sha256": "5d4755a698aa868126b51049445d3468a7b40401e902a80319a62a31a7969e64"
+        },
+        "full": {
+          "file": "assets/example-sequence-oauth-full.html",
+          "bytes": 16581,
+          "sha256": "f067c6bce636a823ac0aaa66c035bb31d75f793f77fb36729110fd9287213fe9"
+        },
+        "plain": {
+          "file": "assets/example-sequence-oauth.html",
+          "bytes": 14362,
+          "sha256": "40b38df11cb54fe055c223a44ddaa7363a2ec0c030dc995e7951a1fb8df42083"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 43056
+    },
+    {
+      "id": "slopegraph",
+      "name": "Slopegraph · Diagram Design",
+      "subject": "One service went the other way",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-slopegraph-dark.html",
+          "bytes": 10452,
+          "sha256": "36cdffff3d70fa34b091dd0e7814a8892cc6c3436525c666402d790cbbdc5ecc"
+        },
+        "full": {
+          "file": "assets/example-slopegraph-full.html",
+          "bytes": 13992,
+          "sha256": "1815f1854f486c5163780f2d8f9cf9c0b96a7e42594099dfb31bd14c453a1f55"
+        },
+        "plain": {
+          "file": "assets/example-slopegraph.html",
+          "bytes": 10370,
+          "sha256": "c20f22a1ba7ae6388d3fae506927242173475f6447da655a96f06f92adfd706e"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 34814
+    },
+    {
+      "id": "state",
+      "name": "State machine · Diagram Design",
+      "subject": "Article lifecycle",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-state-dark.html",
+          "bytes": 8698,
+          "sha256": "d5a29f22ee80fef6fe6f857e767fb0bf4afca8bc8f8cbb478f33286d76f88706"
+        },
+        "full": {
+          "file": "assets/example-state-full.html",
+          "bytes": 11623,
+          "sha256": "683febd8bf1c1658f52f44829d2e72e73453484b54d36409737961718fa2a83c"
+        },
+        "plain": {
+          "file": "assets/example-state.html",
+          "bytes": 8662,
+          "sha256": "33a210ded8261c3117222a7d897a17ccddae89267c4779f19eeaf868a5545a15"
+        }
+      },
+      "references": [
+        "references/type-state.md"
+      ],
+      "documented": true,
+      "bytes": 28983
+    },
+    {
+      "id": "state-lifecycle",
+      "name": "State · Lifecycle phase map",
+      "subject": "Newsletter publication lifecycle",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-state-lifecycle-dark.html",
+          "bytes": 9633,
+          "sha256": "caf933ffcfffd7cc46e4354d5d3dd4d2c0ea8fc5c56e5fefb9b0ec63dc3358d9"
+        },
+        "full": {
+          "file": "assets/example-state-lifecycle-full.html",
+          "bytes": 12624,
+          "sha256": "6b354ce8290c458d3fdce5d30f8f759c8879c9ca490c115156ff6e746c4d3cc2"
+        },
+        "plain": {
+          "file": "assets/example-state-lifecycle.html",
+          "bytes": 10236,
+          "sha256": "0c8406d87facec01143bc4356d896a3ffdc7c429ae481e7ee9fbcd06bfae674c"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 32493
+    },
+    {
+      "id": "story-map",
+      "name": "User story map · Diagram Design",
+      "subject": "Reporting, first release",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-story-map-dark.html",
+          "bytes": 12247,
+          "sha256": "0c288216307ff36b43b513445e0e63fa83ed5902695ead17fdd507a470acc6b7"
+        },
+        "full": {
+          "file": "assets/example-story-map-full.html",
+          "bytes": 15483,
+          "sha256": "fd3a8394c161f8db01c51eb8c3e89b3e0e6fbc85da45c221820dc4ff18036362"
+        },
+        "plain": {
+          "file": "assets/example-story-map.html",
+          "bytes": 12186,
+          "sha256": "2e8765e83ee8fb3c62bd31105d3a73b9f11400035036466d14ec59874e194dde"
+        }
+      },
+      "references": [
+        "references/type-story-map.md"
+      ],
+      "documented": true,
+      "bytes": 39916
+    },
+    {
+      "id": "streamgraph",
+      "name": "Streamgraph · Diagram Design",
+      "subject": "Where the extra build minutes went",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-streamgraph-dark.html",
+          "bytes": 13002,
+          "sha256": "986d4485111c165a18f0eb86055aa326f932c618d26c32f90d6b9457f9189515"
+        },
+        "full": {
+          "file": "assets/example-streamgraph-full.html",
+          "bytes": 16442,
+          "sha256": "dbc513480b04e07056c6ca0532017ea56b107c278eb70360868fa484b762aedc"
+        },
+        "plain": {
+          "file": "assets/example-streamgraph.html",
+          "bytes": 12941,
+          "sha256": "92f45dca6ce38436d1a790424ec1212b4b5eed74a1a309f85fa037c68facbff5"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 42385
+    },
+    {
+      "id": "swimlane",
+      "name": "Swimlane · Diagram Design",
+      "subject": "Publishing an article",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-swimlane-dark.html",
+          "bytes": 10580,
+          "sha256": "d7038fab163c5fc5f56b58502a0d1e07d2961d08a6f6cd10a729864d670186de"
+        },
+        "full": {
+          "file": "assets/example-swimlane-full.html",
+          "bytes": 13524,
+          "sha256": "dc7bf931bb2ee07072f0fe1e151b0b39a79e0da0317836f897c46b5d2a88953d"
+        },
+        "plain": {
+          "file": "assets/example-swimlane.html",
+          "bytes": 10534,
+          "sha256": "c044be167127091b9bc442fdfe7d1dea439a7de23ea2c9819fb8382e511bb6e9"
+        }
+      },
+      "references": [
+        "references/type-swimlane.md"
+      ],
+      "documented": true,
+      "bytes": 34638
+    },
+    {
+      "id": "timeline",
+      "name": "Timeline · Diagram Design",
+      "subject": "Product launch · fourteen months",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-timeline-dark.html",
+          "bytes": 7390,
+          "sha256": "fb9a45991b281e7937e8288abbfeb6eb12e0140ee5dcac17821721d5129fb647"
+        },
+        "full": {
+          "file": "assets/example-timeline-full.html",
+          "bytes": 10391,
+          "sha256": "03b38d6dc44286113cf6680ece546affa53ff13092118fb8b4a68b671f55069f"
+        },
+        "plain": {
+          "file": "assets/example-timeline.html",
+          "bytes": 7338,
+          "sha256": "d853c86bfd40491d5b747a07ca10b9d55d3349701ca01f508d83ba972b805788"
+        }
+      },
+      "references": [
+        "references/type-timeline.md"
+      ],
+      "documented": true,
+      "bytes": 25119
+    },
+    {
+      "id": "tree",
+      "name": "Tree · Diagram Design",
+      "subject": "Claude Code skill taxonomy",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-tree-dark.html",
+          "bytes": 11029,
+          "sha256": "43aa056d0761d323cad0bd6205de3083fe7413af4e10639cad5e92c8ed41beac"
+        },
+        "full": {
+          "file": "assets/example-tree-full.html",
+          "bytes": 13990,
+          "sha256": "ee52773ac71a12d584fbe33569da0a64481e05c94ac1ab4729653552e631d8cc"
+        },
+        "plain": {
+          "file": "assets/example-tree.html",
+          "bytes": 10913,
+          "sha256": "6812d3e99c21ddc29d346cfb3713ea997bd6ac1fcb5b29b5c764c200afa0ea20"
+        }
+      },
+      "references": [
+        "references/type-tree.md"
+      ],
+      "documented": true,
+      "bytes": 35932
+    },
+    {
+      "id": "tree-block-decomposition",
+      "name": "Semantic pattern · Traceable block decomposition",
+      "subject": "Payment gateway block decomposition",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-tree-block-decomposition-dark.html",
+          "bytes": 8303,
+          "sha256": "1a862a84bb85391a850e6c6cc5d657dd019a1c2a4efe8e7d05f6045b876856df"
+        },
+        "full": {
+          "file": "assets/example-tree-block-decomposition-full.html",
+          "bytes": 11639,
+          "sha256": "9c315f8dcb3693c6c79e9057198e13cb6bd10eb2faa6ed2a5a1956f489271543"
+        },
+        "plain": {
+          "file": "assets/example-tree-block-decomposition.html",
+          "bytes": 8224,
+          "sha256": "c5f3051ea93495e6b040d25642ca7a5e67664678bb5e3147509404ed068551da"
+        }
+      },
+      "references": [],
+      "documented": false,
+      "bytes": 28166
+    },
+    {
+      "id": "treemap",
+      "name": "Treemap · Diagram Design",
+      "subject": "World population · six continents",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-treemap-dark.html",
+          "bytes": 7651,
+          "sha256": "43cbbb2ec7c30a71edf5f5436e51dd8369cedb1da80f6e6241b62278ea4e5698"
+        },
+        "full": {
+          "file": "assets/example-treemap-full.html",
+          "bytes": 10737,
+          "sha256": "9339c9007d81969f6d04c30edcf9d3ef558f753ecf9cd8f401978551cfc5c069"
+        },
+        "plain": {
+          "file": "assets/example-treemap.html",
+          "bytes": 7579,
+          "sha256": "224c33a048dc64cbbd687bd826a3a09c8178dcd3d311ea3b53bc43f767f420f6"
+        }
+      },
+      "references": [
+        "references/type-treemap.md"
+      ],
+      "documented": true,
+      "bytes": 25967
+    },
+    {
+      "id": "uml-class",
+      "name": "UML class · Diagram Design",
+      "subject": "Payments domain · class diagram",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-uml-class-dark.html",
+          "bytes": 12400,
+          "sha256": "eca2e26603714d4df494532a2a712101321a484cc2d1263f7629b8f0e214357d"
+        },
+        "full": {
+          "file": "assets/example-uml-class-full.html",
+          "bytes": 15679,
+          "sha256": "0c73c3f1b9b4dd569d264a0caff859bf0a3a82849432294c73fed8435a4772e7"
+        },
+        "plain": {
+          "file": "assets/example-uml-class.html",
+          "bytes": 12355,
+          "sha256": "98e58c2833cc6b4f2b3e176bbf173907e7168aedf5310cb900d7bdfeb6e22c8d"
+        }
+      },
+      "references": [
+        "references/type-uml-class.md"
+      ],
+      "documented": true,
+      "bytes": 40434
+    },
+    {
+      "id": "venn",
+      "name": "Venn · Diagram Design",
+      "subject": "Good design · Desirable × Feasible × Viable",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-venn-dark.html",
+          "bytes": 6699,
+          "sha256": "ea604fc7ff3c2da573bba856b54b0ac6a95491f26cb707caefda94ac64215a4f"
+        },
+        "full": {
+          "file": "assets/example-venn-full.html",
+          "bytes": 9901,
+          "sha256": "7dc6a440cc8881f70f6184200e3557a7501d21f93495a5aa209c6c8c479dd0ba"
+        },
+        "plain": {
+          "file": "assets/example-venn.html",
+          "bytes": 5079,
+          "sha256": "a9f6ab1f15906f7618a2f876bc9cd998a1b0be9b31b7e49eeaf42c3c156340f6"
+        }
+      },
+      "references": [
+        "references/type-venn.md"
+      ],
+      "documented": true,
+      "bytes": 21679
+    },
+    {
+      "id": "wardley",
+      "name": "Wardley map · Diagram Design",
+      "subject": "AI assistant product · Wardley map",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-wardley-dark.html",
+          "bytes": 8924,
+          "sha256": "80aff4e268d3775541eca4cf1c1cac918f0895637cd79568d4895e84b9f2046b"
+        },
+        "full": {
+          "file": "assets/example-wardley-full.html",
+          "bytes": 11344,
+          "sha256": "1986784529ddb529a3d321e6dbc2add1046abccba5fd8bcab23679742731769d"
+        },
+        "plain": {
+          "file": "assets/example-wardley.html",
+          "bytes": 8881,
+          "sha256": "a386727c65063f36df75e096f963c305ca540799c5005daf079ff05e05428436"
+        }
+      },
+      "references": [
+        "references/type-wardley.md"
+      ],
+      "documented": true,
+      "bytes": 29149
+    },
+    {
+      "id": "waterfall",
+      "name": "Waterfall · Diagram Design",
+      "subject": "Cloud budget bridge · FY25 → FY26",
+      "variants": [
+        "plain",
+        "full",
+        "dark"
+      ],
+      "defaultVariant": "plain",
+      "examples": {
+        "dark": {
+          "file": "assets/example-waterfall-dark.html",
+          "bytes": 9844,
+          "sha256": "ce4eb6038b09b87eca88b6981a7b43d19f603f480b6e91fb16d5d7c58a9103a6"
+        },
+        "full": {
+          "file": "assets/example-waterfall-full.html",
+          "bytes": 11594,
+          "sha256": "5a5987e9988cad66b26f769e07eca805796895a951a8cc084f0e0aa8503fca09"
+        },
+        "plain": {
+          "file": "assets/example-waterfall.html",
+          "bytes": 9760,
+          "sha256": "501231921ae5065423f75efa6a37fbfc4753ef76d26b9ab116902dc9964ad818"
+        }
+      },
+      "references": [
+        "references/type-waterfall.md"
+      ],
+      "documented": true,
+      "bytes": 31198
+    }
+  ],
+  "counts": {
+    "types": 71,
+    "documented": 44,
+    "examples": 204
+  }
+}

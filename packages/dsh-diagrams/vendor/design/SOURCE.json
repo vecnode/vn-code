@@ -1,0 +1,10 @@
+{
+  "repo": "cathrynlavery/diagram-design",
+  "branch": "main",
+  "commit": "7a2e22170ee838e859d8142ba825d83f8b6375e6",
+  "commitDate": "2026-10-10T21:10:13Z",
+  "commitSubject": "chore(release): bump plugin manifests to 2.6.74",
+  "version": "2.6",
+  "license": "MIT",
+  "note": "The pin for lib/vendor/design. vendor/design/build.mjs reads this file, downloads exactly this commit, and records every vendored file's bytes and sha256 in lib/vendor/design/VERSION.json. Moving the pin is deliberate: node vendor/design/build.mjs --update-pin, then rebuild and review the diff."
+}

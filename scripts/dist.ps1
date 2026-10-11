@@ -377,6 +377,13 @@ function Assert-Sentinels {
         'packages/dsh-editor/lib/vendor/cm6.min.js',
         'packages/dsh-cmdbar/lib/client.js',
         'packages/dsh-diagrams/lib/vendor/mermaid.min.js',
+        # The vendored Diagram Design kit: 277 files under one generated tree, so
+        # one deep file is not enough to catch a FAMILY left behind. The catalog
+        # is the file the panel reads to list the kit, and an example is the file
+        # the frame serves - a distribution missing either is visibly broken.
+        'packages/dsh-diagrams/lib/vendor/design/catalog.json',
+        'packages/dsh-diagrams/lib/vendor/design/assets/example-architecture.html',
+        'packages/dsh-diagrams/lib/vendor/design/references/style-guide.md',
         'packages/dsh-pdf/lib/vendor/pdf.min.mjs',
         'packages/dsh-pdf/skills/pdf-analysis/SKILL.md',
         # The build fingerprint. Its presence is what tells a later run that this

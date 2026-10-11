@@ -3,17 +3,25 @@
  *
  * One row owns the whole diagram capability:
  *
- *   - **Five tools** (`diagram_write`, `diagram_patch`, `diagram_read`,
- *     `diagram_verify`, `diagram_delete`) registered on `ctx.tools`. Every write
- *     is VALIDATED before it is stored - Mermaid by parsing it headlessly with
- *     the same vendored engine the browser renders with, TikZ by compiling it
- *     with the machine's own TeX engine - so a broken diagram comes back to the
- *     model as the parser's/compiler's own error lines instead of a blank
- *     picture.
- *   - **Two skills** (`mermaid-diagrams`, `tikz-diagrams`) registered on
- *     `ctx.skills` from this package's own `skills/` folder, so the model gets
- *     the craft and not just the syntax. The installer also copies those
- *     folders into `$DSH_HOME/skills`, where the harness's own filesystem
+ *   - **Seven tools** (`diagram_write`, `diagram_patch`, `diagram_read`,
+ *     `diagram_verify`, `diagram_publish`, `diagram_delete`, `diagram_kit`).
+ *     Every write is VALIDATED before it is stored - Mermaid by parsing it
+ *     headlessly with the same vendored engine the browser renders with, TikZ by
+ *     compiling it with the machine's own TeX engine, and an `html` document
+ *     against the Diagram Design kit's safety and accessibility contract - so a
+ *     broken diagram comes back to the model as the parser's/compiler's own
+ *     error lines instead of a blank picture.
+ *   - **Three kinds**: `mermaid`, `tikz`, and `html` (a self-contained
+ *     HTML+SVG document, drawn in a sandboxed frame under a `default-src 'none'`
+ *     policy).
+ *   - **The vendored Diagram Design kit** (`./design-kit.js` over
+ *     `lib/vendor/design/`): 204 worked examples, the 62 reference documents
+ *     behind them, and the templates a new document starts from. `diagram_kit`
+ *     reads and inserts them; the panel browses them from the index page.
+ *   - **Three skills** (`mermaid-diagrams`, `tikz-diagrams`, `diagram-design`)
+ *     registered on `ctx.skills` from this package's own `skills/` folder, so the
+ *     model gets the craft and not just the syntax. The installer also copies
+ *     those folders into `$DSH_HOME/skills`, where the harness's own filesystem
  *     provider finds them and a person can read or edit them without touching
  *     this repository.
  *   - **The state**: one JSON file per conversation (`./store.js`) plus a
@@ -29,14 +37,32 @@
  * line, and the package README for the whole design.
  */
 import { spawn } from 'node:child_process'
-import { promises as fsp, readFileSync } from 'node:fs'
+import { promises as fsp, existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 import { ArtifactCache, HASH_PATTERN, MAX_ARTIFACT_BYTES, ARTIFACT_FILES } from './cache.js'
 import { compileTikz, normalizeTikzSource, probeEngines, stripFence } from './latex.js'
-import { DiagramStore, KINDS, MAX_SOURCE_BYTES, resolveHome, verificationOf } from './store.js'
+import { DiagramStore, KINDS, maxSourceBytes, resolveHome, verificationOf } from './store.js'
+import {
+  KIT_ROOT,
+  STARTER_REFERENCES,
+  catalog,
+  composeHtmlDocument,
+  contentSecurityPolicy,
+  exampleFile,
+  hashText,
+  kitSnapshot,
+  listReferences,
+  listTypes,
+  manifest as kitManifest,
+  motionHash,
+  readCapped,
+  referenceFile,
+  typeById,
+} from './design-kit.js'
+import { checkHtml, extractSvg } from './html-check.js'
 
 export const name = 'dsh-diagrams'
 
@@ -52,6 +78,17 @@ const ARTIFACT_ROUTE = API_ROOT + '/artifact'
 const EXPORT_ROUTE = API_ROOT + '/export'
 const REPORT_ROUTE = API_ROOT + '/render-report'
 const VENDOR_ROUTE = API_ROOT + '/vendor/mermaid.js'
+/**
+ * The two routes the Diagram Design kit is served through.
+ *
+ * `example` is a VENDORED kit example and `document` is a STORED `html`
+ * diagram - two routes rather than one because they answer different questions
+ * (is this the pinned kit file, or this conversation's revision 4?) and because
+ * a kit example is never written to. Both compose through the same
+ * `composeHtmlDocument`, so what the frame receives cannot differ between them.
+ */
+const EXAMPLE_ROUTE = API_ROOT + '/example'
+const DOCUMENT_ROUTE = API_ROOT + '/document'
 
 /** How long the Mermaid child validator may run. */
 const MERMAID_TIMEOUT_MS = 15_000
@@ -64,7 +101,15 @@ const RASTER_DPI = 200
  */
 const TIKZ_RENDERER_VERSION = '1'
 /** Files each kind may export. */
-const EXPORT_FORMATS = { mermaid: ['mmd', 'md', 'svg', 'png'], tikz: ['tex', 'pdf', 'svg', 'png'] }
+const EXPORT_FORMATS = {
+  mermaid: ['mmd', 'md', 'svg', 'png'],
+  tikz: ['tex', 'pdf', 'svg', 'png'],
+  // A Design document exports as itself, and as the one picture inside it. PNG is
+  // deliberately absent: rasterizing HTML on the host needs a browser engine this
+  // pack does not ship, and reporting a format this host cannot produce would be
+  // the plugin lying about its own capability.
+  html: ['html', 'svg'],
+}
 /**
  * The two places a diagram can live.
  *
@@ -470,6 +515,33 @@ async function checkAndRecord(deps, scopeKey, entry, { signal, force = false } =
     return { ...verdict, ms: verdict.ms ?? Date.now() - started, artifact: stored ? stored.artifact : null }
   }
 
+  if (entry.kind === 'html') {
+    // A Design document is a whole page this plugin then FRAMES, so its verdict
+    // is not "does it parse" but "is it safe to serve and is it a picture".
+    // `html-check.js` answers both, in two tiers: a safety finding is a refusal
+    // (`status: 'error'`, and the panel never frames it), a craft finding is a
+    // warning that never changes the status. There is nothing to compile and
+    // nothing to cache, so no artifact is produced.
+    const verdict = checkHtml(entry.source, { motionHash: motionHash(), sha256: hashText })
+    const diagnostics = verdict.refusals.map((finding) => ({ kind: finding.kind, text: finding.text }))
+    store.recordVerdict(scopeKey, entry.id, {
+      status: verdict.status,
+      diagramType: 'html',
+      diagnostics,
+      warnings: verdict.warnings,
+    })
+    return {
+      ok: verdict.ok,
+      status: verdict.status,
+      diagramType: 'html',
+      diagnostics,
+      warnings: verdict.warnings,
+      artifact: null,
+      ms: Date.now() - started,
+      counts: verdict.counts,
+    }
+  }
+
   // A document with no picture in it compiles cleanly and draws nothing. That is
   // a failure a person sees and a compiler never reports, so it is refused here
   // in words instead of being handed on as an empty panel.
@@ -651,10 +723,19 @@ function withCompileSlot(work) {
 // ---------------------------------------------------------------------------
 // Skills
 // ---------------------------------------------------------------------------
-/** The skills this package ships, in the order the catalog should list them. */
+/**
+ * The skills this package ships, in the order the catalog should list them.
+ *
+ * The third is the vncode skill for the vendored Diagram Design kit: its
+ * `resourceBase` points into `lib/vendor/design/`, so the references it tells the
+ * model to read (the style guide, the semantic patterns, the per-type notes) are
+ * the same files `diagram_kit` serves - one copy of the craft, on disk, in the
+ * package, not restated in prose that could drift from it.
+ */
 const SKILL_FILES = [
   { name: 'mermaid-diagrams', file: '../skills/mermaid-diagrams/SKILL.md' },
   { name: 'tikz-diagrams', file: '../skills/tikz-diagrams/SKILL.md' },
+  { name: 'diagram-design', file: '../skills/diagram-design/SKILL.md' },
 ]
 
 /**
@@ -749,7 +830,7 @@ export function registerSkills(ctx, log) {
 /** JSON Schema for a diagram id. */
 const ID_SCHEMA = { type: 'string', description: 'The diagram id (lowercase letters, digits and dashes).' }
 /** JSON Schema for a diagram kind. */
-const KIND_SCHEMA = { type: 'string', enum: [...KINDS], description: 'mermaid | tikz' }
+const KIND_SCHEMA = { type: 'string', enum: [...KINDS], description: 'mermaid | tikz | html' }
 /**
  * JSON Schema for the scope a diagram lives in - the argument that decides
  * whether a diagram belongs to one chat or to every chat.
@@ -809,6 +890,8 @@ function writeDescription(engines) {
     'kind "mermaid": the source is Mermaid text (flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram, gantt, pie, mindmap, timeline, quadrantChart, journey, ...). It is parsed exactly as written; a parse error returns the offending line.',
     'kind "tikz": the source is TikZ/LaTeX. A bare body of TikZ commands, one picture environment, or a complete document are all accepted - a preamble with the standard libraries (arrows.meta, positioning, shapes.geometric, shapes.misc, calc, fit, backgrounds, matrix, chains, decorations, patterns, quotes, angles, intersections, pgfplots) is supplied for you, and leading \\usepackage / \\usetikzlibrary / \\tikzset lines are moved into it.',
     engineLine,
+    '',
+    'kind "html": the source is a complete self-contained HTML+SVG document - the shape of the vendored Diagram Design kit, whose 204 examples you can read and insert with `diagram_kit`. It is checked BEFORE it is stored, in two tiers: a SAFETY finding is a refusal (a remote asset, an executable attribute, a forbidden element, or any script that is not the kit\u2019s own motion controller), and a CRAFT finding is only a warning (no accessible SVG, a node budget blown, no dark-theme tokens, no reduced-motion fallback). Start from the kit rather than from a blank page: `diagram_kit({action:"catalog"})`, then `{action:"reference", ref:"style-guide"}`, then either `{action:"insert"}` an example or write your own with `{action:"example"}` in hand.',
     '',
     'Pass `id` to replace an existing diagram (check it with diagram_read first); omit it to create a new one, whose id is derived from the title.',
     'Pass `scope: "library"` when the diagram is worth keeping beyond this chat: the library is ONE store every conversation reads, its address (`dsh-resource://diagram/library/<id>`) names no conversation, and any later chat can read it by id alone. Keep scratch diagrams in the conversation (the default) so the shared library stays worth reading.',
@@ -937,6 +1020,12 @@ export function buildTools(deps) {
     if (verdict.status === 'ok') {
       if (entry.kind === 'mermaid') {
         lines.push('It parses as a ' + (verdict.diagramType ?? 'diagram') + ' and is rendering in the conversation and in its own tab.')
+      } else if (entry.kind === 'html') {
+        lines.push(
+          'It satisfies the design kit\u2019s safety and accessibility contract' +
+            (verdict.counts && verdict.counts.svgs ? ' (' + verdict.counts.svgs + ' accessible SVG, ' + verdict.counts.elements + ' elements)' : '') +
+            ', and it is drawing in its own tab.',
+        )
       } else if (verdict.artifact) {
         lines.push(
           'Compiled with ' +
@@ -987,7 +1076,7 @@ export function buildTools(deps) {
       required: ['kind', 'source'],
       properties: {
         kind: KIND_SCHEMA,
-        source: { type: 'string', description: 'The complete diagram source (Mermaid text, or TikZ/LaTeX).' },
+        source: { type: 'string', description: 'The complete diagram source: Mermaid text, TikZ/LaTeX, or a self-contained HTML+SVG document for kind "html".' },
         id: ID_SCHEMA,
         scope: SCOPE_SCHEMA,
         title: { type: 'string', description: 'A short human title; the tab chip and the diagram list show it.' },
@@ -1388,7 +1477,264 @@ export function buildTools(deps) {
     },
   }
 
-  return [write, patch, read, verify, publish, remove]
+  /**
+   * `diagram_kit` — the vendored Diagram Design kit, read and inserted.
+   *
+   * The FOUR actions answer the four questions a person actually has about a
+   * design system they did not write:
+   *
+   *   - `catalog`  — which 71 example keys exist, which 44 are documented types,
+   *                  and what variants each one has;
+   *   - `reference`— how this kind of diagram is supposed to be built (the style
+   *                  guide's tokens, the semantic patterns, the per-type notes);
+   *   - `example`  — the actual HTML of one worked example, to copy from;
+   *   - `insert`   — turn one into a real diagram in this conversation.
+   *
+   * `insert` is the reason the other three exist: the kit is 204 finished
+   * documents, and the fastest honest path from "I want a Sankey of this" to a
+   * diagram on screen is to take the kit's own Sankey and edit it. The stored
+   * copy is a FORK - the vendored file stays byte-identical and
+   * `vendor/design/build.mjs --check` keeps proving it - and its provenance is
+   * recorded as `kit` with the upstream example named in the history, so nobody
+   * later mistakes it for something the model drew.
+   */
+  const kitView = (scopeKey, entry) => viewOf(scopeKey, entry)
+  const kit = {
+    name: 'diagram_kit',
+    description: [
+      'Read and USE the vendored Diagram Design kit: 71 example keys (204 self-contained HTML+SVG examples, 44 of them with a written type reference) from https://github.com/cathrynlavery/diagram-design, pinned and shipped inside this plugin.',
+      '',
+      'The four actions:',
+      '  - `catalog`   the example keys, their variants (plain | full | dark | animated) and which of them the kit DOCUMENTS. Pass `type` to look one up. Start here.',
+      '  - `reference` one reference document. `ref` names it: "style-guide" (the colour tokens and type - read it before your first html diagram), "semantic-patterns" (which pattern carries the meaning), "output-spec", "layout-budget", "animation", "primitive-icons", or a type id (e.g. "sankey" or "type-sankey") for that type\u2019s own notes.',
+      '  - `example`   the source of ONE worked example, e.g. id "sankey" (variant "plain" | "full" | "dark" | "animated"), or id "template" / "template-motion" for the templates a new diagram starts from. Read it, then write your own with `diagram_write({kind:"html"})`.',
+      '  - `insert`    turn one example into a REAL diagram in this conversation: it is copied in, validated like any other write, and gets its own tab. Equivalent to reading the example and writing it back, in one call.',
+      '',
+      'The kit is data, not an engine: nothing here reaches the network, and every file is byte-verified against the pinned commit (`node packages/dsh-diagrams/vendor/design/build.mjs --check`).',
+      'A document you author for kind "html" must satisfy the kit\u2019s safety contract (no remote assets, no executable attributes, no element that embeds another document, and no script except the kit\u2019s own motion controller - see `reference` "animation"). That is a refusal, not a warning; everything else the check finds is advisory.',
+    ].join('\n'),
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['action'],
+      properties: {
+        action: { type: 'string', enum: ['catalog', 'reference', 'example', 'insert'], description: 'catalog | reference | example | insert' },
+        type: { type: 'string', description: 'For `catalog`: one example key to look up (e.g. "architecture").' },
+        ref: { type: 'string', description: 'For `reference`: the document to read - a name like "style-guide" / "semantic-patterns" / "animation", or a type id.' },
+        id: { type: 'string', description: 'For `example` / `insert`: the example key (e.g. "sankey", "quadrant-consultant", "template-motion").' },
+        variant: { type: 'string', enum: ['plain', 'full', 'dark', 'animated'], description: 'Which variant of the example (default: the catalog\u2019s own default for that key).' },
+        maxChars: { type: 'integer', description: 'For `example` / `reference`: the character ceiling for the answer (default 40000). A truncation is always stated.' },
+        title: { type: 'string', description: 'For `insert`: the title for the new diagram (default: the kit example\u2019s own headline).' },
+        scope: SCOPE_SCHEMA,
+        diagramId: { ...ID_SCHEMA, description: 'For `insert`: the id to give the new diagram, when you want to cite it by a name of your own. Default: derived from the example.' },
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          kit: { type: 'object' },
+          view: VIEW_SCHEMA,
+          diagnostics: DIAGNOSTICS_SCHEMA,
+        },
+        required: ['text'],
+      },
+      render: (_args, value) => [{ type: 'text', text: value.text }],
+      presentationMeta: (_args, value) => value.view ?? { card: 'generic', title: 'Diagram kit', kind: 'other' },
+    },
+    presentCall: (args) => ({
+      card: 'generic',
+      title: 'Diagram kit ' + String((args && args.action) || 'read') + (args && (args.id || args.ref || args.type) ? ' ' + (args.id || args.ref || args.type) : ''),
+      kind: 'other',
+    }),
+    presentResult: resultView,
+    async execute(args, exec) {
+      const action = String(args.action ?? '')
+      const snapshot = kitSnapshot()
+      if (!snapshot.available) {
+        return {
+          text:
+            'The Diagram Design kit is NOT vendored in this install: ' +
+            KIT_ROOT +
+            ' has no catalog.json. Rebuild it with `node packages/dsh-diagrams/vendor/design/build.mjs` (or reinstall the bundle with the vendored tree).',
+          kit: { available: false },
+        }
+      }
+
+      if (action === 'catalog') {
+        const entries = listTypes({ type: typeof args.type === 'string' ? args.type : null })
+        if (entries.length === 0) {
+          return {
+            text:
+              'No kit example key "' +
+              String(args.type) +
+              '". The catalog has ' +
+              snapshot.typesCount +
+              ' keys (' +
+              snapshot.documented +
+              ' documented); call action "catalog" with no `type` to list them.',
+            kit: { available: true, ...snapshot },
+          }
+        }
+        const lines = [
+          'Diagram Design kit: ' +
+            snapshot.typesCount +
+            ' example keys, ' +
+            snapshot.examples +
+            ' examples, ' +
+            snapshot.documented +
+            ' with a written type reference (upstream ' +
+            snapshot.upstream.repo +
+            '@' +
+            String(snapshot.upstream.commit).slice(0, 12) +
+            ', ' +
+            snapshot.upstream.license +
+            ').',
+          '',
+        ]
+        for (const entry of entries) {
+          lines.push(
+            '- ' +
+              entry.id +
+              (entry.documented ? ' *' : '') +
+              '  ' +
+              entry.name +
+              (entry.subject ? '  [' + entry.subject + ']' : '') +
+              '  variants: ' +
+              entry.variants.join(', ') +
+              '  (' +
+              Math.round(entry.bytes / 1024) +
+              ' KiB)',
+          )
+        }
+        if (!args.type) {
+          lines.push('')
+          lines.push('`*` marks a key with its own written type reference (the 44 authorable types). Read one with action "reference", ref "<id>".')
+          lines.push('Next: action "reference", ref "style-guide" - the tokens and type every diagram in this system shares.')
+        }
+        return { text: lines.join('\n'), kit: { available: true, ...snapshot, returned: entries.length } }
+      }
+
+      if (action === 'reference') {
+        const wanted = String(args.ref ?? args.type ?? '')
+        const found = wanted ? referenceFile(wanted) : null
+        if (!found) {
+          const refs = listReferences()
+          return {
+            text:
+              'No kit reference "' +
+              wanted +
+              '". Available: ' +
+              refs
+                .map((entry) => entry.name.replace(/^type-/, ''))
+                .slice(0, 70)
+                .join(', ') +
+              (refs.length > 70 ? ', ...' : '') +
+              '. The ones worth reading first: ' +
+              STARTER_REFERENCES.join(', ') +
+              '.',
+            kit: { available: true, ...snapshot },
+          }
+        }
+        const read = readCapped(found.path, { maxChars: args.maxChars })
+        return {
+          text: '## ' + found.rel + '\n\n' + read.text + (read.truncated ? '\n\n[TRUNCATED] ' + read.notice : ''),
+          kit: { available: true, ...snapshot, reference: found.rel, totalChars: read.totalChars, truncated: read.truncated === true },
+        }
+      }
+
+      if (action === 'example') {
+        const id = String(args.id ?? '')
+        // The two templates are addressed like examples, because that is how they
+        // are used: `template` is the blank page, `template-motion` is the one
+        // whose controller the html check compares a document against.
+        if (id === 'template' || id === 'template-motion' || id === 'template-full' || id === 'template-dark' || id === 'template-terminal') {
+          const file = path.join(KIT_ROOT, 'assets', id + '.html')
+          if (existsSync(file)) {
+            const read = readCapped(file, { maxChars: args.maxChars })
+            return {
+              text: '## assets/' + id + '.html\n\n' + read.text + (read.truncated ? '\n\n[TRUNCATED] ' + read.notice : ''),
+              kit: { available: true, ...snapshot, example: id, template: true, truncated: read.truncated === true },
+            }
+          }
+        }
+        const found = exampleFile(id, typeof args.variant === 'string' ? args.variant : null)
+        if (!found) {
+          return {
+            text:
+              'No kit example "' +
+              id +
+              '"' +
+              (args.variant ? ' with variant "' + String(args.variant) + '"' : '') +
+              '. Call action "catalog" for the ' +
+              snapshot.typesCount +
+              ' keys.',
+            kit: { available: true, ...snapshot },
+          }
+        }
+        const read = readCapped(found.path, { maxChars: args.maxChars })
+        return {
+          text:
+            '## ' +
+            id +
+            ' (' +
+            found.variant +
+            ', ' +
+            Math.round(read.bytes / 1024) +
+            ' KiB)\n\n' +
+            read.text +
+            (read.truncated ? '\n\n[TRUNCATED] ' + read.notice : ''),
+          kit: { available: true, ...snapshot, example: id, variant: found.variant, truncated: read.truncated === true },
+        }
+      }
+
+      if (action === 'insert') {
+        const sessionId = sessionOf(exec)
+        const inserted = await insertKitExample(deps, {
+          sessionId,
+          exampleId: String(args.id ?? ''),
+          variant: typeof args.variant === 'string' ? args.variant : null,
+          title: typeof args.title === 'string' ? args.title : null,
+          scope: args.scope,
+          diagramId: typeof args.diagramId === 'string' && args.diagramId.length > 0 ? args.diagramId : null,
+        })
+        if (!inserted) {
+          return {
+            text: 'No kit example "' + String(args.id ?? '') + '" to insert. Call action "catalog" for the ' + snapshot.typesCount + ' keys.',
+            kit: { available: true, ...snapshot },
+          }
+        }
+        const { entry, scopeKey, verdict } = inserted
+        const lines = [
+          'Inserted the kit example "' + String(args.id) + '" (' + inserted.variant + ') as diagram "' + entry.id + '" (html) - status: ' + verdict.status + '.',
+          'It is a COPY: the vendored original is untouched, and this diagram now belongs to ' + (scopeKey === LIBRARY_SCOPE ? 'the shared LIBRARY' : 'this conversation') + '.',
+        ]
+        if (verdict.status === 'ok') {
+          lines.push('It satisfies the kit\u2019s safety and accessibility contract and is drawing in its own tab.')
+        } else {
+          lines.push('This example does NOT validate on this host:')
+          for (const diagnostic of verdict.diagnostics ?? []) lines.push('  - ' + diagnostic.text)
+          lines.push('That is the kit\u2019s own file, so it is a finding about THIS plugin rather than about your edit - say so rather than silently "fixing" the example.')
+        }
+        lines.push(renderLine(entry))
+        const warnings = warningLines(entry)
+        if (warnings.length > 0) {
+          lines.push('Advisory:')
+          for (const warning of warnings) lines.push(warning)
+        }
+        lines.push('Tab address: ' + addressOf(scopeKey, entry.id))
+        return { text: lines.join('\n'), view: kitView(scopeKey, entry), diagnostics: verdict.diagnostics ?? [] }
+      }
+
+      return {
+        text: 'Unknown action "' + action + '". Use catalog, reference, example or insert.',
+        kit: { available: true, ...snapshot },
+      }
+    },
+  }
+
+  return [write, patch, read, verify, publish, remove, kit]
 }
 
 // ---------------------------------------------------------------------------
@@ -1423,12 +1769,30 @@ async function serveVendor(request) {
 }
 
 /** The capability block the health and state routes answer with. */
-function healthSnapshot(deps) {
+/**
+ * What this row can do right now, as one object.
+ *
+ * `designKit` is the TRIMMED catalog (71 entries, ~17 KB) and it rides the STATE
+ * route, which the pane fetches anyway; `catalog: false` (the `health` route)
+ * gets the summary only, because that route is a liveness probe and has no
+ * business carrying a catalogue.
+ */
+function healthSnapshot(deps, { catalog = true } = {}) {
   const engines = deps.enginesNow()
+  const kit = kitSnapshot()
   return {
     tex: { available: engines.available, engine: engines.engine, svg: engines.svg, png: engines.png },
     mermaid: { version: deps.version },
     library: { diagrams: deps.library.list(LIBRARY_SCOPE).diagrams.length },
+    designKit: catalog
+      ? kit
+      : {
+          available: kit.available === true,
+          typesCount: kit.typesCount ?? 0,
+          documented: kit.documented ?? 0,
+          examples: kit.examples ?? 0,
+          upstream: kit.upstream ?? null,
+        },
   }
 }
 
@@ -1459,6 +1823,41 @@ function publicDiagram(entry, scopeKey) {
 }
 
 /**
+ * Insert one vendored kit example as a real diagram.
+ *
+ * The ONE implementation behind both doors - `diagram_kit({action:"insert"})`
+ * for the model and the panel's "Use this" button - because the two must not be
+ * able to disagree about what an inserted example IS: an `html` diagram, the
+ * kit's own variant choice when none is named, `bytes` of the untouched vendored
+ * file as its source, `by: 'kit'`, and the upstream example named in its
+ * history. The stored copy is a FORK on purpose: the vendored original stays
+ * byte-identical, which is what `vendor/design/build.mjs --check` keeps proving.
+ *
+ * @param deps - the row's dependencies.
+ * @param options - `{ sessionId, exampleId, variant, title, scope, diagramId }`.
+ * @returns `{ entry, scopeKey, verdict, variant }`, or null when there is no
+ *   such example.
+ */
+async function insertKitExample(deps, { sessionId, exampleId, variant = null, title = null, scope = undefined, diagramId = null }) {
+  const found = exampleFile(String(exampleId ?? ''), variant)
+  if (!found) return null
+  const scopeKey = scope === 'library' ? LIBRARY_SCOPE : sessionId
+  const target = deps.storeFor(scopeKey)
+  const source = readFileSync(found.path, 'utf8')
+  const snapshot = kitSnapshot()
+  const entry = target.write(scopeKey, {
+    id: diagramId ?? undefined,
+    kind: 'html',
+    title: typeof title === 'string' && title.length > 0 ? title : found.type.name || found.id,
+    source,
+    by: 'kit',
+    note: 'from the Diagram Design kit: ' + found.id + ' (' + found.variant + ') at ' + String(snapshot.upstream?.commit ?? '').slice(0, 12),
+  })
+  const verdict = await checkAndRecord(deps, scopeKey, entry, {})
+  return { entry: target.get(scopeKey, entry.id), scopeKey, verdict, variant: found.variant }
+}
+
+/**
  * Which store an id lives in, from a route's `scope` (optional) - the same rule
  * the tools use: the library first, then the conversation.
  */
@@ -1475,9 +1874,17 @@ function locateRoute(deps, session, id, scope) {
   return local ? { scopeKey: session, entry: local } : null
 }
 
-/** A safe, readable file name for one export. */
+/**
+ * A safe, readable file name for one export.
+ *
+ * The ID leads, not the title: the id is the diagram's stable, citable name ("so
+ * the file is `sankey.html`, the thing I asked for"), while a title is prose that
+ * can be 60 characters of punctuation. A kit diagram inserted as `venn` whose
+ * title reads "Venn · Diagram Design" exported as
+ * `venn-diagram-design-2.html` the second time, which is how this rule was found.
+ */
 function exportName(entry, format) {
-  const base = String(entry.title || entry.id)
+  const base = String(entry.id || entry.title)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -1491,10 +1898,34 @@ function exportName(entry, format) {
  * diagram comes from the CLIENT - that is where the picture exists, because the
  * browser is what rendered it.
  */
-function exportBytes(deps, entry, format, clientData) {
+function exportBytes(deps, entry, format, clientData, options = {}) {
   if (format === 'mmd' || format === 'tex') return Buffer.from(entry.source + '\n', 'utf8')
+  // An `html` document exports as the file a person can open in a browser: the
+  // SAME composition the panel frames, minus the viewer bridge it has no parent
+  // for, and with the exact kit fonts back (a standalone file may fetch them;
+  // the framed one may not).
+  if (format === 'html' && entry.kind === 'html') {
+    const composed = composeHtmlDocument(entry.source, {
+      theme: options.theme === 'dark' ? 'dark' : 'light',
+      fonts: 'kit',
+      viewer: false,
+    })
+    return Buffer.from(composed.html, 'utf8')
+  }
+  if (format === 'html') return Buffer.from(entry.source + '\n', 'utf8')
+  // The SVG of an `html` diagram is the picture that is actually in it, lifted
+  // out by `extractSvg` - the token-declaring `<style>` travels inside the
+  // document, so the exported file is the same drawing the tab showed.
+  if (format === 'svg' && entry.kind === 'html') {
+    const lifted = extractSvg(entry.source)
+    if (!lifted) return null
+    const styled = /<style[\s>]/i.test(lifted.svg)
+      ? lifted.svg
+      : lifted.svg.replace(/<svg([^>]*)>/i, '<svg$1><style>:root{--color-paper:#f5f5f5;--color-ink:#2d3142;--color-muted:#4f5d75;--color-accent:#bf4520;}</style>')
+    return Buffer.from('<?xml version="1.0" encoding="UTF-8"?>\n' + styled + '\n', 'utf8')
+  }
   if (format === 'md') {
-    const language = entry.kind === 'mermaid' ? 'mermaid' : 'latex'
+    const language = entry.kind === 'mermaid' ? 'mermaid' : entry.kind === 'html' ? 'html' : 'latex'
     return Buffer.from('# ' + entry.title + '\n\n```' + language + '\n' + entry.source + '\n```\n', 'utf8')
   }
   if (typeof clientData === 'string' && clientData.length > 0) {
@@ -1581,6 +2012,9 @@ export function registerRoutes(ctx, deps) {
       tex: { available: engines.available, engine: engines.engine, engines: engines.engines, svg: engines.svg, png: engines.png },
       store: { root: deps.store.root, artifacts: deps.cache.root, entries: deps.cache.entries().length },
       library: { path: deps.library.fileFor(LIBRARY_SCOPE), diagrams: deps.library.list(LIBRARY_SCOPE).diagrams.length },
+      // The SUMMARY only: this route is a liveness probe, and the pane gets the
+      // whole catalog from the state route it already fetches.
+      designKit: healthSnapshot(deps, { catalog: false }).designKit,
     })
   })
 
@@ -1632,9 +2066,29 @@ export function registerRoutes(ctx, deps) {
       return json(200, { ok: true, deleted })
     }
 
-    if (Buffer.byteLength(String(body.source ?? ''), 'utf8') > MAX_SOURCE_BYTES) {
-      throw httpError(413, 'TOO_LARGE', 'The diagram source is larger than ' + Math.round(MAX_SOURCE_BYTES / 1024) + ' KiB.')
+    // INSERT a vendored kit example: the panel's "Use this" button, which is the
+    // same operation `diagram_kit({action:"insert"})` performs for the model.
+    // Both go through the one helper, so a client-inserted example and a
+    // model-inserted one cannot differ in kind, provenance or validation.
+    if (typeof body.kitExample === 'string' && body.kitExample.length > 0) {
+      const inserted = await insertKitExample(deps, {
+        sessionId: session,
+        exampleId: body.kitExample,
+        variant: typeof body.variant === 'string' ? body.variant : null,
+        title: typeof body.title === 'string' ? body.title : null,
+        scope,
+      })
+      return json(200, {
+        ok: true,
+        diagram: publicDiagram(inserted.entry, inserted.scopeKey),
+        scope: inserted.scopeKey === LIBRARY_SCOPE ? 'library' : 'conversation',
+        status: inserted.verdict.status,
+        diagnostics: inserted.verdict.diagnostics ?? [],
+        warnings: inserted.verdict.warnings ?? [],
+        example: { id: body.kitExample, variant: inserted.variant },
+      })
     }
+
     // A panel edit writes back where the diagram ALREADY is unless it says
     // otherwise: a library diagram edited in its tab must not silently become a
     // second, conversation-only copy.
@@ -1643,11 +2097,20 @@ export function registerRoutes(ctx, deps) {
     const target = deps.storeFor(scopeKey)
     const existing = known ? known.entry : undefined
     const kind = typeof body.kind === 'string' && KINDS.includes(body.kind) ? body.kind : existing ? existing.kind : 'mermaid'
+    // The kind has to be resolved BEFORE the size is judged: an `html` document is
+    // a whole self-contained page and lives under the larger ceiling, while a
+    // Mermaid or TikZ source is a language fragment. The store re-checks this and
+    // remains the authority; this is the route refusing early with the same code.
+    const source = String(body.source ?? '')
+    const ceiling = maxSourceBytes(kind)
+    if (Buffer.byteLength(source, 'utf8') > ceiling) {
+      throw httpError(413, 'TOO_LARGE', 'The diagram source is larger than ' + Math.round(ceiling / 1024) + ' KiB.')
+    }
     const entry = target.write(scopeKey, {
       id: existing ? existing.id : undefined,
       kind,
       title: typeof body.title === 'string' ? body.title : existing ? existing.title : undefined,
-      source: String(body.source ?? ''),
+      source,
       by: 'user',
       note: existing ? 'edited in the diagram panel' : 'created from the diagram panel',
     })
@@ -1705,6 +2168,76 @@ export function registerRoutes(ctx, deps) {
   })
 
   /**
+   * The Design kit's frame routes: the bytes the sandboxed `<iframe>` loads.
+   *
+   * WHY A ROUTE AND NOT A `srcdoc` OR A BLOB
+   * ----------------------------------------
+   * The client cannot hand the frame a document it built itself: a `blob:` URL
+   * gives the frame an opaque origin of a DIFFERENT kind from the one the CSP
+   * header rides on, and a `srcdoc` cannot carry a response header at all. The
+   * composed document therefore comes from here, where the plugin can attach the
+   * `default-src 'none'` policy that makes the frame's inability to reach the
+   * network a fact of the response rather than a promise of the validator.
+   *
+   * Both routes answer with the SAME composition, so a vendored kit example and a
+   * stored diagram cannot drift apart in how they are served. Neither is a write:
+   * GET and HEAD only, and the parameters are a name, never a path.
+   */
+  const composeResponse = (request, source) => {
+    const url = new URL(request.url)
+    const theme = url.searchParams.get('theme') === 'dark' ? 'dark' : 'light'
+    const fonts = url.searchParams.get('fonts') === 'kit' ? 'kit' : 'system'
+    const scale = Number(url.searchParams.get('scale') ?? '1')
+    const composed = composeHtmlDocument(source, {
+      theme,
+      fonts,
+      scale: Number.isFinite(scale) && scale >= 0.25 && scale <= 4 ? scale : 1,
+      viewer: url.searchParams.get('viewer') !== '0',
+    })
+    const headers = {
+      'content-type': 'text/html; charset=utf-8',
+      // The frame gets no ability to fetch ANYTHING, whatever the document says:
+      // this is the backstop behind `html-check.js`, and it is why the Google
+      // Fonts `<link>` every kit example carries is stripped rather than trusted.
+      'content-security-policy': contentSecurityPolicy(),
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    }
+    if (request.method === 'HEAD') return new Response(null, { status: 200, headers })
+    return new Response(composed.html, { status: 200, headers })
+  }
+
+  register(EXAMPLE_ROUTE, ['GET', 'HEAD'], async (request) => {
+    const url = new URL(request.url)
+    const id = url.searchParams.get('id')
+    const variant = url.searchParams.get('variant')
+    if (!id) throw httpError(400, 'BAD_REQUEST', 'A kit example id is required.')
+    // `template*` are addressed like examples: they are what a new document is
+    // copied from, and `template-motion` carries the one script the check allows.
+    const isTemplate = /^template(-[a-z0-9]+)*$/.test(id)
+    const file = isTemplate ? path.join(KIT_ROOT, 'assets', id + '.html') : null
+    const found = isTemplate ? (existsSync(file) ? { path: file, variant: 'template' } : null) : exampleFile(id, variant)
+    if (!found) throw httpError(404, 'NOT_FOUND', 'No such diagram-design example: "' + id + '".')
+    return composeResponse(request, readFileSync(found.path, 'utf8'))
+  })
+
+  register(DOCUMENT_ROUTE, ['GET', 'HEAD'], async (request) => {
+    const url = new URL(request.url)
+    const session = url.searchParams.get('session')
+    const id = url.searchParams.get('id')
+    const scope = url.searchParams.get('scope')
+    if (!session || !id) throw httpError(400, 'BAD_REQUEST', 'A session id and a diagram id are required.')
+    const found = locateRoute(deps, session, id, scope)
+    if (!found) throw httpError(404, 'NOT_FOUND', 'No such diagram in the library or in this conversation.')
+    if (found.entry.kind !== 'html') {
+      throw httpError(400, 'BAD_KIND', 'Only an html diagram is served as a framed document; this one is ' + found.entry.kind + '.')
+    }
+    // The revision is in the URL the client builds, so a stale frame cannot show
+    // text that has since changed: the address itself names what it is drawing.
+    return composeResponse(request, found.entry.source)
+  })
+
+  /**
    * Save one export to the Desktop of the machine running the harness.
    *
    * The client never names a path: it asks for a format and the host decides
@@ -1725,7 +2258,7 @@ export function registerRoutes(ctx, deps) {
     const entry = found.entry
     const allowed = EXPORT_FORMATS[entry.kind] ?? []
     if (!allowed.includes(format)) throw httpError(400, 'BAD_FORMAT', 'A ' + entry.kind + ' diagram exports as: ' + allowed.join(', ') + '.')
-    const bytes = exportBytes(deps, entry, format, body.data)
+    const bytes = exportBytes(deps, entry, format, body.data, { theme: body.theme === 'dark' ? 'dark' : 'light' })
     if (bytes === null) {
       throw httpError(404, 'NO_ARTIFACT', 'There is nothing to export as ' + format + ' yet - render or compile the diagram first.')
     }
@@ -1843,11 +2376,14 @@ export function apply(ctx) {
     },
   }
 
+  const kit = kitSnapshot()
   log.info(
     'active: mermaid@' +
       deps.version +
       ', tex ' +
       (engines.available ? engines.engine + ' + ' + (engines.svg ?? 'no SVG converter') : 'UNAVAILABLE') +
+      ', design kit ' +
+      (kit.available ? kit.typesCount + ' keys / ' + kit.examples + ' examples @ ' + String(kit.upstream.commit).slice(0, 12) : 'NOT VENDORED') +
       ', state ' +
       root +
       ', library ' +

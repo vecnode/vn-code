@@ -172,6 +172,13 @@ if (ps && sh) {
     'packages/dsh-vn-master/package.json',
     'packages/dsh-pdf/lib/vendor/pdf.min.mjs',
     'packages/dsh-diagrams/lib/vendor/mermaid.min.js',
+    // The vendored Diagram Design kit is 277 files in one generated tree, so its
+    // three sentinels are what catch a family of it being left behind: the
+    // catalog the panel lists the kit from, one example the frame serves, and one
+    // reference the model reads.
+    'packages/dsh-diagrams/lib/vendor/design/catalog.json',
+    'packages/dsh-diagrams/lib/vendor/design/assets/example-architecture.html',
+    'packages/dsh-diagrams/lib/vendor/design/references/style-guide.md',
     'packages/dsh-editor/lib/vendor/cm6.min.js',
     'packages/dsh-cmdbar/lib/client.js',
     'app/README.md',

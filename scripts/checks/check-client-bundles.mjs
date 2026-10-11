@@ -3225,16 +3225,21 @@ const indexType = diagTypes.find((entry) => entry.kind === 'diagrams')
 check('viewer type identity', viewerType.id, 'dsh-diagrams-viewer')
 check('index type identity', indexType.id, 'dsh-diagrams-index')
 // One tab per DIAGRAM: a resource kind whose glob owns the address the host's
-// tool results carry, in the extension band so it beats any shipped viewer.
+// tool results carry, in the extension band so it beats any shipped viewer. The
+// THIRD pattern is the Diagram Design kit's: a vendored example opens in this
+// same tab, which is why the kit registers no tab type of its own.
 check(
   'viewer owns the diagram address grammar',
   viewerType.patterns.join(',') + '/' + viewerType.priority,
-  'dsh-resource://diagram/session/**,dsh-resource://diagram/library/**/extension',
+  'dsh-resource://diagram/session/**,dsh-resource://diagram/library/**,dsh-resource://diagram/example/**/extension',
 )
 check('viewer claims a host address', viewerType.patterns[0].includes('dsh-resource://diagram/session/'))
 // A LIBRARY address names no conversation: that is what makes one tab - and one
 // citation - work from every chat.
 check('viewer claims the library address too', viewerType.patterns[1] === 'dsh-resource://diagram/library/**')
+// The kit example address is the third shape, and it is a RESOURCE address (no
+// conversation): the tab draws a file the plugin ships.
+check('viewer claims the kit example address', viewerType.patterns[2] === 'dsh-resource://diagram/example/**')
 check('viewer has no guide entry', viewerType.guide === undefined)
 // The index is a PAGE type: no patterns, so it never competes for a file
 // address, and its one guide entry sits after Files (10), Editor (20) and
@@ -3251,6 +3256,7 @@ check(
     'sidebar.right.pane.tab.title#dsh-diagrams-index',
     'sidebar.right.pane.tab.title#dsh-diagrams-viewer',
     'tool.call.toolview#diagram_delete',
+    'tool.call.toolview#diagram_kit',
     'tool.call.toolview#diagram_patch',
     'tool.call.toolview#diagram_publish',
     'tool.call.toolview#diagram_read',
@@ -3278,13 +3284,121 @@ const indexMarkup = renderToStaticMarkup(h(IndexBody, { sessionId: 'sess-1' }))
 check('index body renders its empty state', indexMarkup.includes('Nothing yet: this conversation has no diagrams and the library is empty.'))
 check(
   'index body offers both engines',
-  indexMarkup.includes('>New Mermaid<') && indexMarkup.includes('>New TikZ<') && indexMarkup.includes('dsh-diagrams 0.1.0-alpha.7'),
+  indexMarkup.includes('>New Mermaid<') && indexMarkup.includes('>New TikZ<') && indexMarkup.includes('dsh-diagrams 0.1.0-alpha.8'),
 )
 // The index is where the LIBRARY becomes visible: the file bar always counts
 // both halves, and the two labelled lists are asserted from the source below
 // (with an empty store the page draws its empty state instead).
 check('index counts the shared library', indexMarkup.includes('in the library') && indexMarkup.includes(' here'))
 check('index title seat', renderToStaticMarkup(h(diagSeats['sidebar.right.pane.tab.title#dsh-diagrams-index'].component, {})), 'Diagrams')
+// With no kit vendored the section is simply absent: a machine without the tree
+// must not draw an empty frame or an error, which is what `available` gates.
+check('index draws no kit section without the vendored kit', indexMarkup.includes('Design kit') === false)
+
+// The kit section and the html frame. The store is filled from the host's own
+// state route, so the double answers THAT route with a real payload and the pane
+// is rendered from it - the same path the browser takes.
+const kitTypes = [
+  { id: 'architecture', name: 'Architecture \u00b7 Diagram Design', subject: 'Content site in production', variants: ['plain', 'full', 'dark'], defaultVariant: 'plain', documented: true, references: ['references/type-architecture.md'], bytes: 39116 },
+  { id: 'venn', name: 'Venn \u00b7 Diagram Design', subject: 'Two sets', variants: ['plain'], defaultVariant: 'plain', documented: true, references: ['references/type-venn.md'], bytes: 5079 },
+  { id: 'bubble', name: 'Bubble \u00b7 Diagram Design', subject: 'Scatter variant', variants: ['plain'], defaultVariant: 'plain', documented: false, references: [], bytes: 6929 },
+]
+const kitHtml = {
+  id: 'kit-venn',
+  kind: 'html',
+  title: 'Venn',
+  scope: 'conversation',
+  address: 'dsh-resource://diagram/session/sess-1/kit-venn',
+  source: '<!doctype html><html><body><svg role="img" aria-labelledby="v-t v-d"><title id="v-t">V</title><desc id="v-d">d</desc></svg></body></html>',
+  status: 'ok',
+  diagramType: 'html',
+  diagnostics: [],
+  warnings: [],
+  render: null,
+  verification: { state: 'pending', revision: 1 },
+  revision: 1,
+  bytes: 190,
+  lines: 1,
+  by: 'kit',
+}
+const kitState = {
+  ok: true,
+  session: 'sess-1',
+  diagrams: [kitHtml],
+  library: [],
+  libraryPath: '/home/.dsh/dsh-diagrams/library.json',
+  capabilities: {
+    tex: { available: true, engine: 'pdflatex' },
+    mermaid: { version: '11.17.2' },
+    library: { diagrams: 0 },
+    designKit: {
+      available: true,
+      types: kitTypes,
+      typesCount: 71,
+      starters: ['style-guide'],
+      documented: 44,
+      examples: 204,
+      files: 277,
+      upstream: { repo: 'cathrynlavery/diagram-design', commit: '7a2e22170ee838e859d8142ba825d83f8b6375e6', version: '2.6', license: 'MIT' },
+    },
+  },
+}
+const kitMarkup = renderToStaticMarkup(h(IndexBody, { sessionId: 'sess-1', preloaded: kitState }))
+check('index draws the kit section from the host catalog', kitMarkup.includes('Design kit') && kitMarkup.includes('example keys from Diagram Design'), true)
+check('the kit section lists a documented type', kitMarkup.includes('Architecture \u00b7 Diagram Design') && kitMarkup.includes('>Type<'), true)
+check('the kit section filters to the documented keys by default', kitMarkup.includes('Bubble \u00b7 Diagram Design'), false)
+check('the kit section counts both halves of the index', kitMarkup.includes('1 here'), true)
+check('the kit badge names the html kind', kitMarkup.includes('data-kind="html"'), true)
+
+// An `html` entry renders as a SANDBOXED FRAME, and the frame's src is the
+// document route at the revision being drawn - so a stale picture cannot appear.
+const htmlTab = { id: 'tabH', contentId: 'dsh-resource://diagram/session/sess-1/kit-venn', title: 'Venn', navigation: { revision: 0 } }
+const htmlMarkup = renderToStaticMarkup(h(ViewerBody, { useTabInfo: () => ({ tab: htmlTab }), sessionId: 'sess-1', preloaded: kitState }))
+check('an html diagram renders as a frame', htmlMarkup.includes('<iframe'), true)
+check('the frame is sandboxed to scripts only', /sandbox="allow-scripts"/.test(htmlMarkup), true)
+check('the frame never gets same-origin', /allow-same-origin/.test(htmlMarkup), false)
+check(
+  'the frame loads the document route at this revision',
+  /src="\/api\/dsh-diagrams\/document\?session=sess-1&amp;id=kit-venn&amp;revision=1/.test(htmlMarkup),
+  true,
+)
+check('the frame carries a theme', /(&amp;|&)theme=(dark|light)/.test(htmlMarkup), true)
+// The export MENU is closed until it is asked for, so the formats this kind
+// offers are read from the source's own per-kind list rather than from a menu
+// that has not been opened. What matters is that `html` never claims a PNG.
+const exportFormats = /const formats = kind === 'tikz' \? \['tex', 'pdf', 'svg', 'png'\] : kind === 'html' \? \['html', 'svg'\] : \['mmd', 'md', 'svg', 'png'\]/
+check('the html tab declares only the formats it has', exportFormats.test(readFileSync(path.join(repo, 'packages/dsh-diagrams/lib/client.js'), 'utf8')), true)
+check('the html tab shows its own kind', htmlMarkup.includes('>Design<'), true)
+
+// A kit example is the THIRD address shape, and it opens in the same tab type -
+// with "Use this" as the only way to change anything, because the vendored file
+// is not this conversation's to edit.
+const exampleTab = { id: 'tabX', contentId: 'dsh-resource://diagram/example/venn', title: 'venn', navigation: { revision: 0 } }
+const exampleMarkup = renderToStaticMarkup(h(ViewerBody, { useTabInfo: () => ({ tab: exampleTab }), sessionId: 'sess-1' }))
+check('an example tab renders the vendored example frame', /\/api\/dsh-diagrams\/example\?id=venn/.test(exampleMarkup), true)
+check('an example tab offers "Use this"', exampleMarkup.includes('>Use this<'), true)
+check('an example tab says it is vendored', exampleMarkup.includes('vendored Diagram Design example'), true)
+check('an example tab offers no Editor drawer', exampleMarkup.includes('>Source<'), false)
+const exampleTitle = viewerType.title('dsh-resource://diagram/example/venn')
+check('an example tab is titled by the address', exampleTitle, 'venn')
+
+// The refused case: an html entry the host refused is NOT framed at all.
+const refusedState = {
+  ok: true,
+  session: 'sess-2',
+  diagrams: [{ ...kitHtml, id: 'refused-page', status: 'error', diagnostics: [{ kind: 'safety', text: 'a remote reference' }] }],
+  library: [],
+  capabilities: {
+    tex: { available: true },
+    mermaid: { version: '11.17.2' },
+    library: { diagrams: 0 },
+    designKit: { available: true, types: kitTypes, typesCount: 71, documented: 44, examples: 204, upstream: { commit: 'x'.repeat(40) } },
+  },
+}
+const refusedTab = { id: 'tabR', contentId: 'dsh-resource://diagram/session/sess-2/refused-page', title: 'Refused', navigation: { revision: 0 } }
+const refusedMarkup = renderToStaticMarkup(h(ViewerBody, { useTabInfo: () => ({ tab: refusedTab }), sessionId: 'sess-2', preloaded: refusedState }))
+check('a refused document is never framed', refusedMarkup.includes('<iframe'), false)
+check('a refused document says so', refusedMarkup.includes('was refused'), true)
 
 // The conversation card draws from the tool call itself, so it is right on
 // replay. The block shapes are the SHELL's: a call still running is a call

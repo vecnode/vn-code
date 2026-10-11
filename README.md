@@ -6,15 +6,12 @@
 ![DeepSeek Harness 0.2.0-rc.2](https://img.shields.io/badge/dsh-0.2.0--rc.2-4f8cff)
 ![Platforms: Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-Agent IDE with core [DSH](https://www.deepseek.com/harness/en/).
+Agent-Human IDE ⌨️    
+Web and Desktop versions, bundles [`Plugins`](packages/),  [`Skills`](docs/) and [`Interfaces`](docs/).
 
 ![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner2.png)
 
-A native cross-platform app plus a pack of standard **dsh bundles**. The plugins
-are plain JavaScript with **zero npm dependencies**; the launchers run on
-**Windows, macOS and Linux** (PowerShell on one side, plain POSIX shell on the
-other, and the Unix half never needs PowerShell).
-
+Supports core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design. Standard **dsh bundles**. The plugins are plain JavaScript with **zero npm dependencies**; the launchers run on **Windows, macOS and Linux** (PowerShell on one side, plain POSIX shell on the other).
 
 <p align="left">
   <img src="assets/img1.png" alt="The vncode window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
@@ -52,7 +49,7 @@ way and what it touches. The exact versions are in
 | [`dsh-media`](packages/dsh-media/README.md) | media the agent can work with: `media_probe` / `media_run` / `media_frames` over a **pinned, SHA-256-verified** ffmpeg copy, plus the routes the video tab streams through |
 | [`dsh-supercollider`](packages/dsh-supercollider/README.md) | SuperCollider the agent can **play**: ten `sc_*` tools over one long-lived `sclang` session (a warm round trip is ~31 ms, and what the agent defines is still there next call) and a hand-written OSC client to `scsynth`, the installed `.schelp` reference indexed for `sc_help`, the `.scd` file workflow, and **five skills** that teach the language, SynthDefs and live coding — every code example in them compiled by a check. Zero npm dependencies and nothing bundled — it finds the machine's own SuperCollider — and its own UI is one small console tab, with `.scd` files opening in the editor |
 | [`dsh-video`](packages/dsh-video/README.md) | a player tab that streams and seeks any video container, with an ffprobe facts panel, chapter jumps and a one-click remux when the browser cannot decode it |
-| [`dsh-diagrams`](packages/dsh-diagrams/README.md) | Mermaid and TikZ as tabs *and* six agent tools, every write validated before it is stored |
+| [`dsh-diagrams`](packages/dsh-diagrams/README.md) | Mermaid, TikZ **and the Diagram Design kit** as tabs *and* seven agent tools — the kit's 204 examples and 44 documented types are vendored at a pinned commit, browsable on the index page, insertable in one call, and every write (a self-contained HTML document included) is validated before it is stored |
 | [`dsh-pdf`](packages/dsh-pdf/README.md) | PDF as a surface the agent can read and **scan**, plus a reader tab with thumbnails and bookmarks |
 | [`dsh-ocr`](packages/dsh-ocr/README.md) | the agent can read a **picture**: one `ocr` tool over `tesseract` from PATH or — on Windows, with **nothing installed at all** — the OCR engine Windows ships, which rasterizes a PDF page itself. Names the engine, the language and the page count, refuses a language this host has no data for with the list of what it CAN read, and says every answer is a transcription |
 | [`dsh-browser`](packages/dsh-browser/README.md) | the **Browser** tab, replacing the shipped iframe one: the page is rendered on the host in a disposable engine behind an https-only egress gate (screenshot, post-script text, measured styles) for the tab and for `browser_render` / `browser_query` / `browser_text` — **built and shipped, but turned OFF**: the master layer disables the row, so a profile loads no tab, no routes, no tools and no client bundle |
@@ -66,6 +63,26 @@ way and what it touches. The exact versions are in
 The pack used to ship its own Files panel (`dsh-files`, earlier `dsh-focus`); that
 was retired when the harness grew a real right Sidebar, and the installer prunes
 the old names so an upgrade cannot double-mount.
+
+## Third-party content the pack vendors
+
+Some bundles carry somebody else's work inside them. Nothing is fetched at run
+time — the profile installs a bundle as a live link, so an engine the plugin needs
+on both sides of the app has to be on disk — and every vendored tree keeps its
+upstream `LICENSE` beside its bytes.
+
+| what | bundles | how it is kept honest |
+|---|---|---|
+| **Mermaid** 11.17.2 (`lib/vendor/mermaid.min.js`) | `dsh-diagrams` | `node packages/dsh-diagrams/vendor/build.mjs --check` re-hashes the recorded sha256 |
+| **Diagram Design** — 204 worked examples, 44 documented visual types, 62 reference documents, MIT, [`cathrynlavery/diagram-design`](https://github.com/cathrynlavery/diagram-design) | `dsh-diagrams` | `node packages/dsh-diagrams/vendor/design/build.mjs --check` re-hashes the whole 277-file tree OFFLINE against a pinned commit |
+| **pdf.js** 6.3.289 (`lib/vendor/pdf.min.mjs` + worker, cmaps, fonts, wasm) | `dsh-pdf` | `node packages/dsh-pdf/vendor/build.mjs --check`, per-file hashes plus a digest per tree |
+| **CodeMirror 6** (`lib/vendor/cm6.min.js`) and the forked shipped client bundles | `dsh-editor`, `dsh-rightbar`, `dsh-open-in-app` | the bundle's own version marker and the forked trees' hashes, both asserted by `scripts/checks/` |
+
+A vendored tree names its pin in a `SOURCE.json`/`VERSION.json` and — where the
+copy differs from upstream at all — says so in a `NOTICE.md`: the Diagram Design
+kit is line-ending-normalized to LF so a Windows checkout cannot report phantom
+drift, and that is the only change to it. A pin bump is deliberate — `--update-pin`,
+rebuild, review the diff, run the package's own check.
 
 ## Security & license
 

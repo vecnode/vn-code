@@ -30,7 +30,7 @@ profile file).
 | `dsh-media` | `media` | the host-only media engine and the only owner of ffmpeg (`media_probe`, `media_run`, `media_frames`) |
 | `dsh-video` | `video` | video player tab, streamed from dsh-media's Range route |
 | `dsh-browser` | `browser` | the pack's own Browser tab, rendering pages on the host; disables `ui-sidebar-browser` (currently disabled again by the master) |
-| `dsh-diagrams` | `diagrams` | Mermaid and TikZ tools, one tab per diagram, an index page and a shared library |
+| `dsh-diagrams` | `diagrams` | Mermaid and TikZ tools plus the vendored Diagram Design kit (`diagram_kit`), one tab per diagram, an index page with the kit browser, and a shared library |
 | `dsh-pdf` | `pdf` | the five `pdf_*` tools plus the PDF reader and workspace index |
 | `dsh-cmdbar` | `cmdbar` | the command bar: a read-only transcript of the agent's own commands |
 | `dsh-themes` | `themes` | header controls (page zoom, Screenshot, Themes, session-log download) and the pack's appearance overrides |

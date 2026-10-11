@@ -91,6 +91,13 @@ app/src-tauri/gen/
 # machine that exported it, with its own drift check beside it.
 docs/diagrams/
 
+# The vendoring DOWNLOAD CACHE. `vendor/design/build.mjs` fetches the pinned
+# upstream commit ONCE into vendor/design/.cache/<sha>.tar.gz and reuses it, so a
+# rebuild costs no network. The tarball is an INPUT to a generated tree that is
+# already committed under lib/vendor/design/ - 4.8 MB of bytes nothing reads at
+# build or run time - so it stays local, per-machine.
+packages/dsh-diagrams/vendor/design/.cache/
+
 # Editors / OS
 .DS_Store
 Thumbs.db

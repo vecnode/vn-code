@@ -32,6 +32,20 @@ export const MAX_DIAGRAMS = 64
 /** A single diagram's source is cut here (a diagram, not a book). */
 export const MAX_SOURCE_BYTES = 256 * 1024
 /**
+ * An `html` diagram is a whole self-contained DOCUMENT: inline stylesheet, inline
+ * SVG, and for an animated one the kit's motion controller too. The kit's own
+ * examples run to 208 KiB, so the flat 256 KiB ceiling Mermaid and TikZ live
+ * under would refuse the largest of the very documents this kind exists to
+ * carry. The conversation budget below is unchanged, so the ceiling is per
+ * diagram and the SUM is still bounded.
+ */
+export const MAX_HTML_SOURCE_BYTES = 512 * 1024
+
+/** The byte ceiling for one source, per kind. */
+export function maxSourceBytes(kind) {
+  return kind === 'html' ? MAX_HTML_SOURCE_BYTES : MAX_SOURCE_BYTES
+}
+/**
  * All the sources in one conversation together are cut here.
  *
  * This is the budget that actually bounds the state file, and it is enforced at
@@ -58,8 +72,15 @@ export const MAX_STATE_BYTES = 16 * 1024 * 1024
 /** The id grammar; also what the client puts in a tab address. */
 export const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,47}$/
 
-/** The diagram kinds this plugin owns. */
-export const KINDS = ['mermaid', 'tikz']
+/**
+ * The diagram kinds this plugin owns.
+ *
+ * `mermaid` and `tikz` are languages the host validates with a real engine;
+ * `html` is a whole self-contained document - the shape the vendored Diagram
+ * Design kit's 204 examples are written in - validated against the safety and
+ * accessibility contract in `./html-check.js` and drawn in a sandboxed frame.
+ */
+export const KINDS = ['mermaid', 'tikz', 'html']
 
 /**
  * What the BROWSER reported about THIS revision, in one objective word.
@@ -130,6 +151,18 @@ function safeSessionName(sessionId) {
   const base = String(sessionId).replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80)
   const digest = createHash('sha1').update(String(sessionId)).digest('hex').slice(0, 10)
   return base + '-' + digest
+}
+
+/**
+ * Who wrote one revision.
+ *
+ * `model` is the ordinary case, `user` is a panel edit, and `kit` is an
+ * insertion from the vendored Diagram Design kit - recorded apart because the
+ * provenance is the point: a kit diagram is a COPY of a published example, and
+ * the panel says so where a model-written one says nothing.
+ */
+function provenanceOf(value) {
+  return value === 'user' ? 'user' : value === 'kit' ? 'kit' : 'model'
 }
 
 /** One typed store failure. */
@@ -349,8 +382,9 @@ export class DiagramStore {
       throw storeError('BAD_KIND', 'A diagram kind must be one of: ' + KINDS.join(', ') + '.')
     }
     const source = String(input.source ?? '')
-    if (Buffer.byteLength(source, 'utf8') > MAX_SOURCE_BYTES) {
-      throw storeError('TOO_LARGE', 'The diagram source is larger than ' + Math.round(MAX_SOURCE_BYTES / 1024) + ' KiB.')
+    const ceiling = maxSourceBytes(kind)
+    if (Buffer.byteLength(source, 'utf8') > ceiling) {
+      throw storeError('TOO_LARGE', 'The diagram source is larger than ' + Math.round(ceiling / 1024) + ' KiB.')
     }
     const existing = typeof input.id === 'string' && input.id.length > 0 ? state.diagrams[input.id] : undefined
     assertSourceBudget(state, existing ? existing.id : null, Buffer.byteLength(source, 'utf8'))
@@ -370,7 +404,7 @@ export class DiagramStore {
       source,
       createdAt: existing ? existing.createdAt : now,
       updatedAt: now,
-      by: input.by === 'user' ? 'user' : 'model',
+      by: provenanceOf(input.by),
       revision: (existing ? existing.revision : 0) + 1,
       status: 'unchecked',
       diagramType: null,
@@ -382,7 +416,7 @@ export class DiagramStore {
       render: null,
       artifact: null,
       history: (existing ? existing.history : []).concat([
-        { at: now, by: input.by === 'user' ? 'user' : 'model', note: String(input.note ?? (existing ? 'rewritten' : 'created')).slice(0, 200) },
+        { at: now, by: provenanceOf(input.by), note: String(input.note ?? (existing ? 'rewritten' : 'created')).slice(0, 200) },
       ]).slice(-MAX_HISTORY),
     }
     state.diagrams[id] = entry
@@ -413,14 +447,15 @@ export class DiagramStore {
       throw storeError('AMBIGUOUS', '`oldString` appears ' + occurrences + ' times; pass a longer unique string or set replaceAll.')
     }
     const source = input.replaceAll === true ? existing.source.split(oldString).join(newString) : existing.source.replace(oldString, newString)
-    if (Buffer.byteLength(source, 'utf8') > MAX_SOURCE_BYTES) {
-      throw storeError('TOO_LARGE', 'The diagram source is larger than ' + Math.round(MAX_SOURCE_BYTES / 1024) + ' KiB.')
+    const ceiling = maxSourceBytes(existing.kind)
+    if (Buffer.byteLength(source, 'utf8') > ceiling) {
+      throw storeError('TOO_LARGE', 'The diagram source is larger than ' + Math.round(ceiling / 1024) + ' KiB.')
     }
     assertSourceBudget(state, existing.id, Buffer.byteLength(source, 'utf8'))
     const now = new Date().toISOString()
     existing.source = source
     existing.updatedAt = now
-    existing.by = input.by === 'user' ? 'user' : 'model'
+    existing.by = provenanceOf(input.by)
     existing.revision += 1
     existing.status = 'unchecked'
     existing.diagnostics = []
@@ -431,7 +466,7 @@ export class DiagramStore {
       .concat([
         {
           at: now,
-          by: input.by === 'user' ? 'user' : 'model',
+          by: provenanceOf(input.by),
           note: String(input.note ?? 'patched ' + (input.replaceAll === true ? occurrences : 1) + ' occurrence(s)').slice(0, 200),
         },
       ])
@@ -516,7 +551,8 @@ export class DiagramStore {
 
 /** A readable default title when the model gave none. */
 function defaultTitle(kind, id) {
-  return (kind === 'tikz' ? 'TikZ diagram' : 'Mermaid diagram') + ' ' + id
+  const label = kind === 'tikz' ? 'TikZ diagram' : kind === 'html' ? 'Diagram Design' : 'Mermaid diagram'
+  return label + ' ' + id
 }
 
 /** How many times `needle` occurs in `haystack` (non-overlapping, literal). */

@@ -23,7 +23,7 @@ It is Node's `homedir()`, so the Windows half is `%USERPROFILE%` and never
 | `.credentials.yaml` | the model API key |
 | `.anonymous-user-id` | one random id, created on first run |
 | `attachments/v1/files/…` | files pasted or attached into a conversation |
-| `skills/` | the pack's copied skills (`mermaid-diagrams`, `tikz-diagrams`, `pdf-analysis`, `ffmpeg-cli`, `ffprobe-cli`, `web-render` and SuperCollider's five), each under a `.vncode-<package>` marker |
+| `skills/` | the pack's copied skills (`mermaid-diagrams`, `tikz-diagrams`, `diagram-design`, `pdf-analysis`, `ffmpeg-cli`, `ffprobe-cli`, `web-render` and SuperCollider's five), each under a `.vncode-<package>` marker |
 | `profiles/<name>/` | the profile: `package.json`, `cordis.yml`, `cordis.patch.yml`, `pnpm-lock.yaml`, `node_modules/`, `.dsh-module-fallback/` |
 | `profiles/node_modules/` | junctions/symlinks into the installation (below) |
 | `dsh-pdf/artifacts/<sha256>/…` | PDF parse cache, LRU at 512 MiB |

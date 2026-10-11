@@ -50,7 +50,7 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
 | `dsh-video` | `video` | video player tab; the bytes stay on the host and stream through a Range route |
 | `dsh-media` | `media` | the pack's ffmpeg owner: `media_probe` / `media_run` / `media_frames`, the Range file route, remux jobs |
 | `dsh-supercollider` | `supercollider` | SuperCollider the agent can play: ten `sc_*` tools over one warm `sclang` session (~31 ms a call, state kept) and a hand-written OSC client to `scsynth`, the installed `.schelp` reference indexed for `sc_help`, the `.scd` file workflow, five skills whose every example is compiled by a check, and one small console tab |
-| `dsh-diagrams` | `diagrams` | Mermaid + TikZ surfaces and the six `diagram_*` tools, validated on the host |
+| `dsh-diagrams` | `diagrams` | Mermaid + TikZ + the vendored **Diagram Design** kit (204 examples, 44 documented types) and the seven `diagram_*` tools, validated on the host |
 | `dsh-pdf` | `pdf` | PDF reader tab + `pdf_info` / `pdf_read` / `pdf_find` / `pdf_render` / `pdf_scan` over vendored pdf.js |
 | `dsh-ocr` | `ocr` | the pack's OCR owner: one tool, `ocr`, over `tesseract` from PATH or the OCR engine Windows itself ships (`lib/win-ocr.ps1` + `Windows.Media.Ocr`, which rasterizes a PDF page through `Windows.Data.Pdf`). Host-only — no client, no route |
 | `dsh-browser` | `browser` | web surface: the host fetches and renders a page in a disposable sandboxed browser (**currently disabled by the master**) |

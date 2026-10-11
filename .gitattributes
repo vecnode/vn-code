@@ -54,3 +54,23 @@ packages/dsh-pdf/lib/vendor/cmaps/LICENSE text eol=lf
 packages/dsh-pdf/lib/vendor/standard_fonts/LICENSE_* text eol=lf
 packages/dsh-pdf/lib/vendor/wasm/LICENSE_* text eol=lf
 packages/dsh-pdf/lib/vendor/wasm/*.js text eol=lf
+
+# The vendored Diagram Design kit is GENERATED and byte-hashed by
+# packages/dsh-diagrams/vendor/design/build.mjs --check (every file's sha256, plus
+# the motion controller's, recorded in lib/vendor/design/VERSION.json).
+#
+# `-text`, not `text eol=lf`, and the difference matters. The kit's own build
+# normalizes the tree to LF (7 upstream examples were committed CRLF) and records
+# the LF bytes, so what is stored is already LF; `-text` then tells git to leave
+# the tree COMPLETELY alone in both directions, and the bytes on disk are the
+# bytes in the commit on every platform. `text eol=lf` would instead ask git to
+# normalize on the way IN - rewriting the very bytes the manifest records - and
+# the working tree would no longer match its own manifest until the next build.
+# The tree is 277 HTML/Markdown/Python files, so there is no binary inside it to
+# protect with the usual reason for this attribute.
+packages/dsh-diagrams/lib/vendor/design/** -text
+
+# The same treatment for the vendored Mermaid engine: it is one GENERATED 3.4 MB
+# file whose sha256 is recorded in lib/vendor/VERSION.json and re-computed by the
+# tracked route check, so its bytes must survive a checkout unchanged.
+packages/dsh-diagrams/lib/vendor/mermaid.min.js -text

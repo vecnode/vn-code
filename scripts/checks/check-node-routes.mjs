@@ -610,6 +610,10 @@ try {
   check('diagrams: route set', [...diagRoutes.keys()].sort().join(','), [
     '/api/dsh-diagrams/artifact',
     '/api/dsh-diagrams/diagram',
+    // The two Diagram Design kit frames: `example` is a vendored file, `document`
+    // is this conversation's own `html` diagram at a revision.
+    '/api/dsh-diagrams/document',
+    '/api/dsh-diagrams/example',
     '/api/dsh-diagrams/export',
     '/api/dsh-diagrams/health',
     '/api/dsh-diagrams/render-report',
@@ -619,7 +623,7 @@ try {
   check(
     'diagrams: tools registered',
     diagTools.map((tool) => tool.name).sort().join(','),
-    'diagram_delete,diagram_patch,diagram_publish,diagram_read,diagram_verify,diagram_write',
+    'diagram_delete,diagram_kit,diagram_patch,diagram_publish,diagram_read,diagram_verify,diagram_write',
   )
   check(
     'diagrams: every tool declares a JSON-schema surface',
@@ -677,6 +681,16 @@ try {
   check('diagrams: health answers', health.status === 200 && healthBody.ok === true)
   check('diagrams: health names the vendored mermaid', healthBody.mermaid.version, recorded.version)
   check('diagrams: health reports the TeX capability', typeof healthBody.tex.available, 'boolean')
+  check('diagrams: health reports the design kit', healthBody.designKit && healthBody.designKit.available === true, true)
+  check('diagrams: health carries the kit summary, not the catalog', Array.isArray(healthBody.designKit.types), false)
+  // The pane draws its kit browser and titles an example tab from the STATE
+  // answer, so the catalog has to ride that route rather than a request of its
+  // own - and a machine with no vendored tree must say so instead of failing.
+  const stateForKit = await getJson('/api/dsh-diagrams/state', 'session=session-diagrams')
+  const stateForKitBody = await stateForKit.json()
+  const stateKit = stateForKitBody.capabilities && stateForKitBody.capabilities.designKit
+  check('diagrams: the state route carries the kit catalog', stateKit && Array.isArray(stateKit.types) && stateKit.types.length > 0, true)
+  check('diagrams: the state catalog carries no example file names', JSON.stringify(stateKit ?? {}).includes('assets/example-'), false)
 
   // --- model writes: mermaid (validated through the vendored engine)
   const goodMermaid = await tool('diagram_write').execute(
@@ -1120,6 +1134,196 @@ try {
   const verdict = JSON.parse(child.stdout.trim().split('\n').pop())
   check('diagrams: the validator exits cleanly', child.status, 0)
   check('diagrams: the validator calls a broken diagram a parse error', verdict.reason, 'parse')
+
+  // --- the Diagram Design kit: the vendored tree, the seventh tool, and `html`
+  //
+  // The kit is DATA this package ships, so what has to hold is: the tree is the
+  // pinned one, the catalog agrees with the files on disk, every published
+  // example still satisfies the contract this plugin enforces on authored
+  // documents, the four tool actions work, and an `html` diagram is refused or
+  // stored on the same terms as the other two kinds.
+  // The smallest document that satisfies the whole contract, so a safety case
+  // can add ONE violation and be sure that is what refused it.
+  const designExampleBody = [
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">',
+    '<style>:root{--color-paper:#f5f5f5;--color-ink:#2d3142;--color-muted:#4f5d75;--color-accent:#bf4520;--font-sans:system-ui;--font-serif:Georgia;--font-mono:ui-monospace;}</style>',
+    '</head><body><svg viewBox="0 0 100 40" role="img" aria-labelledby="probe-title probe-desc">',
+    '<title id="probe-title">Probe</title><desc id="probe-desc">One accessible mark.</desc>',
+    '<rect width="100" height="40" fill="var(--color-paper)"></rect></svg></body></html>',
+  ].join('')
+  const designRoot = path.join(repo, 'packages/dsh-diagrams/lib/vendor/design')
+  const designManifest = JSON.parse(await fsp.readFile(path.join(designRoot, 'VERSION.json'), 'utf8'))
+  const designCatalog = JSON.parse(await fsp.readFile(path.join(designRoot, 'catalog.json'), 'utf8'))
+  const designFiles = readdirSync(path.join(designRoot, 'assets'))
+  const designExamples = designFiles.filter((name) => name.startsWith('example-'))
+  check('diagrams: the design kit is vendored', designManifest.files.length > 250 && designExamples.length > 200, true)
+  check(
+    'diagrams: the catalog covers every example file on disk',
+    designCatalog.counts.examples === designExamples.length && designCatalog.counts.types === designCatalog.types.length,
+    true,
+  )
+  check('diagrams: the kit names its upstream commit', /^[0-9a-f]{40}$/.test(designManifest.upstream.commit), true)
+  check('diagrams: the kit carries the upstream licence', designManifest.upstream.license, 'MIT')
+  check(
+    'diagrams: every vendored file is recorded byte-for-byte',
+    designManifest.files.every((entry) => {
+      const full = path.join(designRoot, entry.path)
+      if (!existsSync(full)) return false
+      const bytes = readFileSync(full)
+      return bytes.byteLength === entry.bytes && createHash('sha256').update(bytes).digest('hex') === entry.sha256
+    }),
+    true,
+  )
+  check(
+    'diagrams: the documented types are the ones with a reference',
+    designCatalog.types.filter((entry) => entry.documented).length === designCatalog.counts.documented &&
+      designCatalog.types.filter((entry) => entry.documented).every((entry) => entry.references.length > 0),
+    true,
+  )
+
+  // The contract is enforced on AUTHORED documents, so it has to be the contract
+  // the kit's own 204 examples already satisfy - otherwise the plugin would be
+  // refusing the very documents it ships. This is the corpus check.
+  const htmlCheck = await import(pathToFileURL(path.join(repo, 'packages/dsh-diagrams/lib/html-check.js')).href)
+  const motionSource = readFileSync(path.join(designRoot, 'assets/template-motion.html'), 'utf8')
+  const motionBody = /<script data-diagram-controls>([\s\S]*?)<\/script>/.exec(motionSource)[1]
+  const motionHashNow = createHash('sha256').update(motionBody, 'utf8').digest('hex')
+  check('diagrams: the recorded motion hash is the file\'s own', designManifest.motion.sha256, motionHashNow)
+  const refusedExamples = designExamples.filter((name) => {
+    const source = readFileSync(path.join(designRoot, 'assets', name), 'utf8')
+    const answer = htmlCheck.checkHtml(source, { motionHash: motionHashNow, sha256: (text) => createHash('sha256').update(text, 'utf8').digest('hex') })
+    return answer.ok !== true
+  })
+  check('diagrams: every vendored example passes the contract', refusedExamples.join(', '), '')
+  check(
+    'diagrams: the templates pass it too',
+    ['template', 'template-motion', 'template-full', 'template-dark', 'template-terminal']
+      .filter((id) => {
+        const source = readFileSync(path.join(designRoot, 'assets', id + '.html'), 'utf8')
+        return !htmlCheck.checkHtml(source, { motionHash: motionHashNow, sha256: (text) => createHash('sha256').update(text, 'utf8').digest('hex') }).ok
+      })
+      .join(', '),
+    '',
+  )
+
+  // Safety is a REFUSAL, and each rule fires on a document that breaks only it.
+  const safetyCases = [
+    ['a remote image', '<img src="https://example.invalid/pixel.gif">'],
+    ['a remote stylesheet', '<link href="https://example.invalid/a.css" rel="stylesheet">'],
+    ['a remote CSS url', '<div style="background:url(https://example.invalid/a.png)"></div>'],
+    ['a CSS import', '<style>@import url("https://example.invalid/a.css");</style>'],
+    ['an executable attribute', '<rect onclick="alert(1)"></rect>'],
+    ['a forbidden element', '<object data="x"></object>'],
+    ['a second script', '<script>1</script>'],
+    ['a foreign script', '<script data-diagram-controls>alert(1)</script>'],
+    ['srcdoc', '<iframe srcdoc="x"></iframe>'],
+  ]
+  const safetyMissed = []
+  for (const [label, extra] of safetyCases) {
+    const document = '<!doctype html><html><head></head><body>' + extra + designExampleBody + '</body></html>'
+    const answer = htmlCheck.checkHtml(document, { motionHash: motionHashNow, sha256: (text) => createHash('sha256').update(text, 'utf8').digest('hex') })
+    if (answer.ok) safetyMissed.push(label)
+  }
+  check('diagrams: every safety rule refuses', safetyMissed.join(', '), '')
+  const probeVerdict = htmlCheck.checkHtml(designExampleBody, { motionHash: motionHashNow, sha256: (text) => createHash('sha256').update(text, 'utf8').digest('hex') })
+  check('diagrams: the probe document is valid on its own', probeVerdict.ok, true)
+  // A document that declares none of the kit's tokens is still VALID - it simply
+  // cannot follow the panel's theme, which is exactly what a warning is for.
+  const untokenized = htmlCheck.checkHtml(
+    designExampleBody
+      .replace(/<style>[\s\S]*?<\/style>/, '<style>svg{max-width:100%}</style>')
+      .replace(/\sfill="var\(--color-paper\)"/, ' fill="#f5f5f5"'),
+    { motionHash: motionHashNow, sha256: (text) => createHash('sha256').update(text, 'utf8').digest('hex') },
+  )
+  check('diagrams: a document with no dark tokens is only warned about', untokenized.ok === true && untokenized.warnings.some((one) => one.kind === 'theme'), true)
+
+  // --- the seventh tool, action by action
+  const kitCatalog = await tool('diagram_kit').execute({ action: 'catalog' }, exec)
+  check('diagrams: the kit lists its catalog', new RegExp(designCatalog.counts.types + ' example keys').test(kitCatalog.text), true)
+  check('diagrams: the catalog answer carries the snapshot', kitCatalog.kit.available === true && kitCatalog.kit.examples === designCatalog.counts.examples, true)
+  const kitReference = await tool('diagram_kit').execute({ action: 'reference', ref: 'style-guide' }, exec)
+  check('diagrams: the kit serves a reference', kitReference.kit.reference, 'references/style-guide.md')
+  check('diagrams: the reference comes back as text', /Style Guide/.test(kitReference.text), true)
+  const kitTypeReference = await tool('diagram_kit').execute({ action: 'reference', ref: 'sankey' }, exec)
+  check('diagrams: a type id resolves to its own notes', kitTypeReference.kit.reference, 'references/type-sankey.md')
+  const kitTruncated = await tool('diagram_kit').execute({ action: 'reference', ref: 'style-guide', maxChars: 1200 }, exec)
+  check('diagrams: a capped read says what it dropped', kitTruncated.kit.truncated === true && /TRUNCATED/.test(kitTruncated.text), true)
+  const kitMissing = await tool('diagram_kit').execute({ action: 'reference', ref: 'not-a-document' }, exec)
+  check('diagrams: an unknown reference lists what exists', /Available:/.test(kitMissing.text) && kitMissing.kit.available === true, true)
+  const kitExample = await tool('diagram_kit').execute({ action: 'example', id: 'venn' }, exec)
+  check('diagrams: the kit serves an example source', /<!DOCTYPE html>/i.test(kitExample.text), true)
+  check('diagrams: an example names its variant', kitExample.kit.example === 'venn' && typeof kitExample.kit.variant === 'string', true)
+  const kitTemplate = await tool('diagram_kit').execute({ action: 'example', id: 'template-motion' }, exec)
+  check('diagrams: a template is addressed like an example', kitTemplate.kit.template === true && /data-diagram-controls/.test(kitTemplate.text), true)
+
+  const insertedKit = await tool('diagram_kit').execute({ action: 'insert', id: 'venn', diagramId: 'kit-venn' }, exec)
+  check('diagrams: insert stores a real diagram', insertedKit.view.status, 'ok')
+  check('diagrams: the inserted diagram is html', insertedKit.view.kind, 'html')
+  check('diagrams: insert honours the id it was given', insertedKit.view.id, 'kit-venn')
+  check('diagrams: the kit copy is recorded as coming from the kit', insertedKit.view.address, 'dsh-resource://diagram/session/session-diagrams/kit-venn')
+  const readBack = await tool('diagram_read').execute({ id: 'kit-venn' }, exec)
+  check('diagrams: the inserted example reads back', readBack.text.includes('<!DOCTYPE html>') || readBack.text.includes('<svg'), true)
+  const kitUnknown = await tool('diagram_kit').execute({ action: 'insert', id: 'no-such-example' }, exec)
+  check('diagrams: inserting an unknown example explains itself', /No kit example/.test(kitUnknown.text), true)
+
+  // --- an `html` write: refused for safety, stored for a good document, and
+  //     cleared by the host BEFORE it is stored (the diagnostics name the line).
+  const badHtml = await tool('diagram_write').execute(
+    { kind: 'html', id: 'unsafe-page', source: '<!doctype html><html><body><img src="https://example.invalid/x.gif"><script>alert(1)</script></body></html>' },
+    exec,
+  )
+  check('diagrams: an unsafe html document is refused', badHtml.view.status, 'error')
+  check('diagrams: the refusal names the safety rules', badHtml.diagnostics.filter((entry) => entry.kind === 'safety').length >= 2, true)
+  const goodHtml = await tool('diagram_write').execute({ kind: 'html', id: 'safe-page', title: 'Safe', source: designExampleBody }, exec)
+  check('diagrams: a safe html document is stored', goodHtml.view.status, 'ok')
+  check('diagrams: the verdict counts what it found', goodHtml.text.includes('accessible SVG'), true)
+  const hugeHtml = await tool('diagram_write').execute(
+    { kind: 'html', id: 'huge-page', source: '<html><body><svg role="img" aria-labelledby="a-t a-d"><title id="a-t">t</title><desc id="a-d">d</desc></svg>' + '<!--' + 'x'.repeat(300 * 1024) + '--></body></html>' },
+    exec,
+  )
+  check('diagrams: an html document may exceed the mermaid ceiling', hugeHtml.view.status, 'ok')
+
+  // --- the two frames
+  const exampleFrame = await call('/api/dsh-diagrams/example', new Request('http://x/api/dsh-diagrams/example?id=venn&theme=dark&fonts=system'))
+  const exampleFrameBody = await exampleFrame.text()
+  check('diagrams: the example route serves html', exampleFrame.status === 200 && exampleFrame.headers.get('content-type'), 'text/html; charset=utf-8')
+  check(
+    'diagrams: the frame forbids every fetch',
+    exampleFrame.headers.get('content-security-policy'),
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'",
+  )
+  check('diagrams: the frame strips the fonts link', /fonts\.googleapis/.test(exampleFrameBody), false)
+  check('diagrams: the frame injects the viewer and the overlay', exampleFrameBody.includes('data-dsh-diagram-overlay') && exampleFrameBody.includes('data-dsh-diagram-viewer'), true)
+  check('diagrams: the frame honours the requested theme', exampleFrameBody.includes('data-dsh-theme="dark"'), true)
+  const exampleHead = await call('/api/dsh-diagrams/example', new Request('http://x/api/dsh-diagrams/example?id=venn', { method: 'HEAD' }))
+  check('diagrams: a frame answers HEAD without a body', exampleHead.status, 200)
+  const exampleNoId = await call('/api/dsh-diagrams/example', new Request('http://x/api/dsh-diagrams/example'))
+  check('diagrams: the example route requires an id', exampleNoId.status, 400)
+  const missingFrame = await call('/api/dsh-diagrams/example', new Request('http://x/api/dsh-diagrams/example?id=nope'))
+  check('diagrams: an unknown example is a 404', missingFrame.status, 404)
+  const documentFrame = await call(
+    '/api/dsh-diagrams/document',
+    new Request('http://x/api/dsh-diagrams/document?session=session-diagrams&id=safe-page&revision=1&theme=light'),
+  )
+  const documentFrameBody = await documentFrame.text()
+  check('diagrams: the document route serves the stored source', documentFrame.status === 200 && documentFrameBody.includes('data-dsh-diagram-overlay'), true)
+  const wrongKind = await call('/api/dsh-diagrams/document', new Request('http://x/api/dsh-diagrams/document?session=session-diagrams&id=auth-flow'))
+  check('diagrams: only an html diagram is framed', wrongKind.status, 400)
+  const unknownDocument = await call('/api/dsh-diagrams/document', new Request('http://x/api/dsh-diagrams/document?session=session-diagrams&id=nope'))
+  check('diagrams: an unknown document is a 404', unknownDocument.status, 404)
+
+  // --- the panel's own door into the kit, and the two html exports
+  const panelInsert = await post('/api/dsh-diagrams/diagram', { session: 'session-diagrams', kitExample: 'architecture', variant: 'dark' })
+  const panelBody = await panelInsert.json()
+  check('diagrams: the panel can insert a kit example', panelInsert.status === 200 && panelBody.diagram.kind === 'html', true)
+  check('diagrams: the panel insert names the variant it used', panelBody.example.variant, 'dark')
+  for (const format of ['html', 'svg']) {
+    const saved = await post('/api/dsh-diagrams/export', { session: 'session-diagrams', id: 'kit-venn', format })
+    const savedBody = await saved.json()
+    check('diagrams: an html diagram exports as ' + format, saved.status === 200 && savedBody.ok === true, true)
+  }
+  const noPng = await post('/api/dsh-diagrams/export', { session: 'session-diagrams', id: 'kit-venn', format: 'png' })
+  check('diagrams: html does not claim a PNG it cannot make', noPng.status, 400)
 } finally {
   if (previousDshHome === undefined) delete process.env.DSH_HOME
   else process.env.DSH_HOME = previousDshHome

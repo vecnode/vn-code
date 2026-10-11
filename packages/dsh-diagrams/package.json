@@ -1,7 +1,7 @@
 {
   "name": "dsh-diagrams",
-  "version": "0.1.0-alpha.7",
-  "description": "Diagrams: Mermaid and TikZ in one bundle - six `diagram_*` tools whose writes are validated on the host before they are stored, a conversation store plus a shared library, a tab per diagram with an export menu, an index page, and browser render reports.",
+  "version": "0.1.0-alpha.8",
+  "description": "Diagrams: Mermaid, TikZ and the Diagram Design kit in one bundle - seven `diagram_*` tools whose writes are validated on the host before they are stored, a conversation store plus a shared library, a tab per diagram with an export menu, an index page with the 44-type design gallery, and browser render reports.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -12,8 +12,13 @@
   "files": [
     "lib",
     "skills",
+    "checks",
     "cordis.patch.yml"
   ],
+  "scripts": {
+    "check": "node checks/check-diagrams-kit.mjs",
+    "vendor:check": "node vendor/design/build.mjs --check"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

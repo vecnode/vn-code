@@ -420,6 +420,9 @@ check_sentinels() {
     packages/dsh-editor/lib/vendor/cm6.min.js \
     packages/dsh-cmdbar/lib/client.js \
     packages/dsh-diagrams/lib/vendor/mermaid.min.js \
+    packages/dsh-diagrams/lib/vendor/design/catalog.json \
+    packages/dsh-diagrams/lib/vendor/design/assets/example-architecture.html \
+    packages/dsh-diagrams/lib/vendor/design/references/style-guide.md \
     packages/dsh-pdf/lib/vendor/pdf.min.mjs \
     packages/dsh-pdf/skills/pdf-analysis/SKILL.md; do
     if [ ! -f "$dist_dir/$_sent" ]; then _sent_missing="$_sent_missing $_sent"; fi
