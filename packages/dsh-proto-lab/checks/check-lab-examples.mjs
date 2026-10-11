@@ -3,7 +3,7 @@
  * them, actually RUN.
  *
  * Why this exists: the skills in this package are not prose, they are load
- * bearing. `p5js-prototypes` tells the model that `window.__LAB` is the contract
+ * bearing. `p5js-prototypes` tells the model that `window.__PROTO` is the contract
  * and that `lab_lint` will report an unseeded sketch; if the example that
  * demonstrates it does not run, the model copies a sketch that does not run
  * either - and the failure surfaces as a blank canvas rather than as an error.
@@ -14,7 +14,7 @@
  *     implements the subset the lab's contract uses (`randomSeed`, `noiseSeed`,
  *     `noise`, `random`, `createCanvas`, the draw calls). `setup()` and `draw()`
  *     must both run three times without throwing, and the sketch must set
- *     `window.__LAB.drew` - the same flag the shell and the headless render check
+ *     `window.__PROTO.drew` - the same flag the shell and the headless render check
  *     wait for.
  *   - every fenced `js` block marked `lab-run` in a SKILL.md is executed the same
  *     way, so a snippet that teaches the contract cannot be wrong about it. An
@@ -56,7 +56,7 @@ function skip(label, why) {
 }
 
 // ---------------------------------------------------------------------------
-// A stub p5, which is the subset window.__LAB's contract actually uses
+// A stub p5, which is the subset the lab contract actually uses
 // ---------------------------------------------------------------------------
 /**
  * Build one sandbox with a stub p5 global on it.
@@ -201,10 +201,30 @@ function makeSandbox(seed, params = []) {
       return true
     },
   }
-  const sandbox = { ...stub, __LAB: spec, console: { log: noop, warn: noop, error: (...args) => errors.push(args.join(' ')) } }
+  const sandbox = { ...stub, __dshProtoLab__: spec, console: { log: noop, warn: noop, error: (...args) => errors.push(args.join(' ')) } }
   sandbox.window = sandbox
   sandbox.globalThis = sandbox
   sandbox.self = sandbox
+  // The shell's factory, and the explicit instantiation that follows it.
+  //
+  // A lab sketch is a FACTORY: it installs `setup`/`draw` on the global, and the
+  // shell then constructs ONE p5 instance to run them. The stub has no DOM, so
+  // running the factory is all it should do here - the lifecycle is driven below
+  // by hand, exactly as a real p5 instance would drive it, and magically running
+  // `setup()` inside the factory would hide a sketch that never installed one.
+  // The shell's two holders, which the sketch reads and writes: the contract it
+  // takes its seed and parameters from, and the lifecycle it hands over. Both are
+  // created by the SHELL before the sketch runs, so the stub creates them too - a
+  // stub that forgot one would fail every sketch with a message about the sketch.
+  sandbox.__dshProtoLabLifecycle__ = {}
+  sandbox.__dshProtoLabSketch__ = (factory) => {
+    try {
+      factory()
+    } catch (err) {
+      errors.push(String(err && err.message))
+    }
+  }
+  sandbox.p5 = function p5() {}
   // p5 puts the window's own size on the global; a sketch that sizes its canvas
   // from it is doing the right thing, so the stub has to provide it.
   sandbox.windowWidth = 1024
@@ -234,10 +254,14 @@ function runSketch(options) {
     return result
   }
   result.ran = true
-  const setup = sandbox.setup
-  const draw = sandbox.draw
+  // The lifecycle is read from the HOLDER the sketch hands it to, which is where a
+  // lab sketch puts it - `window.setup` is deliberately left alone so that p5's own
+  // auto-start cannot claim it (see the shell's comment on the hand-over).
+  const handed = sandbox.__dshProtoLabLifecycle__ ?? {}
+  const setup = handed.setup
+  const draw = handed.draw
   if (typeof setup !== 'function' || typeof draw !== 'function') {
-    errors.push('the sketch did not define both setup() and draw() on the p5 global')
+    errors.push('the sketch did not hand over both setup() and draw()')
     return result
   }
   try {
@@ -249,7 +273,7 @@ function runSketch(options) {
     errors.push(String(err && err.message))
     return result
   }
-  result.drew = sandbox.__LAB.drew === true
+  result.drew = sandbox.__dshProtoLab__.drew === true
   return result
 }
 
@@ -351,12 +375,17 @@ const SKILLS = [
         const files = await entry.materialize(example)
         const sketch = files.find((file) => file.path === 'sketch.js')
         const shell = files.find((file) => file.path === 'index.html')
-        check(skill.name + ': ' + example.slug + ' gets a generated shell', shell !== undefined && /__LAB/.test(shell.content), true)
+        check(skill.name + ': ' + example.slug + ' gets a generated shell', shell !== undefined && /__dshProtoLab__/.test(shell.content), true)
         check(skill.name + ': ' + example.slug + ' gets the library beside it', files.some((file) => file.path === 'p5.min.js'), true)
+        // The params come out of the shell's frozen contract, anchored on the
+        // property name: a loose "first array literal" match grabbed a destructuring
+        // pattern out of the frame-loop shim instead, which is a test bug that looks
+        // exactly like a sketch bug.
+        const paramsLiteral = shell === undefined ? null : /params:\s*(\[[\s\S]*?\n\s*\])/.exec(shell.content)
         const executed = runSketch({
           code: sketch === undefined ? '' : sketch.content,
           seed: example.seed,
-          params: (shell === undefined ? [] : JSON.parse(/(\[[\s\S]*?\n\s*\])/.exec(shell.content)?.[1] ?? '[]')),
+          params: paramsLiteral === null ? [] : JSON.parse(paramsLiteral[1]),
           label: example.slug,
         })
         check(skill.name + ': ' + example.slug + ' runs its own setup() and draw()', executed.ran && executed.errors.length === 0 ? true : executed.errors.join(' | '), true)

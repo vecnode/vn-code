@@ -1,18 +1,20 @@
 /**
- * flow-field — an example run for the p5js-prototypes skill.
+ * flow-field â€” an example run for the p5js-prototypes skill.
  *
  * Read it as a reference for the shape every p5.js prototype in this lab has:
  *
  *   - the seed is applied to randomSeed AND noiseSeed before anything is drawn;
  *   - every tunable is read through P('name'), so the shell's sliders are part
  *     of the algorithm rather than a filter over it;
- *   - window.__LAB.drew marks the first real frame.
+ *   - window.__dshProtoLab__.drew marks the first real frame.
  *
  * The algorithm, in one sentence: particles drift along a layered noise field and
  * die of old age, so density accumulates where the field slows them down.
  */
-(function () {
-  const spec = window.__LAB;
+window.__dshProtoLabSketch__(function () {
+  // The run's contract. The long name is deliberate: p5's global mode copies its
+  // prototype onto window, so window.color (and anything else short) is p5's.
+  const spec = window.__dshProtoLab__;
 
   /** One parameter by name, as the shell currently has it. */
   const P = (name) => spec.param(name);
@@ -20,8 +22,6 @@
   /** Set when the population has to be rebuilt (a parameter or the window changed). */
   let dirty = true;
 
-  randomSeed(spec.seed);
-  noiseSeed(spec.seed);
 
   const state = { particles: [], frames: 0 };
 
@@ -53,7 +53,13 @@
     }
   }
 
-  function setup() {
+  // Handed over, NOT left on window: p5's auto-start would race the shell for it.
+  // See the note above window.__dshProtoLabLifecycle__ in index.html.
+  window.__dshProtoLabLifecycle__.setup = function () {
+    // The seed first, before anything is drawn - and here rather than at the top of
+    // the factory: these globals only exist once p5 has started.
+    randomSeed(spec.seed);
+    noiseSeed(spec.seed);
     const canvas = createCanvas(windowWidth, windowHeight);
     canvas.parent('lab-stage');
     pixelDensity(1);
@@ -62,7 +68,7 @@
     strokeCap(ROUND);
   }
 
-  function draw() {
+  window.__dshProtoLabLifecycle__.draw = function () {
     if (dirty) {
       populate();
       background(0);
@@ -98,7 +104,7 @@
     if (state.frames === 1) spec.drew = true;
   }
 
-  function windowResized() {
+  window.windowResized = function () {
     resizeCanvas(windowWidth, windowHeight);
     dirty = true;
   }
@@ -109,5 +115,5 @@
     if (name !== 'veil' && name !== 'speed' && name !== 'weight') dirty = true;
   };
 
-  Object.assign(window, { setup, draw, windowResized });
-})();
+  // The lifecycle is on `window`, where p5's global mode looks for it.
+});

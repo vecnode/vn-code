@@ -59,12 +59,16 @@ int main(int argc, char** argv) {
     const bool headless = hasFlag(argc, argv, "--headless");
     const std::string framePath = argText(argc, argv, "--png", "");
 
+    // The shape of this block follows the canonical openFrameworks examples
+    // (openFrameworks/examples/*/src/main.cpp) on purpose: a generated project a
+    // reader cannot recognise beside the framework's own examples is a project
+    // they will not trust. The canonical examples use `ofGLWindowSettings`; the
+    // GLFW subclass is used here for ONE field - `visible` - which is what lets a
+    // run be checked headlessly, and it is the same window object otherwise.
     ofGLFWWindowSettings settings;
     settings.setSize(width, height);
-    settings.setGLVersion(3, 2);
     settings.windowMode = OF_WINDOW;
     settings.visible = !headless;
-    settings.title = "{{LABEL}} ({{SLUG}})";
 
     auto window = ofCreateWindow(settings);
     auto app = std::make_shared<ofApp>();

@@ -1,5 +1,5 @@
 /**
- * dsh-proto-lab — the p5.js runtime.
+ * dsh-proto-lab â€” the p5.js runtime.
  *
  * p5.js is the runtime that always works: nothing is installed, nothing is
  * compiled, and a run is a folder a browser opens. It is also the runtime with
@@ -21,8 +21,8 @@
  *
  * REPRODUCIBILITY
  *
- * The seed reaches the sketch as `window.__LAB.seed` and every tunable as a named
- * entry in `window.__LAB.params`. The shell overlays `?seed=` and any parameter
+ * The seed reaches the sketch as `window.__PROTO.seed` and every tunable as a named
+ * entry in `window.__PROTO.params`. The shell overlays `?seed=` and any parameter
  * name from the query string, so ONE file is both the committed run and a seed
  * scrubber - which is what the preview tab's Reroll does, and what the headless
  * render check uses to prove that two seeds give two pictures.
@@ -219,7 +219,7 @@ async function documentsOf(spec) {
       slug: spec.slug,
       concept: spec.concept,
       seed: spec.seed,
-      seedWhere: 'the `seed` field of `window.__LAB` in `index.html`, or `?seed=N`',
+      seedWhere: 'the `seed` field of `window.__PROTO` in `index.html`, or `?seed=N`',
       runtimeLabel: label,
       runtimeNote: 'the browser draws it; nothing is installed and nothing is compiled',
       look: LOOK,
@@ -313,16 +313,38 @@ export async function lint(run) {
     }
   }
   if (sketch !== null) {
-    if (!/\bfunction\s+setup\s*\(/.test(sketch)) found.push({ severity: 'error', code: 'no-setup', message: 'sketch.js defines no `function setup()` - p5 calls it once to build the canvas', file: 'sketch.js' })
-    if (!/\bfunction\s+draw\s*\(/.test(sketch)) found.push({ severity: 'error', code: 'no-draw', message: 'sketch.js defines no `function draw()` - p5 calls it every frame', file: 'sketch.js' })
-    if (!/\b(randomSeed|noiseSeed)\s*\(/.test(sketch)) {
-      found.push({ severity: 'error', code: 'unseeded', message: 'sketch.js never seeds: call randomSeed(window.__LAB.seed) and noiseSeed(window.__LAB.seed) so a seed always gives the same picture', file: 'sketch.js' })
+    // The lifecycle may be written either way, and BOTH must be accepted: a lab
+    // sketch installs it on window (`window.setup = function () {}`) because
+    // the shell's factory is a function scope and a local declaration would be
+    // invisible to p5's global mode - measured as 'p5 did not start'. A plain
+    // `function setup() {}` is also legal in a sketch the user edits by hand.
+    if (!/\bfunction\s+setup\s*\(/.test(sketch) && !/\bwindow\.setup\s*=/.test(sketch) && !/__dshProtoLabLifecycle__\.setup\s*=/.test(sketch)) {
+      found.push({ severity: 'error', code: 'no-setup', message: 'sketch.js defines no setup() - p5 calls it once to build the canvas (install it on window: `window.setup = function () { ... }`)', file: 'sketch.js' })
     }
-    if (!/__LAB/.test(sketch)) {
-      found.push({ severity: 'warn', code: 'no-lab-object', message: 'sketch.js does not read `window.__LAB`, so the seed and the sliders cannot reach it', file: 'sketch.js' })
+    if (!/\bfunction\s+draw\s*\(/.test(sketch) && !/\bwindow\.draw\s*=/.test(sketch) && !/__dshProtoLabLifecycle__\.draw\s*=/.test(sketch)) {
+      found.push({ severity: 'error', code: 'no-draw', message: 'sketch.js defines no draw() - p5 calls it every frame (install it on window: `window.draw = function () { ... }`)', file: 'sketch.js' })
+    }
+    // The seed is looked for INSIDE setup(), and that is stricter than it looks: a
+    // `randomSeed` at the sketch's top level does not run at all any more. The
+    // shell calls the sketch's factory BEFORE `new p5()`, because p5 reads
+    // `window.setup`/`window.draw` when it starts - so a top-level p5 call throws
+    // "randomSeed is not defined" on a real page while looking perfectly fine in
+    // the source. A rule that accepted it would pass a sketch that cannot start.
+    const setupBody = extractFunction(sketch, 'setup') ?? extractAssignedFunction(sketch, 'setup') ?? extractAssignedFunction(sketch, '__dshProtoLabLifecycle__.setup')
+    if (setupBody === null || !/\b(randomSeed|noiseSeed)\s*\(/.test(setupBody)) {
+      found.push({
+        severity: 'error',
+        code: 'unseeded',
+        message:
+          'setup() must seed the run - randomSeed(window.__PROTO.seed) and noiseSeed(window.__PROTO.seed) as its first statements, so a seed always gives the same picture. (A seed call at the TOP of the file never runs: the shell starts p5 after the sketch has loaded.)',
+        file: 'sketch.js',
+      })
+    }
+    if (!/__PROTO/.test(sketch)) {
+      found.push({ severity: 'warn', code: 'no-lab-object', message: 'sketch.js does not read `window.__PROTO`, so the seed and the sliders cannot reach it', file: 'sketch.js' })
     }
     if (!/__LAB\.drew/.test(sketch) && !/\bspec\.drew\s*=/.test(sketch)) {
-      found.push({ severity: 'warn', code: 'no-drew-flag', message: 'set `window.__LAB.drew = true` (or `spec.drew` when `spec` is `window.__LAB`) at the end of the first draw() so the shell and the render check can tell a drawn frame from a black one', file: 'sketch.js' })
+      found.push({ severity: 'warn', code: 'no-drew-flag', message: 'set `window.__PROTO.drew = true` (or `spec.drew` when `spec` is `window.__PROTO`) at the end of the first draw() so the shell and the render check can tell a drawn frame from a black one', file: 'sketch.js' })
     }
     const remote = sketch.match(/https?:\/\/[^"'`)\s]+/g) ?? []
     if (remote.length > 0) {
@@ -346,7 +368,7 @@ export async function lint(run) {
     // the frame time grows with the population and the controls start to lag.
     // These are the three shapes that actually show up in generated sketches, and
     // each message names the RULE rather than the syntax.
-    const drawBody = extractFunction(sketch, 'draw')
+    const drawBody = extractFunction(sketch, 'draw') ?? extractAssignedFunction(sketch, 'draw') ?? extractAssignedFunction(sketch, '__dshProtoLabLifecycle__.draw')
     if (drawBody !== null) {
       const allocates = drawBody.match(/\bnew\s+(Array|Map|Set|Float32Array|Uint8Array|Uint8ClampedArray|Object)\s*\(/g) ?? []
       if (allocates.length > 0) {
@@ -396,6 +418,32 @@ export async function lint(run) {
  */
 export function extractFunction(source, name) {
   const start = new RegExp('\\bfunction\\s+' + name + '\\s*\\([^)]*\\)\\s*\\{').exec(String(source))
+  if (start === null) return null
+  let depth = 1
+  let index = start.index + start[0].length
+  const from = index
+  for (; index < source.length && depth > 0; index += 1) {
+    const character = source[index]
+    if (character === '{') depth += 1
+    else if (character === '}') depth -= 1
+  }
+  return depth === 0 ? source.slice(from, index - 1) : null
+}
+
+/**
+ * The body of one function ASSIGNED to a name, balanced by braces.
+ *
+ * The other half of `extractFunction`, and the form a lab sketch actually uses:
+ * `window.draw = function () { ... }`. Same brace walk, different opening - so the
+ * quick-app rules can look inside whichever spelling the sketch was written in,
+ * and a sketch cannot dodge them by choosing the assignment form.
+ *
+ * @param source - the file's text.
+ * @param name - the assigned name (`draw`).
+ * @returns the body, or null.
+ */
+export function extractAssignedFunction(source, name) {
+  const start = new RegExp('\\b(?:window\\.)?' + name + '\\s*=\\s*function\\s*\\([^)]*\\)\\s*\\{').exec(String(source))
   if (start === null) return null
   let depth = 1
   let index = start.index + start[0].length
@@ -535,4 +583,5 @@ export default {
   library,
   libraryDigest,
   extractFunction,
+  extractAssignedFunction,
 }

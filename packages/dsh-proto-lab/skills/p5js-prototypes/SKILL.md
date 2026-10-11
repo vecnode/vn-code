@@ -27,42 +27,52 @@ array, so there is no second place to keep in step.
 
 ## The contract: one object
 
-The shell puts everything the sketch needs on `window.__LAB`:
+The shell puts everything the sketch needs on `window.__dshProtoLab__`:
 
 ```js
-window.__LAB.seed          // an integer; the same seed draws the same picture
-window.__LAB.params        // [{ name, min, max, value, step }, ...]
-window.__LAB.param('name') // the ONLY way a sketch should read a tunable
-window.__LAB.drew = true   // set at the end of the first draw() - see below
+window.__dshProtoLab__.seed          // an integer; the same seed draws the same picture
+window.__dshProtoLab__.params        // [{ name, min, max, value, step }, ...]
+window.__dshProtoLab__.param('name') // the ONLY way a sketch should read a tunable
+window.__dshProtoLab__.drew = true   // set at the end of the first draw() - see below
 ```
 
 Seed yourself **before anything is drawn** — this snippet is executed by the
 package's own check against a stub p5, so it is a shape that runs:
 
 ```js lab-run
-function setup() {
-  randomSeed(window.__LAB.seed);
-  noiseSeed(window.__LAB.seed);
+// The shell creates both holders before this factory runs.
+const spec = window.__dshProtoLab__;
+
+window.__dshProtoLabLifecycle__.setup = function () {
+  randomSeed(spec.seed);
+  noiseSeed(spec.seed);
   createCanvas(windowWidth, windowHeight).parent('lab-stage');
   background(0);
-}
+};
 
 let first = true;
-function draw() {
+window.__dshProtoLabLifecycle__.draw = function () {
   // ... the algorithm ...
-  if (first) { window.__LAB.drew = true; first = false; }
-}
+  if (first) { spec.drew = true; first = false; }
+};
 ```
+
+**Why the lifecycle goes into a holder instead of onto `window`.** p5's own
+auto-start watches `window.setup` and `window.draw` and constructs its OWN
+instance the moment either appears — so a sketch that installs them on `window`
+races the framework for its own lifecycle, and p5's instance wins. The shell hands
+the two functions to its own `new p5({ setup, draw })` instead, and the sketch
+never touches those two names. `lab_new` writes this shape for you.
 
 Three things follow from that contract, and all three are checked:
 
 - **`randomSeed` and `noiseSeed` are not optional.** Without them the run is not
   reproducible, `lab_lint` reports `unseeded`, and "same seed, same picture"
   stops being true — which is the only reason a seed exists.
-- **`window.__LAB.drew = true` at the end of the first `draw()`** is how the
+- **`window.__dshProtoLab__.drew = true` at the end of the first `draw()`** is how the
   shell and the headless render check tell a drawn frame from a canvas that
   stayed black because `setup()` threw.
-- **Read tunables through `window.__LAB.param(name)`**, never by copying a number
+- **Read tunables through `window.__dshProtoLab__.param(name)`**, never by copying a number
   into a second variable at load time: the slider has to change the algorithm.
 
 ## Derive the algorithm; do not pick a pattern

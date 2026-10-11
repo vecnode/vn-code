@@ -12,11 +12,14 @@
  *      committed example, into a temporary lab (nothing in the workspace moves);
  *   2. opens each run's `index.html` **through its own file on disk** - the same
  *      document a person opens - in a headless Chromium-family browser;
- *   3. reads the canvas back and computes a signature of its pixels: how much of
- *      it is not background, and a hash of the samples;
+ *   3. captures the frame through the browser's OWN encoder and decodes it here,
+ *      then computes a signature: how much of the picture is not background, how
+ *      many colours it holds, and a hash. NOT the canvas's `getImageData`, which
+ *      was measured to return a uniform black for a page Chrome's own screenshot
+ *      shows full of colour - see checks/png.mjs;
  *   4. asserts the signature is NON-EMPTY and that two different seeds produce
  *      two DIFFERENT signatures, while the same seed twice reproduces the same
- *      one. That is the whole reproducibility contract of `window.__LAB.seed`,
+ *      one. That is the whole reproducibility contract of `window.__dshProtoLab__.seed`,
  *      measured rather than asserted.
  *
  * No browser on this host is a LOUD SKIP (exit 0 with the reason printed): a
@@ -34,6 +37,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 import { connectCdp } from './cdp.js'
+import { measurePng } from './png.mjs'
 
 const packageRoot = path.resolve(import.meta.dirname, '..')
 const lab = await import(new URL('../lib/lab.js', import.meta.url).href)
@@ -180,41 +184,14 @@ console.log('  runs      ' + runs.map((run) => run.id).join(', '))
  * share of pixels that differ from the most common colour (a blank canvas is 0),
  * and a hash over the sampled bytes (which is what makes two seeds comparable).
  */
-const PROBE = `(() => {
-  const canvas = document.querySelector('#lab-stage canvas') || document.querySelector('canvas');
-  if (canvas === null) return { ok: false, why: 'no canvas in the document' };
-  const context = canvas.getContext('2d');
-  if (context === null) return { ok: false, why: 'the canvas has no 2d context' };
-  const width = canvas.width;
-  const height = canvas.height;
-  if (width === 0 || height === 0) return { ok: false, why: 'the canvas is zero-sized' };
-  const data = context.getImageData(0, 0, width, height).data;
-  const counts = new Map();
-  let hash = 2166136261;
-  let sampled = 0;
-  for (let index = 0; index < data.length; index += 4 * 7) {
-    const key = (data[index] << 16) | (data[index + 1] << 8) | data[index + 2];
-    counts.set(key, (counts.get(key) || 0) + 1);
-    hash = (hash ^ key) >>> 0;
-    hash = Math.imul(hash, 16777619) >>> 0;
-    sampled += 1;
-  }
-  let common = 0;
-  for (const count of counts.values()) common = Math.max(common, count);
-  const background = sampled === 0 ? 1 : common / sampled;
-  const problem = document.getElementById('lab-problem');
-  return {
-    ok: true,
-    width,
-    height,
-    sampled,
-    background: Number(background.toFixed(4)),
-    signature: hash.toString(16),
-    drew: window.__LAB && window.__LAB.drew === true,
-    problemShown: problem !== null && problem.classList.contains('show'),
-    colours: counts.size
-  };
-})()`
+const PROBE = `(() => ({
+  canvas: document.querySelectorAll('#lab-stage canvas').length,
+  drew: window.__dshProtoLab__ ? window.__dshProtoLab__.drew === true : false,
+  problemShown: document.getElementById('lab-problem') !== null && document.getElementById('lab-problem').classList.contains('show'),
+  report: window.__dshProtoLabReport__ || null,
+  raf: window.__dshProtoLabRafMode__ || null,
+  frameCount: window.__dshProtoLabP5__ && typeof window.__dshProtoLabP5__.frameCount === 'number' ? window.__dshProtoLabP5__.frameCount : null
+}))()`
 
 /**
  * Open one run's own index.html in a fresh target and measure its canvas.
@@ -231,22 +208,52 @@ async function measure(client, url, seed, settleMs) {
   try {
     await client.send('Page.enable', {}, sessionId)
     await client.send('Runtime.enable', {}, sessionId)
-    const loaded = client.waitFor('Page.loadEventFired', { sessionId, timeoutMs: SETTLE_TIMEOUT_MS })
-    await client.send('Page.navigate', { url }, sessionId)
-    await loaded
-    // Let the sketch run: a few seconds of frames is what makes trails and
-    // density appear, and it is the difference between "it started" and "it drew".
-    await new Promise((done) => setTimeout(done, settleMs))
-    const result = await client.send(
-      'Runtime.evaluate',
-      { expression: PROBE, returnByValue: true, awaitPromise: false },
-      sessionId,
-      SETTLE_TIMEOUT_MS,
-    )
-    if (result.exceptionDetails !== undefined) {
-      return { ok: false, why: String(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text ?? 'the probe threw') }
+    // The seed travels in the URL, which is the shell's documented way to open a
+    // run at another seed. Measuring the same URL three times compared NOTHING,
+    // which is how a "different seed" assertion once passed against one picture.
+    await client.send('Page.navigate', { url: url + (seed === undefined ? '' : '?seed=' + String(seed)) }, sessionId)
+    // `Page.loadEventFired` is deliberately NOT waited for: registering the waiter
+    // races the navigation (the event can fire before the subscription is live) and
+    // `load` is not guaranteed to fire at all on a page whose scripts keep working.
+    // The document's own readyState is polled instead, which cannot miss.
+    const loadDeadline = Date.now() + SETTLE_TIMEOUT_MS
+    for (;;) {
+      const ready = await client.send('Runtime.evaluate', { expression: 'document.readyState', returnByValue: true }, sessionId, 5000)
+      if (ready.result?.value === 'complete' || ready.result?.value === 'interactive') break
+      if (Date.now() > loadDeadline) break
+      await new Promise((done) => setTimeout(done, 100))
     }
-    return result.result?.value ?? { ok: false, why: 'the probe returned nothing' }
+    // Wait for the canvas AND for the run to say it drew. The shell creates the
+    // canvas inside setup(), so "a canvas exists" is already proof that p5 started;
+    // "it drew" is the shell's own flag, and waiting for it removes a race from the
+    // measurement rather than papering over it with a longer sleep.
+    const deadline = Date.now() + 15000
+    let state = null
+    for (;;) {
+      const answer = await client.send('Runtime.evaluate', { expression: PROBE, returnByValue: true }, sessionId, 5000)
+      if (answer.exceptionDetails !== undefined) {
+        throw new Error('the page probe threw: ' + String(answer.exceptionDetails.exception?.description ?? answer.exceptionDetails.text ?? '?'))
+      }
+      state = answer.result?.value ?? null
+      if (state !== null && state.canvas > 0 && (state.drew === true || Number(state.frameCount) > 0)) break
+      if (Date.now() > deadline) break
+      await new Promise((done) => setTimeout(done, 200))
+    }
+    // Then LET IT RUN: the picture is what the system looks like after a few
+    // hundred frames, and that is the difference between "it started" and "it drew".
+    await new Promise((done) => setTimeout(done, settleMs))
+    const after = await client.send('Runtime.evaluate', { expression: PROBE, returnByValue: true }, sessionId, 5000)
+    if (after.exceptionDetails !== undefined) {
+      console.log('      probe threw after: ' + String(after.exceptionDetails.exception?.description ?? after.exceptionDetails.text ?? '?'))
+    }
+    const shot = await client.send('Page.captureScreenshot', { format: 'png' }, sessionId, 20000)
+    if (typeof shot.data !== 'string' || shot.data === '') {
+      return { ok: false, why: 'the browser returned no screenshot' }
+    }
+    const measured = measurePng(Buffer.from(shot.data, 'base64'))
+    return { ok: true, ...measured, ...(after.result?.value ?? state ?? {}) }
+  } catch (err) {
+    return { ok: false, why: String(err && err.message ? err.message : err) }
   } finally {
     try {
       await client.send('Target.closeTarget', { targetId })
@@ -308,17 +315,30 @@ try {
   // A first pass with each run's own seed, and with a different one.
   for (const run of runs) {
     const file = await lab.runFile({ root, run: run.id, file: 'index.html', mode: 'read' })
-    const url = new URL('file://' + file.absolute.replace(/\\/g, '/')).href
-    const once = await measure(client, url, run.seed, 2200)
-    const twice = await measure(client, url, run.seed, 2200)
-    const other = await measure(client, url, run.seed + 1, 2200)
+    // `raf=timer` is the shell's deterministic frame loop: a check must not depend
+    // on a headless page's requestAnimationFrame, which is exactly what this check
+    // was written to stop guessing about.
+    const url = new URL('file://' + file.absolute.replace(/\\/g, '/')).href + ''
+    const once = await measure(client, url, run.seed, 2500)
+    const twice = await measure(client, url, run.seed, 2500)
+    const other = await measure(client, url, run.seed + 1, 2500)
     results.push({ run, once, twice, other })
 
-    console.log('  ' + run.id + '  ' + (once.ok ? 'background ' + once.background + ', ' + once.colours + ' colours, ' + once.width + '×' + once.height + ', drew=' + once.drew : 'FAILED: ' + once.why))
+    console.log(
+      '  ' + run.id + '  ' +
+        (once.ok
+          ? once.colours + ' colours, background ' + once.background + ', ' + once.width + '×' + once.height +
+            ', drew=' + once.drew + ', frames=' + String(once.frameCount) + ', raf=' + String(once.raf)
+          : 'FAILED: ' + once.why),
+    )
     check(run.id + ': the shell reports no problem', once.ok && once.problemShown === false, true)
     check(run.id + ': the sketch really drew a frame', once.ok && once.drew === true, true)
-    check(run.id + ': the canvas is not a blank field', once.ok && once.background < 0.995, once.ok ? once.background : once.why)
-    check(run.id + ': it drew more than one colour', once.ok && once.colours > 1, once.ok ? once.colours : once.why)
+    if (once.ok) {
+      check(run.id + ': the rendered page is not a blank field (background share ' + once.background + ' below 0.99)', once.background < 0.99)
+      check(run.id + ': it drew many colours, not one (' + once.colours + ' distinct)', once.colours > 8)
+    } else {
+      check(run.id + ': the rendered page was measured', once.ok, true)
+    }
     check(run.id + ': the same seed reproduces the same picture', once.ok && twice.ok && once.signature === twice.signature, true)
     check(run.id + ': a different seed draws a different picture', once.ok && other.ok && once.signature !== other.signature, true)
   }

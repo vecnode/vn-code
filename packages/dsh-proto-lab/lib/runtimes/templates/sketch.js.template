@@ -6,29 +6,30 @@
  * EDIT THIS FILE. index.html is the shell (it owns the library, the seed and the
  * controls); this file is the prototype. The rules that make it reproducible:
  *
- *   - the seed comes from `window.__LAB.seed` and is applied to BOTH
+ *   - the seed comes from `window.__PROTO.seed` and is applied to BOTH
  *     `randomSeed` and `noiseSeed` before anything is drawn;
  *   - every tunable is a named entry in that same object, read through
  *     `P('name')` - the shell generates a slider for it, so a control and the
  *     value the sketch reads can never disagree;
- *   - `window.__LAB.drew = true` at the end of the first `draw()` is how the
+ *   - `window.__dshProtoLab__.drew = true` at the end of the first `draw()` is how the
  *     shell (and the headless render check) knows the sketch really drew
  *     something rather than sitting on a black canvas.
  */
 
-// Wrapped in an IIFE only so `P` cannot collide with a name p5 puts on window.
-(function () {
-  const spec = window.__LAB;
+// Handed to the shell's queue, which runs it once p5's global mode is actually
+// initialized - see the load-order note in index.html. Everything inside runs in
+// the same scope it would have at top level, so nothing else about the sketch
+// changes; the wrapper is what makes `randomSeed()` legal on the first line.
+window.__dshProtoLabSketch__(function () {
+  // The run's contract. The long name is deliberate: p5's global mode copies its
+  // prototype onto window, so window.color (and anything else short) is p5's.
+  const spec = window.__dshProtoLab__;
 
   /** One parameter by name, as the shell currently has it. */
   const P = (name) => spec.param(name);
 
   /** Draw again from the top, e.g. after rebuilding a grid in labOnParam. */
   let dirty = true;
-
-  // The seed first, so the same seed gives the same picture on every machine.
-  randomSeed(spec.seed);
-  noiseSeed(spec.seed);
 
   // -- the algorithm's own state ---------------------------------------------
   // Nothing here is "the picture": these are the quantities the picture emerges
@@ -38,6 +39,14 @@
     particles: [],
     frames: 0,
   };
+
+  // NO p5 CALL MAY RUN AT THIS POINT, and that is not a style rule - it is when the
+  // globals exist. `randomSeed`, `noiseSeed`, `createCanvas` and the rest are
+  // installed by `new p5()`, which the shell does AFTER this factory returns (it
+  // has to: p5 reads `window.setup` and `window.draw` when it starts). Measured:
+  // a `randomSeed(spec.seed)` up here threw "ReferenceError: randomSeed is not
+  // defined" on a real page while the same line was harmless under the checker's
+  // stub. So the seeding lives in setup(), one line below, where it belongs.
 
   /** Angle of the field at one point. Layered noise, so it has calm and turbulence. */
   function angleAt(x, y) {
@@ -68,7 +77,17 @@
   }
 
   // -- p5's lifecycle --------------------------------------------------------
-  function setup() {
+  // `window.setup` and not a local `function setup()`: this factory's body is a
+  // FUNCTION SCOPE, so a declaration here is invisible to the global mode p5 reads
+  // when it starts - measured as "p5 did not start ... sketch.js did not load",
+  // because p5 found no lifecycle at all. The lifecycle goes on `window`.
+  // Handed over, NOT left on window: p5's auto-start would race the shell for it.
+  // See the note above window.__dshProtoLabLifecycle__ in index.html.
+  window.__dshProtoLabLifecycle__.setup = function () {
+    // The seed FIRST, before anything is drawn - and here rather than at the top of
+    // the factory, because these globals only exist once p5 has started.
+    randomSeed(spec.seed);
+    noiseSeed(spec.seed);
     const canvas = createCanvas(windowWidth, windowHeight);
     // The shell's stage div: the canvas fills the frame and the controls keep
     // their own row, which is what makes the page usable at any window size.
@@ -79,7 +98,7 @@
     strokeCap(ROUND);
   }
 
-  function draw() {
+  window.__dshProtoLabLifecycle__.draw = function () {
     if (dirty) {
       populate();
       background(0);
@@ -118,7 +137,7 @@
     if (state.frames === 1) spec.drew = true;
   }
 
-  function windowResized() {
+  window.windowResized = function () {
     resizeCanvas(windowWidth, windowHeight);
     dirty = true;
   }
@@ -130,6 +149,6 @@
     if (name === 'veil') return;
   };
 
-  // p5 global mode finds the lifecycle functions on window.
-  Object.assign(window, { setup, draw, windowResized });
-})();
+  // Nothing to export: the lifecycle is already ON `window`, where p5's global
+  // mode looks for it the moment the shell constructs the instance.
+});

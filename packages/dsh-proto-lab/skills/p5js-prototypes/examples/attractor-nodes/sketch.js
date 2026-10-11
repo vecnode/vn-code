@@ -1,5 +1,5 @@
 /**
- * attractor-nodes — an example run for the p5js-prototypes skill.
+ * attractor-nodes â€” an example run for the p5js-prototypes skill.
  *
  * The second reference shape, and the one that shows a different kind of system:
  * where flow-field is a FIELD (the same rule everywhere, evaluated per particle),
@@ -10,8 +10,10 @@
  * The algorithm, in one sentence: particles are pulled toward moving attractors
  * and their short trails accumulate into the basins between them.
  */
-(function () {
-  const spec = window.__LAB;
+window.__dshProtoLabSketch__(function () {
+  // The run's contract. The long name is deliberate: p5's global mode copies its
+  // prototype onto window, so window.color (and anything else short) is p5's.
+  const spec = window.__dshProtoLab__;
 
   /** One parameter by name, as the shell currently has it. */
   const P = (name) => spec.param(name);
@@ -19,8 +21,6 @@
   /** Set when the population has to be rebuilt (a parameter or the window changed). */
   let dirty = true;
 
-  randomSeed(spec.seed);
-  noiseSeed(spec.seed);
 
   // The system is the ATTRACTORS plus the particles: a handful of bodies that
   // every particle feels, with its own slow drift and its own lifecycle.
@@ -77,7 +77,13 @@
     }
   }
 
-  function setup() {
+  // Handed over, NOT left on window: p5's auto-start would race the shell for it.
+  // See the note above window.__dshProtoLabLifecycle__ in index.html.
+  window.__dshProtoLabLifecycle__.setup = function () {
+    // The seed first, before anything is drawn - and here rather than at the top of
+    // the factory: these globals only exist once p5 has started.
+    randomSeed(spec.seed);
+    noiseSeed(spec.seed);
     const canvas = createCanvas(windowWidth, windowHeight);
     canvas.parent('lab-stage');
     colorMode(HSB, 360, 100, 100, 100);
@@ -88,7 +94,7 @@
     background(0);
   }
 
-  function draw() {
+  window.__dshProtoLabLifecycle__.draw = function () {
     if (dirty) {
       ensureAttractors(P('attractors'));
       populate();
@@ -158,7 +164,7 @@
     if (state.frames === 1) spec.drew = true;
   }
 
-  function windowResized() {
+  window.windowResized = function () {
     resizeCanvas(windowWidth, windowHeight);
     dirty = true;
   }
@@ -169,5 +175,5 @@
     if (name !== 'veil' && name !== 'drag' && name !== 'weight') dirty = true;
   };
 
-  Object.assign(window, { setup, draw, windowResized });
-})();
+  // The lifecycle is on `window`, where p5's global mode looks for it.
+});

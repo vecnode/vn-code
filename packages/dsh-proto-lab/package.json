@@ -6,6 +6,7 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./lab": "./lib/lab.js",
     "./runtimes": "./lib/runtimes/index.js",
     "./package.json": "./package.json"
@@ -29,6 +30,12 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "dsh-rightbar"
+      ]
     }
   },
   "license": "MIT"
