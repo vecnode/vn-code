@@ -1,0 +1,35 @@
+{
+  "name": "dsh-proto-lab",
+  "version": "0.1.0-alpha.1",
+  "description": "A prototyping lab the agent can fill: five lab_* tools that write a run into lab/<runtime>/<slug>/ - p5.js sketches that open in a browser, and openFrameworks projects that are three real C++ files built with make - plus a committed example library the agent instantiates from, a runtime registry built so a third runtime (Processing in Rust, Cinder) is one module and one line, and a preview tab over an offline-vendored p5.js. Zero npm dependencies, nothing downloaded, no binaries.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./lab": "./lib/lab.js",
+    "./runtimes": "./lib/runtimes/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check:node": "node checks/check-lab-node.mjs",
+    "check:examples": "node checks/check-lab-examples.mjs",
+    "check:render": "node checks/check-lab-render.mjs",
+    "check:vendor": "node vendor/build.mjs --check",
+    "check": "node vendor/build.mjs --check && node checks/check-lab-node.mjs && node checks/check-lab-examples.mjs && node checks/check-lab-render.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT"
+}

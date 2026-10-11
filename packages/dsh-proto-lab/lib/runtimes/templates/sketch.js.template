@@ -1,0 +1,135 @@
+/**
+ * {{LABEL}} — a p5.js prototype ({{RUNTIME}} / {{SLUG}}).
+ *
+ * {{CONCEPT}}
+ *
+ * EDIT THIS FILE. index.html is the shell (it owns the library, the seed and the
+ * controls); this file is the prototype. The rules that make it reproducible:
+ *
+ *   - the seed comes from `window.__LAB.seed` and is applied to BOTH
+ *     `randomSeed` and `noiseSeed` before anything is drawn;
+ *   - every tunable is a named entry in that same object, read through
+ *     `P('name')` - the shell generates a slider for it, so a control and the
+ *     value the sketch reads can never disagree;
+ *   - `window.__LAB.drew = true` at the end of the first `draw()` is how the
+ *     shell (and the headless render check) knows the sketch really drew
+ *     something rather than sitting on a black canvas.
+ */
+
+// Wrapped in an IIFE only so `P` cannot collide with a name p5 puts on window.
+(function () {
+  const spec = window.__LAB;
+
+  /** One parameter by name, as the shell currently has it. */
+  const P = (name) => spec.param(name);
+
+  /** Draw again from the top, e.g. after rebuilding a grid in labOnParam. */
+  let dirty = true;
+
+  // The seed first, so the same seed gives the same picture on every machine.
+  randomSeed(spec.seed);
+  noiseSeed(spec.seed);
+
+  // -- the algorithm's own state ---------------------------------------------
+  // Nothing here is "the picture": these are the quantities the picture emerges
+  // from. A still image is written once; a system is steered.
+  /** The flow field is drawn from noise at a scale, so it is rebuilt, not stored. */
+  const state = {
+    particles: [],
+    frames: 0,
+  };
+
+  /** Angle of the field at one point. Layered noise, so it has calm and turbulence. */
+  function angleAt(x, y) {
+    const scale = P('scale');
+    const t = state.frames * P('speed') * 0.00035;
+    return noise(x * scale, y * scale, t) * TWO_PI * 3;
+  }
+
+  /** A particle, reborn at a random point when its life runs out. */
+  function respawn(particle) {
+    particle.x = random(width);
+    particle.y = random(height);
+    particle.life = random(0.4, 1) * P('life');
+    particle.age = 0;
+    particle.speed = P('flow') * random(0.6, 1.4);
+  }
+
+  /** Build the population for the current canvas and parameters. */
+  function populate() {
+    const wanted = P('particles');
+    while (state.particles.length > wanted) state.particles.pop();
+    while (state.particles.length < wanted) {
+      const particle = { x: 0, y: 0, age: 0, life: 1, speed: 1 };
+      respawn(particle);
+      particle.age = random(particle.life);
+      state.particles.push(particle);
+    }
+  }
+
+  // -- p5's lifecycle --------------------------------------------------------
+  function setup() {
+    const canvas = createCanvas(windowWidth, windowHeight);
+    // The shell's stage div: the canvas fills the frame and the controls keep
+    // their own row, which is what makes the page usable at any window size.
+    canvas.parent('lab-stage');
+    pixelDensity(1);
+    populate();
+    background(0);
+    strokeCap(ROUND);
+  }
+
+  function draw() {
+    if (dirty) {
+      populate();
+      background(0);
+      state.frames = 0;
+      dirty = false;
+    }
+    state.frames += 1;
+
+    // A veil instead of a clear: the field keeps a memory of where it has been,
+    // which is what turns paths into density.
+    noStroke();
+    fill(0, P('veil'));
+    rect(0, 0, width, height);
+
+    const weight = P('weight');
+    for (const particle of state.particles) {
+      const angle = angleAt(particle.x, particle.y);
+      const nextX = particle.x + Math.cos(angle) * particle.speed;
+      const nextY = particle.y + Math.sin(angle) * particle.speed;
+      const speed = Math.hypot(nextX - particle.x, nextY - particle.y);
+      const brightness = 45 + speed * 26;
+
+      stroke(brightness, brightness * 1.6, 255 - brightness * 0.4, 120);
+      strokeWeight(weight * (1 - particle.age / particle.life) + 0.3);
+      line(particle.x, particle.y, nextX, nextY);
+
+      particle.x = nextX;
+      particle.y = nextY;
+      particle.age += 1;
+      if (particle.age > particle.life || particle.x < -20 || particle.x > width + 20 || particle.y < -20 || particle.y > height + 20) {
+        respawn(particle);
+      }
+    }
+
+    // The first frame is what the shell and the render check wait for.
+    if (state.frames === 1) spec.drew = true;
+  }
+
+  function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+    dirty = true;
+  }
+
+  // The shell's slider calls this. Rebuilding the population here is what makes
+  // the control feel like part of the algorithm rather than a filter over it.
+  window.labOnParam = function (name) {
+    if (name === 'particles' || name === 'life' || name === 'flow' || name === 'scale') dirty = true;
+    if (name === 'veil') return;
+  };
+
+  // p5 global mode finds the lifecycle functions on window.
+  Object.assign(window, { setup, draw, windowResized });
+})();

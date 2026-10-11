@@ -162,9 +162,18 @@ if (ps && sh) {
 
   // The sentinel list - one entry per shipped family, the guard that catches a
   // copy that flattened or nested a tree - must be the SAME list in both halves.
+  //
+  // The tokenizer is careful about ONE thing that had been silently wrong: the
+  // POSIX half separates its entries with a backslash-newline continuation, and a
+  // class of `[^\s'"]+` walks straight over the continuation onto the next line -
+  // so the LAST entry came out as `path/SKILL.md;` and never matched `wanted`.
+  // Measured, not guessed: adding a sentinel to the end of dist.sh's list failed
+  // with that exact message while the line was visibly there. The class therefore
+  // excludes a backslash, and trailing punctuation is trimmed, so both halves
+  // tokenize the same way whatever their line-continuation style is.
   const sentinelsOf = (text) => new Set(
-    text.match(/(?:^|[\s'"])(?:\.dsh-version\.json|app\/[^\s'"]+|assets\/[^\s'"]+|docs\/[^\s'"]+|packages\/[^\s'"]+|scripts\/[^\s'"]+)/gm)
-      ?.map((value) => value.trim().replace(/^['"]/, '')) ?? [],
+    (text.match(/(?:^|[\s'"])(?:\.dsh-version\.json|app\/[^\s'"\\]+|assets\/[^\s'"\\]+|docs\/[^\s'"\\]+|packages\/[^\s'"\\]+|scripts\/[^\s'"\\]+)/gm) ?? [])
+      .map((value) => value.trim().replace(/^['"]/, '').replace(/[;,]+$/, '')),
   )
   const psSentinels = sentinelsOf(ps)
   const shSentinels = sentinelsOf(sh)
@@ -172,6 +181,11 @@ if (ps && sh) {
     'packages/dsh-vn-master/package.json',
     'packages/dsh-pdf/lib/vendor/pdf.min.mjs',
     'packages/dsh-diagrams/lib/vendor/mermaid.min.js',
+    // dsh-proto-lab's two, for the same reason: the vendored p5.js is what makes
+    // a generated run work offline, and the skill is what carries the checked
+    // example library beside it.
+    'packages/dsh-proto-lab/lib/vendor/p5.min.js',
+    'packages/dsh-proto-lab/skills/p5js-prototypes/SKILL.md',
     // The vendored Diagram Design kit is 277 files in one generated tree, so its
     // three sentinels are what catch a family of it being left behind: the
     // catalog the panel lists the kit from, one example the frame serves, and one

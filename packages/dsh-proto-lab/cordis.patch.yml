@@ -1,0 +1,22 @@
+# dsh-proto-lab bundle layer (alpha).
+#
+# One row ('proto-lab') owns the whole package: the five `lab_*` tools built in
+# lib/tools.js, the three bundled skills, the runtime registry in lib/runtimes/
+# that turns "which language is this prototype in" into one module, the routes
+# the preview tab reads, and the tab itself.
+#
+# Nothing shipped is patched, no core row is disabled and nothing is vendored
+# from the harness, so there is no `disabled: true` here and nothing for
+# scripts/sync-vendored.ps1 to keep in sync. The one engine this package keeps on
+# disk is p5.js, which is vendored under lib/vendor/ the way dsh-pdf keeps pdf.js
+# and dsh-diagrams keeps Mermaid - the profile installs a bundle as a live LINK,
+# so a package dependency is never installed and the browser half cannot import
+# one.
+#
+# The lab itself is NOT in this bundle and is NOT in the repository: a run is
+# generated on this machine, under the workspace's own `lab/` folder, which
+# .gitignore keeps out of every commit. The package ships the generator, the
+# example library and the conventions; what the agent makes with them stays local.
+- insert:
+    - id: proto-lab
+      name: 'dsh-proto-lab'

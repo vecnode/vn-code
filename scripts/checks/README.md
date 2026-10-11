@@ -36,6 +36,21 @@ Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-r
 | `check-browser-node.mjs` | `dsh-browser`'s host half: the disposable sandboxed renderer and the fetch policy in front of it |
 | `check-splash.mjs` | the launcher window's payload and the console line it prints, including that a key-shaped value never reaches the page |
 
+## The checks that live inside a package
+
+`dsh-proto-lab` ships three of its own under `packages/dsh-proto-lab/checks/`,
+run with `npm run check` in that folder. They are additional to the list above,
+and between them they carry the pack's **verification ladder** — the claim that a
+run was checked is always stated with how deeply: `t0-structure` (always),
+`t1-parse`, `t2-compile` (a real openFrameworks compile), `t3-render`,
+`t4-measure` (pixels read back, two seeds compared).
+
+| script | what it proves |
+|---|---|
+| `check-lab-node.mjs` | the runtime contract, the path policy (`..`, absolute, symlink, NUL each refused with its own code), a scaffold + instantiate + lint round for every runtime, the lint **firing** on a deliberately broken run, and the capability model (the ladder, the frame budget, defaults scaled to the host) |
+| `check-lab-examples.mjs` | every committed example and every `lab-run` fenced snippet in the skills, EXECUTED against a stub p5; C++ snippets checked against the openFrameworks vocabulary |
+| `check-lab-render.mjs` | a real browser opens each run's own `index.html` and the canvas is measured: non-blank, more than one colour, the same seed reproduces the same signature, a different seed does not |
+
 ## The checks that need a real browser
 
 These drive the shipped bundles in a headless Chromium-family browser. With none

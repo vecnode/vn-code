@@ -1,0 +1,83 @@
+/**
+ * {{LABEL}} — an openFrameworks prototype ({{RUNTIME}} / {{SLUG}}).
+ *
+ * {{CONCEPT}}
+ *
+ * This is the executable's entry point and it is intentionally thin: a window,
+ * a GL context, the loop, and the one piece of plumbing every prototyping run
+ * wants - a way to run the SAME prototype headlessly long enough to prove it drew
+ * something. Everything about the prototype lives in ofApp.h / ofApp.cpp.
+ *
+ * Command line:
+ *   ./{{SLUG}} --seed 12345 --frames 120 --headless --png out.png
+ *
+ *   --seed N      override the compiled-in seed (the run's reproducibility knob)
+ *   --frames N    stop after N frames instead of running until the window closes
+ *   --headless    do not show the window
+ *   --png PATH    save the last frame, then exit
+ *   --w N --h N   the window, and therefore the field
+ */
+#include "ofMain.h"
+#include "ofApp.h"
+
+#include <cstdlib>
+#include <string>
+
+namespace {
+
+/// One `--name value` pair from argv, or the fallback.
+int argValue(int argc, char** argv, const std::string& name, int fallback) {
+    for (int i = 1; i + 1 < argc; i++) {
+        if (name == argv[i]) return std::atoi(argv[i + 1]);
+    }
+    return fallback;
+}
+
+/// One `--name value` pair from argv as a string, or the fallback.
+std::string argText(int argc, char** argv, const std::string& name, const std::string& fallback) {
+    for (int i = 1; i + 1 < argc; i++) {
+        if (name == argv[i]) return argv[i + 1];
+    }
+    return fallback;
+}
+
+/// Whether one bare flag is present.
+bool hasFlag(int argc, char** argv, const std::string& name) {
+    for (int i = 1; i < argc; i++) {
+        if (name == argv[i]) return true;
+    }
+    return false;
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+    const int width = argValue(argc, argv, "--w", 1280);
+    const int height = argValue(argc, argv, "--h", 720);
+    const int seed = argValue(argc, argv, "--seed", ofApp::defaultSeed());
+    const int frames = argValue(argc, argv, "--frames", 0);
+    const bool headless = hasFlag(argc, argv, "--headless");
+    const std::string framePath = argText(argc, argv, "--png", "");
+
+    ofGLFWWindowSettings settings;
+    settings.setSize(width, height);
+    settings.setGLVersion(3, 2);
+    settings.windowMode = OF_WINDOW;
+    settings.visible = !headless;
+    settings.title = "{{LABEL}} ({{SLUG}})";
+
+    auto window = ofCreateWindow(settings);
+    auto app = std::make_shared<ofApp>();
+    // The run's own options reach the app before the loop starts, so `--seed` is
+    // not a second place where the seed is decided.
+    ofApp::RunOptions runOptions;
+    runOptions.seed = seed;
+    runOptions.width = width;
+    runOptions.height = height;
+    runOptions.frames = frames;
+    runOptions.framePath = framePath;
+    app->configure(runOptions);
+
+    ofRunApp(window, app);
+    return ofRunMainLoop();
+}

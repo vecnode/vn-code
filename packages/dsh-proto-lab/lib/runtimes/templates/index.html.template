@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{LABEL}} — p5.js prototype</title>
+<!--
+  A dsh-proto-lab run. This file is the whole viewer: it loads the p5 library
+  that sits BESIDE it on disk (p5.min.js, vendored by the plugin - there is no
+  CDN and no network), then runs sketch.js in p5's global mode.
+
+  The contract between this shell and sketch.js is one object:
+
+      window.__LAB = { seed, params, slug, label, run }
+
+  `seed` comes from ?seed= in the URL, so opening this file with no query gives
+  the run's own seed and opening it with ?seed=7 explores the space. Any global
+  parameter name given in the query string after that overrides the value in
+  `params`. sketch.js must seed itself from `window.__LAB.seed` - that is what
+  makes the picture reproducible from a name.
+
+  Buttons do not reach into the sketch: the whole file reloads with a new seed,
+  so every sketch behaves the same way here whatever it keeps in global state.
+-->
+<style>
+  :root { color-scheme: dark; --ink: #e9e6df; --quiet: #8b877c; --line: #2a2926; --panel: #17171a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #101012; color: var(--ink);
+    font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  body { display: flex; flex-direction: column; }
+  #lab-bar { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline;
+    padding: 7px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #lab-bar .title { font-weight: 600; letter-spacing: .01em; }
+  #lab-bar .quiet { color: var(--quiet); }
+  #lab-bar .spacer { flex: 1 1 auto; }
+  #lab-bar button, #lab-bar input { font: inherit; color: var(--ink); background: #22222a;
+    border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; }
+  #lab-bar button:hover { background: #2c2c36; }
+  #lab-frame { flex: 1 1 auto; min-height: 0; position: relative; background: #0b0b0d; }
+  #lab-stage { position: absolute; inset: 0; }
+  #lab-stage canvas { display: block; }
+  #lab-params { display: flex; flex-direction: column; gap: 5px; padding: 9px 12px;
+    border-top: 1px solid var(--line); background: var(--panel); max-height: 9.5em; overflow: auto; }
+  #lab-params .row { display: flex; align-items: center; gap: 10px; }
+  #lab-params .row label { min-width: 10em; color: var(--quiet); }
+  #lab-params .row input { flex: 1 1 auto; }
+  #lab-params .row output { min-width: 4.5em; text-align: right; }
+  #lab-problem { position: absolute; inset: 0; display: none; place-content: center;
+    padding: 24px; text-align: center; color: #ff8f6b; background: rgba(11,11,13,.94); }
+  #lab-problem.show { display: grid; }
+  #lab-problem code { color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="lab-bar">
+  <span class="title">{{LABEL}}</span>
+  <span class="quiet">{{RUNTIME}} · {{SLUG}}</span>
+  <span class="spacer"></span>
+  <button id="lab-reroll" title="reload with a new random seed">Reroll</button>
+  <button id="lab-reset" title="reload with the run's own seed">Reset</button>
+  <button id="lab-png" title="save the current frame">Save PNG</button>
+</div>
+<div id="lab-frame">
+  <div id="lab-stage"></div>
+  <div id="lab-problem"><div>
+    <p><strong>p5 could not start.</strong></p>
+    <p><code>p5.min.js</code> must sit beside this file (the plugin's <code>lab_new</code> writes it there),
+       and <code>sketch.js</code> must exist and parse.</p>
+    <p class="quiet" id="lab-problem-detail"></p>
+  </div></div>
+</div>
+<div id="lab-params"></div>
+
+<script>
+// The run's own data. Values in the query string win, so the same file is both
+// the committed run and a seed scrubber.
+window.__LAB = {
+  runtime: {{RUNTIME_JSON}},
+  slug: {{SLUG_JSON}},
+  label: {{LABEL_JSON}},
+  concept: {{CONCEPT_JSON}},
+  seed: {{SEED}},
+  params: {{PARAMS_JSON}}
+};
+(function () {
+  var query = new URLSearchParams(location.search);
+  var seed = Number(query.get('seed'));
+  // The preview hands the seed in directly (its framed document has no URL to
+  // read), so an override wins over the query string and over the run's own seed.
+  if (typeof window.__LAB_SEED === 'number' && Number.isFinite(window.__LAB_SEED)) {
+    window.__LAB.seed = Math.trunc(window.__LAB_SEED);
+  } else if (Number.isFinite(seed) && seed !== 0) {
+    window.__LAB.seed = Math.trunc(seed);
+  }
+  for (var i = 0; i < window.__LAB.params.length; i += 1) {
+    var slot = window.__LAB.params[i];
+    var given = Number(query.get(slot.name));
+    if (Number.isFinite(given)) slot.value = given;
+  }
+  window.__LAB.param = function (name) {
+    for (var j = 0; j < window.__LAB.params.length; j += 1) {
+      if (window.__LAB.params[j].name === name) return window.__LAB.params[j].value;
+    }
+    return undefined;
+  };
+  window.__LAB.setParam = function (name, value) {
+    for (var j = 0; j < window.__LAB.params.length; j += 1) {
+      if (window.__LAB.params[j].name === name) { window.__LAB.params[j].value = value; return true; }
+    }
+    return false;
+  };
+  window.__LAB.reload = function (next) {
+    var wanted = next === undefined ? Math.floor(Math.random() * 100000) : next;
+    // Standalone (a real URL): a reload with the seed in the query string. In the
+    // preview (no URL, a hand-composed document): the seed through the one global
+    // the host reads, because there is nothing to navigate.
+    if (location.search !== '' || /^https?:$/.test(location.protocol)) {
+      query.set('seed', String(wanted));
+      location.search = query.toString();
+      return;
+    }
+    window.__LAB_SEED = wanted;
+    location.reload();
+  };
+})();
+</script>
+
+<script>
+// The parameter console, generated from the run's own params - which is why a
+// control can never disagree with what the sketch reads.
+(function () {
+  var host = document.getElementById('lab-params');
+  if (window.__LAB.params.length === 0) {
+    host.innerHTML = '<div class="row quiet">This run declares no parameters. Edit sketch.js to add some: ' +
+      'a parameter is an entry in the params array of index.html.</div>';
+    return;
+  }
+  window.__LAB.params.forEach(function (slot) {
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<label for="lab-p-' + slot.name + '">' + slot.name + '</label>' +
+      '<input id="lab-p-' + slot.name + '" type="range" min="' + slot.min + '" max="' + slot.max +
+      '" step="' + slot.step + '" value="' + slot.value + '">' +
+      '<output>' + slot.value + '</output>';
+    var input = row.querySelector('input');
+    var out = row.querySelector('output');
+    input.addEventListener('input', function () {
+      var value = Number(input.value);
+      out.textContent = String(value);
+      window.__LAB.setParam(slot.name, value);
+      if (typeof window.labOnParam === 'function') window.labOnParam(slot.name, value);
+    });
+    host.appendChild(row);
+  });
+})();
+</script>
+
+<script src="p5.min.js" onerror="window.__LAB && (window.__LAB.loadFailed = true)"></script>
+<script>
+(function () {
+  var problem = document.getElementById('lab-problem');
+  var detail = document.getElementById('lab-problem-detail');
+  window.addEventListener('error', function (event) {
+    if (problem.classList.contains('show')) return;
+    detail.textContent = String((event && (event.message || event.error)) || 'a script failed');
+    problem.classList.add('show');
+  });
+  if (typeof window.p5 === 'undefined') {
+    detail.textContent = 'p5 is not loaded: p5.min.js is missing beside this file.';
+    problem.classList.add('show');
+  }
+})();
+</script>
+<script src="sketch.js"></script>
+<script>
+// A sketch that threw during setup() leaves p5 defined and the frame black, so
+// "did anything draw" is answered by the sketch's own flag, which every lab
+// sketch sets at the end of its first draw().
+(function () {
+  setTimeout(function () {
+    if (window.__LAB.drew === true) return;
+    if (document.getElementById('lab-problem').classList.contains('show')) return;
+    var problem = document.getElementById('lab-problem');
+    document.getElementById('lab-problem-detail').textContent =
+      'sketch.js loaded but nothing drew in five seconds.';
+    problem.classList.add('show');
+  }, 5000);
+  var buttons = {
+    'lab-reroll': function () { window.__LAB.reload(); },
+    'lab-reset': function () { window.__LAB.reload({{SEED}}); },
+    'lab-png': function () {
+      if (typeof window.saveCanvas === 'function') window.saveCanvas('{{SLUG}}-seed-' + window.__LAB.seed, 'png');
+    }
+  };
+  Object.keys(buttons).forEach(function (id) {
+    document.getElementById(id).addEventListener('click', buttons[id]);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "slug": "flow-field",
+  "label": "Flow field",
+  "concept": "Particles drift along a layered noise field and die of old age, so density accumulates where the field slows them down.",
+  "seed": 20260401,
+  "params": "`particles` is the population; `scale` is how large the field's features are (raise it and the flow becomes weather, lower it and it becomes texture); `flow` is how far a particle moves per frame; `life` is the frame count a particle gets; `veil` is how much history one frame keeps."
+}

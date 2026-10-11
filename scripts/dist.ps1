@@ -386,6 +386,12 @@ function Assert-Sentinels {
         'packages/dsh-diagrams/lib/vendor/design/references/style-guide.md',
         'packages/dsh-pdf/lib/vendor/pdf.min.mjs',
         'packages/dsh-pdf/skills/pdf-analysis/SKILL.md',
+        # dsh-proto-lab: the vendored p5.js a run copies beside its sketch (so a
+        # run works offline) and the skill whose examples are the lab's committed
+        # library. Missing either makes the package offer a runtime it cannot
+        # scaffold or a language it cannot teach.
+        'packages/dsh-proto-lab/lib/vendor/p5.min.js',
+        'packages/dsh-proto-lab/skills/p5js-prototypes/SKILL.md',
         # The build fingerprint. Its presence is what tells a later run that this
         # folder was assembled from inputs it can vouch for - a folder missing it
         # is a folder this build did not produce, and is reassembled rather than
