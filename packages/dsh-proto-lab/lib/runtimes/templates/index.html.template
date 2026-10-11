@@ -308,65 +308,36 @@ window.__dshProtoLabSketch__ = function (factory) {
     window.__dshProtoLabLog__.push('sketch: no lifecycle was handed over');
     return report('sketch.js defines neither setup() nor draw() - there is nothing for p5 to run.');
   }
-  window.__dshProtoLabPhase__ = 'instantiate';
+  window.__dshProtoLabPhase__ = 'hand-over';
   window.__dshProtoLabLog__.push('sketch: lifecycle taken (' + typeof lifecycle.setup + '/' + typeof lifecycle.draw + ')');
-  try {
-    // THE LIFECYCLE IS HANDED OVER, NOT LEFT ON `window`, and that is the whole
-    // difference between a page that works and one that merely looks like it does.
-    //
-    // p5's own auto-start is a promise on `load` that does `new p5()` AS SOON AS
-    // `window.setup` or `window.draw` is a function:
-    //
-    //   void 0 !== window._setupDone ? warn('p5.js seems to have been imported multiple times')
-    //     : ... (window.setup || window.draw) && new p5()
-    //
-    // A global-mode sketch therefore races its own framework: p5's instance starts
-    // first, runs the sketch, sets `_setupDone`, and the shell's `new p5()` then
-    // either bails out or leaves a second instance nobody drives. Measured on a
-    // generated run: the page drew perfectly while the instance the shell held had
-    // `frameCount === null` and p5's own had 234 - so the measurement was reading
-    // the wrong object and reporting "it never drew".
-    //
-    // Passing `{ setup, draw }` to the constructor is p5's documented instance mode,
-    // and it is what makes the auto-start find nothing to start. p5 still runs the
-    // sketch in GLOBAL mode (its globals are installed by this same constructor), so
-    // a sketch written with `createCanvas`/`randomSeed`/`width` is unchanged.
-    window.__dshProtoLabP5__ = new window.p5({ setup: lifecycle.setup, draw: lifecycle.draw });
-  } catch (err) {
-    window.__dshProtoLabPhase__ = 'instantiate threw';
-    window.__dshProtoLabLog__.push('p5: instantiate threw: ' + String((err && err.message) || err));
-    return report('p5 could not start the sketch: ' + String((err && err.message) || err));
-  }
-  window.__dshProtoLabPhase__ = 'started';
-  window.__dshProtoLabLog__.push('p5: instance created, setupDone=' + String(window._setupDone));
 
-  // WATCH THE LOOP. Nearly every failure this shell has had to explain was a loop
-  // that never ran, and p5 swallows the browser's own error while doing it. One
-  // timer sampling the frame counter turns "it did not draw" into "setup never
-  // ran" or "setup ran and the loop is stalled", which are different bugs with
-  // different fixes - and it costs a real window nothing.
-  var lastCount = -1;
-  var stalled = 0;
-  var watcher = window.setInterval(function () {
-    var instance = window.__dshProtoLabP5__;
-    if (instance === undefined) return;
-    var count = typeof instance.frameCount === 'number' ? instance.frameCount : 0;
-    if (count !== lastCount) {
-      if (lastCount < 0) window.__dshProtoLabLog__.push('loop: first frame (frameCount=' + count + ')');
-      lastCount = count;
-      stalled = 0;
-      return;
-    }
-    stalled += 1;
-    if (stalled === 2) {
-      window.__dshProtoLabLog__.push(
-        'loop: STALLED at frameCount=' + count +
-          ', isLooping=' + String(typeof instance.isLooping === 'function' ? instance.isLooping() : '?') +
-          ', setupDone=' + String(window._setupDone),
-      );
-    }
-    if (stalled > 20) window.clearInterval(watcher);
-  }, 500);
+  // P5 STARTS THE SKETCH; THE SHELL ATTACHES TO WHAT IT STARTED.
+  //
+  // This is the shape that works, and it was reached by measuring four others:
+  //
+  //   lifecycle on `window` + the shell's own `new p5()`
+  //       -> p5's auto-start (a promise on `load` that constructs an instance as
+  //          soon as `window.setup` is a function) beats the shell to it: the page
+  //          draws, but the object the shell holds is a SECOND instance with
+  //          `frameCount === null`, so a measurement reads the wrong instance and
+  //          reports "it never drew".
+  //   `new p5({ setup, draw })`  -> throws inside p5 ("e is not a function"); the
+  //          constructor expects a sketch FUNCTION when its argument is callable.
+  //   `new p5(function (p) { … })`  -> works, but installs NO globals, so a sketch
+  //          dies on "randomSeed is not defined".
+  //   `new p5({})` / `new p5()` bare  -> constructs an instance that runs nothing:
+  //          p5's boot path claims global mode only when it finds a lifecycle on
+  //          `window`, which is why the lifecycle has to go there after all.
+  //
+  // So the lifecycle is published on `window` exactly as every p5 sketch in the
+  // world writes it, p5's own boot does the constructing, and the listener below
+  // takes the instance from the `p5Ready` event p5 dispatches just before it. One
+  // instance, global mode, and nothing left to race.
+  window.setup = lifecycle.setup;
+  window.draw = lifecycle.draw;
+  delete window.__dshProtoLabLifecycle__;
+  window.__dshProtoLabLog__.push('p5: lifecycle published on window, waiting for p5Ready');
+  window.__dshProtoLabInstalling__ = true;
 };
 
 /**
@@ -393,8 +364,63 @@ function report(message) {
   }
 }
 
+// p5's OWN BOOT HANDS US THE INSTANCE - but not in the event payload, and not yet.
+//
+// p5 dispatches `p5Ready` and constructs its instance in the SAME turn, with the
+// dispatch FIRST (`e=new Event("p5Ready"), window.dispatchEvent(e), … && new p5()`).
+// A listener that reads `p5.instance` inside the event therefore finds null -
+// measured. So the listener only starts the hunt, and the hunt polls: the instance
+// appears within the same task, a poll catches it, and there is no ordering left to
+// get wrong. The listener is registered here, while the document is still parsing,
+// so it is always in place before p5's promise on `load` runs.
+window.addEventListener('p5Ready', function () {
+  window.__dshProtoLabLog__.push('p5: p5Ready fired, looking for the instance');
+  var waited = 0;
+  var hunt = window.setInterval(function () {
+    var instance = typeof window.p5 !== 'undefined' ? window.p5.instance : undefined;
+    if (instance === undefined || instance === null) {
+      waited += 1;
+      if (waited > 100) {
+        window.clearInterval(hunt);
+        window.__dshProtoLabPhase__ = 'no-instance';
+        report('p5 announced itself but published no instance, so the run cannot be measured.');
+      }
+      return;
+    }
+    window.clearInterval(hunt);
+    window.__dshProtoLabP5__ = instance;
+    window.__dshProtoLabPhase__ = 'started';
+    window.__dshProtoLabLog__.push('p5: instance taken (frameCount=' + String(instance.frameCount) + ')');
+
+    // WATCH THE LOOP. Nearly every failure this shell has had to explain was a loop
+    // that never ran, and p5 swallows the browser's own error while doing it. One
+    // timer sampling the frame counter turns "it did not draw" into "setup never
+    // ran" or "setup ran and the loop is stalled" - different bugs, different fixes.
+    var lastCount = -1;
+    var stalled = 0;
+    var watcher = window.setInterval(function () {
+      var count = typeof instance.frameCount === 'number' ? instance.frameCount : 0;
+      if (count !== lastCount) {
+        if (lastCount < 0) window.__dshProtoLabLog__.push('loop: first frame (frameCount=' + count + ')');
+        lastCount = count;
+        stalled = 0;
+        return;
+      }
+      stalled += 1;
+      if (stalled === 2) {
+        window.__dshProtoLabLog__.push(
+          'loop: STALLED at frameCount=' + count +
+            ', isLooping=' + String(typeof instance.isLooping === 'function' ? instance.isLooping() : '?') +
+            ', setupDone=' + String(window._setupDone),
+        );
+      }
+      if (stalled > 20) window.clearInterval(watcher);
+    }, 500);
+  }, 50);
+});
+
 document.addEventListener('DOMContentLoaded', function () {
-  if (typeof window.__dshProtoLabP5__ === 'undefined') {
+  if (typeof window.__dshProtoLabP5__ === 'undefined' && window.__dshProtoLabInstalling__ !== true) {
     report('p5 did not start: p5.min.js is missing beside this file, or sketch.js did not load.');
   }
 });
