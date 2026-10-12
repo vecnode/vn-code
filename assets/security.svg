@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1000" height="640" viewBox="0 0 1000 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="security-title security-desc">
+      <title id="security-title">How a request reaches a pack route</title>
+      <desc id="security-desc">A sequence diagram of one authenticated call. The page exchanges the printed launch token for a session cookie, then asks a pack route with that cookie; the gates verify the cookie and the Host/Origin fence before any pack code runs, and answer 200. The alternate region shows the refusal: 401 without a session, 403 for a foreign authority or a cross-site fetch.</desc>
+      <defs>
+        <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.10)"/>
+        </pattern>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+      <style>
+        text { font-kerning: normal; }
+        .node-name { font-family: 'Geist', system-ui, sans-serif; font-size: 12px; font-weight: 600; fill: #2d3142; }
+        .sub { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 9px; fill: #4f5d75; }
+        .zone-label { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 7px; letter-spacing: 0.14em; fill: #5a6580; }
+        .chip { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 7px; letter-spacing: 0.08em; }
+        .msg { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 8px; letter-spacing: 0.08em; }
+        .guard { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 8px; letter-spacing: 0.04em; fill: #4f5d75; }
+        .operator { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 8px; letter-spacing: 0.12em; fill: #4f5d75; }
+        .actor-name { font-family: 'Geist', system-ui, sans-serif; font-size: 12px; font-weight: 600; fill: #2d3142; }
+      </style>
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+      <rect width="100%" height="100%" fill="url(#dots)" opacity="0.55"/>
+
+      <!-- Lifelines, then activation bars, then messages, then labels, then actors. -->
+      <line x1="160" y1="128" x2="160" y2="616" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="500" y1="128" x2="500" y2="616" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="840" y1="128" x2="840" y2="616" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+      <rect x="496" y="180" width="8" height="392" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+      <rect x="836" y="404" width="8" height="40" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+
+      <line x1="160" y1="176" x2="496" y2="176" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="284" y="160" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="msg" x="328" y="170" text-anchor="middle" fill="#2e5aa8">GET /?TOKEN=…</text>
+      <line x1="496" y1="216" x2="160" y2="216" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="198" y="200" width="260" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="msg" x="328" y="210" text-anchor="middle" fill="#4f5d75">303 + SET-COOKIE · HTTPONLY; SAMESITE=STRICT</text>
+      <line x1="160" y1="256" x2="496" y2="256" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="268" y="240" width="120" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="msg" x="328" y="250" text-anchor="middle" fill="#2e5aa8">GET /API/… · COOKIE</text>
+      <path d="M 508 288 L 544 288 L 544 320 L 508 320" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="552" y="300" width="132" height="12" rx="2" fill="#f5f5f5"/>
+      <text class="msg" x="556" y="310" fill="#4f5d75">verify cookie + fence</text>
+
+      <!-- One combined fragment, two regions: the only branch in the figure. -->
+      <rect x="148" y="336" width="704" height="264" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <rect x="148" y="336" width="40" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <text class="operator" x="168" y="348" text-anchor="middle">ALT</text>
+      <text class="guard" x="160" y="372">[session valid · same-origin]</text>
+
+      <line x1="504" y1="408" x2="836" y2="408" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="640" y="392" width="60" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="msg" x="670" y="402" text-anchor="middle" fill="#4f5d75">dispatch</text>
+      <line x1="836" y1="448" x2="504" y2="448" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="636" y="432" width="68" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="msg" x="670" y="442" text-anchor="middle" fill="#4f5d75">the result</text>
+      <line x1="496" y1="488" x2="160" y2="488" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <rect x="312" y="472" width="32" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="msg" x="328" y="482" text-anchor="middle" fill="#bf4520">200</text>
+
+      <line x1="156" y1="520" x2="844" y2="520" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+      <text class="guard" x="160" y="544">[else]</text>
+      <line x1="496" y1="576" x2="160" y2="576" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="190" y="560" width="276" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="msg" x="328" y="570" text-anchor="middle" fill="#4f5d75">401 NO SESSION · 403 FOREIGN HOST OR CROSS-SITE</text>
+
+      <rect x="60" y="72" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="60" y="72" width="200" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="68" y="80" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+      <text class="chip" x="82" y="89" text-anchor="middle" fill="#5a6580">TAB</text>
+      <text class="actor-name" x="160" y="104" text-anchor="middle">The page</text>
+      <text class="sub" x="160" y="119" text-anchor="middle">one browser session</text>
+      <rect x="400" y="72" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="400" y="72" width="200" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="408" y="80" width="32" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+      <text class="chip" x="424" y="89" text-anchor="middle" fill="#4f5d75">HOST</text>
+      <text class="actor-name" x="500" y="104" text-anchor="middle">dsh web · the gates</text>
+      <text class="sub" x="500" y="119" text-anchor="middle">bind → token → cookie → fence</text>
+      <rect x="740" y="72" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="740" y="72" width="200" height="56" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+      <rect x="748" y="80" width="36" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+      <text class="chip" x="766" y="89" text-anchor="middle" fill="#bf4520">ROUTE</text>
+      <text class="actor-name" x="840" y="104" text-anchor="middle">A pack route</text>
+      <text class="sub" x="840" y="119" text-anchor="middle">/api/dsh-cmdbar/activity</text>
+    </svg>

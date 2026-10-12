@@ -7,6 +7,11 @@ and there is no desktop edition. (`app/` + `scripts/run-desktop.bat` is a
 *launcher*: it starts the same pinned `dsh web` on a free loopback port and shows
 that URL in a native window. It installs nothing and touches no profile file.)
 
+The three planes below are the whole system — what npm ships, what the `web`
+profile boots, and what the page renders:
+
+![Three planes of one install target: npm ships the bundle and its pinned vendor trees; the web profile live-links them and composes its rows at boot from the pinned line plus the pack's layers, the host half mounting the services behind the session cookie; the page loads the client bundle into the module table and calls back over authenticated exact-path routes](./assets/architecture.svg)
+
 ## How a plugin ships
 
 - An npm package with `dsh.bundle` plus `cordis.patch.yml`. A UI plugin adds

@@ -90,6 +90,12 @@ bundles are public and contain no secrets. The signing secret lives in
 `$DSH_HOME/.credentials.yaml`, written `0600`, and the harness refuses to boot if
 that file is group/other-readable on POSIX.
 
+One call, through those gates: the printed URL buys the cookie, the cookie and the
+Host/Origin fence are checked on every request, and only then does a pack route
+run.
+
+![A sequence diagram of one authenticated call: the page exchanges the launch token for a session cookie, asks a pack route with that cookie, and the gates verify the cookie and the Host/Origin fence before dispatching anything; the alternate region shows the refusal - 401 without a session, 403 for a foreign authority or a cross-site fetch](./assets/security.svg)
+
 ## Lock it down
 
 1. **Keep it on loopback**: the pack's launcher or
