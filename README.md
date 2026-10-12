@@ -9,7 +9,7 @@
 Agent-Human IDE ⌨️    
 Web and Desktop versions, bundles [`Plugins`](packages/),  [`Skills`](docs/) and [`Interfaces`](docs/)
 
-![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner2.png)
+![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner3.png)
 
 Supports core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design. Standard **dsh bundles**. The plugins are plain JavaScript with **zero npm dependencies**; the launchers run on **Windows, macOS and Linux** (PowerShell on one side, plain POSIX shell on the other).
 
