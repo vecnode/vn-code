@@ -160,6 +160,7 @@ const docModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'doc.js'))
 const syntaxModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'syntax.js')).href)
 const buildModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'build.js')).href)
 const viewModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'view.js')).href)
+const verifyModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'verify.js')).href)
 const refsModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'refs.js')).href)
 const stylesModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'styles', 'index.js')).href)
 const apiModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'api.js')).href)
@@ -947,6 +948,171 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('a bibliography export is a real file', exports.outputs[0].path, 'build/references.bib')
   const bib = await fsp.readFile(path.join(dir, 'build', 'references.bib'), 'utf8')
   check('holding the source', bib.includes('smith2024'), true)
+}
+
+// ---------------------------------------------------------------------------
+// The ladder: the two rungs a file can run, and the two a reader must
+// ---------------------------------------------------------------------------
+{
+  check('a line break inside a word is removed before searching', verifyModule.normalizeForSearch('comple-\ntion rose'), 'completion rose')
+  check('and curly quotes are straightened', verifyModule.normalizeForSearch('the \u201Ceffect\u201D'), 'the "effect"')
+  check('and an en dash is a hyphen', verifyModule.normalizeForSearch('45\u201367'), '45-67')
+  check('a quote is found wherever it sits', verifyModule.locateQuote('the text says completion rose by 12 points here', 'COMPLETION  rose by 12 points').found, true)
+  check('and a miss is a miss', verifyModule.locateQuote('nothing like it', 'completion rose').found, false)
+  check('a title is reduced to its significant words', verifyModule.titleWords('Effects of a programme on completion').join(','), 'programme,completion')
+  check('a title of stopwords alone has none, and says so rather than matching anything', verifyModule.titleWords('The Effect of X on Y: A Study').length, 0)
+  check('a title with no significant words says so', verifyModule.titleWords('the of a').length, 0)
+  check('complete coverage is what makes a miss mean something', verifyModule.textIsComplete({ coverage: 1 }) && !verifyModule.textIsComplete({ coverage: null }) && !verifyModule.textIsComplete({ coverage: 0.4 }), true)
+}
+
+{
+  const exec2 = { agent: { session: { meta: { cwd: workspace } } } }
+  const log = { warn() {}, info() {}, debug() {} }
+  const tools2 = buildTools({ env, workspace, log })
+  const call2 = async (name, args) => {
+    const tool = tools2.find((one) => one.name === name)
+    const value = await tool.execute(args, exec2)
+    return { value, problems: [...schemaErrors(tool.output.schema, value, name), ...losslessErrors(value, name)] }
+  }
+
+  await call2('rs_new', { slug: 'ladder-check', title: 'A checked run', kind: 'paper', instruction: 'Check this properly.' })
+  await answerGate({ root, slug: 'ladder-check', id: 'g1-rq', value: 'confirm' })
+  await answerGate({ root, slug: 'ladder-check', id: 'g2-intake', value: 'no_experiments_declared', text: 'Nothing was run.' })
+
+  const SOURCE_TEXT = 'Effects of a programme on completion. The study found that completion rose by 25 points after the programme began, and that the effect persisted for two years.'
+  const ingested = await call2('rs_cite', {
+    slug: 'ladder-check',
+    action: 'add',
+    key: 'smith2024',
+    record: { kind: 'journal-article', title: 'Effects of a programme on completion', authors: [{ family: 'Smith', given: 'J.' }], year: '2024', container: 'Journal Name', pages: '45-67' },
+    source: 'crossref',
+    text: SOURCE_TEXT,
+    coverage: 1,
+  })
+  check('a source with text and full coverage is ingested', ingested.value.view.ok, true)
+  const noText = await call2('rs_cite', { slug: 'ladder-check', action: 'add', key: 'bare2024', record: { kind: 'journal-article', title: 'A bare record', year: '2024', container: 'J' }, source: 'author' })
+  check('and one with no text at all', noText.value.view.ok, true)
+  const mismatched = await call2('rs_cite', {
+    slug: 'ladder-check',
+    action: 'add',
+    key: 'wrong2024',
+    record: { kind: 'journal-article', title: 'A completely different title about whales', year: '2024', container: 'J' },
+    source: 'author',
+    text: 'This paper is about completion rates and nothing else at all.',
+    coverage: 1,
+  })
+  check('and one whose title is not in its own text', mismatched.value.view.ok, true)
+
+  const written = await call2('rs_write', {
+    slug: 'ladder-check',
+    section: 'results',
+    text: '## Results\n\n[Completion rose by 25 points.]{#c0001} [Completion rose by 99 points.]{#c0002} [It doubled.]{#c0003}\n',
+    claims: [
+      { id: 'c0001', strength: 'associational', sources: [{ key: 'smith2024', locator: { kind: 'quote', quote: 'completion rose by 25 points' } }] },
+      { id: 'c0002', strength: 'causal', sources: [{ key: 'smith2024', locator: { kind: 'quote', quote: 'completion rose by 99 points' } }] },
+      { id: 'c0003', strength: 'causal', sources: [{ key: 'bare2024', locator: { kind: 'quote', quote: 'it doubled' } }] },
+    ],
+  })
+  check('three claims are written', written.value.view.ok, true)
+
+  const recorded = await call2('rs_verify', { slug: 'ladder-check', action: 'record' })
+  check('rs_verify conforms', recorded.problems.join(' | '), '')
+  check('and finds the quote that IS there', recorded.value.text.includes('1 quote(s) found'), true)
+  // The distinction the whole design turns on: a miss is only a miss when the text
+  // is known to be complete.
+  check('a miss in complete text is a locate-miss', recorded.value.text.includes('locate-miss'), true)
+  check('and a source with no text is UNCHECKABLE, never a pass', recorded.value.text.includes('could not be checked'), true)
+  check('and a title that is not in its own text is a title-mismatch', recorded.value.text.includes('title-mismatch'), true)
+
+  const after = await readClaims(path.join(root, 'ladder-check'))
+  const located = after.current.find((row) => row.id === 'c0001')
+  check('the located claim moves to `located` at r2', located.status + '/' + located.tier, 'located/r2-locate')
+  check('and carries the context it was found in', typeof located.locatedContext === 'string' && located.locatedContext.includes('completion rose by 25 points'), true)
+  check('the missing quote leaves the claim unverified', after.current.find((row) => row.id === 'c0002').status, 'unverified')
+  check('with the finding recorded on it', after.current.find((row) => row.id === 'c0002').findings.some((one) => one.code === 'locate-miss'), true)
+
+  const report = await call2('rs_verify', { slug: 'ladder-check', action: 'report' })
+  check('the report names all four rungs', ['r1-record', 'r2-locate', 'r3-support', 'r4-audit'].every((rung) => report.value.text.includes(rung)), true)
+  check('and says r3 needs a reader rather than claiming it ran', report.value.text.includes('needs-a-reader') && report.value.text.includes('waiting on a reader'), true)
+  check('and writes nothing', report.value.text.includes('changed nothing on disk'), true)
+
+  // ---- the two rungs a file cannot do
+  check('a verdict with no judge is refused', (await call2('rs_verify', { slug: 'ladder-check', action: 'support', verdicts: [{ id: 'c0001', verdict: 'supported', reason: 'x' }] })).value.view.code, 'BAD_JUDGE')
+  check(
+    'a verdict with no reason is refused',
+    (await call2('rs_verify', { slug: 'ladder-check', action: 'support', judge: 'the session model', verdicts: [{ id: 'c0001', verdict: 'supported' }] })).value.view.code,
+    'BAD_VERDICT',
+  )
+  check(
+    'an invented verdict is refused',
+    (await call2('rs_verify', { slug: 'ladder-check', action: 'support', judge: 'the session model', verdicts: [{ id: 'c0001', verdict: 'pretty-sure', reason: 'x' }] })).value.view.code,
+    'BAD_VERDICT',
+  )
+  // A claim whose source carries no locator has no passage that was read.
+  //
+  // This text is written with an ANCHOR LINK rather than a claim span on purpose:
+  // the probe that found the `textIsComplete` bug also found this one, and the run
+  // must now report it as a broken marker rather than letting a person believe a
+  // sentence is tracked when the ledger has never heard of it.
+  const anchor = await call2('rs_write', {
+    slug: 'ladder-check',
+    section: 'notes',
+    text: '## Notes\n\n[Nothing points anywhere.](#c0004)\n',
+    claims: [{ id: 'c0004', strength: 'descriptive', sources: [{ key: 'smith2024' }] }],
+  })
+  check('a claim written as an anchor link is refused as span-less', anchor.value.view.code, 'CLAIM_SPAN_MISSING')
+  check('and the text is reported as tracking nothing', syntaxModule.findBrokenClaimMarkers('[x](#c0004)').length, 1)
+  check('with the reason naming the right syntax', syntaxModule.findBrokenClaimMarkers('[x](#c0004)')[0].why.includes('{#c0142}'), true)
+
+  const noLocator = await call2('rs_write', {
+    slug: 'ladder-check',
+    section: 'notes',
+    text: '## Notes\n\n[Nothing points anywhere.]{#c0004}\n',
+    claims: [{ id: 'c0004', strength: 'descriptive', sources: [{ key: 'smith2024' }] }],
+  })
+  check('a claim with no locator can be written', noLocator.value.view.ok, true)
+  check(
+    'but it cannot be JUDGED - evidence first',
+    (await call2('rs_verify', { slug: 'ladder-check', action: 'support', judge: 'the session model', verdicts: [{ id: 'c0004', verdict: 'supported', reason: 'x' }] })).value.view.code,
+    'STATUS_REQUIRES_EVIDENCE',
+  )
+  check(
+    'an audit before an r3 verdict is refused',
+    (await call2('rs_verify', { slug: 'ladder-check', action: 'audit', judge: 'the devil', verdicts: [{ id: 'c0002', verdict: 'contradicted', reason: 'x' }] })).value.view.code,
+    'RUNG_ORDER',
+  )
+
+  const supported = await call2('rs_verify', {
+    slug: 'ladder-check',
+    action: 'support',
+    judge: 'the session model',
+    verdicts: [{ id: 'c0001', verdict: 'supported', strengthVerdict: 'aligned', reason: 'the passage states the rise in those words', passage: 'completion rose by 25 points' }],
+  })
+  check('a well-formed verdict is recorded', supported.value.view.ok, true)
+  check('and names its rung', supported.value.text.includes('r3-support'), true)
+  check('and its judge', supported.value.text.includes('the session model'), true)
+  const judged = (await readClaims(path.join(root, 'ladder-check'))).current.find((row) => row.id === 'c0001')
+  check('the claim now carries the verdict, the strength and the passage', judged.status === 'supported' && judged.strengthVerdict === 'aligned' && judged.reason.includes('completion rose by 25 points'), true)
+  const audited = await call2('rs_verify', {
+    slug: 'ladder-check',
+    action: 'audit',
+    judge: 'a devil\'s advocate subagent',
+    verdicts: [{ id: 'c0001', verdict: 'partially-supported', reason: 'the passage shows an association, and the sentence says nothing about cause' }],
+  })
+  check('an audit after an r3 verdict is recorded at r4', audited.value.view.ok && audited.value.text.includes('r4-audit'), true)
+
+  // A wording change clears the verdict AND the findings: both were about a
+  // sentence that no longer exists.
+  const edited = await call2('rs_write', {
+    slug: 'ladder-check',
+    section: 'results',
+    text: '## Results\n\n[Completion rose by 26 points.]{#c0001}\n',
+    claims: [{ id: 'c0001', strength: 'associational', sources: [{ key: 'smith2024', locator: { kind: 'quote', quote: 'completion rose by 25 points' } }] }],
+  })
+  check('an edit that changes the sentence clears the verdict', edited.value.text.includes('RE-VERIFICATION NEEDED'), true)
+  const cleared = (await readClaims(path.join(root, 'ladder-check'))).current.find((row) => row.id === 'c0001')
+  check('the status is back to unverified', cleared.status, 'unverified')
+  check('and the findings went with it', cleared.findings.length, 0)
 }
 
 // ---------------------------------------------------------------------------

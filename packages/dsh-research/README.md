@@ -20,11 +20,35 @@ the **record** first.
   where this one stands — and `action=handoff`, which reprints the ledger so a
   model's summary is never mistaken for what you said), `rs_new` (start a run;
   opens the frame gates), `rs_plan` (the question, the outline, the method),
-  `rs_read` (the one reader: view, gates, passport, files, **claims, sources,
-  outline, build**, or one text file), `rs_write` (write prose AND declare the
-  claims it makes, together), `rs_cite` (ingest a source: hash the bytes, store the
-  record and the text), `rs_build` (a watermarked draft, or a gated clean
-  document).
+  `rs_read` (the one reader: view, gates, passport, files, claims, sources,
+  outline, build, or one text file), `rs_write` (write prose AND declare the claims
+  it makes, together), `rs_cite` (ingest a source: hash the bytes, store the record
+  and the text), `rs_verify` (run the two rungs a file can run, record the two that
+  need a reader), `rs_build` (a watermarked draft, or a gated clean document).
+- **A ladder, and every rung names what it reached.**
+  - `r0-structure` — the document and its ledgers agree (`span-unrecorded`,
+    `claim-orphan`, `broken-marker`, `broken-citation`, `unknown-source`). Runs in
+    `doc.js`, on every entry the panel saves.
+  - `r1-record` — the stored bytes still hash to the names they are filed under
+    (`bytes-tampered`), the record has the fields a reference needs, every field
+    names its origin, and the title it claims actually appears in the text that was
+    ingested (`title-mismatch`). This is PROVENANCE, not existence: it never says a
+    DOI is real.
+  - `r2-locate` — every claim's quoted passage really is in its source's stored
+    text. **A miss and an inconclusive are different answers**: a quote that is not
+    found is `locate-miss` only when the extraction reports complete coverage, and
+    `locate-inconclusive` otherwise — because telling an author their quote is not
+    in the paper when the *extractor* was partial is the worst answer this plugin
+    could give.
+  - `r3-support` / `r4-audit` — a reader's judgement, recorded by the agent with
+    `rs_verify action=support` / `audit`, with the judge named and the passage
+    quoted. A claim with no locator **cannot be judged** (`STATUS_REQUIRES_EVIDENCE`):
+    there is no passage that was read. An audit before an `r3` verdict is refused
+    (`RUNG_ORDER`). A verdict with no reason is refused — a score with no evidence
+    is the one thing this ledger must not hold.
+  - **A rung that could not run says so.** A source with no stored text is
+    `uncheckable`, listed by name, never a pass — the quiet failure being a run that
+    looks fully checked because every check that could not run was skipped.
 - **A run is a real folder you keep.** `~/Desktop/vncode-research/<slug>/` by
   default, with `plan/`, `doc/`, `ledger/`, `sources/`, `figures/`, `reviews/`,
   `build/`. `DSH_RESEARCH_ROOT` overrides it; a machine with no Desktop falls back
@@ -80,10 +104,10 @@ the **record** first.
 |---|---|
 | row | `research` |
 | routes | eight exact paths, `GET`/`HEAD`/`POST`, all behind the harness's session check |
-| tools | 7 (`rs_open`, `rs_new`, `rs_plan`, `rs_read`, `rs_write`, `rs_cite`, `rs_build`) |
+| tools | 8 (`rs_open`, `rs_new`, `rs_plan`, `rs_read`, `rs_write`, `rs_cite`, `rs_verify`, `rs_build`) |
 | gates | 3 (two frame, one opened by a clean build) |
 | tab types | 1 (`research`, a page type with no file patterns) |
-| skills | 1 so far (`research-project`), registered at activation *and* copied into `$DSH_HOME/skills` |
+| skills | 3 (`research-project`, `research-sources`, `research-writing`), registered at activation *and* copied into `$DSH_HOME/skills` |
 | touches | **no** core row disabled, **no** fork, **no** npm dependency, **no** vendored engine, **no** bundled binary |
 
 | Route | What it answers |
@@ -123,13 +147,12 @@ the **record** first.
 ## Limits — what is not here yet
 
 `md`, `ris`, `bib` and `enw` build today. **`docx`, `html` and `tex` refuse by name
-and say which phase brings them** — the DOCX writer is next. The verification rungs
-`r1`–`r4` are designed, and the ledger already stores everything they need (the
-status vocabulary and `recordVerdict` are in place and driven by the checks), but
-the `rs_verify` tool that records a rung is not written yet. The remaining panel
-sections (claims, sources, outline, and the build buttons) and the other five
-skills are still to come. The design for all of it, with the reasoning, is in
-`docs/DESIGN-dsh-research.md`.
+and say which phase brings them** — the DOCX writer is next. The remaining panel
+work is the in-place editor's hand-off to the editor tab and the headless render
+check. `rs_review` (the reviewer panel, the devil's advocate and the
+R&R matrix) is still to come, and so are the last three skills
+(`research-verification`, `research-review`, `research-formats`). The design for
+all of it, with the reasoning, is in `docs/DESIGN-dsh-research.md`.
 
 A run created today is not a dead end: the folder, the ledgers and the dialect are
 the structures the later phases fill.

@@ -76,7 +76,11 @@ import {
  * what a filesystem provider reads in a profile whose registry the row never
  * reached. Either alone leaves a machine where the skill exists but cannot load.
  */
-const SKILL_FILES = [{ name: 'research-project', file: '../skills/research-project/SKILL.md' }]
+const SKILL_FILES = [
+  { name: 'research-project', file: '../skills/research-project/SKILL.md' },
+  { name: 'research-sources', file: '../skills/research-sources/SKILL.md' },
+  { name: 'research-writing', file: '../skills/research-writing/SKILL.md' },
+]
 
 /** The row's identity. */
 export const name = 'dsh-research'
@@ -451,6 +455,10 @@ export const REFUSAL_CODES = [
   'UNKNOWN_STYLE',
   'UNKNOWN_CLAIM',
   'BAD_STATUS',
+  'BAD_VERDICT',
+  'BAD_JUDGE',
+  'STATUS_REQUIRES_EVIDENCE',
+  'RUNG_ORDER',
   'BROKEN_CITATION',
   'NO_SUCH_FILE',
   'NOT_A_FILE',

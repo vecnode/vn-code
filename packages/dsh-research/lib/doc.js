@@ -251,7 +251,7 @@ export function validateStructure(options) {
     }
   }
   for (const marker of scan.brokenMarkers) {
-    problems.push(problem('broken-marker', 'error', 'a claim marker is malformed: ' + JSON.stringify(marker.marker) + ' (a claim id is `c` and at least four digits)', { marker: marker.marker }))
+    problems.push(problem('broken-marker', 'error', 'a claim reference tracks nothing: ' + JSON.stringify(marker.marker) + (marker.why === undefined ? '' : ' - ' + marker.why), { marker: marker.marker }))
   }
   for (const broken of scan.brokenCitations) {
     problems.push(problem('broken-citation', 'error', JSON.stringify(broken.raw) + ' mentions a key but is not a citation this build can resolve: ' + broken.why, { raw: broken.raw }))

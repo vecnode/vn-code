@@ -314,12 +314,15 @@ export function claimRow(input) {
     checkedAt: null,
     judge: null,
     reason: '',
+    // What a file-checking rung found about this claim. Cleared with the verdict
+    // when the wording changes, for the same reason: a finding is about a sentence.
+    findings: [],
     createdAt: stamp(input.now),
   }
 }
 
 /** The fields a verification leaves behind, all of which a wording change clears. */
-const VERDICT_FIELDS = ['status', 'tier', 'strengthVerdict', 'checkedAt', 'judge', 'reason']
+const VERDICT_FIELDS = ['status', 'tier', 'strengthVerdict', 'checkedAt', 'judge', 'reason', 'findings']
 
 /**
  * Record one claim, appending only when something changed.
@@ -356,6 +359,47 @@ export async function appendClaim(runDir, input, now) {
   }
   await appendJsonl(file, next)
   return { row: next, added: true, invalidated: !sameWording, revision: next.revision }
+}
+
+/**
+ * Record what a FILE rung found, on a source or on a claim.
+ *
+ * Findings are not verdicts: `bytes-tampered` is a fact about a file, and
+ * `locate-miss` is a fact about a string, neither of which says whether a claim is
+ * true. They are stored on the row they are about, appended like everything else,
+ * and CLEARED when a claim's wording changes - a finding about a sentence that no
+ * longer exists is not a finding.
+ *
+ * @returns the new row.
+ */
+export async function applyFindings(runDir, input, now) {
+  const target = input.target === 'source' ? 'sources' : 'claims'
+  const field = target === 'sources' ? 'key' : 'id'
+  const file = ledgerPath(runDir, target)
+  const rows = await readJsonl(file)
+  const current = foldLatest(rows, field)
+  const existing = current.find((row) => row[field] === input.id) ?? null
+  if (existing === null) {
+    throw new ResearchError(
+      target === 'sources' ? 'UNKNOWN_SOURCE' : 'UNKNOWN_CLAIM',
+      'no ' + (target === 'sources' ? 'source' : 'claim') + ' named ' + JSON.stringify(String(input.id ?? '')) + ' - a finding records what was checked, it cannot create it',
+    )
+  }
+  const previous = Array.isArray(existing.findings) ? existing.findings : []
+  // A rung RE-runs, so its own findings are replaced rather than piled up; another
+  // rung's are kept, because r1 and r2 answer different questions.
+  const kept = previous.filter((one) => one === null || one === undefined || one.rung !== input.rung)
+  const next = {
+    ...existing,
+    findings: [...kept, ...(Array.isArray(input.findings) ? input.findings : [])],
+    revision: Number(existing.revision ?? 1) + 1,
+    checkedAt: stamp(now),
+  }
+  if (input.status !== undefined) next.status = input.status
+  if (input.tier !== undefined) next.tier = input.tier
+  if (input.context !== undefined) next.locatedContext = input.context
+  await appendJsonl(file, next)
+  return next
 }
 
 /** The current claim for an id, or null. */

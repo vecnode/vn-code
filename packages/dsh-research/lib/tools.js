@@ -62,11 +62,13 @@ import {
 import {
   appendClaim,
   appendSource,
+  applyFindings,
   attachToSource,
   claimStatusOf,
   claimsById,
   readClaims,
   readSources,
+  recordVerdict,
   sourcesByKey,
   sourceFilePath,
   sourceTextPath,
@@ -75,9 +77,10 @@ import { STRENGTHS, findBrokenCitations, locatorLabel, nextClaimId } from './syn
 import { assembleDocument, parseOutline, scanDocument, validateStructure, wordCount } from './doc.js'
 import { FORMATS, FORMATS_READY, ensureIntegrityGate, formatNotYetMessage, hashOf, loadRefs, loadStyles, runBuild } from './build.js'
 import { API_ROUTES } from './api.js'
+import { ladderReport, r1Sources, r2Claims } from './verify.js'
 
 /** Every tool this package registers, for the row's log line and the tracked checks. */
-export const TOOL_NAMES = ['rs_open', 'rs_new', 'rs_plan', 'rs_read', 'rs_write', 'rs_cite', 'rs_build']
+export const TOOL_NAMES = ['rs_open', 'rs_new', 'rs_plan', 'rs_read', 'rs_write', 'rs_cite', 'rs_verify', 'rs_build']
 
 /** The view schema every tool's `view` conforms to. The conversation card draws this. */
 const VIEW_SCHEMA = {
@@ -874,7 +877,7 @@ export function buildTools(deps = {}) {
           lines.push('')
           lines.push('RE-VERIFICATION NEEDED: ' + invalidated.join(', ') + ' changed wording or sources, so the verification they had was cleared. A verdict belongs to a sentence, not to an id.')
         }
-        for (const marker of scan.brokenMarkers) lines.push('- a claim marker is malformed: ' + JSON.stringify(marker.marker) + ' (a claim id is `c` and at least four digits)')
+        for (const marker of scan.brokenMarkers) lines.push('- ' + (marker.why === undefined ? 'a claim reference tracks nothing: ' + JSON.stringify(marker.marker) : JSON.stringify(marker.marker) + ': ' + marker.why))
         if (answered.length > 0) {
           lines.push('')
           lines.push('STILL WAITING ON THE USER: ' + answered.map((gate) => gate.id).join(', ') + ' - a draft can be built, but not a clean one.')
@@ -1087,7 +1090,13 @@ export function buildTools(deps = {}) {
       additionalProperties: false,
       properties: {
         slug: { type: 'string', description: 'The run.' },
-        format: { type: 'string', enum: [...FORMATS, 'all'], description: '`md` (default), `ris`, `bib`, `enw`, or `all` for every format this build has.' },
+        // The enum ADVERTISES the three formats this build refuses, on purpose: a
+        // model that asks for `docx` gets a refusal naming the phase that brings it,
+        // which is a more useful answer than a schema violation that only says the
+        // value is not allowed. The authority on what can actually be written is
+        // `rs_open action=capabilities`, and the skills point there rather than
+        // listing formats that would go stale.
+        format: { type: 'string', enum: [...FORMATS, 'all'], description: '`md` (default), `ris`, `bib`, `enw`, or `all` for every format this build has; `docx`, `html` and `tex` refuse by name until the phase that brings them.' },
         draft: { type: 'string', enum: ['watermark', 'clean'], description: '`watermark` (default) always builds; `clean` is gated.' },
         style: { type: 'string', description: 'Citation style id. Defaults to the run\'s own.' },
       },
@@ -1171,7 +1180,213 @@ export function buildTools(deps = {}) {
     },
   }
 
-  return [open, create, plan, read, write, cite, build]
+  // -------------------------------------------------------------------------
+  // rs_verify
+  // -------------------------------------------------------------------------
+  const verify = {
+    name: 'rs_verify',
+    description: [
+      'Check the run, and record what was found. Four actions, and the ladder is the shape of all of them.',
+      '`record` runs the two rungs that need NO reader - `r1-record` (are the stored bytes still the bytes that were ingested, does the record have the fields a reference needs, does every field name its origin, and does the title it claims appear in the text that was ingested) and `r2-locate` (is every claim\'s quoted passage really in its source\'s stored text). Pass `tier=r1` or `tier=r2` to narrow it; both run by default.',
+      '`report` is the ladder as it stands - each rung\'s state, what it checked, what it found and what it COULD NOT check - and it writes nothing. Read it before you tell anyone a run has been checked.',
+      '`support` records the rungs a file cannot do: for each claim you name, the verdict (`supported`, `partially-supported`, `unsupported`, `contradicted`, `misattributed`), whether the claim is written at the strength the passage holds (`aligned`, `overstated`, `understated`), and the reason. YOU are the reader for that - this tool records your judgement, it does not make it - so a claim with no locator cannot be judged (`STATUS_REQUIRES_EVIDENCE`), and every verdict names its judge.',
+      '`audit` is the adversarial pass: the same claims argued the other way, recorded at `r4-audit` after an `r3-support` verdict exists. A concession below the stated threshold is REFUSED rather than stored, which is what keeps the devil\'s advocate from agreeing its way out of an argument.',
+      'Nothing here is a claim about the truth of a source. `r1` records PROVENANCE - whose bytes, whose record, which field from where - and never says a DOI exists.',
+    ].join('\n'),
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        slug: { type: 'string', description: 'The run.' },
+        action: { type: 'string', enum: ['record', 'report', 'support', 'audit'], description: '`record` (default) runs the file rungs; `report` writes nothing; `support`/`audit` record YOUR verdicts.' },
+        tier: { type: 'string', enum: ['r1', 'r2', 'all'], description: 'For `record`: which file rung (default `all`).' },
+        judge: { type: 'string', description: 'Who judged, for `support`/`audit` - e.g. the session model, or a subagent and what it was asked. Required.' },
+        verdicts: {
+          type: 'array',
+          description: 'For `support`/`audit`: one entry per claim judged.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['id', 'verdict'],
+            properties: {
+              id: { type: 'string', description: 'The claim id, e.g. `c0142`.' },
+              verdict: { type: 'string', enum: ['supported', 'partially-supported', 'unsupported', 'contradicted', 'misattributed'], description: 'What the passage does for the claim.' },
+              strengthVerdict: { type: 'string', enum: ['aligned', 'overstated', 'understated'], description: 'Whether the sentence is written at the strength the passage holds.' },
+              reason: { type: 'string', description: 'Why - the sentence a reader will weigh. Required: a verdict with no reason is a score with no evidence.' },
+              passage: { type: 'string', description: 'The words you judged, quoted from the source, so the next reader can find them.' },
+            },
+          },
+        },
+      },
+      required: ['slug'],
+    },
+    output,
+    presentCall: () => ({ card: 'generic', title: 'Research check', kind: 'other' }),
+    async execute(args, exec) {
+      return run('rs_verify', args, exec, async () => {
+        const resolved = await rootFor(exec)
+        const slug = String(args.slug ?? '').trim()
+        const { dir, file: runFile, record } = await readRun(resolved.root, slug)
+        const action = args.action ?? 'record'
+
+        if (action === 'report') {
+          const report = await ladderReport({ dir, now: args.now })
+          const lines = ['The ladder for ' + slug + ' as it stands (' + report.sources + ' source(s), ' + report.claims + ' claim(s))']
+          for (const rung of report.rungs) {
+            lines.push('')
+            lines.push(rung.rung + '  [' + rung.state + ']')
+            if (rung.why !== undefined) lines.push('  ' + rung.why)
+            if (rung.checked !== undefined) lines.push('  checked: ' + rung.checked)
+            if (rung.located !== undefined) lines.push('  quotes located: ' + rung.located)
+            if (rung.waiting !== undefined) lines.push('  waiting on a reader: ' + rung.waiting)
+            for (const one of (rung.findings ?? []).slice(0, 12)) lines.push('  · ' + one.code + ': ' + one.detail)
+            if ((rung.findings ?? []).length > 12) lines.push('  · … and ' + ((rung.findings ?? []).length - 12) + ' more')
+            for (const one of (rung.uncheckable ?? []).slice(0, 6)) lines.push('  ? could not check ' + (one.key ?? one.id) + ': ' + one.why)
+            if ((rung.uncheckable ?? []).length > 6) lines.push('  ? … and ' + ((rung.uncheckable ?? []).length - 6) + ' more could not be checked')
+          }
+          lines.push('')
+          lines.push('Statuses: ' + Object.entries(report.statuses).filter(([, count]) => count > 0).map(([status, count]) => count + ' ' + status).join(', '))
+          lines.push('This report changed nothing on disk: `action=record` writes findings, `action=support` writes verdicts, and this writes neither.')
+          lines.push('A rung that could not run is listed as `could not check`, never as a pass.')
+          return {
+            text: lines.join('\n'),
+            view: { action, slug, root: resolved.root, runs: 0, summary: 'r1/r2 report written to nothing' },
+          }
+        }
+
+        if (action === 'support' || action === 'audit') {
+          const judge = String(args.judge ?? '').trim()
+          if (judge === '') {
+            throw new ResearchError('BAD_JUDGE', 'a verdict names its judge: pass `judge="…"` naming who read the passage (the session model, or a subagent and what it was asked)')
+          }
+          const verdicts = Array.isArray(args.verdicts) ? args.verdicts : []
+          if (verdicts.length === 0) throw new ResearchError('BAD_VERDICT', 'pass at least one entry in `verdicts`')
+          const { current: claims } = await readClaims(dir)
+          const byId = claimsById(claims)
+          const tier = action === 'audit' ? 'r4-audit' : 'r3-support'
+          const VERDICTS = ['supported', 'partially-supported', 'unsupported', 'contradicted', 'misattributed']
+          const moved = []
+          for (const entry of verdicts) {
+            const id = String(entry.id ?? '').trim()
+            const row = byId.get(id)
+            if (row === undefined) throw new ResearchError('UNKNOWN_CLAIM', 'no claim named ' + JSON.stringify(id) + ' in ' + slug + ' - a verdict records what was judged')
+            if (!VERDICTS.includes(entry.verdict)) {
+              throw new ResearchError('BAD_VERDICT', 'claim ' + id + ': verdict must be one of ' + VERDICTS.join(', ') + ' (got ' + JSON.stringify(String(entry.verdict)) + ')')
+            }
+            const reason = String(entry.reason ?? '').trim()
+            if (reason === '') {
+              throw new ResearchError('BAD_VERDICT', 'claim ' + id + ': a verdict needs a `reason`. A verdict with no reason is a score with no evidence, which is the one thing this ledger must not hold')
+            }
+            // EVIDENCE FIRST. A verdict about support is a verdict about a PASSAGE,
+            // so a claim that carries no locator cannot be judged at all - there is
+            // nothing that was read.
+            const bindings = Array.isArray(row.sources) ? row.sources : []
+            const located = bindings.filter((binding) => binding.locator !== null && binding.locator !== undefined)
+            if (located.length === 0) {
+              throw new ResearchError(
+                'STATUS_REQUIRES_EVIDENCE',
+                'claim ' + id + ' has no locator on any of its sources, so there is no passage to judge. Bind it to a quote (or a page) with `rs_write`, then judge it.',
+              )
+            }
+            if (action === 'audit') {
+              const previous = claimStatusOf(row)
+              if (previous === 'unverified' || previous === 'located') {
+                throw new ResearchError('RUNG_ORDER', 'claim ' + id + ' has not been through `r3-support` yet (it is `' + previous + '`), and an adversarial pass over a claim nobody has read once is not an audit')
+              }
+            }
+            const next = await recordVerdict(
+              dir,
+              {
+                id,
+                status: entry.verdict,
+                tier,
+                strengthVerdict: entry.strengthVerdict,
+                reason: entry.passage === undefined ? reason : reason + ' [passage: “' + String(entry.passage).slice(0, 200) + '”]',
+                judge,
+              },
+              args.now,
+            )
+            moved.push({ id, verdict: entry.verdict, tier })
+            if (next === null) throw new ResearchError('BAD_VERDICT', 'claim ' + id + ' could not be recorded')
+          }
+          const { passport } = await readPassport(resolved.root, slug)
+          await addReceipt(path.join(dir, PASSPORT_FILE), passport, 'rs_verify', tier + ' recorded for ' + moved.length + ' claim(s) by ' + judge, args.now)
+          await touchRun(runFile, record, args.now)
+          const lines = [tier + ' recorded for ' + moved.length + ' claim(s) in ' + slug, '- judge: ' + judge]
+          for (const one of moved) lines.push('  ' + one.id + ' -> ' + one.verdict)
+          lines.push('')
+          lines.push('A verdict is recorded, not proven: the judge, the reason and the passage are all in the ledger so a reader can disagree with a specific one.')
+          if (moved.some((one) => one.verdict === 'unsupported' || one.verdict === 'contradicted' || one.verdict === 'misattributed')) {
+            lines.push('A clean build now REFUSES while these stand: ' + moved.filter((one) => one.verdict !== 'supported' && one.verdict !== 'partially-supported').map((one) => one.id + '=' + one.verdict).join(', '))
+          }
+          return {
+            text: lines.join('\n'),
+            view: { action, slug, root: resolved.root, gates: [tier], summary: moved.length + ' verdict(s) at ' + tier },
+          }
+        }
+
+        // ---- action=record: the two rungs that need no reader
+        const tier = args.tier ?? 'all'
+        const { current: sources } = await readSources(dir)
+        const { current: claims } = await readClaims(dir)
+        const byKey = sourcesByKey(sources)
+        const lines = ['Checked ' + slug + ' (' + sources.length + ' source(s), ' + claims.length + ' claim(s))']
+        const counts = {}
+        const tally = (findings) => {
+          for (const one of findings) counts[one.code] = (counts[one.code] ?? 0) + 1
+        }
+
+        if (tier === 'r1' || tier === 'all') {
+          const r1 = await r1Sources({ dir, sources })
+          for (const recordEntry of sources) {
+            const own = r1.findings.filter((one) => one.detail.startsWith(recordEntry.key + ':') || one.detail.includes(recordEntry.key))
+            if (own.length > 0) await applyFindings(dir, { target: 'source', id: recordEntry.key, rung: 'r1-record', findings: own }, args.now)
+          }
+          tally(r1.findings)
+          lines.push('- r1-record: ' + r1.checked + ' source(s) matched their own text, ' + r1.findings.length + ' finding(s), ' + r1.uncheckable.length + ' could not be checked')
+          for (const one of r1.uncheckable.slice(0, 6)) lines.push('    ? ' + one.key + ': ' + one.why)
+        }
+
+        if (tier === 'r2' || tier === 'all') {
+          const r2 = await r2Claims({ dir, claims, sourcesByKey: byKey })
+          for (const claimRow of claims) {
+            const own = r2.findings.filter((one) => one.id === claimRow.id)
+            const hit = r2.located.find((one) => one.id === claimRow.id)
+            if (own.length === 0 && hit === undefined) continue
+            await applyFindings(
+              dir,
+              {
+                target: 'claim',
+                id: claimRow.id,
+                rung: 'r2-locate',
+                findings: own,
+                ...(hit === undefined ? {} : { status: 'located', tier: 'r2-locate', context: hit.context }),
+              },
+              args.now,
+            )
+          }
+          tally(r2.findings)
+          lines.push('- r2-locate: ' + r2.located.length + ' quote(s) found in their source, ' + r2.findings.length + ' finding(s), ' + r2.uncheckable.length + ' could not be checked')
+          for (const one of r2.findings.slice(0, 8)) lines.push('    · ' + one.code + ': ' + one.detail)
+          for (const one of r2.uncheckable.slice(0, 6)) lines.push('    ? ' + one.id + '/' + one.key + ': ' + one.why)
+        }
+
+        const spoken = Object.entries(counts).map(([code, count]) => count + ' ' + code).join(', ')
+        if (spoken !== '') lines.push('- findings: ' + spoken)
+        const { passport } = await readPassport(resolved.root, slug)
+        await addReceipt(path.join(dir, PASSPORT_FILE), passport, 'rs_verify', tier + ' over ' + sources.length + ' source(s) and ' + claims.length + ' claim(s)', args.now)
+        await touchRun(runFile, record, args.now)
+        lines.push('')
+        lines.push('Next: `rs_verify action=report` for the ladder, and `rs_verify action=support` once you have READ the passages - the two rungs above never judge whether a source supports a claim, only whether the words are there.')
+        return {
+          text: lines.join('\n'),
+          view: { action: 'record', slug, root: resolved.root, gates: [tier], pending: pendingGates(passport).length, summary: tier + ' recorded, ' + Object.keys(counts).length + ' kind(s) of finding' },
+        }
+      })
+    },
+  }
+
+  return [open, create, plan, read, write, cite, verify, build]
 }
 
 // ---------------------------------------------------------------------------

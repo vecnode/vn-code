@@ -127,21 +127,33 @@ export function findClaimSpans(text) {
 }
 
 /**
- * A bracket that LOOKS like a claim span but is not well formed.
+ * A bracket that LOOKS like a claim reference but does not track anything.
  *
- * This is the quiet failure the span grammar can otherwise produce: a typo like
- * `{#c12}` (too few digits) or an unclosed bracket is a claim the author believes
- * is tracked and the ledger has never heard of. It is reported by name and by
- * line, never ignored.
+ * Two shapes, and both are the quiet failure this whole dialect exists to prevent
+ * - an author believing a sentence is tracked when nothing has heard of it:
+ *
+ *   - a malformed `{#…}` marker (`{#c12}` is too few digits, `{#c}` has none), and
+ *   - **a Markdown anchor link**: `[the sentence](#c0142)`. It reads exactly like a
+ *     claim span to a person, it renders as a clickable claim, and the ledger has
+ *     never seen it. This shape was found by driving `rs_write` with one: it
+ *     refused the DECLARATION as span-less, which is right, but nothing said why
+ *     the text looked tracked. Now something does.
  */
 export function findBrokenClaimMarkers(text) {
   const found = []
   const source = String(text ?? '')
   for (const match of source.matchAll(/\{[^}]*#[^}]*\}/g)) {
     if (/#c[0-9]{4,}\}/.test(match[0])) continue
-    found.push({ index: match.index, marker: match[0] })
+    found.push({ index: match.index, marker: match[0], why: 'a claim marker is `{#c0142}`: a `c`, then at least four digits' })
   }
-  return found
+  for (const match of source.matchAll(/\]\(#(c[0-9]{4,})\)/g)) {
+    found.push({
+      index: match.index,
+      marker: match[0],
+      why: 'this is a Markdown link to an anchor, not a claim span - ' + match[1] + ' tracks nothing. A claim is `[the sentence]{#c0142}`',
+    })
+  }
+  return found.sort((left, right) => left.index - right.index)
 }
 
 /**
