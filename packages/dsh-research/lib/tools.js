@@ -57,6 +57,7 @@ import {
   sizeOf,
   stateView,
   touchRun,
+  writeJsonAtomic,
   writeTextAtomic,
 } from './run.js'
 import {
@@ -73,8 +74,9 @@ import {
   sourceFilePath,
   sourceTextPath,
 } from './ledger.js'
-import { STRENGTHS, findBrokenCitations, locatorLabel, nextClaimId } from './syntax.js'
+import { STRENGTHS, STATISTIC_FIELDS, findBrokenCitations, locatorLabel, nextClaimId, statisticLabel } from './syntax.js'
 import { assembleDocument, parseOutline, scanDocument, validateStructure, wordCount } from './doc.js'
+import { METHOD_FILE, METHOD_MD, METHOD_REQUIRED, methodSummary, normalizeMethod, readMethodRecord, renderMethodMd } from './method.js'
 import { FORMATS, FORMATS_DOCUMENT, FORMATS_READY, combineReports, ensureIntegrityGate, hashOf, loadRefs, loadStyles, readRunState, runBuild, writeBuildReport } from './build.js'
 import { API_ROUTES } from './api.js'
 import { ladderReport, r1Sources, r2Claims } from './verify.js'
@@ -238,6 +240,9 @@ export function buildTools(deps = {}) {
             '- citation styles: ' + styles.join(', '),
             '- gates: ' + GATE_IDS.join(', ') + ' (the first two frame a run; `g3-integrity` is opened by a clean build)',
             '- document syntax: `[sentence]{#c0142}` for a claim, `[@key]` / `[@key, p. 7]` / `[-@key]` for a citation',
+            '- claim strengths: ' + STRENGTHS.join(', ') + ' (the design has to be able to carry the one you pick)',
+            '- claim statistics: { ' + STATISTIC_FIELDS.join(', ') + ' } - recorded as data, printed as the document\'s Statistics table, and `p = .000` is refused',
+            '- method record: ' + METHOD_FILE + ' holds { ' + METHOD_REQUIRED.join(', ') + ' }, validated on the way in and by r0, and printed as the document\'s search-and-screening flow',
             '- it opens no socket and spawns no process: sources arrive as files you already have',
           ]
           return {
@@ -639,6 +644,7 @@ export function buildTools(deps = {}) {
     description: [
       'The run\'s plan: the research question (`part=rq`), the section outline (`part=outline`), the method (`part=method`).',
       'Written to `plan/<part>.md` inside the run. The outline is the one part with a machine meaning: lines of the form `- <slug>: <title>` order the section files at build time, and a section file no line names is appended to the end rather than dropped.',
+      '`part=method` ALSO takes a `method` OBJECT - the record of the search itself: `{ databases, accessed, search, include, exclude, screening: { identified, screened, included } }`. Give it and the record is written to `plan/method.json` and `plan/method.md` is regenerated from it; the counts are checked (records are removed at each step, never added) and the date has to be a real one. A record is what makes a search reproducible and what the document\'s own search-and-screening flow is printed from, so a `part=method` written as prose alone is a sentence nobody can check.',
       'A plan is the agent\'s own work, so this tool has NO gate: nothing in it is a claim and nothing in it is published. The frame gates block the DOCUMENT, and `rs_write` is where that shows.',
     ].join('\n'),
     parameters: {
@@ -648,7 +654,8 @@ export function buildTools(deps = {}) {
         slug: { type: 'string', description: 'The run.' },
         action: { type: 'string', enum: ['write', 'read'], description: '`write` (default) stores text; `read` returns what is there.' },
         part: { type: 'string', enum: ['rq', 'outline', 'method'], description: 'Which part of the plan.' },
-        text: { type: 'string', description: 'For `write`: the Markdown.' },
+        text: { type: 'string', description: 'For `write`: the Markdown. For `part=method`, a `method` object is the record and this is prose on top of it.' },
+        method: { type: 'object', description: 'For `part=method`: the search record - databases (list), accessed (YYYY-MM-DD), search (the query as run), include (list), exclude (list), screening ({ identified, screened, included }), plus optional registration, platforms, notes.' },
         mode: { type: 'string', enum: ['replace', 'append'], description: '`replace` (default) or `append`.' },
       },
       required: ['slug'],
@@ -670,15 +677,53 @@ export function buildTools(deps = {}) {
 
         if (action === 'read') {
           const existing = await fsp.readFile(target, 'utf8').catch(() => null)
+          // `part=method` has TWO files: the record r0 validates and the prose view
+          // generated from it. Reporting only the Markdown would hide the one that
+          // actually carries the search, so the record is reported first.
+          const methodState = part === 'method' ? await readMethodRecord(dir) : null
+          const recordLine =
+            methodState === null
+              ? null
+              : methodState.record === null || methodState.record === undefined
+                ? METHOD_FILE + ': not recorded yet - `rs_plan slug=' + slug + ' part=method method={…}` writes it'
+                : METHOD_FILE + ': ' + methodSummary(methodState.record) + (methodState.problem === null ? '' : ' (UNREADABLE: ' + methodState.problem.detail + ')')
+          const head = recordLine === null ? '' : recordLine + '\n\n'
           if (existing === null) {
             return {
-              text: relative + ' does not exist yet for ' + slug + '. Write it with `rs_plan part=' + part + ' text="…"`.',
+              text: head + relative + ' does not exist yet for ' + slug + '. Write it with `rs_plan part=' + part + ' text="…"`.',
               view: { action, slug, root: resolved.root, summary: 'no ' + part + ' yet' },
             }
           }
           return {
-            text: relative + ' (' + sizeOf(Buffer.byteLength(existing)) + ', ' + wordCount(existing) + ' words)\n\n' + existing.slice(0, 40_000),
+            text: head + relative + ' (' + sizeOf(Buffer.byteLength(existing)) + ', ' + wordCount(existing) + ' words)\n\n' + existing.slice(0, 40_000),
             view: { action, slug, root: resolved.root, chars: existing.length, summary: relative },
+          }
+        }
+
+        // ---- the method RECORD, when one was given
+        if (part === 'method' && args.method !== null && args.method !== undefined) {
+          // NOT named `record`: that name is the RUN's record in this scope, and
+          // shadowing it here wrote the method over RUN.json - which cost the run its
+          // title, its kind and its style, and was caught only because a check reads
+          // the title back out of an artifact. A local name is not worth that.
+          const methodRecord = normalizeMethod(args.method)
+          const recordFile = path.join(dir, ...METHOD_FILE.split('/'))
+          const viewFile = path.join(dir, ...METHOD_MD.split('/'))
+          await writeJsonAtomic(recordFile, methodRecord)
+          await writeTextAtomic(viewFile, renderMethodMd(methodRecord))
+          const { passport } = await readPassport(resolved.root, slug)
+          await addReceipt(path.join(dir, PASSPORT_FILE), passport, 'rs_plan', 'method record: ' + methodSummary(methodRecord), args.now)
+          await touchRun(runFile, record, args.now)
+          const lines = [
+            METHOD_FILE + ' written, and ' + METHOD_MD + ' regenerated from it',
+            '- path: ' + recordFile,
+            '- ' + methodSummary(methodRecord),
+            '',
+            'The record is what r0 validates and what the document\'s search-and-screening flow is printed from. Edit the RECORD, not ' + METHOD_MD + ': the next write replaces the view.',
+          ]
+          return {
+            text: lines.join('\n'),
+            view: { action: 'write', slug, root: resolved.root, summary: methodSummary(methodRecord) },
           }
         }
 
@@ -696,6 +741,14 @@ export function buildTools(deps = {}) {
           const named = parseOutline(next)
           lines.push('- the outline names ' + named.length + ' section(s): ' + (named.map((one) => one.slug).join(', ') || '(none)'))
         }
+        if (part === 'method') {
+          const methodState = await readMethodRecord(dir)
+          if (methodState.exists) {
+            lines.push('- note: ' + METHOD_FILE + ' exists and is what r0 validates and what the flow is printed from; the Markdown you just wrote does not change it')
+          } else {
+            lines.push('- note: no record yet - a search a reader cannot reproduce is not a method. Write one with `rs_plan part=method method={ databases: [...], accessed: "YYYY-MM-DD", search: "…", include: [...], exclude: [...], screening: { identified: 0, screened: 0, included: 0 } }`')
+          }
+        }
         lines.push('')
         lines.push('Next: `rs_write slug=' + slug + ' section=<slug> text="…" claims=[…]` for each section, then `rs_build slug=' + slug + ' format=md`.')
         return { text: lines.join('\n'), view: { action: 'write', slug, root: resolved.root, chars: next.length, summary: relative + ' (' + wordCount(next) + ' words)' } }
@@ -712,8 +765,9 @@ export function buildTools(deps = {}) {
       'Write part of the document, and declare the claims it makes. This is the tool that keeps the prose and the ledger from drifting apart.',
       'A claim in the text is a bracketed span with an id: `[the sentence, as written]{#c0142}`. Every span in `text` MUST be declared in `claims`, and every declared claim MUST have a span - a mismatch is refused (`CLAIM_UNDECLARED` / `CLAIM_SPAN_MISSING`) rather than stored, because a claim nothing tracks is exactly what this plugin exists to prevent.',
       'The claim\'s TEXT comes from the span, not from you: do not retype the sentence. Declare `strength` (causal / associational / descriptive / theoretical / normative) and the `sources` it rests on, each `{ key, locator }` where the locator is `{ kind: "page", page: 7 }` or `{ kind: "quote", quote: "the words, exactly as the source has them" }`.',
+      'A claim that rests on a NUMBER also takes a `statistic`: `{ test, statistic, df, p, effect, ci, n }`. It is recorded as data rather than left in the sentence, so the build can print every number the document claims and a reader can check one of them by name.',
       'Every citation `[@key]` must already be in the ledger; an unknown one is refused with the nearest keys. Omit `section` to write `doc/paper.md` whole; give one to write `doc/sections/<slug>.md`, and name it in `plan/outline.md` so the build puts it in order.',
-      'REWRITING A CLAIM\'S WORDS INVALIDATES ITS VERIFICATION. If the sentence or its sources change, the status, the rung, the judge and the reason are cleared and the answer says so - a verdict belongs to a wording, not to an id.',
+      'REWRITING A CLAIM\'S WORDS INVALIDATES ITS VERIFICATION. If the sentence, its strength, its statistic or its sources change, the status, the rung, the judge and the reason are cleared and the answer says so - a verdict belongs to a wording, not to an id.',
     ].join('\n'),
     parameters: {
       type: 'object',
@@ -734,6 +788,11 @@ export function buildTools(deps = {}) {
             properties: {
               id: { type: 'string', description: 'The claim id, as it appears in the span: `c0142`.' },
               strength: { type: 'string', enum: STRENGTHS, description: 'How strong the sentence is (default `descriptive`).' },
+              statistic: {
+                type: 'object',
+                description:
+                  'The numbers the sentence rests on, as data rather than prose: { test, statistic, df, p, effect, ci, n }. `p` is refused at exactly 0 (`p = .000` is a rounding artefact - write `< .001`), a field nothing reads is refused, and a changed statistic CLEARS the claim\'s verification like a wording change does.',
+              },
               sources: {
                 type: 'array',
                 description: 'What the claim rests on.',
@@ -857,7 +916,14 @@ export function buildTools(deps = {}) {
           const entry = declared.get(span.id)
           const result = await appendClaim(
             dir,
-            { id: span.id, text: span.text, section, strength: entry.strength, sources: Array.isArray(entry.sources) ? entry.sources : [] },
+            {
+              id: span.id,
+              text: span.text,
+              section,
+              strength: entry.strength,
+              statistic: entry.statistic,
+              sources: Array.isArray(entry.sources) ? entry.sources : [],
+            },
             args.now,
           )
           if (result.added) added.push(span.id)
@@ -891,9 +957,17 @@ export function buildTools(deps = {}) {
           '- citations: ' + (scan.citationKeys.join(', ') || '(none)'),
         ]
         if (unbound.length > 0) lines.push('- NOT BOUND TO A SOURCE: ' + unbound.join(', ') + ' - these cannot pass r1 until a source is attached')
+        // The numbers are echoed back in the words a reader will meet them in, so a
+        // mis-typed p-value is caught in the answer rather than in the artifact.
+        const withStatistics = scan.spans
+          .map((span) => claimMap.get(span.id))
+          .filter((row) => row !== undefined && row !== null && row.statistic !== null && row.statistic !== undefined)
+        if (withStatistics.length > 0) {
+          lines.push('- statistics recorded: ' + withStatistics.map((row) => row.id + ' (' + statisticLabel(row.statistic) + ')').join('; '))
+        }
         if (invalidated.length > 0) {
           lines.push('')
-          lines.push('RE-VERIFICATION NEEDED: ' + invalidated.join(', ') + ' changed wording or sources, so the verification they had was cleared. A verdict belongs to a sentence, not to an id.')
+          lines.push('RE-VERIFICATION NEEDED: ' + invalidated.join(', ') + ' changed wording, strength, statistic or sources, so the verification they had was cleared. A verdict belongs to a sentence, not to an id.')
         }
         for (const marker of scan.brokenMarkers) lines.push('- ' + (marker.why === undefined ? 'a claim reference tracks nothing: ' + JSON.stringify(marker.marker) : JSON.stringify(marker.marker) + ': ' + marker.why))
         if (answered.length > 0) {
@@ -1190,6 +1264,8 @@ export function buildTools(deps = {}) {
           '- document: ' + report.document.source + ', ' + report.document.words + ' words',
           '- claims: ' + report.claims.total + ' (' + (spoken === '' ? 'none' : spoken) + ')',
           '- sources: ' + report.sources.total + ' in the ledger, ' + report.sources.cited + ' cited, ' + report.sources.withText + ' with text',
+          '- statistics: ' + report.statistics.claims + ' claim(s) carry a number, printed as the Statistics table',
+          '- method record: ' + (report.method.recorded ? report.method.summary : 'NOT RECORDED - no search is reproducible from this run'),
           '- structure: ' + (report.structure.ok ? 'agrees with the ledger' : report.structure.errors.length + ' error(s): ' + report.structure.errors.join(', ')) + (report.structure.warnings.length > 0 ? ', ' + report.structure.warnings.length + ' warning(s): ' + report.structure.warnings.join(', ') : ''),
         ]
         for (const note of report.notes) lines.push('- note: ' + note)

@@ -24,7 +24,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 
 import { ResearchError, messageOf, sizeOf, stamp } from './run.js'
-import { SOURCE_KINDS, isClaimId, isKey, isStrength, normalizeLocator, parseClaimId, parseKey } from './syntax.js'
+import { SOURCE_KINDS, isClaimId, isKey, isStrength, normalizeLocator, normalizeStatistic, parseClaimId, parseKey } from './syntax.js'
 
 /** The three ledgers, relative to a run folder. */
 export const LEDGER_PATHS = {
@@ -307,6 +307,10 @@ export function claimRow(input) {
     text: text.slice(0, 2000),
     section: String(input.section ?? '').trim().slice(0, 120),
     strength,
+    // The numbers the sentence rests on, as data. A claim that reports a test and
+    // reports it wrongly is a defect a reader can see; a claim that reports one in
+    // prose only is a defect nobody can.
+    statistic: normalizeStatistic(input.statistic ?? null),
     sources,
     status: 'unverified',
     tier: null,
@@ -329,10 +333,16 @@ const VERDICT_FIELDS = ['status', 'tier', 'strengthVerdict', 'checkedAt', 'judge
  *
  * **A changed wording invalidates the verification.** That is the rule this
  * function exists for: `status`, `tier`, the rung, the judge and the reason are
- * cleared when `text`, `strength` or the source bindings differ from the current
- * row, and the returned `invalidated` says whether it happened, so the caller can
- * tell the user that a claim they had already checked is now unverified. Keeping
- * a verdict across an edit would be the quietest way this whole ledger could lie.
+ * cleared when `text`, `strength`, the statistic or the source bindings differ from
+ * the current row, and the returned `invalidated` says whether it happened, so the
+ * caller can tell the user that a claim they had already checked is now unverified.
+ * Keeping a verdict across an edit would be the quietest way this whole ledger could
+ * lie.
+ *
+ * The statistic belongs on that list even though it is not part of the sentence: a
+ * verdict says "this passage supports what this claim asserts", and `p = .032` is
+ * part of what it asserts. Correcting a number is changing the claim, and the check
+ * that was made about the old number is about a claim that no longer exists.
  */
 export async function appendClaim(runDir, input, now) {
   const row = claimRow({ ...input, now })
@@ -343,7 +353,10 @@ export async function appendClaim(runDir, input, now) {
     return { row, added: true, invalidated: false, revision: 1 }
   }
   const sameWording =
-    existing.text === row.text && existing.strength === row.strength && JSON.stringify(existing.sources ?? []) === JSON.stringify(row.sources)
+    existing.text === row.text &&
+    existing.strength === row.strength &&
+    JSON.stringify(existing.statistic ?? null) === JSON.stringify(row.statistic ?? null) &&
+    JSON.stringify(existing.sources ?? []) === JSON.stringify(row.sources)
   const samePlacement = existing.section === row.section
   if (sameWording && samePlacement) {
     return { row: existing, added: false, invalidated: false, revision: Number(existing.revision ?? 1) }

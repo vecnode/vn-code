@@ -1,4 +1,4 @@
-# dsh-research (alpha.2)
+# dsh-research (alpha.3)
 
 **Research as a folder the agent fills and the right bar shows — and that you keep,
 open in any session, and edit yourself.**
@@ -6,8 +6,10 @@ open in any session, and edit yourself.**
 A run is `RUN.json` plus a `passport.json` that records your instructions and every
 answer **in your own words**. Nine `rs_*` tools work over an append-only claim and
 source ledger; a human answers the frame gates in the Research tab rather than the
-model; and every claim in the prose is a span the ledger tracks, so a citation that
-does not exist cannot be built into a document without being reported by name.
+model; every claim in the prose is a span the ledger tracks, so a citation that does
+not exist cannot be built into a document without being reported by name — and a
+claim that rests on a **number** carries that number as data, so the build prints
+every statistic the document claims instead of leaving it buried in a sentence.
 
 Most "write me a paper" surfaces produce text that lives in the chat and dies
 there, and the one quiet catastrophe of research tooling is a citation — or a
@@ -27,6 +29,43 @@ the **record** first.
   need a reader), `rs_review` (the panel, the author's answers, the re-review, and
   the devil's advocate), `rs_build` (a watermarked draft, or a gated clean
   document).
+- **A structured method record, and the counts that cannot be true.**
+  `rs_plan part=method method={…}` writes `plan/method.json`: `databases`,
+  `accessed`, `search`, `include`, `exclude` and `screening` (`identified`,
+  `screened`, `included`), plus optional `registration`, `platforms` and `notes`.
+  It is validated **on the way in** — a date that does not exist, a field this
+  package does not read, and a required field left out are each refused — and again
+  by **`r0`** on the way out, because a record a person edited by hand never passed
+  the first check. The one arithmetic a review can lie to itself with is checked
+  rather than trusted: records are removed at each step, never added, so
+  `identified >= screened >= included`. A record that breaks it is refused
+  (`METHOD_COUNTS`); an incomplete one is an `r0` warning, `method-incomplete`.
+  `plan/method.md` is **generated** from the record, and the build prints the whole
+  thing into the document as a **search-and-screening flow** — the same numbers,
+  from the same bytes, in every artifact. A run with no record is not a failure: a
+  theoretical paper has no search, and the build reports the absence as a note.
+- **A statistic is data, not prose.** A claim that rests on a number takes
+  `statistic: { test, statistic, df, p, effect, ci, n }`, validated like everything
+  else in the dialect. Two of its rules are reporting standards rather than taste:
+  **`p = .000` is refused** (no test produces a probability of exactly zero — it is
+  what a program prints after rounding — and the refusal names `p < .001` as what to
+  write instead), and **a field with no numeral is refused** (`"effect": "large"` is
+  a label, not a measurement). The build prints a **Statistics table**: each claim
+  and its numbers in a draft, each **sentence** and its numbers in a clean build,
+  because a finished document must not cite ids that appear nowhere in it. And
+  **changing a statistic clears the claim's verification**, exactly as changing its
+  words does: a verdict says "this passage supports what this claim asserts", and
+  `p = .032` is part of what it asserts.
+- **The method layer is a skill, and the dense content is a reference.**
+  `research-methods` is one of the **seven** bundled skills: ~10 KB carrying the
+  design→what-it-can-support table wired to the `strength` enum, the reporting
+  guideline each design owes, and the two refusals above. Beside it,
+  `reference/method.md` holds what a run actually needs — question frameworks
+  (FINER, PICO/PECO/SPIDER), a design catalogue with its validity threats, sampling
+  and missing-data mechanisms, the statistics reporting bar, risk-of-bias
+  instruments and GRADE, the PRISMA process, qualitative trustworthiness, and ethics
+  and authorship. Every fenced example in **both** files is held against the real
+  tool surface by the same check, so the reference cannot drift either.
 - **A review is a ledger of concerns, with two columns that stay apart.**
   `rs_review action=panel` records a round of findings — each with the role that
   raised it, its severity, its criterion, and the **evidence in the manuscript**
@@ -157,11 +196,11 @@ the **record** first.
 |---|---|
 | row | `research` |
 | routes | eight exact paths, `GET`/`HEAD`/`POST`, all behind the harness's session check |
-| tools | 9 (`rs_open`, `rs_new`, `rs_plan`, `rs_read`, `rs_write`, `rs_cite`, `rs_verify`, `rs_review`, `rs_build`) |
+| tools | 9 (`rs_open`, `rs_new`, `rs_plan`, `rs_read`, `rs_write`, `rs_cite`, `rs_verify`, `rs_review`, `rs_build`) — `rs_plan` also writes the method record, `rs_write` also takes a `statistic` per claim |
 | gates | 3 (two frame, one opened by a clean build — and by `format=package`) |
 | builds | `md`, `docx`, `html`, `tex`, `ris`, `bib`, `enw`, plus `package` (the gated submission folder) — every format it advertises is implemented, and a check asserts that |
 | tab types | 1 (`research`, a page type with no file patterns) |
-| skills | 6 (`research-project`, `research-sources`, `research-writing`, `research-verification`, `research-review`, `research-formats`), registered at activation *and* copied into `$DSH_HOME/skills` |
+| skills | 7 (`research-project`, `research-methods`, `research-sources`, `research-writing`, `research-verification`, `research-review`, `research-formats`), registered at activation *and* copied into `$DSH_HOME/skills`; `research-methods` ships a bundled `reference/method.md` |
 | touches | **no** core row disabled, **no** fork, **no** npm dependency, **no** vendored engine, **no** bundled binary |
 
 | Route | What it answers |
@@ -201,10 +240,20 @@ the **record** first.
 ## Limits — what is not here yet
 
 Every format this plugin advertises is implemented: `md`, `docx`, `html`, `tex`,
-`ris`, `bib`, `enw`, and the gated `package` folder. The six skills are written. One
-thing remains from the design: the **headless render check** for the tab, which is
-how the panel's own layout would be verified rather than only its payload. The
-design for what is left, with the reasoning, is in `docs/DESIGN-dsh-research.md`.
+`ris`, `bib`, `enw`, and the gated `package` folder. The seven skills are written.
+One thing remains from the design: the **headless render check** for the tab, which
+is how the panel's own layout would be verified rather than only its payload. The
+design for what is left, with the reasoning, is in `docs/DESIGN-dsh-research.md`,
+and the review that produced alpha.3 — measured against an external
+academic-research suite — is in `docs/REVIEW-dsh-research-alpha.3.md`.
+
+**It records statistics; it does not recompute them.** Nothing here calculates a
+p-value from a test statistic, checks that `d = 0.61` follows from the means it was
+given, or judges whether a design was analysed correctly. A `statistic` is
+validated, stored, printed and checkable by a reader — and saying that plainly is
+worth more than a recomputation that would look like arithmetic truth and not be
+it. The same holds for the method record: it checks that a search is *recorded* and
+that its counts are *internally consistent*, not that the search was any good.
 
 Three DOCX limits, stated rather than discovered: **IEEE is single column** (the
 two-column layout is not emitted), page setup is Letter with 1-inch margins for
@@ -222,10 +271,12 @@ the structures the later phases fill.
 Inside the package, so it travels with it:
 
 ```sh
-npm run check          # the engine: run model, ledgers, dialect, gates, tools, routes, the security claim
-npm run check:refs     # RIS / BibTeX / MEDLINE / EndNote import and export, round-tripped
-npm run check:styles   # every citation style against pinned strings
-npm run check:all      # all three
+npm run check            # the engine: run model, ledgers, dialect, statistics, the method record, gates, tools, routes, the security claim
+npm run check:docx       # the written OOXML, read back by pandoc
+npm run check:refs       # RIS / BibTeX / MEDLINE / EndNote import and export, round-tripped
+npm run check:styles     # every citation style against pinned strings
+npm run check:examples   # every tool call, code and span the skills AND their references teach, against the real surface
+npm run check:all        # all five
 ```
 
 Then the pack-wide checks that own the area:

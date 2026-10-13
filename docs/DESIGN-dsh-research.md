@@ -484,23 +484,24 @@ subagent or the session model, and there is no second provider anywhere in it.
 | 1 | `rs_plan`, `rs_write`, claim + citation syntax, the append-only source and claim ledgers, `rs_cite` (ingest only), the RIS/BibTeX/MEDLINE/EndNote engine, six citation styles as a registry, `format=md`, the first skill | `check-research-node.mjs`, `check-research-refs.mjs`, `check-research-styles.mjs` | **SHIPPED** |
 | 2 | the panel: the gates form, the passport, the outline, the claims ledger with its status chips, the sources ledger with what can be checked, the build row, the in-place editor with its structure verdict, the library pointer | client (rendered for real), node | **SHIPPED** except the headless render check |
 | 3 | the DOCX writer (seven modules, no dependencies, byte-deterministic), the HTML builder (self-contained, no network), RIS/BibTeX/ENW export, the integrity gate | `check-research-docx.mjs` (118 assertions, pandoc as the foreign reader) + `check-research-node.mjs` (a real .docx built, unzipped, read back and rebuilt byte-identically; the page asserted self-contained and scriptless) | **SHIPPED** |
-| 5 | `r3`/`r4` recording, the reviewer panel, the DA concession gate, the R&R matrix | ladder with a stub judge, `rs_review` driven end to end | **SHIPPED** |
-| 6 | the LaTeX builder and the printed compile command, submission packaging (the anonymized manuscript, the generated cover letter, the checklist, the figures), the disclosure artifact | `check-research-node.mjs` (the `.tex` asserted, the command asserted PRINTED and not run, the ten characters that break TeX driven through the escaper; the package asserted gated, anonymized, and its letter computed from the ledger) | **SHIPPED** (the disclosure artifact lands with the review UI) |
 | 4 | `r1-record` and `r2-locate`, the `rs_verify` tool that records a rung, the ladder report | `check-research-node.mjs` (the whole ladder driven end to end) | **SHIPPED** |
 | 5 | `r3`/`r4` recording, the reviewer panel, the DA concession gate, the R&R matrix | ladder with a stub judge, `rs_review` driven end to end | **SHIPPED** |
-| 6 | `tex` output and the printed PDF command, submission packaging, the disclosure artifact, hash-change re-opening | docx/latex, node | |
+| 6 | the LaTeX builder and the printed compile command, submission packaging (the anonymized manuscript, the generated cover letter, the checklist, the figures), the disclosure artifact | `check-research-node.mjs` (the `.tex` asserted, the command asserted PRINTED and not run, the ten characters that break TeX driven through the escaper; the package asserted gated, anonymized, and its letter computed from the ledger) | **SHIPPED** except the disclosure artifact |
+| 7 | the METHOD LAYER: a validated `statistic` on a claim and the document's own Statistics table; a structured `plan/method.json` (databases, date of access, search string, criteria, screening counts) that r0 validates and the build prints as a search-and-screening flow; the seventh skill with its bundled method reference | `check-research-node.mjs` (the dialect, r0 and the artifact), `check-research-examples.mjs` (every example in the skill **and** its reference, against the real tool surface) | **SHIPPED** |
 
 Rough size, for planning rather than pride: the host half of `dsh-pdf` is ~1,825
 lines with a 40 KB client bundle; this is a comparable package plus the OOXML
 writer, so **plan for the biggest plugin in the pack**. What has landed measures:
-`lib/run.js` (the model, the pointer and the gates), `lib/syntax.js` (the dialect),
-`lib/ledger.js` (the append-only ledgers), `lib/doc.js` (assembly, r0, rendering),
-`lib/verify.js` (the rungs a file can run), `lib/build.js` (the builders and the
-gate), `lib/view.js` (the panel payload), `lib/refs.js` 1,471 (four formats,
-round-tripped), `lib/styles/` ~1,600 across eight modules, `lib/docx/` ~2,100
-across seven, `lib/tools.js` (eight tools), `lib/index.js` (the row),
-`lib/client.js` (the tab, its editor and its five sections), three bundled skills,
-and five checks.
+`lib/run.js` (the model, the pointer and the gates), `lib/syntax.js` (the dialect
+and the statistic vocabulary), `lib/ledger.js` (the append-only ledgers),
+`lib/method.js` (the method record, its validation and the flow it prints),
+`lib/doc.js` (assembly, r0, rendering, the statistics table), `lib/verify.js` (the
+rungs a file can run), `lib/build.js` (the builders and the gate), `lib/view.js`
+(the panel payload), `lib/refs.js` 1,471 (four formats, round-tripped),
+`lib/styles/` ~1,600 across eight modules, `lib/docx/` ~2,100 across seven,
+`lib/tools.js` (nine tools), `lib/index.js` (the row), `lib/client.js` (the tab,
+its editor and its five sections), seven bundled skills — one of them with a
+bundled reference — and five checks.
 
 The lessons the phases actually produced, worth keeping:
 
@@ -515,7 +516,17 @@ The lessons the phases actually produced, worth keeping:
   citation that does not work.
 - A skill is prose about a tool surface, so it needs a check of its own: see
   `check-research-examples.mjs`, which holds every `rs_*` name, parameter value,
-  refusal code, claim span and citation a skill teaches against the code.
+  refusal code, claim span and citation a skill teaches against the code — and
+  which now walks a skill's bundled `reference/` files too, because the largest
+  prose in a package is the worst thing to leave unchecked.
+- The method record's own writing path shadowed the RUN's record with the METHOD
+  record and wrote it into `RUN.json`, so a run lost its title, kind and style the
+  moment a search was recorded. Nothing in the engine noticed; a check that reads
+  the title back out of a built artifact caught it in one run. A local variable
+  name is not worth that.
+- `PLUGIN_VERSION` sat at alpha.1 through a whole alpha.2 release because the two
+  numbers that must agree lived in two files and nothing read both. One assertion
+  now does.
 
 ## The pipeline
 

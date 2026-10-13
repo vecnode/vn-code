@@ -72,7 +72,7 @@ function allowedValues(tool, parameter) {
 function codesFromSource() {
   const upper = new Set(indexModule.REFUSAL_CODES)
   const lower = new Set()
-  for (const name of ['doc.js', 'verify.js', 'ledger.js', 'syntax.js']) {
+  for (const name of ['doc.js', 'verify.js', 'ledger.js', 'syntax.js', 'method.js']) {
     const text = readFileSync(path.join(pkgDir, 'lib', name), 'utf8')
     for (const match of text.matchAll(/(?:problem|finding)\('([a-z][a-z-]+)'/g)) lower.add(match[1])
     for (const match of text.matchAll(/'(r[0-4]-[a-z]+)'/g)) lower.add(match[1])
@@ -151,95 +151,131 @@ const unclassified = []
 const frontmatterProblems = []
 
 let fenceCount = 0
-for (const skill of skillNames) {
-  const file = path.join(skillsDir, skill, 'SKILL.md')
-  const text = readFileSync(file, 'utf8')
+/** How many Markdown files this check actually opened, for the guard at the end. */
+let documentsRead = 0
 
-  // ---- frontmatter: what the registry actually registers
-  const front = /^---\n([\s\S]*?)\n---\n?/.exec(text.replace(/\r\n?/g, '\n'))
-  if (front === null) frontmatterProblems.push(skill + ': no frontmatter')
-  else {
-    const meta = {}
-    for (const line of front[1].split('\n')) {
-      const entry = /^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/.exec(line)
-      if (entry !== null) meta[entry[1]] = entry[2].trim()
-    }
-    if (meta.name !== skill) frontmatterProblems.push(skill + ': name is ' + JSON.stringify(meta.name ?? ''))
-    for (const field of ['description', 'whenToUse']) {
-      if (typeof meta[field] !== 'string' || meta[field].length < 40) frontmatterProblems.push(skill + ': ' + field + ' is missing or too short to load on')
+/**
+ * Every Markdown file a skill ships, not only its `SKILL.md`.
+ *
+ * A skill may carry a bundled reference (`reference/*.md`, the pattern
+ * `dsh-diagrams` already uses), and a reference teaches the same tool calls, codes
+ * and dialect a SKILL.md does. Scanning only the SKILL.md would leave the largest
+ * file in the package as the one thing nothing checks - which is the failure this
+ * whole check exists to name, so it walks the folder instead.
+ */
+function markdownOf(skill) {
+  const root = path.join(skillsDir, skill)
+  const skillFile = path.join(root, 'SKILL.md')
+  const found = [{ file: skillFile, label: skill, isSkill: true }]
+  const walk = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!entry.name.endsWith('.md') || full === skillFile) continue
+      found.push({ file: full, label: skill + '/' + path.relative(root, full).replace(/\\/g, '/'), isSkill: false })
     }
   }
+  walk(root)
+  return found
+}
 
-  for (const block of fencesOf(text)) {
-    if (block.info === '') {
-      // A fence with no language is not checked by anything else in the pack
-      // either; saying so is better than pretending it was read.
-      unclassified.push(skill + ':' + block.line + ' a fence with no info string')
-      continue
-    }
-    fenceCount += 1
-    if (block.info !== 'text' && block.info !== 'bash' && block.info !== 'json' && block.info !== 'markdown') {
-      unclassified.push(skill + ':' + block.line + ' fence kind `' + block.info + '` (this check reads text/bash/json/markdown)')
-    }
-    for (const line of block.text.split('\n')) {
-      for (const use of assignments(line)) {
-        const tool = use.tool === null ? null : byName.get(use.tool)
-        if (use.tool !== null && tool === undefined) {
-          badTools.push(skill + ':' + block.line + ' `' + use.tool + '`')
-          continue
+for (const skill of skillNames) {
+  for (const doc of markdownOf(skill)) {
+    const text = readFileSync(doc.file, 'utf8')
+    documentsRead += 1
+
+    // ---- frontmatter: what the registry actually registers. Only the SKILL.md has
+    // one; a reference is prose beside it and is held to the same code rules below.
+    if (doc.isSkill) {
+      const front = /^---\n([\s\S]*?)\n---\n?/.exec(text.replace(/\r\n?/g, '\n'))
+      if (front === null) frontmatterProblems.push(skill + ': no frontmatter')
+      else {
+        const meta = {}
+        for (const line of front[1].split('\n')) {
+          const entry = /^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/.exec(line)
+          if (entry !== null) meta[entry[1]] = entry[2].trim()
         }
-        if (use.tool === null) {
-          // A parameter written in PROSE, with the tool established earlier in the
-          // paragraph. That is normal writing, so the honest test is not "no tool on
-          // this line" - it is whether ANY tool accepts the value. `action=rereview`
-          // in a sentence is fine; `action=re-review` is a typo and fails here.
-          const anywhere = tools.some((one) => (allowedValues(one, use.parameter) ?? []).includes(use.value))
-          if (['action', 'what', 'part', 'tier'].includes(use.parameter) && !anywhere) {
-            badValues.push(skill + ':' + block.line + ' `' + use.parameter + '=' + use.value + '` - no tool accepts that value')
+        if (meta.name !== skill) frontmatterProblems.push(skill + ': name is ' + JSON.stringify(meta.name ?? ''))
+        for (const field of ['description', 'whenToUse']) {
+          if (typeof meta[field] !== 'string' || meta[field].length < 40) frontmatterProblems.push(skill + ': ' + field + ' is missing or too short to load on')
+        }
+      }
+    }
+
+    for (const block of fencesOf(text)) {
+      if (block.info === '') {
+        // A fence with no language is not checked by anything else in the pack
+        // either; saying so is better than pretending it was read.
+        unclassified.push(doc.label + ':' + block.line + ' a fence with no info string')
+        continue
+      }
+      fenceCount += 1
+      if (block.info !== 'text' && block.info !== 'bash' && block.info !== 'json' && block.info !== 'markdown') {
+        unclassified.push(doc.label + ':' + block.line + ' fence kind `' + block.info + '` (this check reads text/bash/json/markdown)')
+      }
+      for (const line of block.text.split('\n')) {
+        for (const use of assignments(line)) {
+          const tool = use.tool === null ? null : byName.get(use.tool)
+          if (use.tool !== null && tool === undefined) {
+            badTools.push(doc.label + ':' + block.line + ' `' + use.tool + '`')
+            continue
           }
-          continue
+          if (use.tool === null) {
+            // A parameter written in PROSE, with the tool established earlier in the
+            // paragraph. That is normal writing, so the honest test is not "no tool on
+            // this line" - it is whether ANY tool accepts the value. `action=rereview`
+            // in a sentence is fine; `action=re-review` is a typo and fails here.
+            const anywhere = tools.some((one) => (allowedValues(one, use.parameter) ?? []).includes(use.value))
+            if (['action', 'what', 'part', 'tier'].includes(use.parameter) && !anywhere) {
+              badValues.push(doc.label + ':' + block.line + ' `' + use.parameter + '=' + use.value + '` - no tool accepts that value')
+            }
+            continue
+          }
+          const allowed = allowedValues(tool, use.parameter)
+          if (allowed === null) {
+            badValues.push(doc.label + ':' + block.line + ' `' + use.tool + '` has no `' + use.parameter + '` parameter')
+            continue
+          }
+          if (allowed.length > 0 && !allowed.includes(use.value)) {
+            badValues.push(doc.label + ':' + block.line + ' `' + use.tool + ' ' + use.parameter + '=' + use.value + '` (allows ' + allowed.join('|') + ')')
+          }
         }
-        const allowed = allowedValues(tool, use.parameter)
-        if (allowed === null) {
-          badValues.push(skill + ':' + block.line + ' `' + use.tool + '` has no `' + use.parameter + '` parameter')
-          continue
+        // ---- refusal codes
+        for (const match of line.matchAll(/\b([A-Z][A-Z0-9]*_[A-Z0-9_]+)\b/g)) {
+          // An ENVIRONMENT VARIABLE is not a refusal code, and the pack's own are all
+          // prefixed (`DSH_`, `OF_`). Code names never carry a prefix like that, so
+          // this is a rule rather than an allowlist: an allowlist would have to grow
+          // every time a skill mentions one.
+          if (/^(DSH|OF)_/.test(match[1])) continue
+          if (!CODES.upper.has(match[1])) badUpper.push(doc.label + ':' + block.line + ' `' + match[1] + '`')
         }
-        if (allowed.length > 0 && !allowed.includes(use.value)) {
-          badValues.push(skill + ':' + block.line + ' `' + use.tool + ' ' + use.parameter + '=' + use.value + '` (allows ' + allowed.join('|') + ')')
+        for (const match of line.matchAll(/`([a-z][a-z]+(?:-[a-z]+)+)`/g)) {
+          const code = match[1]
+          // Only the ones that ARE codes: prose in backticks is not a code, so this
+          // flags a token only when it is shaped like one and is not known.
+          if (/^(span|claim|broken|unknown|locate|bytes|title|field|origin|text|source)/.test(code) && !CODES.lower.has(code)) {
+            badLower.push(doc.label + ':' + block.line + ' `' + code + '`')
+          }
         }
-      }
-      // ---- refusal codes
-      for (const match of line.matchAll(/\b([A-Z][A-Z0-9]*_[A-Z0-9_]+)\b/g)) {
-        // An ENVIRONMENT VARIABLE is not a refusal code, and the pack's own are all
-        // prefixed (`DSH_`, `OF_`). Code names never carry a prefix like that, so
-        // this is a rule rather than an allowlist: an allowlist would have to grow
-        // every time a skill mentions one.
-        if (/^(DSH|OF)_/.test(match[1])) continue
-        if (!CODES.upper.has(match[1])) badUpper.push(skill + ':' + block.line + ' `' + match[1] + '`')
-      }
-      for (const match of line.matchAll(/`([a-z][a-z]+(?:-[a-z]+)+)`/g)) {
-        const code = match[1]
-        // Only the ones that ARE codes: prose in backticks is not a code, so this
-        // flags a token only when it is shaped like one and is not known.
-        if (/^(span|claim|broken|unknown|locate|bytes|title|field|origin|text|source)/.test(code) && !CODES.lower.has(code)) {
-          badLower.push(skill + ':' + block.line + ' `' + code + '`')
+        // ---- the document dialect, parsed by the dialect's own parser
+        for (const match of line.matchAll(/\[[^[\]]+\]\{#(c[0-9]*)\}/g)) {
+          const spans = syntaxModule.findClaimSpans(line)
+          if (spans.length === 0 || syntaxModule.findBrokenClaimMarkers(line).length > 0) badSpans.push(doc.label + ':' + block.line + ' ' + JSON.stringify(match[0]))
         }
-      }
-      // ---- the document dialect, parsed by the dialect's own parser
-      for (const match of line.matchAll(/\[[^[\]]+\]\{#(c[0-9]*)\}/g)) {
-        const spans = syntaxModule.findClaimSpans(line)
-        if (spans.length === 0 || syntaxModule.findBrokenClaimMarkers(line).length > 0) badSpans.push(skill + ':' + block.line + ' ' + JSON.stringify(match[0]))
-      }
-      if (line.includes('[@{') === false) {
-        for (const match of line.matchAll(/\[-?@[^\]]*\]/g)) {
-          // A citation is only a citation when the dialect's parser says so - and a
-          // bracket that MENTIONS a key without parsing is the case a skill is most
-          // likely to teach by accident.
-          if (syntaxModule.findCitations(match[0]).length === 0) badCitations.push(skill + ':' + block.line + ' ' + JSON.stringify(match[0]))
+        if (line.includes('[@{') === false) {
+          for (const match of line.matchAll(/\[-?@[^\]]*\]/g)) {
+            // A citation is only a citation when the dialect's parser says so - and a
+            // bracket that MENTIONS a key without parsing is the case a skill is most
+            // likely to teach by accident.
+            if (syntaxModule.findCitations(match[0]).length === 0) badCitations.push(doc.label + ':' + block.line + ' ' + JSON.stringify(match[0]))
+          }
         }
-      }
-      if (syntaxModule.findBrokenClaimMarkers(line).length > 0 && /\]\(#c[0-9]/.test(line)) {
-        badSpans.push(skill + ':' + block.line + ' an anchor link taught as a claim')
+        if (syntaxModule.findBrokenClaimMarkers(line).length > 0 && /\]\(#c[0-9]/.test(line)) {
+          badSpans.push(doc.label + ':' + block.line + ' an anchor link taught as a claim')
+        }
       }
     }
   }
@@ -264,6 +300,11 @@ if (unclassified.length > 0) {
 // A guard on the check itself: if the tool surface grew and this check did not
 // notice, the two lists would silently disagree.
 check('the check read the whole tool surface', TOOLS.length, toolsModule.TOOL_NAMES.length)
+// The guard on the WALK, not on the tool surface: if `markdownOf` ever stopped
+// descending into a skill folder, every bundled reference would fall out of this
+// check silently and the largest prose in the package would be the one thing nobody
+// reads. A reference file is what makes the count exceed the number of skills.
+check('and it read a bundled reference, not only the SKILL.md files', documentsRead > skillNames.length, true)
 check('and the surface is the nine tools the package documents', TOOLS.join(','), 'rs_open,rs_new,rs_plan,rs_read,rs_write,rs_cite,rs_verify,rs_review,rs_build')
 check('the code sets it reads are not empty', CODES.upper.size > 30 && CODES.lower.size > 6, true)
 // The classifier can only police a code it can SEE. These three are read out of

@@ -35,10 +35,12 @@ import {
   renderReferences,
   runsToMarkdown,
   scanDocument,
+  statisticsEntries,
   validateStructure,
   wordCount,
 } from './doc.js'
 import { claimsById, readClaims, readSources, sourcesByKey, statusCounts } from './ledger.js'
+import { methodSummary, readMethodRecord, renderMethodFlow } from './method.js'
 
 /** The formats this plugin can build, and the phase each arrived in. */
 export const FORMATS = ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex', 'package']
@@ -148,10 +150,15 @@ export async function readRunState(runDir) {
   const document = await assembleDocument(runDir)
   const { current: claims } = await readClaims(runDir)
   const { current: sources } = await readSources(runDir)
+  // The method record is read HERE and handed to `validateStructure`, because r0 is
+  // the rung that reports what does not add up and a search whose counts contradict
+  // each other is exactly that. Reading it once, in the one place both the build and
+  // the panel pass through, is what keeps the answer the same in both.
+  const method = await readMethodRecord(runDir)
   const map = sourcesByKey(sources)
   const scan = scanDocument(document.text)
-  const structure = validateStructure({ scan, claims, sourcesByKey: map })
-  return { document, claims, sources, sourcesByKey: map, scan, structure }
+  const structure = validateStructure({ scan, claims, sourcesByKey: map, method: method.record, methodProblem: method.problem })
+  return { document, claims, sources, sourcesByKey: map, scan, structure, method }
 }
 
 /**
@@ -189,6 +196,39 @@ export function composeMarkdown(state, style, draft, notes) {
     lines.push('')
   }
   lines.push(rendered.body.trimEnd())
+
+  // The derived apparatus - the numbers the claims rest on, then the search that
+  // found the evidence for them - goes BETWEEN the body and the reference list, and
+  // that placement is not cosmetic: the DOCX writer styles every paragraph after the
+  // reference heading as a bibliography entry, so a table placed after it would come
+  // out with a hanging indent and be counted as a reference.
+  //
+  // Both sections are computed from the ledger, never typed: a hand-edited build is
+  // overwritten by the next one, exactly like the reference list.
+  const statistics = statisticsEntries(state.claims)
+  if (statistics.length > 0) {
+    lines.push('')
+    lines.push('## Statistics')
+    lines.push('')
+    if (draft === 'clean') {
+      // A finished document must not cite ids that no longer appear anywhere in it,
+      // so the clean table names each sentence by its own words - which is also how
+      // a reader finds it in the prose.
+      lines.push('| sentence | statistic |')
+      lines.push('|---|---|')
+      for (const row of statistics) lines.push('| ' + row.sentence.replace(/\|/g, '/') + ' | ' + row.label.replace(/\|/g, '/') + ' |')
+    } else {
+      lines.push('| claim | status | written as | statistic |')
+      lines.push('|---|---|---|---|')
+      for (const row of statistics) lines.push('| ' + row.id + ' | ' + row.status + ' | ' + row.strength + ' | ' + row.label.replace(/\|/g, '/') + ' |')
+    }
+  }
+  const methodRecord = state.method === null || state.method === undefined ? null : state.method.record
+  if (methodRecord !== null && methodRecord !== undefined) {
+    lines.push('')
+    for (const line of renderMethodFlow(methodRecord)) lines.push(line)
+  }
+
   lines.push('')
   lines.push('## ' + references.heading)
   lines.push('')
@@ -251,6 +291,16 @@ export function buildReport(options) {
       withBytes: options.sources.filter((one) => Array.isArray(one.files) && one.files.length > 0).length,
       withText: options.sources.filter((one) => one.text !== undefined && one.text !== null).length,
       cited: options.usedKeys.length,
+    },
+    // Counted here rather than left to the reader of the artifacts: "how many claims
+    // rest on a number, and was a search recorded at all" is exactly the kind of
+    // question this report exists to answer from the folder.
+    statistics: {
+      claims: (options.claims ?? []).filter((row) => row !== null && row.statistic !== null && row.statistic !== undefined).length,
+    },
+    method: {
+      recorded: options.method !== null && options.method !== undefined && options.method.record !== null && options.method.record !== undefined,
+      summary: options.method === null || options.method === undefined || options.method.record === null || options.method.record === undefined ? null : methodSummary(options.method.record),
     },
     structure: {
       ok: options.structure.ok,
@@ -481,6 +531,17 @@ export async function runBuild(options) {
     await write(OUTPUT_NAMES[format], list)
   }
 
+  // Reported, never blocking: a theoretical paper legitimately has no search, and a
+  // build that refused without one would be inventing a requirement. But a reader of
+  // an empirical review asks this question first, so the report says it out loud.
+  //
+  // It is pushed HERE, after every format has been composed, and not before: `notes`
+  // is also what `composeMarkdown` appends to the artifact as an HTML comment, and a
+  // note about the run's own record has no business in the document a reader opens.
+  if (state.method.exists !== true) {
+    notes.push('no plan/method.json: this run records no search, so a reader cannot reproduce how the evidence was found (rs_plan part=method method={…})')
+  }
+
   const report = buildReport({
     format,
     // The EFFECTIVE draft, not the argument: `package` is a clean build whatever the
@@ -492,6 +553,7 @@ export async function runBuild(options) {
     document: state.document,
     claims: state.claims,
     sources: state.sources,
+    method: state.method,
     usedKeys: composed === null ? state.sources.map((one) => one.key) : composed.usedKeys,
     structure: state.structure,
     outputs,

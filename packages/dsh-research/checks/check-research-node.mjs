@@ -168,6 +168,7 @@ const texModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'tex.js'))
 const refsModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'refs.js')).href)
 const stylesModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'styles', 'index.js')).href)
 const apiModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'api.js')).href)
+const methodModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'method.js')).href)
 
 const {
   GATES,
@@ -194,7 +195,8 @@ const {
 const { TOOL_NAMES, buildTools, workspaceOf, provenanceOf, nearMisses } = toolsModule
 const { appendClaim, appendSource, claimsById, foldLatest, readClaims, readSources, sourcesByKey, statusCounts } = ledgerModule
 const { assembleDocument, renderBody, renderReferences, scanDocument, sectionsOf, validateStructure, wordCount } = docModule
-const { findCitations, findClaimSpans, normalizeLocator, nextClaimId, parseKey } = syntaxModule
+const { findCitations, findClaimSpans, normalizeLocator, normalizeStatistic, nextClaimId, parseKey, statisticLabel } = syntaxModule
+const { methodProblems, methodSummary, normalizeMethod, readMethodRecord } = methodModule
 const { FORMATS, FORMATS_DOCUMENT, FORMATS_READY, composeMarkdown, hashOf, readRunState, runBuild } = buildModule
 const { ALL_GATES, libraryFile, readLibrary } = runModule
 const { projectDetail } = viewModule
@@ -425,6 +427,10 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   )
   check('the gate count travels with the row', typeof state.runs[0].gates.pending === 'number' && state.runs[0].gates.total === 2, true)
   check('the version matches the package', state.version, PLUGIN_VERSION)
+  // ...and the version marker is the PACKAGE's, not a number someone remembered to
+  // edit: it sat at alpha.1 through a whole alpha.2 release because nothing read
+  // both files in one place.
+  check('and PLUGIN_VERSION is package.json\'s version', PLUGIN_VERSION, JSON.parse(readFileSync(path.join(pkgDir, 'package.json'), 'utf8')).version)
   check('the capabilities name every tool', state.capabilities.tools.join(','), TOOL_NAMES.join(','))
   // The row and the tools both report capabilities, and they must report the SAME
   // thing: a tool that offers a format the build cannot produce is a tool that
@@ -463,7 +469,7 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
 {
   const log = { warn() {}, info() {}, debug() {} }
   const tools = buildTools({ env, workspace, log })
-  check('three tools, and they are the intended three', tools.map((tool) => tool.name).join(','), TOOL_NAMES.join(','))
+  check('the tools are exactly the ones the package documents', tools.map((tool) => tool.name).join(','), TOOL_NAMES.join(','))
   check('every tool declares a parameters schema', tools.every((tool) => tool.parameters && tool.parameters.type === 'object'), true)
   check('every tool declares an output schema', tools.every((tool) => tool.output && tool.output.schema && typeof tool.output.render === 'function'), true)
   check('every tool has a prose description', tools.every((tool) => typeof tool.description === 'string' && tool.description.length > 200), true)
@@ -602,10 +608,86 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('rs_read what=sources shows the ledger', (await call('rs_read', { slug: 'writer-check', what: 'sources' })).value.text.includes('NO BYTES'), true)
   check('rs_read what=outline assembles the document', (await call('rs_read', { slug: 'writer-check', what: 'outline' })).value.text.includes('[results]'), true)
 
+  // ---- the method record, through the tool that writes it
+  const methodRecord = {
+    databases: ['PubMed'],
+    accessed: '2026-10-13',
+    search: '("sleep deprivation" OR "sleep restriction") AND (recall OR consolidation)',
+    include: ['adult human samples'],
+    exclude: ['animal-only studies'],
+    screening: { identified: 412, screened: 96, included: 23 },
+  }
+  const plannedMethod = await call('rs_plan', { slug: 'writer-check', part: 'method', method: methodRecord })
+  check('rs_plan records a method as data', plannedMethod.problems.join(' | '), '')
+  check('and regenerates the readable view from it', plannedMethod.value.text.includes('plan/method.json written'), true)
+  check('the record reads back with its counts', (await call('rs_plan', { slug: 'writer-check', part: 'method', action: 'read' })).value.text.includes('412 identified -> 96 screened -> 23 included'), true)
+  check(
+    'counts that cannot be true are refused by the TOOL',
+    (await call('rs_plan', { slug: 'writer-check', part: 'method', method: { ...methodRecord, screening: { identified: 1, screened: 9, included: 3 } } })).value.view.code,
+    'METHOD_COUNTS',
+  )
+  check(
+    'and the refusal left the good record alone',
+    (await call('rs_plan', { slug: 'writer-check', part: 'method', action: 'read' })).value.text.includes('23 included'),
+    true,
+  )
+
+  // ---- the statistic, on the claim that rests on it
+  const withStatistic = await call('rs_write', {
+    slug: 'writer-check',
+    section: 'results',
+    text: '## Results\n\n[The programme raised completion by 25 points.]{#c0001} See [@smith2024, p. 7].\n',
+    claims: [
+      {
+        id: 'c0001',
+        strength: 'causal',
+        statistic: { test: 'Welch t-test', statistic: 't = 2.41', df: '38.2', p: '.032', effect: 'd = 0.61', ci: [0.12, 1.1], n: 40 },
+        sources: [{ key: 'smith2024', locator: { kind: 'quote', quote: 'completion rose by 25 points', page: 7 } }],
+      },
+    ],
+  })
+  check('a statistic is recorded on the claim', withStatistic.value.text.includes('statistics recorded: c0001 (Welch t-test, t = 2.41'), true)
+  const changedNumber = await call('rs_write', {
+    slug: 'writer-check',
+    section: 'results',
+    text: '## Results\n\n[The programme raised completion by 25 points.]{#c0001} See [@smith2024, p. 7].\n',
+    claims: [
+      {
+        id: 'c0001',
+        strength: 'causal',
+        statistic: { test: 'Welch t-test', statistic: 't = 2.41', df: '38.2', p: '.024', effect: 'd = 0.61', ci: [0.12, 1.1], n: 40 },
+        sources: [{ key: 'smith2024', locator: { kind: 'quote', quote: 'completion rose by 25 points', page: 7 } }],
+      },
+    ],
+  })
+  // The design decision this asserts: a verdict says "this passage supports what
+  // this claim asserts", and p = .032 is part of what it asserts.
+  check('changing ONLY the statistic clears the verification', changedNumber.value.text.includes('RE-VERIFICATION NEEDED: c0001'), true)
+  check('and the new number is what the ledger holds', (await readClaims(path.join(root, 'writer-check'))).current.find((row) => row.id === 'c0001').statistic.p, '.024')
+  check('a p-value of .000 is refused before it reaches the ledger', (await call('rs_write', { slug: 'writer-check', section: 'results', text: '## Results\n\n[A sentence.]{#c0002}\n', claims: [{ id: 'c0002', statistic: { p: '.000' } }] })).value.view.code, 'BAD_STATISTIC')
+
   const built = await call('rs_build', { slug: 'writer-check', format: 'md' })
   check('rs_build conforms', built.problems.join(' | '), '')
   check('and writes the draft', built.value.text.includes('build/paper.md'), true)
   check('and records the artifact hash', built.value.text.includes('sha256'), true)
+  // The answer is what the model reads, so the two things this release added are in
+  // it, not only in build.json: a number that reached no table and a search nothing
+  // recorded are both facts a reader of the answer needs.
+  check('and counts the claims that carry a number', built.value.text.includes('- statistics: 1 claim(s) carry a number'), true)
+  check('and names the search the evidence came from', built.value.text.includes('- method record: 1 database(s), accessed 2026-10-13'), true)
+  const draftMd = await fsp.readFile(path.join(root, 'writer-check', 'build', 'paper.md'), 'utf8')
+  check('the draft prints a Statistics table', draftMd.includes('## Statistics') && draftMd.includes('| claim | status | written as | statistic |'), true)
+  check('naming the claim and its numbers', draftMd.includes('| c0001 |') && draftMd.includes('Welch t-test') && draftMd.includes('p .024'), true)
+  check('and prints the search that found the evidence', draftMd.includes('## Search and screening') && draftMd.includes('| identified | 412 record(s) |'), true)
+  // Placement is a rule, not a preference: the DOCX writer styles every paragraph
+  // after the reference heading as a bibliography entry.
+  check(
+    'with the derived apparatus BEFORE the reference list',
+    draftMd.indexOf('## Statistics') < draftMd.indexOf('## References') && draftMd.indexOf('## Search and screening') < draftMd.indexOf('## References'),
+    true,
+  )
+  const storedReportOfDraft = JSON.parse(await fsp.readFile(path.join(root, 'writer-check', 'build', 'build.json'), 'utf8'))
+  check('and the stored report counts them too', storedReportOfDraft.statistics.claims + '/' + storedReportOfDraft.method.recorded, '1/true')
 
   const cleanRefused = await call('rs_build', { slug: 'writer-check', format: 'md', draft: 'clean' })
   check('a clean build is refused until a person answers g3', cleanRefused.value.view.code, 'GATE_UNANSWERED')
@@ -710,6 +792,18 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
     'GATE_UNANSWERED',
   )
   await answerGate({ root, slug: 'writer-check', id: 'g3-integrity', value: 'checked' })
+  const cleanBuild = await call('rs_build', { slug: 'writer-check', format: 'md', draft: 'clean' })
+  check('a clean build runs once a person answers the gate', cleanBuild.value.view.ok, true)
+  const cleanMd = await fsp.readFile(path.join(root, 'writer-check', 'build', 'paper.md'), 'utf8')
+  // A finished document must not cite ids that appear nowhere in it - a reader of a
+  // clean artifact has no c0001 to look up - so the table names the sentence.
+  check(
+    'and its statistics table names the SENTENCE, not a claim id',
+    cleanMd.includes('| sentence | statistic |') && cleanMd.includes('raised completion by 25 points') && cleanMd.includes('| c0001 |') === false,
+    true,
+  )
+  check('while the search record is still printed', cleanMd.includes('## Search and screening') && cleanMd.includes('PubMed'), true)
+  check('and the banner is gone from a clean build', cleanMd.startsWith('> **DRAFT'), false)
   const pkg = await call('rs_build', { slug: 'writer-check', format: 'package' })
   check('and builds once a person answers the gate', pkg.value.view.ok, true)
   const submission = path.join(root, 'writer-check', 'build', 'submission')
@@ -910,6 +1004,34 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('and a fresh run starts at c0001', nextClaimId([]), 'c0001')
   check('a key is refused when it is not one', await codeOf(() => parseKey('Smith 2024!')), 'BAD_KEY')
   check('and lowercased when it is', parseKey('Smith-2024'), 'smith-2024')
+
+  // ---- a statistic: the numbers a claim rests on, as data
+  const statistic = normalizeStatistic({ test: 'Welch t-test', statistic: 't = 2.41', df: '38.2', p: '0.032', effect: 'd = 0.61', ci: [0.12, 1.1], n: 40 })
+  check('a statistic normalises its p-value', statistic.p, '.032')
+  check('and its interval', statistic.ci, '.12 to 1.1')
+  check('and keeps the sample it came from', statistic.n, 40)
+  check('a bound is kept as a bound', normalizeStatistic({ p: '<.001' }).p, '< .001')
+  check('and reads as one line', statisticLabel(statistic), 'Welch t-test, t = 2.41, df 38.2, p .032, effect size d = 0.61, 95% CI .12 to 1.1, n 40')
+  // The two rules that are reporting standards rather than taste.
+  check('p = .000 is refused', await codeOf(() => normalizeStatistic({ p: '0.000' })), 'BAD_STATISTIC')
+  check(
+    'and the refusal says what to write instead',
+    await (async () => {
+      try {
+        normalizeStatistic({ p: '.000' })
+        return '(no error)'
+      } catch (err) {
+        return err.message.includes('< .001') ? 'names it' : err.message
+      }
+    })(),
+    'names it',
+  )
+  check('a label with no number is refused', await codeOf(() => normalizeStatistic({ effect: 'large' })), 'BAD_STATISTIC')
+  check('a field nothing reads is refused', await codeOf(() => normalizeStatistic({ alpha: '0.05' })), 'BAD_STATISTIC')
+  check('an empty statistic is refused', await codeOf(() => normalizeStatistic({})), 'BAD_STATISTIC')
+  check('an inverted interval is refused', await codeOf(() => normalizeStatistic({ ci: [1.1, 0.12] })), 'BAD_STATISTIC')
+  check('n is a whole number of observations', await codeOf(() => normalizeStatistic({ n: 0 })), 'BAD_STATISTIC')
+  check('and no statistic at all is null, not an error', normalizeStatistic(null), null)
 }
 
 // ---------------------------------------------------------------------------
@@ -1020,6 +1142,83 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('and the endnotes after it', /\[\^1\]: claim c0001/.test(composed.text), true)
   const cleanComposed = composeMarkdown(state, style, 'clean', [])
   check('a clean build has no banner', cleanComposed.text.startsWith('> **DRAFT'), false)
+}
+
+// ---------------------------------------------------------------------------
+// The method record: a search as data, and the counts that cannot be true
+// ---------------------------------------------------------------------------
+{
+  const full = {
+    databases: ['PubMed', 'Web of Science Core Collection'],
+    accessed: '2026-10-13',
+    search: '("sleep deprivation" OR "sleep restriction") AND (recall OR consolidation)',
+    include: ['adult human samples'],
+    exclude: [],
+    screening: { identified: 412, screened: 96, included: 23 },
+  }
+  const record = normalizeMethod(full)
+  check('a method record normalises', record.databases.length + '/' + record.screening.included, '2/23')
+  check('an empty exclude is recorded AS empty, not dropped', Array.isArray(record.exclude) && record.exclude.length === 0, true)
+  check('and the record reads as one line', methodSummary(record), '2 database(s), accessed 2026-10-13, 412 identified -> 96 screened -> 23 included')
+  check('the readable view marks itself generated', methodModule.renderMethodMd(record).startsWith('<!-- GENERATED'), true)
+  check('and the flow is a table every writer can render', methodModule.renderMethodFlow(record).join('\n').includes('| identified | 412 record(s) |'), true)
+
+  // The refusal a review actually makes: the arithmetic of its own screening.
+  check(
+    'counts that cannot be true are refused',
+    await codeOf(() => normalizeMethod({ ...full, screening: { identified: 96, screened: 412, included: 23 } })),
+    'METHOD_COUNTS',
+  )
+  check('and the refusal explains the rule', await (async () => {
+    try {
+      normalizeMethod({ ...full, screening: { identified: 96, screened: 412, included: 23 } })
+      return '(no error)'
+    } catch (err) {
+      return err.message.includes('removed at each step, never added') ? 'explains it' : err.message
+    }
+  })(), 'explains it')
+  check('a date that cannot exist is refused', await codeOf(() => normalizeMethod({ ...full, accessed: '2026-02-31' })), 'BAD_METHOD')
+  check('a missing search string is refused', await codeOf(() => normalizeMethod({ ...full, search: '  ' })), 'BAD_METHOD')
+  check('a missing field is named', await (async () => {
+    const broken = { ...full }
+    delete broken.include
+    try {
+      normalizeMethod(broken)
+      return '(no error)'
+    } catch (err) {
+      return err.message.includes('`include` is required') ? 'named' : err.message
+    }
+  })(), 'named')
+  check('a field nothing reads is refused', await codeOf(() => normalizeMethod({ ...full, reviewer: 'me' })), 'BAD_METHOD')
+  check('a fractional count is refused', await codeOf(() => normalizeMethod({ ...full, screening: { identified: 4.5, screened: 4, included: 1 } })), 'BAD_METHOD')
+
+  // What is ALREADY ON DISK is reported rather than believed: a record a person
+  // edited by hand never passed `normalizeMethod`, so r0 is where it is caught.
+  const handEdited = methodProblems({ databases: [], accessed: 'not-a-date', search: '', include: [], exclude: [], screening: { identified: 3, screened: 2, included: 5 } })
+  check('an incomplete record is a WARNING, not a throw', handEdited.some((one) => one.code === 'method-incomplete' && one.severity === 'warning'), true)
+  check('and it names the fields a reader is missing', handEdited.find((one) => one.code === 'method-incomplete').fields.join(','), 'databases,search,include')
+  check('while an explicitly empty exclude counts as decided, not missing', methodProblems({ databases: ['PubMed'], accessed: '2026-10-13', search: 'x', include: ['y'], exclude: [], screening: { identified: 1, screened: 1, included: 1 } }).length, 0)
+  check('a date that is not a date is a warning of its own', handEdited.some((one) => one.code === 'method-date'), true)
+  check('but counts that cannot be true are an ERROR', handEdited.some((one) => one.code === 'method-counts' && one.severity === 'error'), true)
+  check('no record at all is NOT a defect', methodProblems(null).length, 0)
+
+  const dir = path.join(root, 'method-check')
+  await createRun({ root, slug: 'method-check', title: 'Method check', kind: 'review' })
+  check('a run with no record reads as absence, not as an error', (await readMethodRecord(dir)).exists, false)
+  await fsp.writeFile(path.join(dir, 'plan', 'method.json'), 'not json\n', 'utf8')
+  const unparsable = await readMethodRecord(dir)
+  check('an unparsable record is a problem, not a throw', unparsable.problem.code + '/' + unparsable.problem.severity, 'method-incomplete/error')
+  await fsp.writeFile(
+    path.join(dir, 'plan', 'method.json'),
+    JSON.stringify({ databases: ['PubMed'], accessed: '2026-10-13', search: 'x', include: ['y'], exclude: [], screening: { identified: 9, screened: 4, included: 12 } }),
+    'utf8',
+  )
+  const onDisk = await readMethodRecord(dir)
+  const withRecord = validateStructure({ scan: scanDocument(''), claims: [], sourcesByKey: new Map(), method: onDisk.record, methodProblem: onDisk.problem })
+  check('r0 reads the record on disk', withRecord.ok, false)
+  check('so a clean build refuses on it', withRecord.errors.map((one) => one.code).join(','), 'method-counts')
+  const noRecord = validateStructure({ scan: scanDocument(''), claims: [], sourcesByKey: new Map(), method: null, methodProblem: null })
+  check('and a run with no record is not blocked by r0', noRecord.ok, true)
 }
 
 // ---------------------------------------------------------------------------

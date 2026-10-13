@@ -288,16 +288,16 @@
       ]
     },
     "dsh-research": {
-      "version": "0.1.0-alpha.2",
+      "version": "0.1.0-alpha.3",
       "rows": [
         "research"
       ],
       "rowOverrides": [],
-      "role": "Research: a run is a FOLDER - `RUN.json` (what it is) plus a `passport.json` that records the user's instructions and every gate answer VERBATIM - that stays findable from any session through a library pointer at `$DSH_HOME/dsh-research/library.json`. Seven `rs_*` tools (rs_open / rs_new / rs_plan / rs_read / rs_write / rs_cite / rs_build) work over an append-only claim and source ledger; the document dialect adds exactly one thing to Pandoc Markdown (`[sentence]{#c0142}` for a claim, `[@key]` for a citation) and `rs_write` REFUSES a claim nothing tracks; six citation styles are one module each behind a registry, with the reference list computed from the ledger rather than typed by the model; `rs_build` writes a watermarked draft or a gated clean document, and docx/html/tex refuse by name with the phase that brings them. The Research tab is where a PERSON answers the gates and edits their own `doc/` and `plan/` files in place, with the structure verdict returned on every save. Host half plus UI; no vendored engine, no npm dependency, no bundled binary, no socket, no child process.",
+      "role": "Research: a run is a FOLDER - `RUN.json` (what it is) plus a `passport.json` that records the user's instructions and every gate answer VERBATIM - that stays findable from any session through a library pointer at `$DSH_HOME/dsh-research/library.json`. Nine `rs_*` tools (rs_open / rs_new / rs_plan / rs_read / rs_write / rs_cite / rs_verify / rs_review / rs_build) work over an append-only claim and source ledger; the document dialect adds exactly one thing to Pandoc Markdown (`[sentence]{#c0142}` for a claim, `[@key]` for a citation) and `rs_write` REFUSES a claim nothing tracks; a claim that rests on a NUMBER carries a validated `statistic` ({ test, statistic, df, p, effect, ci, n }, refused at `p = .000` and cleared like a wording change) which the build prints as the document's own Statistics table; a structured METHOD RECORD (`plan/method.json`: databases, date of access, search string, criteria, PRISMA-shaped screening counts) is validated on the way in and by r0, whose counts must not increase, and is printed as the document's search-and-screening flow; six citation styles are one module each behind a registry, with the reference list computed from the ledger rather than typed by the model; `rs_build` writes a watermarked draft or a gated clean document in md/docx/html/tex/ris/bib/enw plus the gated submission folder; and seven bundled skills teach the tool surface, the method layer and the review. The Research tab is where a PERSON answers the gates and edits their own `doc/` and `plan/` files in place, with the structure verdict returned on every save. Host half plus UI; no vendored engine, no npm dependency, no bundled binary, no socket, no child process.",
       "uses": [
-        "@deepseek-ai/dsh-tools (the registry the seven tools are registered into)",
+        "@deepseek-ai/dsh-tools (the registry the nine tools are registered into)",
         "the harness's own `connection.fetch` registry for the eight routes, all behind the session check",
-        "@deepseek-ai/dsh-skill (ctx.skills, resolved lazily; the bundled skill is also copied into $DSH_HOME/skills by both installers)",
+        "@deepseek-ai/dsh-skill (ctx.skills, resolved lazily; the seven bundled skills are also copied into $DSH_HOME/skills by both installers)",
         "dsh-rightbar (the tab registry and the two keyed pane seats)"
       ],
       "requires": [

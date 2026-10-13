@@ -317,7 +317,144 @@ export function isStrength(value) {
   return typeof value === 'string' && STRENGTHS.includes(value)
 }
 
+/**
+ * What a claim may say about its own numbers.
+ *
+ * A statistic in prose is a sentence nothing can check: "the effect was
+ * significant" is not a finding, it is a mood. These seven fields are the least a
+ * reader needs to find the number again - which test, what value, its degrees of
+ * freedom, the p-value, the effect size, its interval, and the n it came from - and
+ * they are DATA on the claim row rather than text in the sentence, so the build can
+ * print them and a later rung can disagree with one of them by name.
+ *
+ * The vocabulary is closed, exactly like `LOCATOR_KINDS`: a field nothing reads is
+ * a field nothing checks, and accepting one would be this plugin implying it
+ * understood a number it never looked at.
+ */
+export const STATISTIC_FIELDS = ['test', 'statistic', 'df', 'p', 'effect', 'ci', 'n']
+/** What each field is called when a person reads it. */
+export const STATISTIC_LABELS = {
+  test: 'test',
+  statistic: 'statistic',
+  df: 'df',
+  p: 'p',
+  effect: 'effect size',
+  ci: '95% CI',
+  n: 'n',
+}
+
+function badStatistic(detail) {
+  return new ResearchError('BAD_STATISTIC', detail)
+}
+
+/** A number written the way a journal prints it: no leading zero before a point. */
+function trimLeadingZero(value) {
+  const text = String(value)
+  return text.startsWith('0.') ? text.slice(1) : text
+}
+
+/**
+ * A p-value, normalised.
+ *
+ * Two rules beyond "it is a number between 0 and 1", and both are reporting
+ * standards rather than taste:
+ *
+ *   - `p = .000` is refused. No test produces a probability of exactly zero; it is
+ *     what a program prints when it rounds, and a paper that copies it is reporting
+ *     a number that cannot exist. The refusal names the form to write instead.
+ *   - `p < .001` is accepted and preserved as a bound, because that IS the honest
+ *     way to report a value the precision cannot resolve.
+ */
+function normalizeP(value) {
+  const raw = typeof value === 'number' ? String(value) : String(value ?? '').trim()
+  if (raw === '') throw badStatistic('`p` needs the p-value as reported, e.g. `.032` or `< .001`')
+  const bound = /^<=?\s*([0-9]*\.?[0-9]+)$/.exec(raw)
+  if (bound !== null) {
+    const limit = Number(bound[1])
+    if (!Number.isFinite(limit) || limit <= 0) throw badStatistic('a p-value bound must be above 0 (got ' + JSON.stringify(raw) + ')')
+    return '< ' + trimLeadingZero(bound[1])
+  }
+  if (!/^[0-9]*\.?[0-9]+$/.test(raw)) throw badStatistic('`p` is a number between 0 and 1, or a bound like `< .001` (got ' + JSON.stringify(raw) + ')')
+  const number = Number(raw)
+  if (!Number.isFinite(number) || number < 0 || number > 1) throw badStatistic('a p-value is between 0 and 1 (got ' + JSON.stringify(raw) + ')')
+  if (number === 0) {
+    throw badStatistic(
+      'a p-value of exactly 0 is not something a test produces - it is what a program prints after rounding. Write `p < .001` (or the smallest boundary your test can resolve) instead of ' +
+        JSON.stringify(raw),
+    )
+  }
+  return trimLeadingZero(raw)
+}
+
+/** A short field that has to carry a numeral to be worth recording. */
+function numeralField(value, field, max) {
+  const text = typeof value === 'number' ? String(value) : String(value ?? '').trim()
+  if (text === '') throw badStatistic('`' + field + '` is empty - drop the field rather than leaving it blank')
+  if (text.length > max) throw badStatistic('`' + field + '` is at most ' + max + ' characters (got ' + text.length + ')')
+  if (!/[0-9]/.test(text)) throw badStatistic('`' + field + '` has to carry a number to be a statistic, not just a label (got ' + JSON.stringify(text) + ')')
+  return text
+}
+
+/**
+ * A claim's statistic, validated, or a refusal that says which rule it broke.
+ *
+ * @returns a frozen plain object holding only the fields that were given, or `null`.
+ */
+export function normalizeStatistic(value) {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw badStatistic('a statistic is an object, e.g. { "test": "Welch t-test", "statistic": "t = 2.41", "p": ".032", "effect": "d = 0.61" }')
+  }
+  const keys = Object.keys(value)
+  if (keys.length === 0) throw badStatistic('a statistic with no fields is not a statistic - drop it, or say which test and what it found')
+  for (const key of keys) {
+    if (!STATISTIC_FIELDS.includes(key)) {
+      throw badStatistic('`' + key + '` is not a field of a statistic. It holds ' + STATISTIC_FIELDS.join(', ') + ' (a number nothing reads is a number nothing checks)')
+    }
+  }
+  const out = {}
+  if (value.test !== undefined && value.test !== null && String(value.test).trim() !== '') {
+    const test = String(value.test).trim()
+    if (test.length > 80) throw badStatistic('`test` is at most 80 characters (got ' + test.length + ')')
+    out.test = test
+  }
+  if (value.statistic !== undefined && value.statistic !== null) out.statistic = numeralField(value.statistic, 'statistic', 120)
+  if (value.df !== undefined && value.df !== null) out.df = numeralField(value.df, 'df', 40)
+  if (value.p !== undefined && value.p !== null) out.p = normalizeP(value.p)
+  if (value.effect !== undefined && value.effect !== null) out.effect = numeralField(value.effect, 'effect', 120)
+  if (value.ci !== undefined && value.ci !== null) {
+    if (Array.isArray(value.ci)) {
+      if (value.ci.length !== 2) throw badStatistic('a `ci` given as a list is [lower, upper] (got ' + value.ci.length + ' entries)')
+      const [low, high] = value.ci.map((one) => Number(one))
+      if (!Number.isFinite(low) || !Number.isFinite(high)) throw badStatistic('a `ci` is two numbers, or a string like "0.12 to 0.91"')
+      if (low > high) throw badStatistic('a `ci` runs from the lower bound to the upper one (got ' + low + ' to ' + high + ')')
+      out.ci = trimLeadingZero(low) + ' to ' + trimLeadingZero(high)
+    } else {
+      out.ci = numeralField(value.ci, 'ci', 120)
+    }
+  }
+  if (value.n !== undefined && value.n !== null) {
+    const n = typeof value.n === 'number' ? value.n : Number(String(value.n).trim())
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) throw badStatistic('`n` is a whole number of observations, 1 or more (got ' + JSON.stringify(value.n) + ')')
+    out.n = n
+  }
+  if (Object.keys(out).length === 0) throw badStatistic('a statistic with no numbers is not a statistic - every field given was empty')
+  return Object.freeze(out)
+}
+
+/** A statistic as one line a person reads: `Welch t-test, t = 2.41, p = .032, d = 0.61`. */
+export function statisticLabel(statistic) {
+  if (statistic === null || statistic === undefined) return ''
+  const bits = []
+  if (statistic.test !== undefined) bits.push(statistic.test)
+  for (const field of ['statistic', 'df', 'p', 'effect', 'ci', 'n']) {
+    if (statistic[field] === undefined) continue
+    bits.push((field === 'statistic' ? '' : STATISTIC_LABELS[field] + ' ') + String(statistic[field]))
+  }
+  return bits.join(', ')
+}
+
 /** One message per refusal this module can raise, for the checks that assert them. */
-export const SYNTAX_CODES = ['BAD_KEY', 'BAD_CLAIM_ID', 'BAD_LOCATOR']
+export const SYNTAX_CODES = ['BAD_KEY', 'BAD_CLAIM_ID', 'BAD_LOCATOR', 'BAD_STATISTIC']
 
 export { messageOf }

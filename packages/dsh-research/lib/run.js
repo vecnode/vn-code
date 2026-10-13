@@ -31,8 +31,8 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
-/** This build's marker. It must equal package.json's version. */
-export const PLUGIN_VERSION = '0.1.0-alpha.1'
+/** This build's marker. It must equal package.json's version - a check asserts it. */
+export const PLUGIN_VERSION = '0.1.0-alpha.3'
 
 /** The root override. Relative paths resolve against the workspace. */
 export const ROOT_ENV = 'DSH_RESEARCH_ROOT'

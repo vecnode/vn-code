@@ -26,8 +26,9 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 
 import { messageOf } from './run.js'
-import { findBrokenClaimMarkers, findBrokenCitations, findCitations, findClaimSpans, locatorLabel } from './syntax.js'
+import { findBrokenClaimMarkers, findBrokenCitations, findCitations, findClaimSpans, locatorLabel, statisticLabel } from './syntax.js'
 import { BLOCKING_STATUSES, claimStatusOf } from './ledger.js'
+import { methodProblems } from './method.js'
 
 /** How many sections a document may have before the outline is reported as runaway. */
 export const MAX_SECTIONS = 200
@@ -274,9 +275,48 @@ export function validateStructure(options) {
       }
     }
   }
+  // The method record is the run's other ledger: not what the document says, but
+  // what the search WAS. It is validated here rather than only on the way in, so a
+  // record a person edited by hand - or one another version wrote - is reported
+  // rather than believed. An unparsable file is pushed as-is, because "this is not
+  // JSON" is a fact the reader needs and `methodProblems` cannot see it.
+  if (options.methodProblem !== null && options.methodProblem !== undefined) {
+    problems.push(problem(options.methodProblem.code, options.methodProblem.severity, options.methodProblem.detail))
+  }
+  for (const one of methodProblems(options.method ?? null)) {
+    problems.push(problem(one.code, one.severity, one.detail, one.fields === undefined ? {} : { fields: one.fields }))
+  }
   const errors = problems.filter((one) => one.severity === 'error')
   const warnings = problems.filter((one) => one.severity === 'warning')
   return { ok: errors.length === 0, problems, errors, warnings, scan }
+}
+
+/**
+ * The run's statistics, as the rows of one table.
+ *
+ * Only the claims that CARRY a statistic appear, and they appear in claim-id order
+ * so the table is stable between builds. A claim with no statistic is not a defect
+ * - most sentences have no number in them - so nothing is reported for it.
+ *
+ * The sentence is trimmed rather than quoted whole: this is an index a reader
+ * checks the document against, not a second copy of the prose, and a table whose
+ * cells are paragraphs is a table nobody reads.
+ */
+export function statisticsEntries(claims) {
+  const rows = (claims ?? [])
+    .filter((row) => row !== null && typeof row.id === 'string' && row.statistic !== null && row.statistic !== undefined)
+    .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+  return rows.map((row) => {
+    const text = String(row.text ?? '').replace(/\s+/g, ' ').trim()
+    return {
+      id: row.id,
+      status: claimStatusOf(row),
+      strength: typeof row.strength === 'string' ? row.strength : '',
+      sentence: text.length > 90 ? text.slice(0, 89) + '…' : text,
+      statistic: row.statistic,
+      label: statisticLabel(row.statistic),
+    }
+  })
 }
 
 /** Runs to Markdown: italics are the one emphasis a reference entry needs. */
@@ -381,6 +421,7 @@ export function renderBody(options) {
     footnotes.push(
       'claim ' + span.id + ' — ' + status + (row !== null && typeof row.tier === 'string' && row.tier !== '' ? ' (' + row.tier + ')' : '') +
         (row !== null && typeof row.strength === 'string' ? ', written as ' + row.strength : '') +
+        (row !== null && row.statistic !== null && row.statistic !== undefined ? ', statistic ' + statisticLabel(row.statistic) : '') +
         (where === '' ? ', bound to no source' : ', bound to ' + where),
     )
     body = body.slice(0, span.start) + span.text + '[^' + footnotes.length + ']' + body.slice(span.end)
