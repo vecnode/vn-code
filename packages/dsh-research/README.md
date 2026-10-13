@@ -16,7 +16,7 @@ the **record** first.
 
 ## What it adds
 
-- **Seven tools, named by intent.** `rs_open` (where runs live, what is in each,
+- **Nine tools, named by intent.** `rs_open` (where runs live, what is in each,
   where this one stands — and `action=handoff`, which reprints the ledger so a
   model's summary is never mistaken for what you said), `rs_new` (start a run;
   opens the frame gates), `rs_plan` (the question, the outline, the method),
@@ -24,7 +24,29 @@ the **record** first.
   outline, build, or one text file), `rs_write` (write prose AND declare the claims
   it makes, together), `rs_cite` (ingest a source: hash the bytes, store the record
   and the text), `rs_verify` (run the two rungs a file can run, record the two that
-  need a reader), `rs_build` (a watermarked draft, or a gated clean document).
+  need a reader), `rs_review` (the panel, the author's answers, the re-review, and
+  the devil's advocate), `rs_build` (a watermarked draft, or a gated clean
+  document).
+- **A review is a ledger of concerns, with two columns that stay apart.**
+  `rs_review action=panel` records a round of findings — each with the role that
+  raised it, its severity, its criterion, and the **evidence in the manuscript**
+  that grounds it, because a concern the author cannot find is a revision round
+  wasted. `action=answer` records **your** reply (`addressed` / `rejected`);
+  `action=rereview` records what a **fresh reader** found (`verified: true|false`
+  plus a reason). "I fixed it" and "it is fixed" are different statements, so the
+  traceability matrix keeps them in separate columns — and `verified: false` is a
+  normal, useful answer rather than a failure. `action=write` puts
+  `reviews/panel-r<n>.md` and `reviews/traceability.md` on disk, which is what a
+  response-to-reviewers letter is written from.
+- **The devil's advocate's protocol is enforced, not requested.** `action=attack`
+  raises one, `action=concede` records a concession — and it needs the rebuttal's
+  **score** (1–5, how directly and how evidential the reply was). Below 4 the
+  concession is **refused** (`CONCESSION_BELOW_THRESHOLD`): the advocate holds
+  position and restates the attack. **Two concessions in a row are refused
+  outright** (`CONSECUTIVE_CONCESSION`) — the sycophancy pattern the protocol exists
+  to slow, where every individual concession looks reasonable and the sequence is
+  agreement with extra steps. The report also prints the concession rate and says
+  the pattern out loud when it crosses half.
 - **A ladder, and every rung names what it reached.**
   - `r0-structure` — the document and its ledgers agree (`span-unrecorded`,
     `claim-orphan`, `broken-marker`, `broken-citation`, `unknown-source`). Runs in
@@ -104,10 +126,10 @@ the **record** first.
 |---|---|
 | row | `research` |
 | routes | eight exact paths, `GET`/`HEAD`/`POST`, all behind the harness's session check |
-| tools | 8 (`rs_open`, `rs_new`, `rs_plan`, `rs_read`, `rs_write`, `rs_cite`, `rs_verify`, `rs_build`) |
+| tools | 9 (`rs_open`, `rs_new`, `rs_plan`, `rs_read`, `rs_write`, `rs_cite`, `rs_verify`, `rs_review`, `rs_build`) |
 | gates | 3 (two frame, one opened by a clean build) |
 | tab types | 1 (`research`, a page type with no file patterns) |
-| skills | 3 (`research-project`, `research-sources`, `research-writing`), registered at activation *and* copied into `$DSH_HOME/skills` |
+| skills | 5 (`research-project`, `research-sources`, `research-writing`, `research-verification`, `research-review`), registered at activation *and* copied into `$DSH_HOME/skills` |
 | touches | **no** core row disabled, **no** fork, **no** npm dependency, **no** vendored engine, **no** bundled binary |
 
 | Route | What it answers |
@@ -147,12 +169,10 @@ the **record** first.
 ## Limits — what is not here yet
 
 `md`, `ris`, `bib` and `enw` build today. **`docx`, `html` and `tex` refuse by name
-and say which phase brings them** — the DOCX writer is next. The remaining panel
-work is the in-place editor's hand-off to the editor tab and the headless render
-check. `rs_review` (the reviewer panel, the devil's advocate and the
-R&R matrix) is still to come, and so are the last three skills
-(`research-verification`, `research-review`, `research-formats`). The design for
-all of it, with the reasoning, is in `docs/DESIGN-dsh-research.md`.
+and say which phase brings them** — the DOCX writer is in progress. The remaining
+panel work is the headless render check. `research-formats` is the last of the six
+skills. The design for all of it, with the reasoning, is in
+`docs/DESIGN-dsh-research.md`.
 
 A run created today is not a dead end: the folder, the ledgers and the dialect are
 the structures the later phases fill.

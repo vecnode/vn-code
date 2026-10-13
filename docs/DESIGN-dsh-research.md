@@ -485,7 +485,7 @@ subagent or the session model, and there is no second provider anywhere in it.
 | 2 | the panel: the gates form, the passport, the outline, the claims ledger with its status chips, the sources ledger with what can be checked, the build row, the in-place editor with its structure verdict, the library pointer | client (rendered for real), node | **SHIPPED** except the headless render check |
 | 3 | the DOCX writer (seven modules, no dependencies, byte-deterministic), the HTML builder, RIS/BibTeX/ENW export from the panel, the integrity gate | `check-research-docx.mjs` (+ pandoc as the foreign reader) | **in progress** |
 | 4 | `r1-record` and `r2-locate`, the `rs_verify` tool that records a rung, the ladder report | `check-research-node.mjs` (the whole ladder driven end to end) | **SHIPPED** |
-| 5 | `r3`/`r4` recording (shipped with `rs_verify`), the reviewer panel, the DA concession gate, the R&R matrix | ladder with a stub judge, node | verdicts **SHIPPED**; `rs_review` to come |
+| 5 | `r3`/`r4` recording, the reviewer panel, the DA concession gate, the R&R matrix | ladder with a stub judge, `rs_review` driven end to end | **SHIPPED** |
 | 6 | `tex` output and the printed PDF command, submission packaging, the disclosure artifact, hash-change re-opening | docx/latex, node | |
 
 Rough size, for planning rather than pride: the host half of `dsh-pdf` is ~1,825

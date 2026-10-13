@@ -75,12 +75,30 @@ import {
 } from './ledger.js'
 import { STRENGTHS, findBrokenCitations, locatorLabel, nextClaimId } from './syntax.js'
 import { assembleDocument, parseOutline, scanDocument, validateStructure, wordCount } from './doc.js'
-import { FORMATS, FORMATS_READY, ensureIntegrityGate, formatNotYetMessage, hashOf, loadRefs, loadStyles, runBuild } from './build.js'
+import { FORMATS, FORMATS_READY, ensureIntegrityGate, formatNotYetMessage, hashOf, loadRefs, loadStyles, readRunState, runBuild } from './build.js'
 import { API_ROUTES } from './api.js'
 import { ladderReport, r1Sources, r2Claims } from './verify.js'
+import {
+  CONCESSION_MAX,
+  CONCESSION_THRESHOLD,
+  REVIEW_CRITERIA,
+  REVIEW_ROLES,
+  REVIEW_SEVERITIES,
+  advocateHealth,
+  answerFinding,
+  concede,
+  latestRound,
+  matrix,
+  raiseAttack,
+  readReviewRows,
+  recordFindings,
+  renderMatrix,
+  renderPanel,
+  rereviewFinding,
+} from './review.js'
 
 /** Every tool this package registers, for the row's log line and the tracked checks. */
-export const TOOL_NAMES = ['rs_open', 'rs_new', 'rs_plan', 'rs_read', 'rs_write', 'rs_cite', 'rs_verify', 'rs_build']
+export const TOOL_NAMES = ['rs_open', 'rs_new', 'rs_plan', 'rs_read', 'rs_write', 'rs_cite', 'rs_verify', 'rs_review', 'rs_build']
 
 /** The view schema every tool's `view` conforms to. The conversation card draws this. */
 const VIEW_SCHEMA = {
@@ -1207,7 +1225,13 @@ export function buildTools(deps = {}) {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['id', 'verdict'],
+            // `reason` is REQUIRED in the schema, not only in the refusal: this
+            // subset of JSON Schema cannot say "required for some actions", so the
+            // requirements a caller can be told before the call are stated here and
+            // the rest stay runtime refusals. `judge` is the other way round - the
+            // tool-level `required` is `['slug']`, because `record` and `report` need
+            // no judge at all, and asking for one there would refuse a valid call.
+            required: ['id', 'verdict', 'reason'],
             properties: {
               id: { type: 'string', description: 'The claim id, e.g. `c0142`.' },
               verdict: { type: 'string', enum: ['supported', 'partially-supported', 'unsupported', 'contradicted', 'misattributed'], description: 'What the passage does for the claim.' },
@@ -1386,7 +1410,199 @@ export function buildTools(deps = {}) {
     },
   }
 
-  return [open, create, plan, read, write, cite, verify, build]
+  // -------------------------------------------------------------------------
+  // rs_review
+  // -------------------------------------------------------------------------
+  const review = {
+    name: 'rs_review',
+    description: [
+      'The review: the concerns raised about the document, what the author did about each, and whether a re-review confirmed it. This tool RECORDS a review - it does not perform one, because reading a paper and judging it is the reader\'s work.',
+      '`panel` records one round of findings: `items=[{ role, concern, severity, criterion, evidence, suggestion }]`. Roles: journal-fit, methodology, domain, devils-advocate, editor, author. A concern should name the `evidence` in the manuscript that grounds it (a section, a claim id), because a concern the author cannot find is a revision round wasted.',
+      '`answer` records YOUR reply to one concern: `{ id, status: addressed|rejected, reply }`. `rereview` records what a fresh reader found: `{ id, verified: true|false, reason }` - and that is a SEPARATE column from the author\'s own answer, because "I fixed it" and "it is fixed" are different statements.',
+      '`attack` and `concede` are the devil\'s advocate, and the concession threshold is ENFORCED rather than requested: a concession needs the rebuttal\'s score (1-5) and is REFUSED below 4 (`CONCESSION_BELOW_THRESHOLD`) - at that score the advocate holds position - and a second concession in a row is refused outright (`CONSECUTIVE_CONCESSION`), which is the sycophancy pattern this protocol exists to slow.',
+      '`read` prints the matrix and the round\'s report; `write` puts the panel report and the response-to-reviewers letter in `reviews/`. The matrix keeps the author\'s claim and the re-review\'s finding in separate columns, on purpose.',
+    ].join('\n'),
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        slug: { type: 'string', description: 'The run.' },
+        action: { type: 'string', enum: ['panel', 'answer', 'rereview', 'attack', 'concede', 'read', 'write'], description: 'What to record, or `read`/`write` for the report and the letter.' },
+        round: { type: 'number', description: 'The review round (default: the next one).' },
+        items: {
+          type: 'array',
+          description: 'For `action=panel`: the findings.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['role', 'concern'],
+            properties: {
+              role: { type: 'string', enum: REVIEW_ROLES, description: 'Which reviewer is speaking.' },
+              concern: { type: 'string', description: 'The concern, in the reviewer\'s words.' },
+              severity: { type: 'string', enum: REVIEW_SEVERITIES, description: 'major (default), minor or note.' },
+              criterion: { type: 'string', enum: REVIEW_CRITERIA, description: 'What it is about (default evidence).' },
+              evidence: { type: 'string', description: 'Where in the manuscript - a section slug, a claim id, a page. A concern with no location is one the author cannot find.' },
+              suggestion: { type: 'string', description: 'What would resolve it, if the reviewer has one.' },
+            },
+          },
+        },
+        id: { type: 'string', description: 'For answer/rereview: the finding id, e.g. `f0001`.' },
+        status: { type: 'string', enum: ['addressed', 'rejected'], description: 'For `answer`. Neither is a verification.' },
+        reply: { type: 'string', description: 'For `answer`/`concede`: the sentence being answered with.' },
+        verified: { type: 'boolean', description: 'For `rereview`: did the revised document actually settle it?' },
+        reason: { type: 'string', description: 'For `rereview`/`attack`: what grounds the verdict.' },
+        concern: { type: 'string', description: 'For `attack`/`concede`: the concern.' },
+        score: { type: 'number', description: 'For `concede`: 1-5, how directly and how evidential the rebuttal was. 4 or more earns the concession.' },
+        by: { type: 'string', description: 'For `rereview`: who re-read it.' },
+      },
+      required: ['slug'],
+    },
+    output,
+    presentCall: () => ({ card: 'generic', title: 'Research review', kind: 'other' }),
+    async execute(args, exec) {
+      return run('rs_review', args, exec, async () => {
+        const resolved = await rootFor(exec)
+        const slug = String(args.slug ?? '').trim()
+        const { dir, file: runFile, record } = await readRun(resolved.root, slug)
+        const action = args.action ?? 'read'
+        const { rows } = await readReviewRows(dir)
+        const round = Number.isFinite(Number(args.round)) && Number(args.round) > 0 ? Number(args.round) : undefined
+
+        if (action === 'read' || action === 'write') {
+          // A report is ABOUT a round, so with none named it reports the latest one
+          // that exists - which is also what names the file it writes.
+          const activeRound = round ?? latestRound(rows)
+          const report = renderPanel(rows, { round: activeRound, title: record.title })
+          const matrixText = renderMatrix(rows)
+          const open = matrix(rows).filter((entry) => entry.status === 'open')
+          const unanswered = open.length
+          if (action === 'read') {
+            if (rows.length === 0) {
+              return {
+                text: 'No review yet for ' + slug + '. Record a panel with `rs_review action=panel items=[{ role, concern, … }]`.',
+                view: { action, slug, root: resolved.root, summary: 'no review yet' },
+              }
+            }
+            const lines = [
+              'Review of ' + slug + ' — ' + matrix(rows).length + ' concern(s)',
+              '- open: ' + unanswered + '   major: ' + matrix(rows).filter((entry) => entry.severity === 'major').length,
+              '- the author\'s answers and the re-review\'s findings are separate columns; a concern is not closed by an answer alone',
+              '',
+              'The traceability matrix:',
+              '',
+              matrixText,
+            ]
+            const advocate = advocateHealth(rows)
+            if (advocate.attacks + advocate.concessions > 0) {
+              lines.push('', 'The devil\'s advocate: ' + advocate.attacks + ' attack(s), ' + advocate.concessions + ' concession(s), rate ' + Math.round(advocate.rate * 100) + '%')
+              if (advocate.warning !== '') lines.push('', advocate.warning)
+            }
+            return { text: lines.join('\n'), view: { action, slug, root: resolved.root, files: matrix(rows).length, summary: matrix(rows).length + ' concern(s), ' + unanswered + ' open' } }
+          }
+          if (rows.length === 0) throw new ResearchError('NO_REVIEW', 'there is no review to write up yet - record the panel first')
+          await fsp.mkdir(path.join(dir, 'reviews'), { recursive: true })
+          const reportFile = path.join(dir, 'reviews', 'panel-r' + activeRound + '.md')
+          await writeTextAtomic(reportFile, report + '\n')
+          const matrixFile = path.join(dir, 'reviews', 'traceability.md')
+          await writeTextAtomic(matrixFile, '# Response to reviewers — traceability\n\n' + matrixText + '\n')
+          const { passport } = await readPassport(resolved.root, slug)
+          await addReceipt(path.join(dir, PASSPORT_FILE), passport, 'rs_review', 'wrote the panel report and the traceability matrix (' + matrix(rows).length + ' concerns)', args.now)
+          await touchRun(runFile, record, args.now)
+          return {
+            text: [
+              'Wrote the review for ' + slug,
+              '- reviews/' + path.basename(reportFile) + ': the round\'s concerns, grouped and counted',
+              '- reviews/traceability.md: the matrix, with the author\'s answer and the re-review\'s finding in separate columns',
+              '',
+              unanswered > 0 ? 'NOTE: ' + unanswered + ' concern(s) are still open - a response letter with an open concern in it is a letter that concedes the point.' : 'Every concern has an answer.',
+            ].join('\n'),
+            view: { action, slug, root: resolved.root, files: 2, summary: 'panel + matrix written' },
+          }
+        }
+
+        if (action === 'panel') {
+          if (!Array.isArray(args.items) || args.items.length === 0) throw new ResearchError('BAD_FINDING', 'pass `items=[{ role, concern, … }]`')
+          const state = await readRunState(dir)
+          if (state.document.text.trim() === '') {
+            throw new ResearchError('DOC_EMPTY', 'there is nothing to review yet - a concern about a document that does not exist cannot be answered')
+          }
+          const result = await recordFindings(dir, { round, items: args.items }, args.now)
+          const { passport } = await readPassport(resolved.root, slug)
+          await addReceipt(path.join(dir, PASSPORT_FILE), passport, 'rs_review', 'recorded ' + result.added.length + ' finding(s) in round ' + result.round, args.now)
+          await touchRun(runFile, record, args.now)
+          return {
+            text: [
+              'Recorded round ' + result.round + ' for ' + slug + ': ' + result.added.length + ' concern(s)',
+              ...result.added.map((one) => '  ' + one.id + '  [' + one.severity + ', ' + one.role + ', ' + one.criterion + ']'),
+              '',
+              'Next: answer each one with `rs_review action=answer id=… status=addressed reply="…"`, then have a fresh reader check it with `action=rereview`.',
+            ].join('\n'),
+            view: { action, slug, root: resolved.root, files: result.added.length, summary: result.added.length + ' concern(s) in round ' + result.round },
+          }
+        }
+
+        if (action === 'answer') {
+          const row = await answerFinding(dir, { id: args.id, status: args.status, reply: args.reply }, args.now)
+          await touchRun(runFile, record, args.now)
+          return {
+            text: [
+              'Finding ' + row.id + ' is now ' + row.status + ' (your words, not a verification)',
+              '- your answer: ' + row.reply,
+              '',
+              'A re-review decides whether it is actually settled: `rs_review action=rereview id=' + row.id + ' verified=true|false reason="…"`. Until then the matrix says `not re-reviewed`.',
+            ].join('\n'),
+            view: { action, slug, root: resolved.root, summary: row.id + ' ' + row.status },
+          }
+        }
+
+        if (action === 'rereview') {
+          const row = await rereviewFinding(dir, { id: args.id, verified: args.verified, reason: args.reason, by: args.by }, args.now)
+          await touchRun(runFile, record, args.now)
+          return {
+            text: [
+              'Re-review of ' + row.id + ': ' + (row.verified ? 'VERIFIED' : 'NOT settled') + ' by ' + row.verifiedBy,
+              '- ' + row.verifyReason,
+              '',
+              row.verified
+                ? 'The concern is closed in the matrix (the revision did what the answer said).'
+                : 'The matrix now says NO, which is a normal and useful answer: the revision did not do what the answer said it did, and the reason above is what to change.',
+            ].join('\n'),
+            view: { action, slug, root: resolved.root, summary: row.id + (row.verified ? ' verified' : ' not settled') },
+          }
+        }
+
+        if (action === 'attack') {
+          const row = await raiseAttack(dir, { round, concern: args.concern, severity: args.severity, criterion: args.criterion, evidence: args.evidence, suggestion: args.suggestion, reply: args.reply }, args.now)
+          await touchRun(runFile, record, args.now)
+          return {
+            text: [
+              'Attack ' + row.id + ' recorded (round ' + row.round + ')',
+              '- ' + row.concern,
+              '',
+              'When a rebuttal comes back, score it with `action=concede score=1-5 reply="…"`. Below ' + CONCESSION_THRESHOLD + ' the advocate holds position, and the tool will refuse the concession rather than store a quiet surrender.',
+            ].join('\n'),
+            view: { action, slug, root: resolved.root, summary: row.id + ' attack' },
+          }
+        }
+
+        // ---- concede, and the two rules that can refuse it
+        const result = await concede(dir, { round, concern: args.concern, reply: args.reply, score: args.score }, args.now)
+        await touchRun(runFile, record, args.now)
+        return {
+          text: [
+            'Concession recorded for round ' + result.row.round + ' (rebuttal scored ' + result.row.concessionScore + '/' + CONCESSION_MAX + ')',
+            '- conceded to: ' + result.row.reply,
+            '- the advocate now stands at ' + result.attacks + ' attack(s), ' + result.concessions + ' concession(s), rate ' + Math.round(result.rate * 100) + '%',
+            '',
+            'Two concessions in a row are refused, so the next entry has to be an attack or a note saying what is left to attack.',
+          ].join('\n'),
+          view: { action, slug, root: resolved.root, summary: 'conceded at ' + result.row.concessionScore + '/' + CONCESSION_MAX },
+        }
+      })
+    },
+  }
+
+  return [open, create, plan, read, write, cite, verify, review, build]
 }
 
 // ---------------------------------------------------------------------------

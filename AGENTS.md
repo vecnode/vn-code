@@ -61,8 +61,11 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   reference indexed, five skills whose every example a check compiles, one small
   console tab — host half plus UI, no bundled binary), `dsh-diagrams`, `dsh-pdf`,
   `dsh-research` (a run is a folder with a `passport.json` recording the user's own
-  words; three `rs_*` tools, two frame gates a PERSON answers in the right bar, and
-  the Research tab — host half plus UI, no socket, no vendored engine),
+  words; nine `rs_*` tools over an append-only claim and source ledger, a
+  verification ladder whose every rung names what it reached, the review with its
+  enforced concession protocol, frame gates a PERSON answers in the right bar, and
+  a Research tab that also edits the document — host half plus UI, no socket, no
+  vendored engine),
   `dsh-browser`, `dsh-themes`, `dsh-cmdbar`, `dsh-modal`, `dsh-skills`,
   `dsh-ui-state`, `dsh-open-in-app`.
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with

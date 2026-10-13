@@ -123,7 +123,21 @@ const skillNames = readdirSync(skillsDir, { withFileTypes: true })
   .map((entry) => entry.name)
   .sort()
 
-check('the package ships its skills', skillNames.join(','), 'research-project,research-sources,research-writing')
+// The invariant that matters is not "there are three skills" - it is that every
+// skill ON DISK is one this row REGISTERS. A skill folder nothing registers is a
+// skill the agent never loads, and the installers copy it into $DSH_HOME/skills
+// anyway, so the two halves disagree and only one of them is what the model sees.
+check('every skill on disk is registered at activation', skillNames.join(','), indexModule.__internals.SKILL_FILES.map((one) => one.name).sort().join(','))
+// ...and the other direction: a REGISTERED skill whose file is missing is a warning
+// at activation rather than a failure, which is how a rename leaves a row quietly
+// teaching a skill it cannot load.
+check(
+  'every registered skill has a file on disk',
+  indexModule.__internals.SKILL_FILES.filter((one) => !skillNames.includes(one.name)).map((one) => one.name).join(','),
+  '',
+)
+check('and the package ships at least one skill', skillNames.length >= 1, true)
+check('every skill on disk has a SKILL.md', skillNames.every((name) => readFileSync(path.join(skillsDir, name, 'SKILL.md'), 'utf8').length > 200), true)
 
 /** Every assignment a skill makes, collected first so the report is one line each. */
 const badTools = []
@@ -175,9 +189,14 @@ for (const skill of skillNames) {
           continue
         }
         if (use.tool === null) {
-          // An assignment with no tool on its line: only flag it when the parameter
-          // is one only a tool has, so ordinary prose is not mistaken for a call.
-          if (['action', 'what', 'part', 'tier'].includes(use.parameter)) badValues.push(skill + ':' + block.line + ' `' + use.parameter + '=' + use.value + '` with no tool named')
+          // A parameter written in PROSE, with the tool established earlier in the
+          // paragraph. That is normal writing, so the honest test is not "no tool on
+          // this line" - it is whether ANY tool accepts the value. `action=rereview`
+          // in a sentence is fine; `action=re-review` is a typo and fails here.
+          const anywhere = tools.some((one) => (allowedValues(one, use.parameter) ?? []).includes(use.value))
+          if (['action', 'what', 'part', 'tier'].includes(use.parameter) && !anywhere) {
+            badValues.push(skill + ':' + block.line + ' `' + use.parameter + '=' + use.value + '` - no tool accepts that value')
+          }
           continue
         }
         const allowed = allowedValues(tool, use.parameter)
@@ -245,8 +264,13 @@ if (unclassified.length > 0) {
 // A guard on the check itself: if the tool surface grew and this check did not
 // notice, the two lists would silently disagree.
 check('the check read the whole tool surface', TOOLS.length, toolsModule.TOOL_NAMES.length)
-check('and the surface is the eight tools the package documents', TOOLS.join(','), 'rs_open,rs_new,rs_plan,rs_read,rs_write,rs_cite,rs_verify,rs_build')
+check('and the surface is the nine tools the package documents', TOOLS.join(','), 'rs_open,rs_new,rs_plan,rs_read,rs_write,rs_cite,rs_verify,rs_review,rs_build')
 check('the code sets it reads are not empty', CODES.upper.size > 30 && CODES.lower.size > 6, true)
+// The classifier can only police a code it can SEE. These three are read out of
+// verify.js, so if a rename ever moves them out of the pattern's reach the check
+// would stop policing them silently - which is the failure mode this assertion is
+// here to prevent.
+check('and it can see the rung findings, not just the r0 problems', ['bytes-missing', 'title-mismatch', 'locate-miss', 'locate-inconclusive'].every((code) => CODES.lower.has(code)), true)
 
 console.log('')
 console.log(failures === 0 ? 'all research-example checks passed' : failures + ' check(s) FAILED')

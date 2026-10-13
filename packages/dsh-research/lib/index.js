@@ -80,6 +80,8 @@ const SKILL_FILES = [
   { name: 'research-project', file: '../skills/research-project/SKILL.md' },
   { name: 'research-sources', file: '../skills/research-sources/SKILL.md' },
   { name: 'research-writing', file: '../skills/research-writing/SKILL.md' },
+  { name: 'research-verification', file: '../skills/research-verification/SKILL.md' },
+  { name: 'research-review', file: '../skills/research-review/SKILL.md' },
 ]
 
 /** The row's identity. */
@@ -459,6 +461,17 @@ export const REFUSAL_CODES = [
   'BAD_JUDGE',
   'STATUS_REQUIRES_EVIDENCE',
   'RUNG_ORDER',
+  'BAD_FINDING',
+  'BAD_ROLE',
+  'BAD_SEVERITY',
+  'BAD_CRITERION',
+  'BAD_REPLY',
+  'BAD_SCORE',
+  'UNKNOWN_FINDING',
+  'NOT_ANSWERED',
+  'NO_REVIEW',
+  'CONCESSION_BELOW_THRESHOLD',
+  'CONSECUTIVE_CONCESSION',
   'BROKEN_CITATION',
   'NO_SUCH_FILE',
   'NOT_A_FILE',

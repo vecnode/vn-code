@@ -161,6 +161,7 @@ const syntaxModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'syntax
 const buildModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'build.js')).href)
 const viewModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'view.js')).href)
 const verifyModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'verify.js')).href)
+const reviewModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'review.js')).href)
 const refsModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'refs.js')).href)
 const stylesModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'styles', 'index.js')).href)
 const apiModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'api.js')).href)
@@ -1113,6 +1114,92 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   const cleared = (await readClaims(path.join(root, 'ladder-check'))).current.find((row) => row.id === 'c0001')
   check('the status is back to unverified', cleared.status, 'unverified')
   check('and the findings went with it', cleared.findings.length, 0)
+}
+
+// ---------------------------------------------------------------------------
+// The review: the panel, the two columns, and the concession protocol
+// ---------------------------------------------------------------------------
+{
+  const exec3 = { agent: { session: { meta: { cwd: workspace } } } }
+  const log3 = { warn() {}, info() {}, debug() {} }
+  const tools3 = buildTools({ env, workspace, log: log3 })
+  const call3 = async (name, args) => {
+    const tool = tools3.find((one) => one.name === name)
+    const value = await tool.execute(args, exec3)
+    return { value, problems: [...schemaErrors(tool.output.schema, value, name), ...losslessErrors(value, name)] }
+  }
+
+  check('reviewing a run with no document is refused', (await call3('rs_review', { slug: 'tool-check', action: 'panel', items: [{ role: 'methodology', concern: 'x' }] })).value.view.code, 'DOC_EMPTY')
+  check('a panel with no items is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'panel' })).value.view.code, 'BAD_FINDING')
+
+  const panel = await call3('rs_review', {
+    slug: 'ladder-check',
+    action: 'panel',
+    items: [
+      { role: 'methodology', concern: 'The claim about completion rests on one study.', severity: 'major', criterion: 'method', evidence: '§results', suggestion: 'Add the second study already in the ledger.' },
+      { role: 'journal-fit', concern: 'The framing speaks to practitioners rather than to the journal.', severity: 'minor', criterion: 'fit', evidence: 'c0001' },
+      { role: 'domain', concern: 'A key definition is missing.', severity: 'note', criterion: 'clarity' },
+    ],
+  })
+  check('the panel records three findings', panel.value.view.ok && panel.value.text.includes('f0001') && panel.value.text.includes('f0003'), true)
+  check('and numbers them in one round', panel.problems.join(' | '), '')
+  check('an invented role is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'panel', items: [{ role: 'vibes', concern: 'x' }] })).value.view.code, 'BAD_ROLE')
+  check('a finding with no concern is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'panel', items: [{ role: 'domain' }] })).value.view.code, 'BAD_FINDING')
+  check('an invented severity is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'panel', items: [{ role: 'domain', concern: 'x', severity: 'fatal' }] })).value.view.code, 'BAD_SEVERITY')
+
+  // ---- the author's answer, and the separate column it does NOT fill
+  check('an answer to a finding that does not exist is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'answer', id: 'f9999', status: 'addressed', reply: 'x' })).value.view.code, 'UNKNOWN_FINDING')
+  check('an answer with no reply is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'answer', id: 'f0001', status: 'addressed' })).value.view.code, 'BAD_REPLY')
+  check('and "open" is not a status an answer may set', (await call3('rs_review', { slug: 'ladder-check', action: 'answer', id: 'f0001', status: 'open', reply: 'x' })).value.view.code, 'BAD_STATUS')
+  const answered = await call3('rs_review', { slug: 'ladder-check', action: 'answer', id: 'f0001', status: 'addressed', reply: 'Added the second study to §results and cited it.' })
+  check('a well-formed answer is recorded', answered.value.view.ok, true)
+  check('and says it is not a verification', answered.value.text.includes('your words, not a verification'), true)
+
+  // A re-review is a SEPARATE finding: verified=false is a normal answer.
+  check('re-reviewing an unanswered concern is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'rereview', id: 'f0002', verified: true, reason: 'x' })).value.view.code, 'NOT_ANSWERED')
+  check('a re-review with no reason is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'rereview', id: 'f0001', verified: true })).value.view.code, 'BAD_REPLY')
+  const settled = await call3('rs_review', { slug: 'ladder-check', action: 'rereview', id: 'f0001', verified: false, reason: 'the second study was added to the prose but not cited, so the claim still rests on one source', by: 'a fresh reader' })
+  check('a re-review that did NOT settle it is recorded as such', settled.value.view.ok && settled.value.text.includes('NOT settled'), true)
+  check('and says why', settled.value.text.includes('not cited'), true)
+
+  // ---- the concession protocol, which is the reason this tool exists
+  check('an attack needs a concern', (await call3('rs_review', { slug: 'ladder-check', action: 'attack', severity: 'major' })).value.view.code, 'BAD_FINDING')
+  const attack = await call3('rs_review', { slug: 'ladder-check', action: 'attack', concern: 'The causal wording is not supported by an observational study.', evidence: 'c0001' })
+  check('an attack is recorded', attack.value.view.ok, true)
+  check('a concession with no score is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'concede', concern: 'x', reply: 'y' })).value.view.code, 'BAD_SCORE')
+  check('a score outside 1-5 is refused', (await call3('rs_review', { slug: 'ladder-check', action: 'concede', concern: 'x', reply: 'y', score: 9 })).value.view.code, 'BAD_SCORE')
+  // The threshold: a rebuttal that did not answer the attack directly with
+  // evidence does not change the advocate's position.
+  const below = await call3('rs_review', { slug: 'ladder-check', action: 'concede', concern: 'The causal wording is not supported.', reply: 'We believe the study design is adequate.', score: 3 })
+  check('a rebuttal below the threshold does NOT earn a concession', below.value.view.code, 'CONCESSION_BELOW_THRESHOLD')
+  check('and the refusal tells the advocate to hold position', below.value.text.includes('HOLD POSITION'), true)
+  const earned = await call3('rs_review', { slug: 'ladder-check', action: 'concede', concern: 'The causal wording is not supported.', reply: 'The sentence now says "associated with" and cites the second study, which the reader can check.', score: 5 })
+  check('a scored rebuttal at or above the threshold is recorded', earned.value.view.ok && earned.value.text.includes('5/5'), true)
+  check('and the refusal of a second concession follows', (await call3('rs_review', { slug: 'ladder-check', action: 'concede', concern: 'x', reply: 'y', score: 5 })).value.view.code, 'CONSECUTIVE_CONCESSION')
+  check('while an attack in between reopens it', (await call3('rs_review', { slug: 'ladder-check', action: 'attack', concern: 'The sample is not described.', severity: 'minor' })).value.view.ok, true)
+  check('so a further concession is allowed', (await call3('rs_review', { slug: 'ladder-check', action: 'concede', concern: 'The sample is not described.', reply: 'Section 3.1 now reports N, the sampling frame and the response rate.', score: 4 })).value.view.ok, true)
+
+  // ---- the matrix, and the pattern warning
+  const read = await call3('rs_review', { slug: 'ladder-check', action: 'read' })
+  check('the matrix reports the author\'s answer and the re-review separately', read.value.text.includes('| verified |') && read.value.text.includes('NO'), true)
+  check('and says a concern is not closed by an answer alone', read.value.text.includes('not closed by an answer alone'), true)
+  check('and reports the advocate\'s rate', read.value.text.includes('rate 50%'), true)
+  check('and says the sycophancy pattern out loud at that rate', read.value.text.includes('Conceding is not the same as being answered'), true)
+
+  const written = await call3('rs_review', { slug: 'ladder-check', action: 'write' })
+  check('the review writes a panel report and the matrix', written.value.view.ok && written.value.text.includes('traceability.md'), true)
+  const panelFile = await fsp.readFile(path.join(root, 'ladder-check', 'reviews', 'panel-r1.md'), 'utf8').catch(() => null)
+  check('the report is on disk with the round in its name', panelFile !== null && panelFile.includes('round 1'), true)
+  const matrixFile = await fsp.readFile(path.join(root, 'ladder-check', 'reviews', 'traceability.md'), 'utf8').catch(() => null)
+  check('and the matrix is on disk', matrixFile !== null && matrixFile.includes('f0002'), true)
+
+  // ---- the pure pieces
+  check('a concern with a pipe in it cannot break the matrix table', reviewModule.renderMatrix([{ id: 'f0001', round: 1, kind: 'finding', role: 'domain', severity: 'major', criterion: 'clarity', concern: 'a | b', status: 'open' }]).includes('a \\| b'), true)
+  check('a finding defaults to major and evidence', reviewModule.normalizeFinding({ role: 'domain', concern: 'x' }, undefined).severity + '/' + reviewModule.normalizeFinding({ role: 'domain', concern: 'x' }, undefined).criterion, 'major/evidence')
+  check('the matrix keeps the author\'s claim and the re-review apart', reviewModule.matrix([{ id: 'f0001', kind: 'finding', status: 'addressed', reply: 'done', verified: false }])[0].verified, 'NO')
+  check('and an unverified concern says so rather than looking closed', reviewModule.matrix([{ id: 'f0001', kind: 'finding', status: 'addressed', reply: 'done' }])[0].verified, 'not re-reviewed')
+  check('the threshold is the number the refusals use', reviewModule.CONCESSION_THRESHOLD, 4)
+  check('every role, criterion and severity is an enum the tool publishes', reviewModule.REVIEW_ROLES.length + reviewModule.REVIEW_CRITERIA.length + reviewModule.REVIEW_SEVERITIES.length, 17)
 }
 
 // ---------------------------------------------------------------------------
