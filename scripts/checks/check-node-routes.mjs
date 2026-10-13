@@ -1690,10 +1690,10 @@ try {
 }
 
 // ------------------------------------------- every runtime skill registration
-// Four rows register a skill into the harness's own registry at activation
-// (dsh-media's two, dsh-diagrams' two, dsh-pdf's one, dsh-supercollider's five
-// and dsh-proto-lab's three), and each of them must name the FILE it read and its
-// SOURCE BUCKET. The source is not cosmetic:
+// Six rows register a skill into the harness's own registry at activation
+// (dsh-media's two, dsh-diagrams' two, dsh-pdf's one, dsh-supercollider's five,
+// dsh-proto-lab's three and dsh-research's one), and each of them must name the
+// FILE it read and its SOURCE BUCKET. The source is not cosmetic:
 // `ctx.skills.get()` - what the `skill` tool calls to LOAD a skill, as opposed to
 // listing it - validates the definition it gets back and requires a STRING
 // `source`, so a runtime registration without one is unloadable wherever it is
@@ -1709,7 +1709,7 @@ try {
 // whose registration nothing pinned. It is here now.
 {
   const registrations = []
-  for (const packageName of ['dsh-media', 'dsh-diagrams', 'dsh-pdf', 'dsh-supercollider', 'dsh-proto-lab']) {
+  for (const packageName of ['dsh-media', 'dsh-diagrams', 'dsh-pdf', 'dsh-supercollider', 'dsh-proto-lab', 'dsh-research']) {
     registrations.push({
       packageName,
       source: await fsp.readFile(path.join(repo, 'packages', packageName, 'lib', 'index.js'), 'utf8'),
@@ -1719,7 +1719,7 @@ try {
   check(
     'every bundled-skill registration names its file and source bucket',
     named.map((entry) => entry.packageName).join(','),
-    'dsh-media,dsh-diagrams,dsh-pdf,dsh-supercollider,dsh-proto-lab',
+    'dsh-media,dsh-diagrams,dsh-pdf,dsh-supercollider,dsh-proto-lab,dsh-research',
   )
 }
 

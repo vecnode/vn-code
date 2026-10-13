@@ -392,6 +392,12 @@ function Assert-Sentinels {
         # scaffold or a language it cannot teach.
         'packages/dsh-proto-lab/lib/vendor/p5.min.js',
         'packages/dsh-proto-lab/skills/p5js-prototypes/SKILL.md',
+        # dsh-research: the engine (a run is a folder this file defines) and the
+        # browser half (the Research tab, which is the only place a PERSON answers
+        # a gate). A distribution missing either ships a package that can list
+        # nothing or show nothing.
+        'packages/dsh-research/lib/run.js',
+        'packages/dsh-research/lib/client.js',
         # The build fingerprint. Its presence is what tells a later run that this
         # folder was assembled from inputs it can vouch for - a folder missing it
         # is a folder this build did not produce, and is reassembled rather than

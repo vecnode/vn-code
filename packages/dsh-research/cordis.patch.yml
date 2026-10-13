@@ -1,0 +1,34 @@
+# dsh-research bundle layer (alpha.2).
+#
+# One extra row ('research') owns the whole plugin: its Node half registers the
+# `rs_*` tools, the bundled skill, and the eight authenticated
+# /api/dsh-research/* routes (the run list, one run in one round trip, the gate
+# answer, one source's record and text, a built artifact's bytes, a run's own text
+# files READ and SAVED, a build, and the health snapshot the tracked checks read),
+# and therefore ships its browser half (dsh.client) with the Loader entry. The
+# browser half registers ONE tab type, `research`: a page type with no patterns,
+# reachable from the "+" control's Start page, which draws the run list, the
+# pending gates a PERSON answers, the passport's provenance, an editor for the
+# run's own `doc/` and `plan/` files, and the file list.
+#
+# What this row deliberately does NOT do:
+#
+#   - it disables NO shipped row, forks NO bundle and patches nothing. A research
+#     run is a folder, so there is no shipped surface to supersede: the tab is a
+#     new page type beside Files, the editor, History, the PDF reader and the rest.
+#   - it opens NO socket, spawns NO process and reads NO credential. Literature
+#     arrives as a file the person or the agent already has; the harness's own
+#     web_fetch / web_search are the agent's way to the network. See SECURITY.md.
+#   - it vendors NOTHING and downloads NOTHING. The engine is hand-written
+#     JavaScript, which is why this bundle has no `vendor/` folder and nothing for
+#     scripts/sync-vendored.ps1 to keep in sync - and why the DOCX writer is being
+#     written rather than wrapped around pandoc, which would be a child process.
+#
+# A gate is the one thing the model must not do for the user: `g2-intake` asks
+# whether the person ran the experiments a document reports, and `g1-rq` is what
+# `rs_write` refuses to write past. Both are opened by rs_new, answered over
+# POST /api/dsh-research/gate (behind the harness's own session check, like every
+# pack route), and quoted back verbatim afterwards.
+- insert:
+    - id: research
+      name: 'dsh-research'
