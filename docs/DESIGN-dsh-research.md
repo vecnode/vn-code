@@ -482,22 +482,38 @@ subagent or the session model, and there is no second provider anywhere in it.
 |---|---|---|---|
 | 0 | the run model, the passport, the two gates, `rs_open`/`rs_new`/`rs_read`, the routes, the Research tab with the gate form and the live poll | `check-research-node.mjs`, `check-client-bundles.mjs` | **SHIPPED** |
 | 1 | `rs_plan`, `rs_write`, claim + citation syntax, the append-only source and claim ledgers, `rs_cite` (ingest only), the RIS/BibTeX/MEDLINE/EndNote engine, six citation styles as a registry, `format=md`, the first skill | `check-research-node.mjs`, `check-research-refs.mjs`, `check-research-styles.mjs` | **SHIPPED** |
-| 2 | the panel: the gates form, the passport, the file list, **the in-place editor with its structure verdict**, the library pointer, hand-off addresses | client, render | **PARTLY SHIPPED** — the claims, sources, outline and build sections, and the headless render check, are what remain |
-| 3 | the DOCX writer, the HTML builder, RIS/BibTeX/ENW export from the panel, the integrity gate, byte-determinism | docx (+ pandoc as the foreign reader) | next |
-| 4 | `r1-record` and `r2-locate`, the `rs_verify` tool that records a rung | ingest, locate | |
-| 5 | `r3`/`r4`, the reviewer panel, the DA concession gate, the R&R matrix | ladder with a stub judge | |
+| 2 | the panel: the gates form, the passport, the outline, the claims ledger with its status chips, the sources ledger with what can be checked, the build row, the in-place editor with its structure verdict, the library pointer | client (rendered for real), node | **SHIPPED** except the headless render check |
+| 3 | the DOCX writer (seven modules, no dependencies, byte-deterministic), the HTML builder, RIS/BibTeX/ENW export from the panel, the integrity gate | `check-research-docx.mjs` (+ pandoc as the foreign reader) | **in progress** |
+| 4 | `r1-record` and `r2-locate`, the `rs_verify` tool that records a rung, the ladder report | `check-research-node.mjs` (the whole ladder driven end to end) | **SHIPPED** |
+| 5 | `r3`/`r4` recording (shipped with `rs_verify`), the reviewer panel, the DA concession gate, the R&R matrix | ladder with a stub judge, node | verdicts **SHIPPED**; `rs_review` to come |
 | 6 | `tex` output and the printed PDF command, submission packaging, the disclosure artifact, hash-change re-opening | docx/latex, node | |
 
 Rough size, for planning rather than pride: the host half of `dsh-pdf` is ~1,825
 lines with a 40 KB client bundle; this is a comparable package plus the OOXML
-writer, so **plan for the biggest plugin in the pack**. Phases 0–1 shipped in two
-passes and measure: `lib/run.js` (the model, the pointer and the gates),
-`lib/syntax.js` (the dialect), `lib/ledger.js` (the append-only ledgers),
-`lib/doc.js` (assembly, r0 and rendering), `lib/build.js` (the builders and the
-gate), `lib/refs.js` 1,471 (four formats, round-tripped), `lib/styles/` ~1,600
-across eight modules, `lib/tools.js` (seven tools), `lib/index.js` (the row),
-`lib/client.js` (the tab and its editor), and three checks with 172 + 196 + ~380
-assertions.
+writer, so **plan for the biggest plugin in the pack**. What has landed measures:
+`lib/run.js` (the model, the pointer and the gates), `lib/syntax.js` (the dialect),
+`lib/ledger.js` (the append-only ledgers), `lib/doc.js` (assembly, r0, rendering),
+`lib/verify.js` (the rungs a file can run), `lib/build.js` (the builders and the
+gate), `lib/view.js` (the panel payload), `lib/refs.js` 1,471 (four formats,
+round-tripped), `lib/styles/` ~1,600 across eight modules, `lib/docx/` ~2,100
+across seven, `lib/tools.js` (eight tools), `lib/index.js` (the row),
+`lib/client.js` (the tab, its editor and its five sections), three bundled skills,
+and five checks.
+
+The lessons the phases actually produced, worth keeping:
+
+- `r2`'s miss/inconclusive split is not a detail. Driving it found `r2` passing a
+  text BODY where the text RECORD was expected, so `coverage` was always undefined
+  and every miss came back inconclusive - the ladder quietly softening every
+  finding it made.
+- A claim written as a Markdown ANCHOR LINK (`[sentence](#c0142)`) reads exactly
+  like a claim span to a person and tracks nothing. It is now a `broken-marker`.
+- Three of the six citation styles printed no DOI at all until the styles check was
+  driven against pinned strings: a Works Cited entry a reader cannot follow is a
+  citation that does not work.
+- A skill is prose about a tool surface, so it needs a check of its own: see
+  `check-research-examples.mjs`, which holds every `rs_*` name, parameter value,
+  refusal code, claim span and citation a skill teaches against the code.
 
 ## The pipeline
 
