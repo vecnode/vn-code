@@ -488,6 +488,7 @@ subagent or the session model, and there is no second provider anywhere in it.
 | 5 | `r3`/`r4` recording, the reviewer panel, the DA concession gate, the R&R matrix | ladder with a stub judge, `rs_review` driven end to end | **SHIPPED** |
 | 6 | the LaTeX builder and the printed compile command, submission packaging (the anonymized manuscript, the generated cover letter, the checklist, the figures), the disclosure artifact | `check-research-node.mjs` (the `.tex` asserted, the command asserted PRINTED and not run, the ten characters that break TeX driven through the escaper; the package asserted gated, anonymized, and its letter computed from the ledger) | **SHIPPED** except the disclosure artifact |
 | 7 | the METHOD LAYER: a validated `statistic` on a claim and the document's own Statistics table; a structured `plan/method.json` (databases, date of access, search string, criteria, screening counts) that r0 validates and the build prints as a search-and-screening flow; the seventh skill with its bundled method reference | `check-research-node.mjs` (the dialect, r0 and the artifact), `check-research-examples.mjs` (every example in the skill **and** its reference, against the real tool surface) | **SHIPPED** |
+| 8 | the ETHICS LAYER and a MEASURED READER: `plan/disclosure.json` (authors with CRediT roles; ethics approval that must name the body, its reference and the consent basis; funding; conflicts; data availability; AI use) validated on the way in and by r0, printed as `disclosure.md` in the submission folder and asserted ABSENT from the anonymized manuscript, with the checklist naming every statement that is not recorded; the eighth skill and its bundled ethics reference; and `rs_verify action=calibrate`, which hands out a gold set with the labels withheld and reports FNR and FPR against stated bars | `check-research-node.mjs` (the record, r0, the artifact and the anonymity assertion), `check-research-examples.mjs`, and `check-research-judge.mjs` (the gold set's shape, the label-leakage guard, hand-computed arithmetic, a sycophant, a skeptic, and a judge exactly on each bar) | **SHIPPED** |
 
 Rough size, for planning rather than pride: the host half of `dsh-pdf` is ~1,825
 lines with a 40 KB client bundle; this is a comparable package plus the OOXML
@@ -495,13 +496,15 @@ writer, so **plan for the biggest plugin in the pack**. What has landed measures
 `lib/run.js` (the model, the pointer and the gates), `lib/syntax.js` (the dialect
 and the statistic vocabulary), `lib/ledger.js` (the append-only ledgers),
 `lib/method.js` (the method record, its validation and the flow it prints),
-`lib/doc.js` (assembly, r0, rendering, the statistics table), `lib/verify.js` (the
-rungs a file can run), `lib/build.js` (the builders and the gate), `lib/view.js`
-(the panel payload), `lib/refs.js` 1,471 (four formats, round-tripped),
-`lib/styles/` ~1,600 across eight modules, `lib/docx/` ~2,100 across seven,
-`lib/tools.js` (nine tools), `lib/index.js` (the row), `lib/client.js` (the tab,
-its editor and its five sections), seven bundled skills — one of them with a
-bundled reference — and five checks.
+`lib/disclosure.js` (authorship, ethics, funding, conflicts, data and AI use, and
+the matrix a reader checks), `lib/calibration.js` (the gold set, the scorer and the
+two bars it states), `lib/doc.js` (assembly, r0, rendering, the statistics table),
+`lib/verify.js` (the rungs a file can run), `lib/build.js` (the builders and the
+gate), `lib/view.js` (the panel payload), `lib/refs.js` 1,471 (four formats,
+round-tripped), `lib/styles/` ~1,600 across eight modules, `lib/docx/` ~2,100 across
+seven, `lib/tools.js` (nine tools), `lib/index.js` (the row), `lib/client.js` (the
+tab, its editor and its five sections), eight bundled skills — two of them with a
+bundled reference — and six checks.
 
 The lessons the phases actually produced, worth keeping:
 

@@ -1,7 +1,7 @@
 {
   "name": "dsh-research",
-  "version": "0.1.0-alpha.3",
-  "description": "Research: a run is a folder with RUN.json and a passport.json that records what the human decided in their own words. Nine rs_* tools (open, new, plan, read, write, cite, verify, review, build) over an append-only claim and source ledger, a document dialect where every claim is a span the ledger tracks and every number a claim rests on is a validated statistic rather than prose, a structured method record (databases, date of access, search string, criteria, PRISMA-shaped screening counts) that r0 validates and the build prints as the document's own flow, six citation styles, a dependency-free Markdown/DOCX builder, two frame gates plus a build gate answered by a person in the right bar rather than by the model, seven bundled skills, and the Research tab that shows a run while it is being worked on. Host half plus UI, no vendored engine, no npm dependency, and no socket of its own.",
+  "version": "0.1.0-alpha.4",
+  "description": "Research: a run is a folder with RUN.json and a passport.json that records what the human decided in their own words. Nine rs_* tools (open, new, plan, read, write, cite, verify, review, build) over an append-only claim and source ledger, a document dialect where every claim is a span the ledger tracks and every number a claim rests on is a validated statistic rather than prose, a structured method record (databases, date of access, search string, criteria, PRISMA-shaped screening counts) that r0 validates and the build prints as the document's own flow, a disclosure record (authors with CRediT roles, ethics approval that must name the body and the reference, consent, funding, conflicts, data availability and AI use) that the submission folder prints as a disclosure artifact and the anonymized manuscript never carries, six citation styles, a dependency-free Markdown/DOCX builder, a judge calibration set whose FNR and FPR are reported against stated bars, two frame gates plus a build gate answered by a person in the right bar rather than by the model, eight bundled skills, and the Research tab that shows a run while it is being worked on. Host half plus UI, no vendored engine, no npm dependency, and no socket of its own.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -22,7 +22,8 @@
     "check:refs": "node checks/check-research-refs.mjs",
     "check:styles": "node checks/check-research-styles.mjs",
     "check:examples": "node checks/check-research-examples.mjs",
-    "check:all": "node checks/check-research-node.mjs && node checks/check-research-docx.mjs && node checks/check-research-refs.mjs && node checks/check-research-styles.mjs && node checks/check-research-examples.mjs"
+    "check:judge": "node checks/check-research-judge.mjs",
+    "check:all": "node checks/check-research-node.mjs && node checks/check-research-docx.mjs && node checks/check-research-refs.mjs && node checks/check-research-styles.mjs && node checks/check-research-examples.mjs && node checks/check-research-judge.mjs"
   },
   "dsh": {
     "bundle": {

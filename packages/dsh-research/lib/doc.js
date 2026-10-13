@@ -29,6 +29,7 @@ import { messageOf } from './run.js'
 import { findBrokenClaimMarkers, findBrokenCitations, findCitations, findClaimSpans, locatorLabel, statisticLabel } from './syntax.js'
 import { BLOCKING_STATUSES, claimStatusOf } from './ledger.js'
 import { methodProblems } from './method.js'
+import { disclosureProblems } from './disclosure.js'
 
 /** How many sections a document may have before the outline is reported as runaway. */
 export const MAX_SECTIONS = 200
@@ -284,6 +285,16 @@ export function validateStructure(options) {
     problems.push(problem(options.methodProblem.code, options.methodProblem.severity, options.methodProblem.detail))
   }
   for (const one of methodProblems(options.method ?? null)) {
+    problems.push(problem(one.code, one.severity, one.detail, one.fields === undefined ? {} : { fields: one.fields }))
+  }
+  // The disclosure record is the third ledger-shaped file, validated here for the
+  // same reason as the other two: what a person edited by hand never passed the
+  // write-time check, and an unknown CRediT role - a contribution the matrix cannot
+  // print - is a defect a reader of the artifact would otherwise have to find.
+  if (options.disclosureProblem !== null && options.disclosureProblem !== undefined) {
+    problems.push(problem(options.disclosureProblem.code, options.disclosureProblem.severity, options.disclosureProblem.detail))
+  }
+  for (const one of disclosureProblems(options.disclosure ?? null)) {
     problems.push(problem(one.code, one.severity, one.detail, one.fields === undefined ? {} : { fields: one.fields }))
   }
   const errors = problems.filter((one) => one.severity === 'error')

@@ -1,4 +1,4 @@
-# dsh-research (alpha.3)
+# dsh-research (alpha.4)
 
 **Research as a folder the agent fills and the right bar shows — and that you keep,
 open in any session, and edit yourself.**
@@ -66,6 +66,35 @@ the **record** first.
   instruments and GRADE, the PRISMA process, qualitative trustworthiness, and ethics
   and authorship. Every fenced example in **both** files is held against the real
   tool surface by the same check, so the reference cannot drift either.
+- **A disclosure record, and a determination this package refuses to make.**
+  `rs_plan part=disclosure disclosure={…}` writes `plan/disclosure.json`: **authors**
+  with their CRediT roles, **ethics** approval, **funding**, **conflicts**, **data**
+  availability and the use of **generative AI**. It is validated on the way in and
+  again by `r0`, and every rule is about a statement being *complete* rather than
+  true — an approval of `approved` or `exempt-declared` must name the approving
+  `body`, its `reference` **and** how `consent` was taken, because "approved" with no
+  body is a sentence nobody can check; data said to be `open` or `on-request` must
+  say **where**; data said to be `restricted` or `none` must say **why**; every
+  author needs at least one CRediT role, because an author with no declared
+  contribution is a name on a list; and an AI declaration that says a tool was not
+  used while naming a scope is refused as the contradiction it is. The vocabulary has
+  no `exempt` for a plugin to choose — only `exempt-declared`, which is an author
+  recording what a body decided. `format=package` prints it as `disclosure.md`
+  **beside** the title page and never into the manuscript, `CHECKLIST.md` says which
+  statements are recorded and which are not, and a check asserts that not one author
+  name from the record reaches the anonymized manuscript.
+- **The reader is measured, not only recorded.** `rs_verify action=calibrate` hands
+  out a set of items whose correct verdict is not in doubt — claim, passage, and
+  **no labels** — scores the answers against them, and reports the two errors that
+  matter: **FNR** (defects accepted: the expensive one, the error that lets an
+  overstated claim through) and **FPR** (good claims rejected), each against a stated
+  bar, with the strength-verdict agreement and every disagreement shown beside the
+  judge's own reason. The labels are ours, every one carries the reason for it, and
+  the thresholds are constants in the source rather than folklore. **A pass means
+  very little** — that a judge agreed with 25 unambiguous items, not that it can spot
+  a subtle overstatement in a real manuscript — and nothing is gated on the result.
+  The arithmetic is itself checked: a perfect judge, a sycophant, a skeptic, and a
+  judge sitting exactly on each bar.
 - **A review is a ledger of concerns, with two columns that stay apart.**
   `rs_review action=panel` records a round of findings — each with the role that
   raised it, its severity, its criterion, and the **evidence in the manuscript**
@@ -200,7 +229,7 @@ the **record** first.
 | gates | 3 (two frame, one opened by a clean build — and by `format=package`) |
 | builds | `md`, `docx`, `html`, `tex`, `ris`, `bib`, `enw`, plus `package` (the gated submission folder) — every format it advertises is implemented, and a check asserts that |
 | tab types | 1 (`research`, a page type with no file patterns) |
-| skills | 7 (`research-project`, `research-methods`, `research-sources`, `research-writing`, `research-verification`, `research-review`, `research-formats`), registered at activation *and* copied into `$DSH_HOME/skills`; `research-methods` ships a bundled `reference/method.md` |
+| skills | 8 (`research-project`, `research-methods`, `research-ethics`, `research-sources`, `research-writing`, `research-verification`, `research-review`, `research-formats`), registered at activation *and* copied into `$DSH_HOME/skills`; `research-methods` and `research-ethics` each ship a bundled reference |
 | touches | **no** core row disabled, **no** fork, **no** npm dependency, **no** vendored engine, **no** bundled binary |
 
 | Route | What it answers |
@@ -240,7 +269,7 @@ the **record** first.
 ## Limits — what is not here yet
 
 Every format this plugin advertises is implemented: `md`, `docx`, `html`, `tex`,
-`ris`, `bib`, `enw`, and the gated `package` folder. The seven skills are written.
+`ris`, `bib`, `enw`, and the gated `package` folder. The eight skills are written.
 One thing remains from the design: the **headless render check** for the tab, which
 is how the panel's own layout would be verified rather than only its payload. The
 design for what is left, with the reasoning, is in `docs/DESIGN-dsh-research.md`,
@@ -254,6 +283,21 @@ validated, stored, printed and checkable by a reader — and saying that plainly
 worth more than a recomputation that would look like arithmetic truth and not be
 it. The same holds for the method record: it checks that a search is *recorded* and
 that its counts are *internally consistent*, not that the search was any good.
+
+**It records ethics, it does not decide ethics.** No part of this package says
+whether a study needed approval, whether consent was required, or which review
+category applies — the vocabulary has no value for a determination, only for a body
+declaring one, and the reference that ships beside the skill says so at length. What
+it checks is that a statement is *complete*: that an approval names the body and the
+reference, that a waiver names its basis, that "available on request" has an address.
+Whether any of it is true is the author's signature, not a builder's.
+
+**And the judge measurement is a floor, not a certificate.** `action=calibrate`
+scores a judge against 25 items whose labels are not in doubt. Agreeing with them
+means the judge is not grossly miscalibrated; it does not mean the judge can catch a
+subtle overstatement in a real manuscript, which is the failure the ladder exists to
+limit and which no fixed set can measure. The report says exactly that, and nothing
+in the package is gated on the result.
 
 Three DOCX limits, stated rather than discovered: **IEEE is single column** (the
 two-column layout is not emitted), page setup is Letter with 1-inch margins for
@@ -276,7 +320,8 @@ npm run check:docx       # the written OOXML, read back by pandoc
 npm run check:refs       # RIS / BibTeX / MEDLINE / EndNote import and export, round-tripped
 npm run check:styles     # every citation style against pinned strings
 npm run check:examples   # every tool call, code and span the skills AND their references teach, against the real surface
-npm run check:all        # all five
+npm run check:judge      # the calibration set, the scorer, and the bars - a perfect judge, a sycophant, a skeptic, and one exactly on each threshold
+npm run check:all        # all six
 ```
 
 Then the pack-wide checks that own the area:

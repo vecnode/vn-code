@@ -55,6 +55,7 @@ import {
   readRunText,
   resolveRoot,
   sizeOf,
+  stamp,
   stateView,
   touchRun,
   writeJsonAtomic,
@@ -62,6 +63,7 @@ import {
 } from './run.js'
 import {
   appendClaim,
+  appendJsonl,
   appendSource,
   applyFindings,
   attachToSource,
@@ -77,6 +79,8 @@ import {
 import { STRENGTHS, STATISTIC_FIELDS, findBrokenCitations, locatorLabel, nextClaimId, statisticLabel } from './syntax.js'
 import { assembleDocument, parseOutline, scanDocument, validateStructure, wordCount } from './doc.js'
 import { METHOD_FILE, METHOD_MD, METHOD_REQUIRED, methodSummary, normalizeMethod, readMethodRecord, renderMethodMd } from './method.js'
+import { DISCLOSURE_FIELDS, DISCLOSURE_FILE, DISCLOSURE_MD, disclosureSummary, normalizeDisclosure, readDisclosureRecord, renderDisclosure } from './disclosure.js'
+import { GOLD_ITEMS, MIN_ITEMS, publicItems, renderCalibration, scoreVerdicts } from './calibration.js'
 import { FORMATS, FORMATS_DOCUMENT, FORMATS_READY, combineReports, ensureIntegrityGate, hashOf, loadRefs, loadStyles, readRunState, runBuild, writeBuildReport } from './build.js'
 import { API_ROUTES } from './api.js'
 import { ladderReport, r1Sources, r2Claims } from './verify.js'
@@ -243,6 +247,8 @@ export function buildTools(deps = {}) {
             '- claim strengths: ' + STRENGTHS.join(', ') + ' (the design has to be able to carry the one you pick)',
             '- claim statistics: { ' + STATISTIC_FIELDS.join(', ') + ' } - recorded as data, printed as the document\'s Statistics table, and `p = .000` is refused',
             '- method record: ' + METHOD_FILE + ' holds { ' + METHOD_REQUIRED.join(', ') + ' }, validated on the way in and by r0, and printed as the document\'s search-and-screening flow',
+            '- disclosure record: ' + DISCLOSURE_FILE + ' holds { ' + DISCLOSURE_FIELDS.join(', ') + ' }, printed as `disclosure.md` in the submission folder and never into the manuscript; whether a study needed approval is NOT decided here',
+            '- judge calibration: `rs_verify action=calibrate` hands out ' + GOLD_ITEMS.length + ' items with the labels withheld and reports FNR/FPR against stated bars (nothing is gated on it)',
             '- it opens no socket and spawns no process: sources arrive as files you already have',
           ]
           return {
@@ -642,9 +648,10 @@ export function buildTools(deps = {}) {
   const plan = {
     name: 'rs_plan',
     description: [
-      'The run\'s plan: the research question (`part=rq`), the section outline (`part=outline`), the method (`part=method`).',
+      'The run\'s plan: the research question (`part=rq`), the section outline (`part=outline`), the method (`part=method`), the disclosure (`part=disclosure`).',
       'Written to `plan/<part>.md` inside the run. The outline is the one part with a machine meaning: lines of the form `- <slug>: <title>` order the section files at build time, and a section file no line names is appended to the end rather than dropped.',
       '`part=method` ALSO takes a `method` OBJECT - the record of the search itself: `{ databases, accessed, search, include, exclude, screening: { identified, screened, included } }`. Give it and the record is written to `plan/method.json` and `plan/method.md` is regenerated from it; the counts are checked (records are removed at each step, never added) and the date has to be a real one. A record is what makes a search reproducible and what the document\'s own search-and-screening flow is printed from, so a `part=method` written as prose alone is a sentence nobody can check.',
+      '`part=disclosure` takes a `disclosure` OBJECT - authorship and the statements a journal requires: `{ authors: [{ name, credit }], ethics, funding, conflicts, data, aiUse }`. `authors` is required and every author needs at least one CRediT role. An approval of `approved` or `exempt-declared` must name the approving `body`, its `reference` and how `consent` was taken, because "approved" with no body is a sentence nobody can check. Data said to be `open` or `on-request` must say WHERE; data said to be `restricted` or `none` must say WHY. This tool does not decide whether a study needed approval - that is an institution\'s determination, and a plugin that made it would be answering for somebody else.',
       'A plan is the agent\'s own work, so this tool has NO gate: nothing in it is a claim and nothing in it is published. The frame gates block the DOCUMENT, and `rs_write` is where that shows.',
     ].join('\n'),
     parameters: {
@@ -653,9 +660,10 @@ export function buildTools(deps = {}) {
       properties: {
         slug: { type: 'string', description: 'The run.' },
         action: { type: 'string', enum: ['write', 'read'], description: '`write` (default) stores text; `read` returns what is there.' },
-        part: { type: 'string', enum: ['rq', 'outline', 'method'], description: 'Which part of the plan.' },
-        text: { type: 'string', description: 'For `write`: the Markdown. For `part=method`, a `method` object is the record and this is prose on top of it.' },
+        part: { type: 'string', enum: ['rq', 'outline', 'method', 'disclosure'], description: 'Which part of the plan.' },
+        text: { type: 'string', description: 'For `write`: the Markdown. For a record part, the record object is the source and this is prose on top of it.' },
         method: { type: 'object', description: 'For `part=method`: the search record - databases (list), accessed (YYYY-MM-DD), search (the query as run), include (list), exclude (list), screening ({ identified, screened, included }), plus optional registration, platforms, notes.' },
+        disclosure: { type: 'object', description: 'For `part=disclosure`: { authors: [{ name, credit: [CRediT roles], orcid? }], ethics: { approval, body?, reference?, consent?, notes? }, funding: [{ funder, grant?, role? }], conflicts: "none" | [{ author, what }], data: { availability, location?, reason? }, aiUse: { used, tools?, scope?, disclosure? } }.' },
         mode: { type: 'string', enum: ['replace', 'append'], description: '`replace` (default) or `append`.' },
       },
       required: ['slug'],
@@ -667,8 +675,8 @@ export function buildTools(deps = {}) {
         const resolved = await rootFor(exec)
         const slug = String(args.slug ?? '').trim()
         const part = args.part ?? 'rq'
-        if (!['rq', 'outline', 'method'].includes(part)) {
-          throw new ResearchError('BAD_PART', 'part must be rq, outline or method (got ' + JSON.stringify(String(part)) + ')')
+        if (!['rq', 'outline', 'method', 'disclosure'].includes(part)) {
+          throw new ResearchError('BAD_PART', 'part must be rq, outline, method or disclosure (got ' + JSON.stringify(String(part)) + ')')
         }
         const { dir, file: runFile, record } = await readRun(resolved.root, slug)
         const target = path.join(dir, 'plan', part + '.md')
@@ -677,16 +685,22 @@ export function buildTools(deps = {}) {
 
         if (action === 'read') {
           const existing = await fsp.readFile(target, 'utf8').catch(() => null)
-          // `part=method` has TWO files: the record r0 validates and the prose view
-          // generated from it. Reporting only the Markdown would hide the one that
-          // actually carries the search, so the record is reported first.
+          // `part=method` and `part=disclosure` each have TWO files: the record r0
+          // validates and the prose view generated from it. Reporting only the
+          // Markdown would hide the one that actually carries the record, so the
+          // record is reported first.
           const methodState = part === 'method' ? await readMethodRecord(dir) : null
+          const disclosureState = part === 'disclosure' ? await readDisclosureRecord(dir) : null
           const recordLine =
-            methodState === null
-              ? null
-              : methodState.record === null || methodState.record === undefined
+            methodState !== null
+              ? methodState.record === null || methodState.record === undefined
                 ? METHOD_FILE + ': not recorded yet - `rs_plan slug=' + slug + ' part=method method={…}` writes it'
                 : METHOD_FILE + ': ' + methodSummary(methodState.record) + (methodState.problem === null ? '' : ' (UNREADABLE: ' + methodState.problem.detail + ')')
+              : disclosureState !== null
+                ? disclosureState.record === null || disclosureState.record === undefined
+                  ? DISCLOSURE_FILE + ': not recorded yet - `rs_plan slug=' + slug + ' part=disclosure disclosure={…}` writes it'
+                  : DISCLOSURE_FILE + ': ' + disclosureSummary(disclosureState.record) + (disclosureState.problem === null ? '' : ' (UNREADABLE: ' + disclosureState.problem.detail + ')')
+                : null
           const head = recordLine === null ? '' : recordLine + '\n\n'
           if (existing === null) {
             return {
@@ -727,6 +741,32 @@ export function buildTools(deps = {}) {
           }
         }
 
+        // ---- the disclosure RECORD, when one was given
+        if (part === 'disclosure' && args.disclosure !== null && args.disclosure !== undefined) {
+          // NOT named `record`: that name is the RUN's record in this scope, and
+          // shadowing it once already wrote a record over RUN.json and cost a run its
+          // title. A local name is not worth that.
+          const disclosureRecord = normalizeDisclosure(args.disclosure)
+          const recordFile = path.join(dir, ...DISCLOSURE_FILE.split('/'))
+          const viewFile = path.join(dir, ...DISCLOSURE_MD.split('/'))
+          await writeJsonAtomic(recordFile, disclosureRecord)
+          await writeTextAtomic(viewFile, renderDisclosure(disclosureRecord))
+          const { passport } = await readPassport(resolved.root, slug)
+          await addReceipt(path.join(dir, PASSPORT_FILE), passport, 'rs_plan', 'disclosure record: ' + disclosureSummary(disclosureRecord), args.now)
+          await touchRun(runFile, record, args.now)
+          const lines = [
+            DISCLOSURE_FILE + ' written, and ' + DISCLOSURE_MD + ' regenerated from it',
+            '- path: ' + recordFile,
+            '- ' + disclosureSummary(disclosureRecord),
+            '',
+            '`format=package` writes these statements as `disclosure.md` beside the title page, and NEVER into the manuscript: a disclosure names people and funders, and a blinded review must not receive it. This package checks that a statement is COMPLETE and cannot check that it is true - whether a study needed approval is your institution\'s determination, not this tool\'s.',
+          ]
+          return {
+            text: lines.join('\n'),
+            view: { action: 'write', slug, root: resolved.root, summary: disclosureSummary(disclosureRecord) },
+          }
+        }
+
         const text = String(args.text ?? '')
         if (text.trim() === '') throw new ResearchError('BAD_TEXT', 'nothing to write: pass `text`')
         const mode = args.mode === 'append' ? 'append' : 'replace'
@@ -747,6 +787,14 @@ export function buildTools(deps = {}) {
             lines.push('- note: ' + METHOD_FILE + ' exists and is what r0 validates and what the flow is printed from; the Markdown you just wrote does not change it')
           } else {
             lines.push('- note: no record yet - a search a reader cannot reproduce is not a method. Write one with `rs_plan part=method method={ databases: [...], accessed: "YYYY-MM-DD", search: "…", include: [...], exclude: [...], screening: { identified: 0, screened: 0, included: 0 } }`')
+          }
+        }
+        if (part === 'disclosure') {
+          const disclosureState = await readDisclosureRecord(dir)
+          if (disclosureState.exists) {
+            lines.push('- note: ' + DISCLOSURE_FILE + ' exists and is what r0 validates and what `disclosure.md` is generated from; the Markdown you just wrote does not change it')
+          } else {
+            lines.push('- note: no disclosure record yet - a journal asks for authorship, ethics, funding, conflicts, data availability and AI use. Write one with `rs_plan part=disclosure disclosure={ authors: [{ name: "…", credit: ["conceptualization"] }] }`')
           }
         }
         lines.push('')
@@ -1266,6 +1314,7 @@ export function buildTools(deps = {}) {
           '- sources: ' + report.sources.total + ' in the ledger, ' + report.sources.cited + ' cited, ' + report.sources.withText + ' with text',
           '- statistics: ' + report.statistics.claims + ' claim(s) carry a number, printed as the Statistics table',
           '- method record: ' + (report.method.recorded ? report.method.summary : 'NOT RECORDED - no search is reproducible from this run'),
+          '- disclosure: ' + (report.disclosure.recorded ? report.disclosure.summary : 'NOT RECORDED - no authorship, ethics, funding, conflicts, data or AI-use statement exists'),
           '- structure: ' + (report.structure.ok ? 'agrees with the ledger' : report.structure.errors.length + ' error(s): ' + report.structure.errors.join(', ')) + (report.structure.warnings.length > 0 ? ', ' + report.structure.warnings.length + ' warning(s): ' + report.structure.warnings.join(', ') : ''),
         ]
         for (const note of report.notes) lines.push('- note: ' + note)
@@ -1304,6 +1353,7 @@ export function buildTools(deps = {}) {
       '`report` is the ladder as it stands - each rung\'s state, what it checked, what it found and what it COULD NOT check - and it writes nothing. Read it before you tell anyone a run has been checked.',
       '`support` records the rungs a file cannot do: for each claim you name, the verdict (`supported`, `partially-supported`, `unsupported`, `contradicted`, `misattributed`), whether the claim is written at the strength the passage holds (`aligned`, `overstated`, `understated`), and the reason. YOU are the reader for that - this tool records your judgement, it does not make it - so a claim with no locator cannot be judged (`STATUS_REQUIRES_EVIDENCE`), and every verdict names its judge.',
       '`audit` is the adversarial pass: the same claims argued the other way, recorded at `r4-audit` after an `r3-support` verdict exists. A concession below the stated threshold is REFUSED rather than stored, which is what keeps the devil\'s advocate from agreeing its way out of an argument.',
+      '`calibrate` measures the READER rather than the run. Call it with no `verdicts` and it hands back a small set of items whose correct verdict is not in doubt - claim, passage, and nothing else, because the labels are what you are being measured against. Answer every item in `verdicts` (with a `reason` each) and it scores the answers: the rate at which defects were accepted (FNR), the rate at which good claims were rejected (FPR), the strength-verdict agreement, and every disagreement with the reason beside it. Nothing is gated on the result, and it is not a rung: a rung says something about the document, and this says something about you.',
       'Nothing here is a claim about the truth of a source. `r1` records PROVENANCE - whose bytes, whose record, which field from where - and never says a DOI exists.',
     ].join('\n'),
     parameters: {
@@ -1311,12 +1361,12 @@ export function buildTools(deps = {}) {
       additionalProperties: false,
       properties: {
         slug: { type: 'string', description: 'The run.' },
-        action: { type: 'string', enum: ['record', 'report', 'support', 'audit'], description: '`record` (default) runs the file rungs; `report` writes nothing; `support`/`audit` record YOUR verdicts.' },
+        action: { type: 'string', enum: ['record', 'report', 'support', 'audit', 'calibrate'], description: '`record` (default) runs the file rungs; `report` writes nothing; `support`/`audit` record YOUR verdicts; `calibrate` measures the reader against a fixed set of items with known answers.' },
         tier: { type: 'string', enum: ['r1', 'r2', 'all'], description: 'For `record`: which file rung (default `all`).' },
-        judge: { type: 'string', description: 'Who judged, for `support`/`audit` - e.g. the session model, or a subagent and what it was asked. Required.' },
+        judge: { type: 'string', description: 'Who judged, for `support`/`audit`/`calibrate` - e.g. the session model, or a subagent and what it was asked. Required.' },
         verdicts: {
           type: 'array',
-          description: 'For `support`/`audit`: one entry per claim judged.',
+          description: 'For `support`/`audit`: one entry per claim judged. For `calibrate`: one entry per ITEM handed back by the first call, and `id` is the item id (`g01`…).',
           items: {
             type: 'object',
             additionalProperties: false,
@@ -1347,6 +1397,71 @@ export function buildTools(deps = {}) {
         const slug = String(args.slug ?? '').trim()
         const { dir, file: runFile, record } = await readRun(resolved.root, slug)
         const action = args.action ?? 'record'
+
+        // ---- calibrate: the measurement of the READER, not of the run
+        if (action === 'calibrate') {
+          const given = Array.isArray(args.verdicts) ? args.verdicts : []
+          const calibrationFile = path.join(dir, 'calibration', 'report.json')
+          if (given.length === 0) {
+            // The items are handed out WITHOUT their labels, and the answer says why
+            // in as many words: a calibration you can read the answers to is not one.
+            const previous = await fsp.readFile(calibrationFile, 'utf8').then((text) => JSON.parse(text)).catch(() => null)
+            const lines = [
+              'Judge calibration for ' + slug + ': ' + GOLD_ITEMS.length + ' item(s), labels withheld',
+              '',
+              'Each item below is a CLAIM and the PASSAGE it was bound to. Say, for each one, what the passage does for the claim:',
+              '  supported             — the passage supports the sentence as written',
+              '  partially-supported   — it supports part of it (one of two populations, one of two conjuncts)',
+              '  unsupported           — the passage does not contain the claim, though it may be about the same thing',
+              '  contradicted          — the passage states the opposite',
+              '  misattributed         — the quote is real and the claim attributes it to the wrong population, measure or study',
+              'and whether it is written at the strength the passage holds: aligned, overstated, understated.',
+              'Give a `reason` for each: it is shown beside the label wherever you disagreed, and a verdict with no reason is a score with no evidence.',
+              '',
+            ]
+            for (const item of publicItems()) {
+              lines.push(item.id + '. CLAIM: ' + item.claim)
+              lines.push('   PASSAGE: ' + item.passage)
+            }
+            lines.push('')
+            lines.push('When every item is answered: `rs_verify slug=' + slug + ' action=calibrate judge="…" verdicts=[{ id, verdict, strengthVerdict, reason }, …]`.')
+            lines.push('The labels are in the package\'s own source. Not reading them first is the whole measurement.')
+            if (previous !== null) {
+              lines.push('')
+              lines.push('The last recorded run: ' + previous.judged + ' answered, FNR ' + previous.fnr.rate + ', FPR ' + previous.fpr.rate + ' -> ' + previous.verdict + '.')
+            }
+            return {
+              text: lines.join('\n'),
+              view: { action, slug, root: resolved.root, pending: 0, summary: GOLD_ITEMS.length + ' item(s) handed out, labels withheld' },
+            }
+          }
+
+          const judge = String(args.judge ?? '').trim()
+          if (judge === '') throw new ResearchError('BAD_JUDGE', 'a calibration names its judge: pass `judge="…"` naming who answered (the session model, or a subagent and what it was asked)')
+          if (given.length < MIN_ITEMS) {
+            throw new ResearchError(
+              'CALIBRATION_SMALL',
+              'a calibration of ' + given.length + ' item(s) cannot be scored: the floor is ' + MIN_ITEMS + ', because below it one item moves the rate by more than five points. Answer the rest and call again.',
+            )
+          }
+          const report = scoreVerdicts(given)
+          await fsp.mkdir(path.join(dir, 'calibration'), { recursive: true })
+          // The answers are kept, one row per item per run: a report beside the run it
+          // came from, so "was this judge measured, and on what" is answerable later.
+          await appendJsonl(path.join(dir, 'calibration', 'verdicts.jsonl'), {
+            at: stamp(args.now),
+            judge,
+            verdicts: given.map((entry) => ({ id: String(entry.id ?? ''), verdict: String(entry.verdict ?? ''), strengthVerdict: String(entry.strengthVerdict ?? '') })),
+          })
+          await writeJsonAtomic(calibrationFile, { ...report, judge, at: stamp(args.now) })
+          const { passport } = await readPassport(resolved.root, slug)
+          await addReceipt(path.join(dir, PASSPORT_FILE), passport, 'rs_verify', 'calibration ' + report.verdict + ' (FNR ' + report.fnr.rate + ', FPR ' + report.fpr.rate + ', n=' + report.judged + ')', args.now)
+          await touchRun(runFile, record, args.now)
+          return {
+            text: renderCalibration(report) + '\n\nRecorded in calibration/report.json (' + judge + '). This is not a rung: nothing in the ladder changed, and no build is gated on it.',
+            view: { action, slug, root: resolved.root, pending: 0, summary: report.verdict + ': FNR ' + report.fnr.rate + ', FPR ' + report.fpr.rate + ' (n=' + report.judged + ')' },
+          }
+        }
 
         if (action === 'report') {
           const report = await ladderReport({ dir, now: args.now })

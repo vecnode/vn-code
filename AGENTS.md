@@ -63,11 +63,14 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   `dsh-research` (a run is a folder with a `passport.json` recording the user's own
   words; nine `rs_*` tools over an append-only claim and source ledger, a claim's
   numbers recorded as a validated `statistic` rather than left in the prose, a
-  structured method record whose screening counts cannot increase, a verification
-  ladder whose every rung names what it reached, the review with its enforced
-  concession protocol, frame gates a PERSON answers in the right bar, seven skills
-  that teach the tool surface and the method layer, and a Research tab that also
-  edits the document — host half plus UI, no socket, no vendored engine),
+  structured method record whose screening counts cannot increase, a disclosure
+  record whose every statement must be complete before a submission prints it, a
+  verification ladder whose every rung names what it reached plus a calibration set
+  that measures the READER rather than the run, the review with its enforced
+  concession protocol, frame gates a PERSON answers in the right bar, eight skills
+  that teach the tool surface, the method layer and the ethics layer, and a Research
+  tab that also edits the document — host half plus UI, no socket, no vendored
+  engine),
   `dsh-browser`, `dsh-themes`, `dsh-cmdbar`, `dsh-modal`, `dsh-skills`,
   `dsh-ui-state`, `dsh-open-in-app`.
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with

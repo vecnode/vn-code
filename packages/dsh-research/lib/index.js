@@ -79,6 +79,7 @@ import {
 const SKILL_FILES = [
   { name: 'research-project', file: '../skills/research-project/SKILL.md' },
   { name: 'research-methods', file: '../skills/research-methods/SKILL.md' },
+  { name: 'research-ethics', file: '../skills/research-ethics/SKILL.md' },
   { name: 'research-sources', file: '../skills/research-sources/SKILL.md' },
   { name: 'research-writing', file: '../skills/research-writing/SKILL.md' },
   { name: 'research-verification', file: '../skills/research-verification/SKILL.md' },
@@ -508,6 +509,9 @@ export const REFUSAL_CODES = [
   'BAD_STATISTIC',
   'BAD_METHOD',
   'METHOD_COUNTS',
+  'BAD_DISCLOSURE',
+  'DISCLOSURE_INCOMPLETE',
+  'CALIBRATION_SMALL',
   'DOC_EMPTY',
   'BUILD_BLOCKED',
   'BLOCKING_CLAIMS',

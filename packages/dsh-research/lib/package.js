@@ -11,6 +11,7 @@
  *
  *   submission/manuscript.docx   the document with NO title block: review-ready
  *   submission/title-page.md     the title, and the placeholder a person fills in
+ *   submission/disclosure.md     the statements a journal requires, from the record
  *   submission/cover-letter.md   generated from the ledger, not from memory
  *   submission/CHECKLIST.md      what a submission needs, and what this run has
  *   submission/figures/          the run's own figures, copied beside it
@@ -19,7 +20,9 @@
  *
  *   1. **The manuscript carries nothing identifying.** It is built with no title
  *      block, and the checklist says so in as many words, because "I remembered to
- *      anonymize it" is exactly the kind of claim a person cannot verify later.
+ *      anonymize it" is exactly the kind of claim a person cannot verify later. The
+ *      disclosure is written BESIDE the manuscript and never into it for the same
+ *      reason: it names authors, funders and an approving body.
  *   2. **The cover letter is computed.** The claim counts, the verification state
  *      and the experiment-intake answer come from the ledger, so a letter cannot
  *      describe a paper that does not exist - and a run with twelve unverified
@@ -33,6 +36,7 @@ import { ResearchError, messageOf, stamp } from './run.js'
 import { buildDocxReport } from './docx/index.js'
 import { BLOCKING_STATUSES, claimStatusOf, readClaims, readSources } from './ledger.js'
 import { assembleDocument, blockingClaims, renderBody, renderReferences, scanDocument, validateStructure } from './doc.js'
+import { renderDisclosure } from './disclosure.js'
 
 /** The directory a submission is assembled into, inside the run's build folder. */
 export const SUBMISSION_DIRNAME = 'submission'
@@ -92,6 +96,83 @@ export function coverLetter(options) {
 }
 
 /** The checklist: what a submission needs, and what this run has. */
+/**
+ * The statements a journal requires, as checklist lines that say which are RECORDED
+ * and which are not.
+ *
+ * A line that says "not recorded" is worth more than one that says "check this":
+ * the first tells the author exactly what is missing, and the second is a sentence
+ * every checklist in the world already contains. Nothing here is a tick, because a
+ * builder cannot know whether an author has a conflict to declare - it can only know
+ * whether they said.
+ */
+export function disclosureChecklist(disclosure) {
+  const record = disclosure !== null && disclosure !== undefined ? disclosure.record : null
+  const exists = disclosure !== null && disclosure !== undefined && disclosure.exists === true
+  const say = (ok, what) => '- ' + (ok ? '[x]' : '[ ]') + ' ' + what
+  if (!exists || record === null || record === undefined) {
+    return [
+      say(false, '**No disclosure record.** Nothing is declared here — write one with `rs_plan part=disclosure disclosure={…}` and the statements below are generated from it:'),
+      '- [ ] Authors and their CRediT contributions.',
+      '- [ ] Ethics approval: the approving body, the reference number and how consent was taken — the package does not decide which applies.',
+      '- [ ] Funding, with grant numbers, or a statement that there is none.',
+      '- [ ] Conflicts of interest, for every author.',
+      '- [ ] Data availability, with where the data are or why they cannot be shared.',
+      '- [ ] The venue\'s AI-use declaration.',
+    ]
+  }
+  const lines = []
+  const authors = Array.isArray(record.authors) ? record.authors : []
+  lines.push(say(authors.length > 0, (authors.length > 0 ? authors.length + ' author(s) with CRediT contributions' : 'no authors') + ' — see `disclosure.md`.'))
+  lines.push(
+    say(
+      record.ethics !== undefined,
+      record.ethics === undefined
+        ? '**Ethics: not recorded.** Whether approval was needed is your institution\'s determination; say what it said, or say that it was not required.'
+        : 'Ethics: ' + String(record.ethics.approval).replace(/-/g, ' ') + (record.ethics.body === undefined ? '' : ' — ' + record.ethics.body + (record.ethics.reference === undefined ? '' : ', ' + record.ethics.reference)),
+    ),
+  )
+  lines.push(
+    say(
+      record.funding !== undefined,
+      record.funding === undefined
+        ? '**Funding: not recorded.** Say who paid, with the grant number, or that nobody did.'
+        : record.funding.length === 0
+          ? 'Funding: none to declare.'
+          : 'Funding: ' + record.funding.map((item) => item.funder + (item.grant === undefined ? '' : ' (' + item.grant + ')')).join(', ') + '.',
+    ),
+  )
+  lines.push(
+    say(
+      record.conflicts !== undefined,
+      record.conflicts === undefined
+        ? '**Conflicts: not recorded.** The reader decides relevance; the author declares.'
+        : record.conflicts === 'none' || record.conflicts.length === 0
+          ? 'Conflicts: none to declare.'
+          : 'Conflicts: ' + record.conflicts.length + ' declared, in `disclosure.md`.',
+    ),
+  )
+  lines.push(
+    say(
+      record.data !== undefined,
+      record.data === undefined
+        ? '**Data availability: not recorded.** "Available on request" with no address reads as "not available".'
+        : 'Data: ' + String(record.data.availability).replace(/-/g, ' ') + (record.data.location === undefined ? '' : ' — ' + record.data.location) + '.',
+    ),
+  )
+  lines.push(
+    say(
+      record.aiUse !== undefined,
+      record.aiUse === undefined
+        ? '**AI use: not recorded.** Check the venue\'s policy: what has to be disclosed differs, and a statement in the wrong place is one the editor never sees.'
+        : record.aiUse.used === true
+          ? 'AI use declared: ' + (record.aiUse.tools ?? []).join(', ') + ' for ' + String(record.aiUse.scope ?? '').replace(/-/g, ' ') + '.'
+          : 'AI use: declared as none.',
+    ),
+  )
+  return lines
+}
+
 export function checklist(options) {
   const tick = (ok) => (ok ? '[x]' : '[ ]')
   const lines = [
@@ -108,8 +189,10 @@ export function checklist(options) {
     '## What no builder can check for you',
     '- [ ] The journal\'s own word limit, reference style and figure requirements — this run was built for **' + options.style + '**.',
     '- [ ] That every author has seen and approved this version.',
-    '- [ ] Consent, ethics and data-availability statements the journal requires.',
     '- [ ] Whether the manuscript is still anonymous: **read it once with fresh eyes.** The builder removed the title block, and it cannot know what your prose reveals.',
+    '',
+    '## The statements a journal asks for',
+    ...disclosureChecklist(options.disclosure),
     '',
     '## What this run says about its own evidence',
     '- ' + tick(options.structure.ok) + ' the document and its ledger ' + (options.structure.ok ? 'agree' : 'DO NOT agree: ' + options.structure.codes.join(', ')) + '.',
@@ -141,7 +224,14 @@ export async function buildSubmission(options) {
   const { current: sources } = await readSources(dir)
   const byKey = new Map(sources.map((record) => [record.key, record]))
   const scan = scanDocument(document.text)
-  const structure = validateStructure({ scan, claims, sourcesByKey: byKey })
+  const disclosure = options.disclosure ?? null
+  const structure = validateStructure({
+    scan,
+    claims,
+    sourcesByKey: byKey,
+    disclosure: disclosure === null ? null : disclosure.record,
+    disclosureProblem: disclosure === null ? null : disclosure.problem,
+  })
 
   // The manuscript is built with NO title block. The writer's title block is the
   // only place this pipeline puts the document's own name at the top, so leaving it
@@ -194,7 +284,10 @@ export async function buildSubmission(options) {
       '',
       '## Funding, conflicts and data',
       '',
-      '<!-- Whatever this journal requires. A builder cannot invent it, and must not. -->',
+      '<!-- Whatever this journal requires. If the run has a disclosure record',
+      '     (plan/disclosure.json), the statements are generated in disclosure.md',
+      '     beside this page and the numbers are already there. A builder cannot',
+      '     invent a funder, and must not. -->',
     ].join('\n') + '\n',
   )
   await keep(
@@ -208,12 +301,19 @@ export async function buildSubmission(options) {
       figures,
     }),
   )
+  // Written only when a record exists. A generated `disclosure.md` full of "not
+  // recorded" would look like a disclosure and be the opposite of one: the checklist
+  // is where an absent statement is named, and this file is a statement.
+  if (disclosure !== null && disclosure.record !== null && disclosure.record !== undefined) {
+    await keep('disclosure.md', renderDisclosure(disclosure.record))
+  }
   await keep(
     'CHECKLIST.md',
     checklist({
       at: stamp(options.now),
       style: options.style,
       figures,
+      disclosure,
       structure: { ok: structure.ok, codes: [...new Set(structure.problems.map((one) => one.code))] },
       blocking: blockingClaims(claims),
       unverified: claims.filter((row) => claimStatusOf(row) === 'unverified').length,
@@ -227,7 +327,7 @@ export async function buildSubmission(options) {
     await keep('figures/' + name, bytes)
   }
 
-  return { folder, outputs, figures, structure }
+  return { folder, outputs, figures, structure, disclosure }
 }
 
 export { messageOf, BLOCKING_STATUSES, renderBody, renderReferences }

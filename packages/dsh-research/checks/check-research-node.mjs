@@ -169,6 +169,8 @@ const refsModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'refs.js'
 const stylesModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'styles', 'index.js')).href)
 const apiModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'api.js')).href)
 const methodModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'method.js')).href)
+const disclosureModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'disclosure.js')).href)
+const calibrationModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'calibration.js')).href)
 
 const {
   GATES,
@@ -197,6 +199,7 @@ const { appendClaim, appendSource, claimsById, foldLatest, readClaims, readSourc
 const { assembleDocument, renderBody, renderReferences, scanDocument, sectionsOf, validateStructure, wordCount } = docModule
 const { findCitations, findClaimSpans, normalizeLocator, normalizeStatistic, nextClaimId, parseKey, statisticLabel } = syntaxModule
 const { methodProblems, methodSummary, normalizeMethod, readMethodRecord } = methodModule
+const { CREDIT_ROLES, creditMatrix, disclosureProblems, disclosureSummary, normalizeDisclosure, readDisclosureRecord, renderDisclosure } = disclosureModule
 const { FORMATS, FORMATS_DOCUMENT, FORMATS_READY, composeMarkdown, hashOf, readRunState, runBuild } = buildModule
 const { ALL_GATES, libraryFile, readLibrary } = runModule
 const { projectDetail } = viewModule
@@ -632,6 +635,67 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
     true,
   )
 
+  // ---- the disclosure record, through the tool that writes it
+  const disclosureInput = {
+    authors: [
+      { name: 'A. Okonkwo', credit: ['conceptualization', 'methodology', 'writing-original-draft'] },
+      { name: 'R. Silva', credit: ['formal-analysis', 'writing-review-editing'] },
+    ],
+    ethics: { approval: 'approved', body: 'the University Research Ethics Committee', reference: 'UREC-2026-0142', consent: 'written' },
+    funding: [{ funder: 'the National Institute of Education', grant: 'NIE-2026-77' }],
+    conflicts: 'none',
+    data: { availability: 'on-request', location: 'the corresponding author' },
+    aiUse: { used: true, tools: ['a generative writing assistant'], scope: 'writing' },
+  }
+  const plannedDisclosure = await call('rs_plan', { slug: 'writer-check', part: 'disclosure', disclosure: disclosureInput })
+  check('rs_plan records a disclosure', plannedDisclosure.problems.join(' | '), '')
+  check('and regenerates the readable view', plannedDisclosure.value.text.includes('plan/disclosure.json written'), true)
+  check('and says where the manuscript must not carry it', plannedDisclosure.value.text.includes('NEVER into the manuscript'), true)
+  check(
+    'an incomplete statement is refused by the TOOL',
+    (await call('rs_plan', { slug: 'writer-check', part: 'disclosure', disclosure: { ...disclosureInput, ethics: { approval: 'approved', reference: 'X', consent: 'written' } } })).value.view.code,
+    'DISCLOSURE_INCOMPLETE',
+  )
+  check(
+    'and the refusal names the rule it broke',
+    (await call('rs_plan', { slug: 'writer-check', part: 'disclosure', disclosure: { ...disclosureInput, authors: [{ name: 'A.', credit: ['vibes'] }] } })).value.view.code,
+    'BAD_DISCLOSURE',
+  )
+  check('the disclosure reads back with its statements', (await call('rs_plan', { slug: 'writer-check', part: 'disclosure', action: 'read' })).value.text.includes('ethics approved'), true)
+
+  // ---- the calibration, through the tool: the labels are withheld until after
+  const handed = await call('rs_verify', { slug: 'writer-check', action: 'calibrate' })
+  check('calibration hands out the items', handed.problems.join(' | '), '')
+  check('and says the labels are withheld', handed.value.text.includes('labels withheld'), true)
+  check('and hands out every item by id', handed.value.text.includes('g01. CLAIM:') && handed.value.text.includes('g' + String(calibrationModule.GOLD_ITEMS.length).padStart(2, '0')), true)
+  // The measurement is worthless if the answer contains the answers, so this is the
+  // assertion that keeps it a measurement: no label's REASON appears in the hand-out.
+  check('with no label reason leaked into the hand-out', calibrationModule.GOLD_ITEMS.some((item) => handed.value.text.includes(item.why)), false)
+  check(
+    'a sample below the floor is REFUSED rather than scored',
+    (await call('rs_verify', { slug: 'writer-check', action: 'calibrate', judge: 'a hasty reader', verdicts: [{ id: 'g01', verdict: 'supported', reason: 'read it' }] })).value.view.code,
+    'CALIBRATION_SMALL',
+  )
+  check(
+    'and a calibration with no judge is refused',
+    (await call('rs_verify', { slug: 'writer-check', action: 'calibrate', verdicts: calibrationModule.GOLD_ITEMS.map((item) => ({ id: item.id, verdict: item.verdict, reason: 'read it' })) })).value.view.code,
+    'BAD_JUDGE',
+  )
+  const scored = await call('rs_verify', {
+    slug: 'writer-check',
+    action: 'calibrate',
+    judge: 'the package check, answering from the gold set',
+    verdicts: calibrationModule.GOLD_ITEMS.map((item) => ({ id: item.id, verdict: item.verdict, strengthVerdict: item.strengthVerdict, reason: 'read it' })),
+  })
+  check('a full calibration is scored', scored.problems.join(' | '), '')
+  check('and reports the two rates', scored.value.text.includes('FNR') && scored.value.text.includes('FPR'), true)
+  check('and says what a pass does not mean', scored.value.text.includes('does NOT mean the judge can spot a subtle overstatement'), true)
+  check('and says it is not a rung', scored.value.text.includes('not a rung'), true)
+  const calibrationReport = JSON.parse(await fsp.readFile(path.join(root, 'writer-check', 'calibration', 'report.json'), 'utf8'))
+  check('the report is on disk with its judge', calibrationReport.verdict + '/' + calibrationReport.judge, 'calibrated/the package check, answering from the gold set')
+  const calibrationLog = await fsp.readFile(path.join(root, 'writer-check', 'calibration', 'verdicts.jsonl'), 'utf8')
+  check('and the answers are kept, one row per run', calibrationLog.trim().split('\n').length, 1)
+
   // ---- the statistic, on the claim that rests on it
   const withStatistic = await call('rs_write', {
     slug: 'writer-check',
@@ -825,6 +889,20 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('the checklist says what only a person can confirm', list !== null && list.includes('read it once with fresh eyes') && list.includes('word limit'), true)
   check('and what the run says about its own evidence', list !== null && list.includes('claims nothing has checked'), true)
   check('and warns that a clean build is not a check of correctness', list !== null && list.includes('not a check of correctness'), true)
+
+  // ---- the disclosure artifact: printed BESIDE the manuscript, never into it
+  check('the disclosure is written into the folder', packaged.includes('disclosure.md'), true)
+  const disclosureMd = await fsp.readFile(path.join(submission, 'disclosure.md'), 'utf8').catch(() => null)
+  check('and names the authors with their roles', disclosureMd !== null && disclosureMd.includes('A. Okonkwo') && disclosureMd.includes('Writing – original draft'), true)
+  check('and the approval with its body and reference', disclosureMd !== null && disclosureMd.includes('UREC-2026-0142') && disclosureMd.includes('the University Research Ethics Committee'), true)
+  check('and says what it cannot check', disclosureMd !== null && disclosureMd.includes('cannot check that it is true'), true)
+  // THE assertion this feature exists for: the artifact a reviewer opens must not
+  // carry a name from the record, and the record is where the names are.
+  check('the author names reach the disclosure and NOT the manuscript', manuscriptText.includes('Okonkwo') || manuscriptText.includes('Silva'), false)
+  check('and the manuscript still carries the paper', manuscriptText.includes('raised completion by 25 points'), true)
+  check('the checklist names every statement it has', list !== null && list.includes('author(s) with CRediT contributions') && list.includes('Ethics: approved'), true)
+  check('and what it does not have, by name', list !== null && list.includes('Data: on request — the corresponding author'), true)
+  check('and the run report counts the disclosure', (await call('rs_build', { slug: 'writer-check', format: 'md' })).value.text.includes('- disclosure: 2 author(s), ethics approved'), true)
 
   const capabilities = await call('rs_open', { action: 'capabilities' })
   check('rs_open action=capabilities answers', capabilities.value.view.ok, true)
@@ -1219,6 +1297,93 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('so a clean build refuses on it', withRecord.errors.map((one) => one.code).join(','), 'method-counts')
   const noRecord = validateStructure({ scan: scanDocument(''), claims: [], sourcesByKey: new Map(), method: null, methodProblem: null })
   check('and a run with no record is not blocked by r0', noRecord.ok, true)
+}
+
+// ---------------------------------------------------------------------------
+// The disclosure record: complete statements, and a determination this package
+// refuses to make
+// ---------------------------------------------------------------------------
+{
+  const full = {
+    authors: [
+      { name: 'A. Okonkwo', credit: ['conceptualization', 'methodology', 'writing-original-draft'] },
+      { name: 'R. Silva', credit: ['formal-analysis', 'visualization', 'writing-review-editing'] },
+    ],
+    ethics: { approval: 'approved', body: 'the University Research Ethics Committee', reference: 'UREC-2026-0142', consent: 'written' },
+    funding: [{ funder: 'the National Institute of Education', grant: 'NIE-2026-77', role: 'The funder had no role in the analysis.' }],
+    conflicts: 'none',
+    data: { availability: 'on-request', location: 'the corresponding author' },
+    aiUse: { used: true, tools: ['a generative writing assistant'], scope: 'writing', disclosure: 'A generative writing assistant edited the prose.' },
+  }
+  const record = normalizeDisclosure(full)
+  check('a disclosure record normalises', record.authors.length + '/' + record.ethics.approval, '2/approved')
+  check('and reads as one line', disclosureSummary(record).startsWith('2 author(s), ethics approved'), true)
+  check('the CRediT matrix names who did what', creditMatrix(record).find((row) => row.role === 'formal-analysis').authors.join(','), 'R. Silva')
+  check('and the artifact marks itself generated', renderDisclosure(record).startsWith('<!-- GENERATED'), true)
+  check('and prints every author with a role', renderDisclosure(record).includes('A. Okonkwo') && renderDisclosure(record).includes('Writing – original draft'), true)
+  check('and says what an absent statement means', renderDisclosure(normalizeDisclosure({ authors: full.authors })).includes('Not recorded.'), true)
+
+  // The determination this package will not make, asserted from both sides: the
+  // vocabulary has no `exempt` for a plugin to choose, and the refusal says why.
+  check('there is no determination for a plugin to pick', disclosureModule.APPROVALS.includes('exempt'), false)
+  check('only a body declaring exemption', disclosureModule.APPROVALS.includes('exempt-declared'), true)
+  check(
+    'and the refusal points at the vocabulary',
+    await (async () => {
+      try {
+        normalizeDisclosure({ ...full, ethics: { ...full.ethics, approval: 'exempt' } })
+        return '(no error)'
+      } catch (err) {
+        return err.message.includes('does not decide which applies') ? 'says so' : err.message
+      }
+    })(),
+    'says so',
+  )
+
+  // Incomplete statements: shaped correctly, and saying nothing a reader can check.
+  check('an approval with no body is refused', await codeOf(() => normalizeDisclosure({ ...full, ethics: { approval: 'approved', reference: 'X', consent: 'written' } })), 'DISCLOSURE_INCOMPLETE')
+  check('and with no reference', await codeOf(() => normalizeDisclosure({ ...full, ethics: { approval: 'approved', body: 'B', consent: 'written' } })), 'DISCLOSURE_INCOMPLETE')
+  check('and with no consent', await codeOf(() => normalizeDisclosure({ ...full, ethics: { approval: 'approved', body: 'B', reference: 'X' } })), 'DISCLOSURE_INCOMPLETE')
+  check('a waived consent with no basis is refused', await codeOf(() => normalizeDisclosure({ ...full, ethics: { approval: 'approved', body: 'B', reference: 'X', consent: 'waived' } })), 'DISCLOSURE_INCOMPLETE')
+  check('an author with no contribution is refused', await codeOf(() => normalizeDisclosure({ ...full, authors: [{ name: 'A. Okonkwo' }] })), 'DISCLOSURE_INCOMPLETE')
+  check('and an empty author list', await codeOf(() => normalizeDisclosure({ authors: [] })), 'DISCLOSURE_INCOMPLETE')
+  check('data said to be open with no address is refused', await codeOf(() => normalizeDisclosure({ ...full, data: { availability: 'open' } })), 'DISCLOSURE_INCOMPLETE')
+  check('and restricted data with no reason', await codeOf(() => normalizeDisclosure({ ...full, data: { availability: 'restricted' } })), 'DISCLOSURE_INCOMPLETE')
+  check('an AI declaration that says both things is refused', await codeOf(() => normalizeDisclosure({ ...full, aiUse: { used: false, scope: 'writing' } })), 'BAD_DISCLOSURE')
+  check('and one that says a tool was used with none named', await codeOf(() => normalizeDisclosure({ ...full, aiUse: { used: true, scope: 'writing' } })), 'DISCLOSURE_INCOMPLETE')
+
+  // Malformed: a field this package does not read is a field nothing validates.
+  check('an unknown field is refused', await codeOf(() => normalizeDisclosure({ ...full, reviewers: ['someone'] })), 'BAD_DISCLOSURE')
+  check('a role that is not CRediT is refused', await codeOf(() => normalizeDisclosure({ ...full, authors: [{ name: 'A.', credit: ['vibes'] }] })), 'BAD_DISCLOSURE')
+  check('an unknown availability is refused', await codeOf(() => normalizeDisclosure({ ...full, data: { availability: 'somewhere', reason: 'x' } })), 'BAD_DISCLOSURE')
+  check('conflicts are either "none" or a list', await codeOf(() => normalizeDisclosure({ ...full, conflicts: 'nothing' })), 'BAD_DISCLOSURE')
+  check('an empty funding list is a statement, not an omission', normalizeDisclosure({ authors: full.authors, funding: [] }).funding.length, 0)
+  check('and every CRediT role is one this package knows', CREDIT_ROLES.length, 14)
+
+  // What is ALREADY ON DISK is reported rather than believed, for the same reason as
+  // the method record: a hand-edited file never passed the check above.
+  const handEdited = disclosureProblems({ authors: [{ name: 'A. Okonkwo', credit: ['vibes'] }, { name: 'R. Silva', credit: [] }], ethics: { approval: 'approved' }, data: { availability: 'open' }, aiUse: { used: false, scope: 'writing' } })
+  check('a role the matrix cannot print is an ERROR', handEdited.some((one) => one.code === 'disclosure-role' && one.severity === 'error'), true)
+  check('an author with no contribution is a warning', handEdited.some((one) => one.code === 'disclosure-incomplete' && one.detail.includes('no declared contribution')), true)
+  check('an approval with no body is a warning naming it', handEdited.some((one) => one.detail.includes('names no approving `body`')), true)
+  check('data declared open with no location is a warning', handEdited.some((one) => one.detail.includes('no `location`')), true)
+  check('and a self-contradicting AI declaration is an ERROR', handEdited.some((one) => one.code === 'disclosure-contradiction' && one.severity === 'error'), true)
+  check('no record at all is NOT a defect', disclosureProblems(null).length, 0)
+
+  const dir = path.join(root, 'disclosure-check')
+  await createRun({ root, slug: 'disclosure-check', title: 'Disclosure check', kind: 'paper' })
+  check('a run with no record reads as absence', (await readDisclosureRecord(dir)).exists, false)
+  await fsp.writeFile(path.join(dir, 'plan', 'disclosure.json'), '{oops', 'utf8')
+  check('an unparsable record is a problem, not a throw', (await readDisclosureRecord(dir)).problem.code, 'disclosure-incomplete')
+  await fsp.writeFile(path.join(dir, 'plan', 'disclosure.json'), JSON.stringify({ authors: [{ name: 'A. Okonkwo', credit: ['nonsense'] }] }), 'utf8')
+  const onDisk = await readDisclosureRecord(dir)
+  const withRole = validateStructure({ scan: scanDocument(''), claims: [], sourcesByKey: new Map(), disclosure: onDisk.record, disclosureProblem: onDisk.problem })
+  check('r0 reads the disclosure on disk', withRole.ok, false)
+  check('so a clean build refuses on an unprintable role', withRole.errors.map((one) => one.code).join(','), 'disclosure-role')
+  await fsp.writeFile(path.join(dir, 'plan', 'disclosure.json'), JSON.stringify(normalizeDisclosure(full)), 'utf8')
+  const good = await readDisclosureRecord(dir)
+  const clean = validateStructure({ scan: scanDocument(''), claims: [], sourcesByKey: new Map(), disclosure: good.record, disclosureProblem: good.problem })
+  check('and a complete record passes r0', clean.ok, true)
 }
 
 // ---------------------------------------------------------------------------

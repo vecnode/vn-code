@@ -41,6 +41,7 @@ import {
 } from './doc.js'
 import { claimsById, readClaims, readSources, sourcesByKey, statusCounts } from './ledger.js'
 import { methodSummary, readMethodRecord, renderMethodFlow } from './method.js'
+import { disclosureSummary, readDisclosureRecord } from './disclosure.js'
 
 /** The formats this plugin can build, and the phase each arrived in. */
 export const FORMATS = ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex', 'package']
@@ -155,10 +156,19 @@ export async function readRunState(runDir) {
   // each other is exactly that. Reading it once, in the one place both the build and
   // the panel pass through, is what keeps the answer the same in both.
   const method = await readMethodRecord(runDir)
+  const disclosure = await readDisclosureRecord(runDir)
   const map = sourcesByKey(sources)
   const scan = scanDocument(document.text)
-  const structure = validateStructure({ scan, claims, sourcesByKey: map, method: method.record, methodProblem: method.problem })
-  return { document, claims, sources, sourcesByKey: map, scan, structure, method }
+  const structure = validateStructure({
+    scan,
+    claims,
+    sourcesByKey: map,
+    method: method.record,
+    methodProblem: method.problem,
+    disclosure: disclosure.record,
+    disclosureProblem: disclosure.problem,
+  })
+  return { document, claims, sources, sourcesByKey: map, scan, structure, method, disclosure }
 }
 
 /**
@@ -301,6 +311,17 @@ export function buildReport(options) {
     method: {
       recorded: options.method !== null && options.method !== undefined && options.method.record !== null && options.method.record !== undefined,
       summary: options.method === null || options.method === undefined || options.method.record === null || options.method.record === undefined ? null : methodSummary(options.method.record),
+    },
+    // The disclosure is COUNTED here and printed only into the submission folder: it
+    // names people and funders, and the manuscript a reviewer receives must carry
+    // none of it. A report that did not record whether one exists would leave the
+    // question to the reader of the artifact, which is where it usually goes wrong.
+    disclosure: {
+      recorded: options.disclosure !== null && options.disclosure !== undefined && options.disclosure.record !== null && options.disclosure.record !== undefined,
+      summary:
+        options.disclosure === null || options.disclosure === undefined || options.disclosure.record === null || options.disclosure.record === undefined
+          ? null
+          : disclosureSummary(options.disclosure.record),
     },
     structure: {
       ok: options.structure.ok,
@@ -515,6 +536,7 @@ export async function runBuild(options) {
       referencesHeading: typeof style.referenceHeading === 'string' ? style.referenceHeading : 'References',
       created: options.created,
       passportGates: options.passportGates,
+      disclosure: state.disclosure,
       hashOf,
       now: options.now,
     })
@@ -541,6 +563,9 @@ export async function runBuild(options) {
   if (state.method.exists !== true) {
     notes.push('no plan/method.json: this run records no search, so a reader cannot reproduce how the evidence was found (rs_plan part=method method={…})')
   }
+  if (state.disclosure.exists !== true) {
+    notes.push('no plan/disclosure.json: this run records no authorship, ethics, funding, conflicts, data-availability or AI-use statement (rs_plan part=disclosure disclosure={…})')
+  }
 
   const report = buildReport({
     format,
@@ -554,6 +579,7 @@ export async function runBuild(options) {
     claims: state.claims,
     sources: state.sources,
     method: state.method,
+    disclosure: state.disclosure,
     usedKeys: composed === null ? state.sources.map((one) => one.key) : composed.usedKeys,
     structure: state.structure,
     outputs,

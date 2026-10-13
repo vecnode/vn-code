@@ -72,7 +72,7 @@ function allowedValues(tool, parameter) {
 function codesFromSource() {
   const upper = new Set(indexModule.REFUSAL_CODES)
   const lower = new Set()
-  for (const name of ['doc.js', 'verify.js', 'ledger.js', 'syntax.js', 'method.js']) {
+  for (const name of ['doc.js', 'verify.js', 'ledger.js', 'syntax.js', 'method.js', 'disclosure.js', 'calibration.js']) {
     const text = readFileSync(path.join(pkgDir, 'lib', name), 'utf8')
     for (const match of text.matchAll(/(?:problem|finding)\('([a-z][a-z-]+)'/g)) lower.add(match[1])
     for (const match of text.matchAll(/'(r[0-4]-[a-z]+)'/g)) lower.add(match[1])
