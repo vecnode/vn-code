@@ -42,8 +42,14 @@ import { claimsById, readClaims, readSources, sourcesByKey, statusCounts } from 
 
 /** The formats this plugin can build, and the phase each arrived in. */
 export const FORMATS = ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex']
-/** The formats phase 1 implements. The rest refuse by name, with the phase. */
-export const FORMATS_READY = ['md', 'ris', 'bib', 'enw']
+/**
+ * The formats this build implements.
+ *
+ * `docx` is here because the writer is WRITTEN rather than wrapped: seven modules
+ * under `lib/docx/` produce the OOXML themselves, which is the only way to keep the
+ * package's promise that it spawns no process - calling pandoc would be one.
+ */
+export const FORMATS_READY = ['md', 'ris', 'bib', 'enw', 'docx']
 /** Where a format's output goes, when the format writes one file. */
 export const OUTPUT_NAMES = {
   md: 'paper.md',
@@ -70,6 +76,21 @@ export async function loadRefs() {
     return await import('./refs.js')
   } catch (err) {
     throw new ResearchError('REFS_UNAVAILABLE', 'the reference import/export engine is not in this build: ' + messageOf(err))
+  }
+}
+
+/**
+ * The DOCX writer, on demand.
+ *
+ * Seven modules and no dependency between them and the rest of the engine: the
+ * writer takes a Markdown string and returns a Buffer, so a build is the only thing
+ * that needs it and a missing one refuses by name rather than taking the row down.
+ */
+export async function loadDocx() {
+  try {
+    return await import('./docx/index.js')
+  } catch (err) {
+    throw new ResearchError('DOCX_UNAVAILABLE', 'the DOCX writer is not in this build: ' + messageOf(err))
   }
 }
 
@@ -130,7 +151,17 @@ export function composeMarkdown(state, style, draft, notes) {
   if (references.entries.length === 0) {
     lines.push('_No source is cited yet._')
   } else {
-    for (const entry of references.entries) lines.push(runsToMarkdown(entry.runs))
+    // One BLANK LINE between entries, not one newline. Adjacent lines in Markdown
+    // are ONE paragraph, so a reference list written that way is a single
+    // run-together block in every renderer - and the DOCX writer, which parses this
+    // same Markdown, would give the whole bibliography one hanging indent instead of
+    // one per entry. A reference list is a list of paragraphs; this is what makes it
+    // one.
+    for (const entry of references.entries) {
+      lines.push(runsToMarkdown(entry.runs))
+      lines.push('')
+    }
+    lines.pop()
   }
   if (rendered.footnotes.length > 0) {
     lines.push('')
@@ -190,7 +221,7 @@ export function buildReport(options) {
 
 /** Why a format is not in this build yet, in one sentence both callers use. */
 export function formatNotYetMessage(format) {
-  const phase = format === 'docx' ? 'the DOCX writer (phase 3)' : format === 'html' ? 'the HTML builder (phase 3)' : 'the LaTeX builder (phase 6)'
+  const phase = format === 'html' ? 'the HTML builder (phase 3)' : format === 'tex' ? 'the LaTeX builder (phase 6)' : 'a later phase'
   return 'format `' + format + '` is not in this build yet - it arrives with ' + phase + '. Ready now: ' + FORMATS_READY.join(', ') + '. Nothing was written.'
 }
 
@@ -287,6 +318,31 @@ export async function runBuild(options) {
   if (format === 'md') {
     composed = composeMarkdown(state, style, draft, notes)
     await write(OUTPUT_NAMES.md, composed.text)
+  } else if (format === 'docx') {
+    // The SAME Markdown the .md build writes, so the two artifacts of one run cannot
+    // disagree about a sentence, a citation or a footnote.
+    composed = composeMarkdown(state, style, draft, notes)
+    const docx = await loadDocx()
+    const built = docx.buildDocxReport({
+      markdown: composed.text,
+      style: styleId,
+      // The title block is the document's own name, and the style's OWN reference
+      // heading - the writer applies the bibliography style to the paragraphs after
+      // it, so handing it the wrong string would give the whole list the body style.
+      title: options.title,
+      authors: options.authors,
+      referencesHeading: typeof style.referenceHeading === 'string' ? style.referenceHeading : 'References',
+      created: options.created,
+      toc: options.toc === true,
+      images: options.images,
+    })
+    await write(OUTPUT_NAMES.docx, built.buffer)
+    // What the writer could not render travels into the report: a construct it
+    // skipped is a fact about the artifact, and a build report that omitted it would
+    // describe a document nobody has.
+    for (const one of built.report.unsupported) {
+      notes.push('docx line ' + one.line + ': ' + one.why)
+    }
   } else {
     const refs = await loadRefs()
     // An export is the run's LIBRARY, not only the part the current draft cites:

@@ -332,6 +332,8 @@ export function registerRoutes(options) {
         styleId: typeof body.style === 'string' && body.style !== '' ? body.style : record.style,
         slug: body.slug,
         integrityAnswered: answered,
+        title: record.title,
+        created: record.created,
       })
       return json(200, { ok: true, outputs: result.outputs, report: result.report })
     } catch (err) {

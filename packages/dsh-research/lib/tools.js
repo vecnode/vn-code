@@ -1148,7 +1148,20 @@ export function buildTools(deps = {}) {
             notYet.push(format)
             continue
           }
-          const result = await runBuild({ runDir: dir, format, draft, styleId, slug, integrityAnswered, now: args.now })
+          const result = await runBuild({
+            runDir: dir,
+            format,
+            draft,
+            styleId,
+            slug,
+            integrityAnswered,
+            // The title block and the core properties come from the run's own
+            // RUN.json: `created` is what makes two builds of one run byte-identical,
+            // because the writer may not read the clock.
+            title: record.title,
+            created: record.created,
+            now: args.now,
+          })
           outputs.push(...result.outputs)
           reports.push(result.report)
         }

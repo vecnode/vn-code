@@ -162,6 +162,7 @@ const buildModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'build.j
 const viewModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'view.js')).href)
 const verifyModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'verify.js')).href)
 const reviewModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'review.js')).href)
+const docxModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'docx', 'index.js')).href)
 const refsModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'refs.js')).href)
 const stylesModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'styles', 'index.js')).href)
 const apiModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'api.js')).href)
@@ -192,7 +193,7 @@ const { TOOL_NAMES, buildTools, workspaceOf, provenanceOf, nearMisses } = toolsM
 const { appendClaim, appendSource, claimsById, foldLatest, readClaims, readSources, sourcesByKey, statusCounts } = ledgerModule
 const { assembleDocument, renderBody, renderReferences, scanDocument, sectionsOf, validateStructure, wordCount } = docModule
 const { findCitations, findClaimSpans, normalizeLocator, nextClaimId, parseKey } = syntaxModule
-const { FORMATS_READY, composeMarkdown, readRunState, runBuild } = buildModule
+const { FORMATS_READY, composeMarkdown, hashOf, readRunState, runBuild } = buildModule
 const { ALL_GATES, libraryFile, readLibrary } = runModule
 const { projectDetail } = viewModule
 const { API_ROUTES } = apiModule
@@ -612,9 +613,30 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
 
   const exportTool = await call('rs_build', { slug: 'writer-check', format: 'ris' })
   check('an export is built from the library', exportTool.value.text.includes('references.ris'), true)
-  const notYet = await call('rs_build', { slug: 'writer-check', format: 'docx' })
-  check('a format this build does not have says so and names a phase', notYet.value.text.includes('phase 3'), true)
+  // `docx` now BUILDS (the writer is written, not wrapped), so the not-yet case is
+  // `tex` - and a format that is refused must still say which phase brings it.
+  const notYet = await call('rs_build', { slug: 'writer-check', format: 'tex' })
+  check('a format this build does not have says so and names a phase', notYet.value.text.includes('phase 6'), true)
   check('and writes nothing', notYet.value.view.ok, false)
+  check('and names what it CAN write', notYet.value.text.includes('md, ris, bib, enw, docx'), true)
+
+  // ---- the DOCX: a real archive with the parts a reader needs
+  const docxBuild = await call('rs_build', { slug: 'writer-check', format: 'docx' })
+  check('the DOCX builds', docxBuild.value.view.ok && docxBuild.value.text.includes('build/paper.docx'), true)
+  const docxBytes = await fsp.readFile(path.join(root, 'writer-check', 'build', 'paper.docx')).catch(() => null)
+  check('and the file is on disk', docxBytes !== null && docxBytes.length > 2000, true)
+  check('and it is a ZIP, by its own magic number', docxBytes !== null && docxBytes[0] === 0x50 && docxBytes[1] === 0x4b, true)
+  const parts = docxModule.unzipDocx(docxBytes)
+  check('with the parts a Word reader opens', ['[Content_Types].xml', '_rels/.rels', 'word/document.xml', 'word/styles.xml', 'word/numbering.xml', 'word/settings.xml', 'docProps/core.xml'].every((name) => parts.has(name)), true)
+  const docxText = docxModule.documentText(docxBytes)
+  check('and the reference heading the style uses', docxText.includes('References'), true)
+  check('and the claim sentences in the body', docxText.includes('raised completion by 25 points'), true)
+  check('while the claim markers are gone from the prose', docxText.includes('{#c0001}'), false)
+  // Determinism is a promise, so it is asserted: the same run built twice is the
+  // same bytes, because the writer may not read the clock.
+  const again = await call('rs_build', { slug: 'writer-check', format: 'docx' })
+  const docxSecond = await fsp.readFile(path.join(root, 'writer-check', 'build', 'paper.docx'))
+  check('and two DOCX builds of one run are byte-identical', hashOf(docxBytes) === hashOf(docxSecond), true)
 
   const capabilities = await call('rs_open', { action: 'capabilities' })
   check('rs_open action=capabilities answers', capabilities.value.view.ok, true)
@@ -927,7 +949,7 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
     await codeOf(() => runBuild({ runDir: dir, format: 'md', draft: 'clean', styleId: 'apa7', slug: 'ledger-check', integrityAnswered: false })),
     'GATE_UNANSWERED',
   )
-  check('a format this build does not have yet is refused BY NAME', await codeOf(() => runBuild({ runDir: dir, format: 'docx', draft: 'watermark', styleId: 'apa7', slug: 'ledger-check' })), 'FORMAT_NOT_YET')
+  check('a format this build does not have yet is refused BY NAME', await codeOf(() => runBuild({ runDir: dir, format: 'tex', draft: 'watermark', styleId: 'apa7', slug: 'ledger-check' })), 'FORMAT_NOT_YET')
   check('and an unknown style is refused', await codeOf(() => runBuild({ runDir: dir, format: 'md', draft: 'watermark', styleId: 'harvard', slug: 'ledger-check' })), 'UNKNOWN_STYLE')
   check('an empty document is refused rather than built empty', await codeOf(() => runBuild({ runDir: path.join(root, 'tool-check'), format: 'md', draft: 'watermark', styleId: 'apa7', slug: 'tool-check' })), 'DOC_EMPTY')
 

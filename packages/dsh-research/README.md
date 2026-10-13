@@ -110,6 +110,19 @@ the **record** first.
   list computed from the ledger rather than typed by the model. Every one of them
   prints the source's address, because a citation a reader cannot follow is a
   citation that does not work.
+- **It builds the document, and the DOCX is written rather than wrapped.**
+  `rs_build format=md` writes the reader-ready Markdown — citations resolved by the
+  style, the reference list computed from the ledger, claim endnotes in a draft.
+  `format=docx` writes a real Office document from **the same Markdown**, through
+  seven modules of hand-written OOXML (`lib/docx/`: a ZIP writer with fixed
+  timestamps, the part model, styles, numbering, footnotes, tables, images) — which
+  is the only way to keep the promise that this plugin spawns no process, since
+  calling pandoc would be one. Two builds of one run are **byte-identical**: the
+  writer never reads the clock, and a check holds it to that. `ris` / `bib` / `enw`
+  export the run's whole library for Zotero, EndNote or pandoc.
+  The DOCX was verified by an independent tag-balance check, a CRC read of its own
+  ZIP central directory, and **pandoc reading the file back** — including the
+  metadata, the aligned table, the nested list and both footnotes.
 - **The Research tab, and it is editable.** The run list with a "waiting" badge;
   the pending gates as a form (question, options, a box for your words, a reason
   box for an override, Submit); answered gates as a timeline; the passport's
@@ -128,6 +141,7 @@ the **record** first.
 | routes | eight exact paths, `GET`/`HEAD`/`POST`, all behind the harness's session check |
 | tools | 9 (`rs_open`, `rs_new`, `rs_plan`, `rs_read`, `rs_write`, `rs_cite`, `rs_verify`, `rs_review`, `rs_build`) |
 | gates | 3 (two frame, one opened by a clean build) |
+| builds | `md`, `docx`, `ris`, `bib`, `enw` — `html` and `tex` refuse by name with the phase that brings them |
 | tab types | 1 (`research`, a page type with no file patterns) |
 | skills | 5 (`research-project`, `research-sources`, `research-writing`, `research-verification`, `research-review`), registered at activation *and* copied into `$DSH_HOME/skills` |
 | touches | **no** core row disabled, **no** fork, **no** npm dependency, **no** vendored engine, **no** bundled binary |
@@ -168,11 +182,18 @@ the **record** first.
 
 ## Limits — what is not here yet
 
-`md`, `ris`, `bib` and `enw` build today. **`docx`, `html` and `tex` refuse by name
-and say which phase brings them** — the DOCX writer is in progress. The remaining
-panel work is the headless render check. `research-formats` is the last of the six
-skills. The design for all of it, with the reasoning, is in
-`docs/DESIGN-dsh-research.md`.
+`md`, `docx`, `ris`, `bib` and `enw` build today. **`html` and `tex` refuse by name
+and say which phase brings them.** The remaining panel work is the headless render
+check; `research-formats` is the last of the six skills. The design for all of it,
+with the reasoning, is in `docs/DESIGN-dsh-research.md`.
+
+Three DOCX limits, stated rather than discovered: **IEEE is single column** (the
+two-column layout is not emitted), page setup is Letter with 1-inch margins for
+every style (APA 7 pins exactly that; the others pin none, so it is a deliberate
+uniform choice rather than a source), and a construct outside the Markdown subset
+— nested emphasis inside emphasis, list nesting past one level, indented code,
+setext headings, raw HTML — is **reported with its line number rather than
+dropped**.
 
 A run created today is not a dead end: the folder, the ledgers and the dialect are
 the structures the later phases fill.
