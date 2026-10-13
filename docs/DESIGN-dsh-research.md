@@ -482,7 +482,7 @@ subagent or the session model, and there is no second provider anywhere in it.
 |---|---|---|---|
 | 0 | the run model, the passport, the two gates, `rs_open`/`rs_new`/`rs_read`, the routes, the Research tab with the gate form and the live poll | `check-research-node.mjs`, `check-client-bundles.mjs` | **SHIPPED** |
 | 1 | `rs_plan`, `rs_write`, claim + citation syntax, the append-only source and claim ledgers, `rs_cite` (ingest only), the RIS/BibTeX/MEDLINE/EndNote engine, six citation styles as a registry, `format=md`, the first skill | `check-research-node.mjs`, `check-research-refs.mjs`, `check-research-styles.mjs` | **SHIPPED** |
-| 2 | the panel: the gates form, the passport, the outline, the claims ledger with its status chips, the sources ledger with what can be checked, the build row, the in-place editor with its structure verdict, the library pointer | client (rendered for real), node | **SHIPPED** except the headless render check |
+| 2 | the panel: the gates form, the passport, the outline, the claims ledger with its status chips, the sources ledger with what can be checked, the build row, the in-place editor with its structure verdict, the library pointer | `check-client-bundles.mjs` (the markup, server-rendered) + **`check-research-render.mjs`** (a real browser against a fixture run served by the engine's own view code: the run list and its `1 waiting` badge, the header, the verbatim quote, claims and sources measured, and the gate form DRIVEN - the overriding option reveals the reason box, the plain one hides it, typing enables Submit) | **SHIPPED** |
 | 3 | the DOCX writer (seven modules, no dependencies, byte-deterministic), the HTML builder (self-contained, no network), RIS/BibTeX/ENW export, the integrity gate | `check-research-docx.mjs` (118 assertions, pandoc as the foreign reader) + `check-research-node.mjs` (a real .docx built, unzipped, read back and rebuilt byte-identically; the page asserted self-contained and scriptless) | **SHIPPED** |
 | 4 | `r1-record` and `r2-locate`, the `rs_verify` tool that records a rung, the ladder report | `check-research-node.mjs` (the whole ladder driven end to end) | **SHIPPED** |
 | 5 | `r3`/`r4` recording, the reviewer panel, the DA concession gate, the R&R matrix | ladder with a stub judge, `rs_review` driven end to end | **SHIPPED** |
@@ -504,7 +504,7 @@ gate), `lib/view.js` (the panel payload), `lib/refs.js` 1,471 (four formats,
 round-tripped), `lib/styles/` ~1,600 across eight modules, `lib/docx/` ~2,100 across
 seven, `lib/tools.js` (nine tools), `lib/index.js` (the row), `lib/client.js` (the
 tab, its editor and its five sections), eight bundled skills — two of them with a
-bundled reference — and six checks.
+bundled reference — and seven checks.
 
 The lessons the phases actually produced, worth keeping:
 

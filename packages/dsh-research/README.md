@@ -268,13 +268,21 @@ the **record** first.
 
 ## Limits — what is not here yet
 
-Every format this plugin advertises is implemented: `md`, `docx`, `html`, `tex`,
-`ris`, `bib`, `enw`, and the gated `package` folder. The eight skills are written.
-One thing remains from the design: the **headless render check** for the tab, which
-is how the panel's own layout would be verified rather than only its payload. The
-design for what is left, with the reasoning, is in `docs/DESIGN-dsh-research.md`,
-and the review that produced alpha.3 — measured against an external
-academic-research suite — is in `docs/REVIEW-dsh-research-alpha.3.md`.
+**The design is complete.** Every format this plugin advertises is implemented —
+`md`, `docx`, `html`, `tex`, `ris`, `bib`, `enw`, and the gated `package` folder —
+the eight skills are written, and the last item the design carried, the **headless
+render check** for the Research tab, now runs: `check-research-render.mjs` opens the
+tab in a real Chromium-family browser against a fixture run served by the engine's
+own view code, and **measures the layout** rather than only the payload — the run
+list and its `1 waiting` badge, the selected run's header, the passport's verbatim
+quote, the claims and sources, and the gate form driven the way a person drives it
+(pick the option that overrides the default, watch the reason box appear, pick the
+plain one, watch it go, type, and Submit comes alive). It skips **loudly** on a host
+with no browser or no React UMD build, because a check that downloads one to pass is
+not a check. The design and the reasoning behind every phase are in
+`docs/DESIGN-dsh-research.md`, and the review that produced alpha.3 — measured
+against an external academic-research suite — is in
+`docs/REVIEW-dsh-research-alpha.3.md`.
 
 **It records statistics; it does not recompute them.** Nothing here calculates a
 p-value from a test statistic, checks that `d = 0.61` follows from the means it was
@@ -321,7 +329,8 @@ npm run check:refs       # RIS / BibTeX / MEDLINE / EndNote import and export, r
 npm run check:styles     # every citation style against pinned strings
 npm run check:examples   # every tool call, code and span the skills AND their references teach, against the real surface
 npm run check:judge      # the calibration set, the scorer, and the bars - a perfect judge, a sycophant, a skeptic, and one exactly on each threshold
-npm run check:all        # all six
+npm run check:render     # the Research tab in a REAL browser against a fixture run: the layout measured and the gate form driven (skips loudly with no browser)
+npm run check:all        # all seven
 ```
 
 Then the pack-wide checks that own the area:

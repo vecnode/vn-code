@@ -23,7 +23,8 @@
     "check:styles": "node checks/check-research-styles.mjs",
     "check:examples": "node checks/check-research-examples.mjs",
     "check:judge": "node checks/check-research-judge.mjs",
-    "check:all": "node checks/check-research-node.mjs && node checks/check-research-docx.mjs && node checks/check-research-refs.mjs && node checks/check-research-styles.mjs && node checks/check-research-examples.mjs && node checks/check-research-judge.mjs"
+    "check:render": "node checks/check-research-render.mjs",
+    "check:all": "node checks/check-research-node.mjs && node checks/check-research-docx.mjs && node checks/check-research-refs.mjs && node checks/check-research-styles.mjs && node checks/check-research-examples.mjs && node checks/check-research-judge.mjs && node checks/check-research-render.mjs"
   },
   "dsh": {
     "bundle": {
