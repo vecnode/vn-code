@@ -129,6 +129,18 @@ the **record** first.
   The DOCX was verified by an independent tag-balance check, a CRC read of its own
   ZIP central directory, and **pandoc reading the file back** — including the
   metadata, the aligned table, the nested list and both footnotes.
+- **Submission packaging, which is a folder and not a file.** `format=package`
+  assembles what a journal actually asks for: `manuscript.docx` built with **no
+  title block**, so it carries nothing identifying; `title-page.md` (uploaded
+  separately, with the placeholders a person fills in); `cover-letter.md`
+  **computed from the ledger** rather than written from memory — the claim counts,
+  the verification state and the experiment-intake answer come from the run, so a
+  letter cannot describe a paper that does not exist; `CHECKLIST.md`, which says
+  what the run says about its own evidence *and* what no builder can check for you
+  ("read it once with fresh eyes: the builder removed the title block, and it cannot
+  know what your prose reveals"); and the run's `figures/` copied beside them.
+  It is **gated like a clean build whatever `draft` says**, because a submission is
+  the artifact that must not carry a claim nothing has checked.
 - **The Research tab, and it is editable.** The run list with a "waiting" badge;
   the pending gates as a form (question, options, a box for your words, a reason
   box for an override, Submit); answered gates as a timeline; the passport's
@@ -146,10 +158,10 @@ the **record** first.
 | row | `research` |
 | routes | eight exact paths, `GET`/`HEAD`/`POST`, all behind the harness's session check |
 | tools | 9 (`rs_open`, `rs_new`, `rs_plan`, `rs_read`, `rs_write`, `rs_cite`, `rs_verify`, `rs_review`, `rs_build`) |
-| gates | 3 (two frame, one opened by a clean build) |
-| builds | `md`, `docx`, `html`, `tex`, `ris`, `bib`, `enw` — every format it advertises is implemented, and a check asserts that |
+| gates | 3 (two frame, one opened by a clean build — and by `format=package`) |
+| builds | `md`, `docx`, `html`, `tex`, `ris`, `bib`, `enw`, plus `package` (the gated submission folder) — every format it advertises is implemented, and a check asserts that |
 | tab types | 1 (`research`, a page type with no file patterns) |
-| skills | 5 (`research-project`, `research-sources`, `research-writing`, `research-verification`, `research-review`), registered at activation *and* copied into `$DSH_HOME/skills` |
+| skills | 6 (`research-project`, `research-sources`, `research-writing`, `research-verification`, `research-review`, `research-formats`), registered at activation *and* copied into `$DSH_HOME/skills` |
 | touches | **no** core row disabled, **no** fork, **no** npm dependency, **no** vendored engine, **no** bundled binary |
 
 | Route | What it answers |
@@ -189,11 +201,10 @@ the **record** first.
 ## Limits — what is not here yet
 
 Every format this plugin advertises is implemented: `md`, `docx`, `html`, `tex`,
-`ris`, `bib` and `enw`. Two things remain from the design: **submission packaging**
-(a folder with an anonymized manuscript, a cover letter and a checklist) and the
-**headless render check** for the tab. The `research-formats` skill is the last of
-the six. The design for what is left, with the reasoning, is in
-`docs/DESIGN-dsh-research.md`.
+`ris`, `bib`, `enw`, and the gated `package` folder. The six skills are written. One
+thing remains from the design: the **headless render check** for the tab, which is
+how the panel's own layout would be verified rather than only its payload. The
+design for what is left, with the reasoning, is in `docs/DESIGN-dsh-research.md`.
 
 Three DOCX limits, stated rather than discovered: **IEEE is single column** (the
 two-column layout is not emitted), page setup is Letter with 1-inch margins for

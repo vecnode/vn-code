@@ -41,15 +41,26 @@ import {
 import { claimsById, readClaims, readSources, sourcesByKey, statusCounts } from './ledger.js'
 
 /** The formats this plugin can build, and the phase each arrived in. */
-export const FORMATS = ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex']
+export const FORMATS = ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex', 'package']
 /**
  * The formats this build implements.
  *
  * `docx` is here because the writer is WRITTEN rather than wrapped: seven modules
  * under `lib/docx/` produce the OOXML themselves, which is the only way to keep the
  * package's promise that it spawns no process - calling pandoc would be one.
+ * `package` is not a document format: it assembles the FOLDER a journal wants
+ * (anonymized manuscript, title page, generated cover letter, checklist, figures).
  */
-export const FORMATS_READY = ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex']
+export const FORMATS_READY = ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex', 'package']
+
+/**
+ * The formats `format=all` means.
+ *
+ * `package` is deliberately NOT one of them: it is a gated submission bundle rather
+ * than a document format, so asking for "everything" must not silently require the
+ * integrity gate that a draft build is allowed to skip.
+ */
+export const FORMATS_DOCUMENT = FORMATS_READY.filter((one) => one !== 'package')
 /** Where a format's output goes, when the format writes one file. */
 export const OUTPUT_NAMES = {
   md: 'paper.md',
@@ -115,6 +126,15 @@ export async function loadTex() {
     return await import('./tex.js')
   } catch (err) {
     throw new ResearchError('TEX_UNAVAILABLE', 'the LaTeX builder is not in this build: ' + messageOf(err))
+  }
+}
+
+/** The submission packager, on demand: it assembles a FOLDER, not a file. */
+export async function loadPackage() {
+  try {
+    return await import('./package.js')
+  } catch (err) {
+    throw new ResearchError('PACKAGE_UNAVAILABLE', 'the submission packager is not in this build: ' + messageOf(err))
   }
 }
 
@@ -249,6 +269,38 @@ export function unknownFormatMessage(format) {
 }
 
 /**
+ * One report for a build that wrote several formats.
+ *
+ * `runBuild` no longer writes `build.json` itself, because `format=all` called it
+ * once per format and each call overwrote the file - so a seven-format build left a
+ * report describing ONE of them, and the answer said "the report above, stored"
+ * while the stored one was the last format's. A build report that is not the whole
+ * build is worse than none: it is the record a person consults about a document
+ * that was already handed to somebody.
+ */
+export function combineReports(reports, outputs) {
+  const list = Array.isArray(reports) ? reports : []
+  const first = list[0] ?? null
+  if (first === null) return null
+  return {
+    ...first,
+    format: list.map((one) => one.format).join('+'),
+    formats: list.map((one) => ({ format: one.format, outputs: one.outputs, document: one.document })),
+    // Every file this build wrote, across every format, with its own hash.
+    outputs,
+    notes: [...new Set(list.flatMap((one) => (Array.isArray(one.notes) ? one.notes : [])))],
+  }
+}
+
+/** Write the run's build report, atomically, where everything else can find it. */
+export async function writeBuildReport(runDir, report) {
+  if (report === null) return null
+  const file = path.join(runDir, 'build', 'build.json')
+  await writeJsonAtomic(file, report)
+  return file
+}
+
+/**
  * Open the integrity gate, once, for a clean build.
  *
  * Both callers of a build - the `rs_build` tool and the panel's `POST /build`
@@ -278,6 +330,12 @@ export async function runBuild(options) {
   const runDir = options.runDir
   const format = options.format ?? 'md'
   const draft = options.draft === 'clean' ? 'clean' : 'watermark'
+  // A SUBMISSION is a clean build whatever the caller asked for. Packaging a run
+  // whose document and ledger disagree, or that carries a claim a check found
+  // unsupported, would assemble exactly the artifact the integrity gate exists to
+  // hold back - and it would do it under a name ("submission") that implies more
+  // care than a draft. So the gate is not optional here.
+  const effectiveDraft = format === 'package' ? 'clean' : draft
   if (!FORMATS.includes(format)) {
     throw new ResearchError('BAD_FORMAT', 'format must be one of ' + FORMATS.join(', ') + ' (got ' + JSON.stringify(String(format)) + ')')
   }
@@ -304,7 +362,7 @@ export async function runBuild(options) {
   const notes = [...state.document.notes]
   // A DRAFT is always buildable: that is what it is for. A CLEAN build is the one
   // that claims to be finished, so it is the one that has to hold up.
-  if (draft === 'clean') {
+  if (effectiveDraft === 'clean') {
     if (state.structure.errors.length > 0) {
       throw new ResearchError(
         'BUILD_BLOCKED',
@@ -341,12 +399,12 @@ export async function runBuild(options) {
 
   let composed = null
   if (format === 'md') {
-    composed = composeMarkdown(state, style, draft, notes)
+    composed = composeMarkdown(state, style, effectiveDraft, notes)
     await write(OUTPUT_NAMES.md, composed.text)
   } else if (format === 'docx') {
     // The SAME Markdown the .md build writes, so the two artifacts of one run cannot
     // disagree about a sentence, a citation or a footnote.
-    composed = composeMarkdown(state, style, draft, notes)
+    composed = composeMarkdown(state, style, effectiveDraft, notes)
     const docx = await loadDocx()
     const built = docx.buildDocxReport({
       markdown: composed.text,
@@ -371,7 +429,7 @@ export async function runBuild(options) {
   } else if (format === 'html') {
     // The same Markdown again: three artifacts, one parse, so a sentence, a
     // citation or a footnote cannot be in one and missing from another.
-    composed = composeMarkdown(state, style, draft, notes)
+    composed = composeMarkdown(state, style, effectiveDraft, notes)
     const page = await loadHtml()
     const built = page.buildHtmlReport({
       markdown: composed.text,
@@ -382,7 +440,7 @@ export async function runBuild(options) {
     await write(OUTPUT_NAMES.html, built.html)
     for (const one of built.report.unsupported) notes.push('html line ' + one.line + ': ' + one.why)
   } else if (format === 'tex') {
-    composed = composeMarkdown(state, style, draft, notes)
+    composed = composeMarkdown(state, style, effectiveDraft, notes)
     const latex = await loadTex()
     const built = latex.buildTexReport({
       markdown: composed.text,
@@ -396,6 +454,24 @@ export async function runBuild(options) {
     // The command is PRINTED, never run: this package spawns no process, so it
     // cannot know whether a PDF exists and will not imply that it does.
     if (typeof built.report.compileWith === 'string') notes.push('to compile it yourself: ' + built.report.compileWith)
+  } else if (format === 'package') {
+    composed = composeMarkdown(state, style, effectiveDraft, notes)
+    const packager = await loadPackage()
+    const built = await packager.buildSubmission({
+      dir: runDir,
+      markdown: composed.text,
+      style: styleId,
+      title: options.title,
+      referencesHeading: typeof style.referenceHeading === 'string' ? style.referenceHeading : 'References',
+      created: options.created,
+      passportGates: options.passportGates,
+      hashOf,
+      now: options.now,
+    })
+    // A packager writes a FOLDER: each file is its own output, hashed like any other.
+    for (const one of built.outputs) outputs.push(one)
+    notes.push('the submission folder holds ' + built.outputs.length + ' file(s) and ' + built.figures.length + ' figure(s); the manuscript is built with NO title block, so it carries nothing identifying')
+    notes.push('read it once with fresh eyes before uploading: the builder removed the title block, and it cannot know what the prose reveals')
   } else {
     const refs = await loadRefs()
     // An export is the run's LIBRARY, not only the part the current draft cites:
@@ -407,7 +483,10 @@ export async function runBuild(options) {
 
   const report = buildReport({
     format,
-    draft,
+    // The EFFECTIVE draft, not the argument: `package` is a clean build whatever the
+    // caller asked for, and a report that called a gated submission a watermark would
+    // be describing a mode it was not built in.
+    draft: effectiveDraft,
     styleId,
     slug: options.slug,
     document: state.document,
@@ -420,6 +499,8 @@ export async function runBuild(options) {
     now: options.now,
   })
   report.source = { 'doc': state.document.source, sha256: hashOf(state.document.text) }
-  await writeJsonAtomic(path.join(buildDir, 'build.json'), report)
+  // The report is RETURNED, not written: the caller knows whether this was one
+  // format or seven, and only the caller can write a `build.json` that describes the
+  // whole build. Writing it here overwrote the file on every format.
   return { outputs, report, body: composed === null ? null : composed.text, state }
 }

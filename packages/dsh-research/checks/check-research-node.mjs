@@ -195,7 +195,7 @@ const { TOOL_NAMES, buildTools, workspaceOf, provenanceOf, nearMisses } = toolsM
 const { appendClaim, appendSource, claimsById, foldLatest, readClaims, readSources, sourcesByKey, statusCounts } = ledgerModule
 const { assembleDocument, renderBody, renderReferences, scanDocument, sectionsOf, validateStructure, wordCount } = docModule
 const { findCitations, findClaimSpans, normalizeLocator, nextClaimId, parseKey } = syntaxModule
-const { FORMATS, FORMATS_READY, composeMarkdown, hashOf, readRunState, runBuild } = buildModule
+const { FORMATS, FORMATS_DOCUMENT, FORMATS_READY, composeMarkdown, hashOf, readRunState, runBuild } = buildModule
 const { ALL_GATES, libraryFile, readLibrary } = runModule
 const { projectDetail } = viewModule
 const { API_ROUTES } = apiModule
@@ -684,9 +684,53 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   // ---- `all` writes every ready format in one call
   const all = await call('rs_build', { slug: 'writer-check', format: 'all' })
   check('format=all writes every ready format', all.value.view.ok && FORMATS_READY.every((one) => all.value.text.includes('build/')), true)
-  check('and names them all as ready', FORMATS_READY.length === FORMATS.length && FORMATS_READY.length === 7, true)
+  check('and names them all as ready', FORMATS_READY.length === FORMATS.length && FORMATS_READY.includes('package'), true)
+  // The report on disk must describe the WHOLE build. `format=all` used to leave a
+  // `build.json` describing only the last format, because each per-format build
+  // overwrote it - and the answer said "the report above, stored" while the stored
+  // one was one seventh of it.
   const buildDir = await fsp.readdir(path.join(root, 'writer-check', 'build'))
   check('and each one is on disk with the report', ['paper.md', 'paper.docx', 'paper.html', 'paper.tex', 'references.ris', 'references.bib', 'references.enw', 'build.json'].every((name) => buildDir.includes(name)), true)
+  // The report on disk must describe the WHOLE build. `format=all` used to leave a
+  // `build.json` describing only the last format, because each per-format build
+  // overwrote it - and the answer said "the report above, stored" while what was
+  // stored was one seventh of it.
+  const storedReport = JSON.parse(await fsp.readFile(path.join(root, 'writer-check', 'build', 'build.json'), 'utf8'))
+  check('the stored report describes every format the build wrote', storedReport.formats.length === FORMATS_DOCUMENT.length, true)
+  check('and lists every output with its own hash', storedReport.outputs.length >= FORMATS_DOCUMENT.length && storedReport.outputs.every((one) => /^build\//.test(one.path) && /^[0-9a-f]{64}$/.test(one.sha256)), true)
+  check('and names the formats it covered', storedReport.format.split('+').length, FORMATS_DOCUMENT.length)
+  // `all` means every DOCUMENT format, and it must not silently require the
+  // integrity gate that a draft build is allowed to skip.
+  check('format=all does not include the gated submission bundle', all.value.view.ok && FORMATS_DOCUMENT.includes('package') === false, true)
+
+  // ---- the submission package: a folder, and a gate that is not optional
+  check(
+    'packaging a draft is REFUSED - a submission is gated whatever draft says',
+    (await call('rs_build', { slug: 'writer-check', format: 'package' })).value.view.code,
+    'GATE_UNANSWERED',
+  )
+  await answerGate({ root, slug: 'writer-check', id: 'g3-integrity', value: 'checked' })
+  const pkg = await call('rs_build', { slug: 'writer-check', format: 'package' })
+  check('and builds once a person answers the gate', pkg.value.view.ok, true)
+  const submission = path.join(root, 'writer-check', 'build', 'submission')
+  const packaged = await fsp.readdir(submission).catch(() => [])
+  check('the folder holds what a journal asks for', ['manuscript.docx', 'title-page.md', 'cover-letter.md', 'CHECKLIST.md'].every((name) => packaged.includes(name)), true)
+  const manuscript = await fsp.readFile(path.join(submission, 'manuscript.docx')).catch(() => null)
+  const manuscriptText = manuscript === null ? '' : docxModule.documentText(manuscript)
+  // The identifying paragraph is the title block, and it is the one thing this
+  // pipeline puts at the top: leaving it out is what makes the artifact anonymous.
+  check('the manuscript is anonymized: no title block', manuscriptText.includes('A written run'), false)
+  check('while it still holds the paper itself', manuscriptText.includes('raised completion by 25 points'), true)
+  check('and the answer calls it a gated submission, not a draft', pkg.value.text.includes('SUBMISSION folder, gated like a clean build'), true)
+  const titlePage = await fsp.readFile(path.join(submission, 'title-page.md'), 'utf8').catch(() => null)
+  check('the title page carries the title, uploaded separately', titlePage !== null && titlePage.startsWith('# A written run') && titlePage.includes('SEPARATELY'), true)
+  const letter = await fsp.readFile(path.join(submission, 'cover-letter.md'), 'utf8').catch(() => null)
+  check('the cover letter is computed from the ledger', letter !== null && letter.includes('marked claim(s)'), true)
+  check('and states the intake declaration in the writer\'s own terms', letter !== null && letter.includes('The author declared:'), true)
+  const list = await fsp.readFile(path.join(submission, 'CHECKLIST.md'), 'utf8').catch(() => null)
+  check('the checklist says what only a person can confirm', list !== null && list.includes('read it once with fresh eyes') && list.includes('word limit'), true)
+  check('and what the run says about its own evidence', list !== null && list.includes('claims nothing has checked'), true)
+  check('and warns that a clean build is not a check of correctness', list !== null && list.includes('not a check of correctness'), true)
 
   const capabilities = await call('rs_open', { action: 'capabilities' })
   check('rs_open action=capabilities answers', capabilities.value.view.ok, true)
@@ -990,9 +1034,18 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('and what the structure check found', draft.report.structure.ok, true)
   const written = await fsp.readFile(path.join(dir, 'build', 'paper.md'), 'utf8')
   check('the artifact is on disk', written.includes('## References'), true)
-  const reportOnDisk = JSON.parse(await fsp.readFile(path.join(dir, 'build', 'build.json'), 'utf8'))
-  check('and the report is stored beside it', reportOnDisk.outputs.length, 1)
+  // `runBuild` RETURNS the report and writes no `build.json`: only the caller knows
+  // whether it built one format or seven, and when the builder wrote the file itself
+  // a `format=all` build left a report describing one seventh of itself.
+  check('the builder leaves no report of its own on disk', await fsp.readFile(path.join(dir, 'build', 'build.json'), 'utf8').then(() => false).catch(() => true), true)
+  const storedFile = await buildModule.writeBuildReport(dir, draft.report)
+  const reportOnDisk = JSON.parse(await fsp.readFile(storedFile, 'utf8'))
+  check('and the caller stores the report beside the artifact', reportOnDisk.outputs.length, 1)
   check('with the sha256 of the document it was built from', /^[0-9a-f]{64}$/.test(reportOnDisk.source.sha256), true)
+  const combined = buildModule.combineReports([draft.report, { ...draft.report, format: 'html' }], [...draft.outputs, { path: 'build/paper.html', bytes: 1, sha256: 'a'.repeat(64) }])
+  check('a multi-format build gets ONE report naming them all', combined.format, 'md+html')
+  check('and listing every output', combined.outputs.length, 2)
+  check('with the notes deduplicated across formats', combined.notes.length <= draft.report.notes.length + 1, true)
 
   check(
     'a clean build is refused while the integrity gate is unanswered',
@@ -1399,6 +1452,18 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   const joined = [...sources.values()].join('\n')
   const unthrown = indexModule.REFUSAL_CODES.filter((code) => !joined.includes("'" + code + "'"))
   check('every published refusal code is thrown by the code', unthrown.join(','), '')
+  // ...and the OTHER direction, which is the one that was missing: a code the code
+  // throws but never publishes is a refusal a caller cannot switch on and a health
+  // snapshot that is not the whole truth. `GATE_UNANSWERED` was thrown by `rs_write`
+  // and `rs_build` for two rounds while being absent from this list, and nothing
+  // noticed - because only one direction was ever asserted.
+  const thrown = new Set()
+  for (const [name, text] of sources) {
+    for (const match of text.matchAll(/ResearchError\(\s*'([A-Z][A-Z0-9_]*)'/g)) thrown.add(match[1])
+  }
+  const unpublished = [...thrown].filter((code) => !indexModule.REFUSAL_CODES.includes(code)).sort()
+  check('every thrown refusal code is published', unpublished.join(','), '')
+  check('and the scan actually found codes to check', thrown.size > 20, true)
   check('a refusal is a ResearchError', new ResearchError('X', 'y') instanceof Error, true)
 }
 

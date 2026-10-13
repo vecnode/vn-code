@@ -75,7 +75,7 @@ import {
 } from './ledger.js'
 import { STRENGTHS, findBrokenCitations, locatorLabel, nextClaimId } from './syntax.js'
 import { assembleDocument, parseOutline, scanDocument, validateStructure, wordCount } from './doc.js'
-import { FORMATS, FORMATS_READY, ensureIntegrityGate, hashOf, loadRefs, loadStyles, readRunState, runBuild } from './build.js'
+import { FORMATS, FORMATS_DOCUMENT, FORMATS_READY, combineReports, ensureIntegrityGate, hashOf, loadRefs, loadStyles, readRunState, runBuild, writeBuildReport } from './build.js'
 import { API_ROUTES } from './api.js'
 import { ladderReport, r1Sources, r2Claims } from './verify.js'
 import {
@@ -1098,7 +1098,8 @@ export function buildTools(deps = {}) {
   const build = {
     name: 'rs_build',
     description: [
-      'Build the document. `format=md` is the reader-ready Markdown: citations resolved by the style, the reference list computed from the ledger (never typed by the model), and claim endnotes in a draft. `format=docx` writes a real Office document from the SAME Markdown through this package\'s own OOXML writer - no process is spawned, and two builds of one run are byte-identical. `format=html` writes one self-contained page, no network needed. `ris` / `bib` / `enw` export the run\'s LIBRARY for Zotero, EndNote or pandoc.',
+      'Build the document. `format=md` is the reader-ready Markdown: citations resolved by the style, the reference list computed from the ledger (never typed by the model), and claim endnotes in a draft. `format=docx` writes a real Office document from the SAME Markdown through this package\'s own OOXML writer - no process is spawned, and two builds of one run are byte-identical. `format=html` writes one self-contained page, no network needed. `format=tex` writes a .tex that needs no bibliography engine, and PRINTS the compile command rather than running it. `ris` / `bib` / `enw` export the run\'s LIBRARY for Zotero, EndNote or pandoc.',
+      '`format=package` is not a document format: it assembles the FOLDER a journal wants - an ANONYMIZED manuscript (built with no title block), a title page to fill in, a cover letter computed from the ledger, a checklist, and the run\'s figures copied beside them. It is GATED like a clean build whatever `draft` says, because a submission is the artifact that must not carry a claim nothing has checked.',
       'TWO DRAFTS, and the difference is the whole point. `draft=watermark` (the default) always builds: it puts a banner at the top and an endnote on every claim naming its status and its rung, so a half-checked document cannot be mistaken for a finished one. `draft=clean` is the mode whose output looks finished, so it REFUSES while the document and its ledger disagree, while a claim a check found unsupported is still in the text, or until a person has answered gate `g3-integrity` - which this call opens, and which is answered in the Research tab.',
       'Every build writes `build/build.json` beside the artifacts: what was built, from the sha256 of which document, and the claim statuses as they were at that moment. A question about a document that was handed to somebody is answerable from the folder.',
       'Nothing leaves this machine and no engine is run: this plugin spawns no process, so a format that needs a LaTeX engine names the command for you to run instead of running it.',
@@ -1114,7 +1115,7 @@ export function buildTools(deps = {}) {
         // value is not allowed. The authority on what can actually be written is
         // `rs_open action=capabilities`, and the skills point there rather than
         // listing formats that would go stale.
-        format: { type: 'string', enum: [...FORMATS, 'all'], description: '`md` (default), `docx`, `html`, `tex`, `ris`, `bib`, `enw`, or `all` for every format this build has. `tex` writes the file and PRINTS the pdflatex command: this plugin runs no engine.' },
+        format: { type: 'string', enum: [...FORMATS, 'all'], description: '`md` (default), `docx`, `html`, `tex`, `ris`, `bib`, `enw`, `package` (the gated submission folder), or `all` for every DOCUMENT format. `tex` PRINTS the pdflatex command: this plugin runs no engine.' },
         draft: { type: 'string', enum: ['watermark', 'clean'], description: '`watermark` (default) always builds; `clean` is gated.' },
         style: { type: 'string', description: 'Citation style id. Defaults to the run\'s own.' },
       },
@@ -1135,11 +1136,18 @@ export function buildTools(deps = {}) {
         // the question is visibly waiting in the panel rather than only in a message.
         // The route that builds goes through the same helper, so the two callers
         // cannot disagree about what a clean build requires.
-        const integrity = await ensureIntegrityGate({ root: resolved.root, slug, draft, now: args.now })
+        //
+        // `package` requires it too, whatever `draft` says: a submission is a clean
+        // build. Asking for the gate on `draft` alone made the tool OPEN a gate the
+        // builder was about to REQUIRE, so `format=package` refused with
+        // GATE_UNANSWERED while telling nobody there was a question to answer - the
+        // two halves of one decision, made from different inputs.
+        const needsIntegrity = draft === 'clean' || wanted === 'package'
+        const integrity = await ensureIntegrityGate({ root: resolved.root, slug, draft: needsIntegrity ? 'clean' : draft, now: args.now })
         const { passport } = await readPassport(resolved.root, slug)
         const integrityAnswered = integrity.answered
 
-        const formats = wanted === 'all' ? FORMATS_READY : [wanted]
+        const formats = wanted === 'all' ? FORMATS_DOCUMENT : [wanted]
         const outputs = []
         const reports = []
         for (const format of formats) {
@@ -1155,6 +1163,9 @@ export function buildTools(deps = {}) {
             // because the writer may not read the clock.
             title: record.title,
             created: record.created,
+            // The packager's cover letter states what the author declared about the
+            // experiments, so the gate answers travel with the build.
+            passportGates: gateViews(passport),
             now: args.now,
           })
           outputs.push(...result.outputs)
@@ -1162,6 +1173,10 @@ export function buildTools(deps = {}) {
         }
 
         const report = reports[0]
+        // ONE report for the whole build, written by the caller that knows how many
+        // formats it asked for - `runBuild` cannot, and writing per format left a
+        // seven-format build described by its last one.
+        await writeBuildReport(dir, combineReports(reports, outputs))
         await addReceipt(path.join(dir, PASSPORT_FILE), passport, 'rs_build', draft + ' build of ' + formats.join('+') + ' -> ' + outputs.map((one) => one.path).join(', '), args.now)
         await touchRun(runFile, record, args.now)
 
@@ -1171,7 +1186,7 @@ export function buildTools(deps = {}) {
           .map(([status, count]) => count + ' ' + status)
           .join(', ')
         const lines = [
-          'Built ' + slug + ' (' + draft + ', ' + styleId + ')',
+          'Built ' + slug + ' (' + (reports[0] === undefined ? draft : reports[0].draft) + ', ' + styleId + ')' + (formats.includes('package') ? ' - a SUBMISSION folder, gated like a clean build' : ''),
           '- document: ' + report.document.source + ', ' + report.document.words + ' words',
           '- claims: ' + report.claims.total + ' (' + (spoken === '' ? 'none' : spoken) + ')',
           '- sources: ' + report.sources.total + ' in the ledger, ' + report.sources.cited + ' cited, ' + report.sources.withText + ' with text',

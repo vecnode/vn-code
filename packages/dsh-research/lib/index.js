@@ -52,7 +52,7 @@ import {
   writeRunFile,
 } from './run.js'
 import { GATE_IDS, TOOL_NAMES, buildTools, workspaceOf } from './tools.js'
-import { FORMATS_READY, ensureIntegrityGate, readRunState, runBuild } from './build.js'
+import { FORMATS_READY, combineReports, ensureIntegrityGate, readRunState, runBuild, writeBuildReport } from './build.js'
 import { readSources, sourcesByKey } from './ledger.js'
 import { projectDetail } from './view.js'
 import {
@@ -82,6 +82,7 @@ const SKILL_FILES = [
   { name: 'research-writing', file: '../skills/research-writing/SKILL.md' },
   { name: 'research-verification', file: '../skills/research-verification/SKILL.md' },
   { name: 'research-review', file: '../skills/research-review/SKILL.md' },
+  { name: 'research-formats', file: '../skills/research-formats/SKILL.md' },
 ]
 
 /** The row's identity. */
@@ -335,6 +336,7 @@ export function registerRoutes(options) {
         title: record.title,
         created: record.created,
       })
+      await writeBuildReport(dir, combineReports([result.report], result.outputs))
       return json(200, { ok: true, outputs: result.outputs, report: result.report })
     } catch (err) {
       return refused(err)
@@ -483,6 +485,17 @@ export const REFUSAL_CODES = [
   'MALFORMED_JSON',
   'MALFORMED_LEDGER',
   'PATH_ESCAPE',
+  // A builder that is missing from an install refuses BY NAME rather than taking the
+  // row down, so each of these is a code a caller can see and must be able to switch
+  // on. They were thrown for two rounds without being published, which is what the
+  // check's reverse assertion now catches.
+  'REFS_UNAVAILABLE',
+  'DOCX_UNAVAILABLE',
+  'HTML_UNAVAILABLE',
+  'TEX_UNAVAILABLE',
+  'PACKAGE_UNAVAILABLE',
+  'REFS_FORMAT',
+  'GATE_UNANSWERED',
   'GATE_UNKNOWN',
   'GATE_ALREADY_ANSWERED',
   'VALUE_INVALID',
