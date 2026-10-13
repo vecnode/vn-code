@@ -49,7 +49,7 @@ export const FORMATS = ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex']
  * under `lib/docx/` produce the OOXML themselves, which is the only way to keep the
  * package's promise that it spawns no process - calling pandoc would be one.
  */
-export const FORMATS_READY = ['md', 'ris', 'bib', 'enw', 'docx']
+export const FORMATS_READY = ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex']
 /** Where a format's output goes, when the format writes one file. */
 export const OUTPUT_NAMES = {
   md: 'paper.md',
@@ -91,6 +91,30 @@ export async function loadDocx() {
     return await import('./docx/index.js')
   } catch (err) {
     throw new ResearchError('DOCX_UNAVAILABLE', 'the DOCX writer is not in this build: ' + messageOf(err))
+  }
+}
+
+/** The HTML builder, on demand, for the same reason. */
+export async function loadHtml() {
+  try {
+    return await import('./html.js')
+  } catch (err) {
+    throw new ResearchError('HTML_UNAVAILABLE', 'the HTML builder is not in this build: ' + messageOf(err))
+  }
+}
+
+/**
+ * The LaTeX builder, on demand.
+ *
+ * It produces a FILE and runs nothing: compiling is the person's step, on their own
+ * machine with their own toolchain, and the build report carries the exact command.
+ * A package that spawns no process cannot tell you a PDF exists, so it does not.
+ */
+export async function loadTex() {
+  try {
+    return await import('./tex.js')
+  } catch (err) {
+    throw new ResearchError('TEX_UNAVAILABLE', 'the LaTeX builder is not in this build: ' + messageOf(err))
   }
 }
 
@@ -219,10 +243,9 @@ export function buildReport(options) {
   }
 }
 
-/** Why a format is not in this build yet, in one sentence both callers use. */
-export function formatNotYetMessage(format) {
-  const phase = format === 'html' ? 'the HTML builder (phase 3)' : format === 'tex' ? 'the LaTeX builder (phase 6)' : 'a later phase'
-  return 'format `' + format + '` is not in this build yet - it arrives with ' + phase + '. Ready now: ' + FORMATS_READY.join(', ') + '. Nothing was written.'
+/** Why a format is not in this build, for a caller the tool schema cannot reach. */
+export function unknownFormatMessage(format) {
+  return 'format ' + JSON.stringify(String(format)) + ' is not one this build writes: ' + FORMATS_READY.join(', ') + '. Nothing was written.'
 }
 
 /**
@@ -259,9 +282,11 @@ export async function runBuild(options) {
     throw new ResearchError('BAD_FORMAT', 'format must be one of ' + FORMATS.join(', ') + ' (got ' + JSON.stringify(String(format)) + ')')
   }
   if (!FORMATS_READY.includes(format)) {
-    // The phase is named, because "not yet" without "when" is a dead end - and a
-    // caller can then say which step it is waiting for instead of guessing.
-    throw new ResearchError('FORMAT_NOT_YET', formatNotYetMessage(format))
+    // Unreachable through the tool's own enum, and here for a direct caller: every
+    // format this package advertises is IMPLEMENTED, so there is no "not yet" left
+    // to report. The check asserts that too, so a format added to FORMATS without a
+    // builder fails rather than being advertised.
+    throw new ResearchError('BAD_FORMAT', unknownFormatMessage(format))
   }
 
   const state = await readRunState(runDir)
@@ -343,6 +368,34 @@ export async function runBuild(options) {
     for (const one of built.report.unsupported) {
       notes.push('docx line ' + one.line + ': ' + one.why)
     }
+  } else if (format === 'html') {
+    // The same Markdown again: three artifacts, one parse, so a sentence, a
+    // citation or a footnote cannot be in one and missing from another.
+    composed = composeMarkdown(state, style, draft, notes)
+    const page = await loadHtml()
+    const built = page.buildHtmlReport({
+      markdown: composed.text,
+      title: options.title,
+      referencesHeading: typeof style.referenceHeading === 'string' ? style.referenceHeading : 'References',
+      lang: options.lang,
+    })
+    await write(OUTPUT_NAMES.html, built.html)
+    for (const one of built.report.unsupported) notes.push('html line ' + one.line + ': ' + one.why)
+  } else if (format === 'tex') {
+    composed = composeMarkdown(state, style, draft, notes)
+    const latex = await loadTex()
+    const built = latex.buildTexReport({
+      markdown: composed.text,
+      style: styleId,
+      title: options.title,
+      referencesHeading: typeof style.referenceHeading === 'string' ? style.referenceHeading : 'References',
+      lang: options.lang,
+    })
+    await write(OUTPUT_NAMES.tex, built.tex)
+    for (const one of built.report.unsupported) notes.push('tex line ' + one.line + ': ' + one.why)
+    // The command is PRINTED, never run: this package spawns no process, so it
+    // cannot know whether a PDF exists and will not imply that it does.
+    if (typeof built.report.compileWith === 'string') notes.push('to compile it yourself: ' + built.report.compileWith)
   } else {
     const refs = await loadRefs()
     // An export is the run's LIBRARY, not only the part the current draft cites:

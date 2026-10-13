@@ -118,8 +118,14 @@ the **record** first.
   timestamps, the part model, styles, numbering, footnotes, tables, images) — which
   is the only way to keep the promise that this plugin spawns no process, since
   calling pandoc would be one. Two builds of one run are **byte-identical**: the
-  writer never reads the clock, and a check holds it to that. `ris` / `bib` / `enw`
-  export the run's whole library for Zotero, EndNote or pandoc.
+  writer never reads the clock, and a check holds it to that. `format=html` writes
+  one **self-contained** page — no stylesheet URL, no font, no script, no remote
+  image — and only the URL schemes a document may legitimately cite survive into it
+  (`javascript:` is dropped rather than emitted). `format=tex` writes a `.tex` that
+  needs **no bibliography engine**, because the citations are already resolved and
+  the reference list already computed; it **prints the pdflatex command rather than
+  running it**, which is what a package that spawns no process can honestly do.
+  `ris` / `bib` / `enw` export the run's whole library for Zotero, EndNote or pandoc.
   The DOCX was verified by an independent tag-balance check, a CRC read of its own
   ZIP central directory, and **pandoc reading the file back** — including the
   metadata, the aligned table, the nested list and both footnotes.
@@ -141,7 +147,7 @@ the **record** first.
 | routes | eight exact paths, `GET`/`HEAD`/`POST`, all behind the harness's session check |
 | tools | 9 (`rs_open`, `rs_new`, `rs_plan`, `rs_read`, `rs_write`, `rs_cite`, `rs_verify`, `rs_review`, `rs_build`) |
 | gates | 3 (two frame, one opened by a clean build) |
-| builds | `md`, `docx`, `ris`, `bib`, `enw` — `html` and `tex` refuse by name with the phase that brings them |
+| builds | `md`, `docx`, `html`, `tex`, `ris`, `bib`, `enw` — every format it advertises is implemented, and a check asserts that |
 | tab types | 1 (`research`, a page type with no file patterns) |
 | skills | 5 (`research-project`, `research-sources`, `research-writing`, `research-verification`, `research-review`), registered at activation *and* copied into `$DSH_HOME/skills` |
 | touches | **no** core row disabled, **no** fork, **no** npm dependency, **no** vendored engine, **no** bundled binary |
@@ -182,10 +188,12 @@ the **record** first.
 
 ## Limits — what is not here yet
 
-`md`, `docx`, `ris`, `bib` and `enw` build today. **`html` and `tex` refuse by name
-and say which phase brings them.** The remaining panel work is the headless render
-check; `research-formats` is the last of the six skills. The design for all of it,
-with the reasoning, is in `docs/DESIGN-dsh-research.md`.
+Every format this plugin advertises is implemented: `md`, `docx`, `html`, `tex`,
+`ris`, `bib` and `enw`. Two things remain from the design: **submission packaging**
+(a folder with an anonymized manuscript, a cover letter and a checklist) and the
+**headless render check** for the tab. The `research-formats` skill is the last of
+the six. The design for what is left, with the reasoning, is in
+`docs/DESIGN-dsh-research.md`.
 
 Three DOCX limits, stated rather than discovered: **IEEE is single column** (the
 two-column layout is not emitted), page setup is Letter with 1-inch margins for

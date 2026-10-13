@@ -163,6 +163,8 @@ const viewModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'view.js'
 const verifyModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'verify.js')).href)
 const reviewModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'review.js')).href)
 const docxModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'docx', 'index.js')).href)
+const htmlModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'html.js')).href)
+const texModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'tex.js')).href)
 const refsModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'refs.js')).href)
 const stylesModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'styles', 'index.js')).href)
 const apiModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'api.js')).href)
@@ -193,7 +195,7 @@ const { TOOL_NAMES, buildTools, workspaceOf, provenanceOf, nearMisses } = toolsM
 const { appendClaim, appendSource, claimsById, foldLatest, readClaims, readSources, sourcesByKey, statusCounts } = ledgerModule
 const { assembleDocument, renderBody, renderReferences, scanDocument, sectionsOf, validateStructure, wordCount } = docModule
 const { findCitations, findClaimSpans, normalizeLocator, nextClaimId, parseKey } = syntaxModule
-const { FORMATS_READY, composeMarkdown, hashOf, readRunState, runBuild } = buildModule
+const { FORMATS, FORMATS_READY, composeMarkdown, hashOf, readRunState, runBuild } = buildModule
 const { ALL_GATES, libraryFile, readLibrary } = runModule
 const { projectDetail } = viewModule
 const { API_ROUTES } = apiModule
@@ -613,12 +615,11 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
 
   const exportTool = await call('rs_build', { slug: 'writer-check', format: 'ris' })
   check('an export is built from the library', exportTool.value.text.includes('references.ris'), true)
-  // `docx` now BUILDS (the writer is written, not wrapped), so the not-yet case is
-  // `tex` - and a format that is refused must still say which phase brings it.
-  const notYet = await call('rs_build', { slug: 'writer-check', format: 'tex' })
-  check('a format this build does not have says so and names a phase', notYet.value.text.includes('phase 6'), true)
-  check('and writes nothing', notYet.value.view.ok, false)
-  check('and names what it CAN write', notYet.value.text.includes('md, ris, bib, enw, docx'), true)
+  // Every format this build ADVERTISES is implemented, so there is no "not yet" left
+  // to report - and a format added to the enum without a builder fails here rather
+  // than being advertised by a schema that cannot honour it.
+  check('every advertised format is implemented', FORMATS.filter((one) => !FORMATS_READY.includes(one)).join(','), '')
+  check('and an unknown format is refused by name', await codeOf(() => runBuild({ runDir: path.join(root, 'writer-check'), format: 'pdf', draft: 'watermark', styleId: 'apa7', slug: 'writer-check' })), 'BAD_FORMAT')
 
   // ---- the DOCX: a real archive with the parts a reader needs
   const docxBuild = await call('rs_build', { slug: 'writer-check', format: 'docx' })
@@ -637,6 +638,55 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   const again = await call('rs_build', { slug: 'writer-check', format: 'docx' })
   const docxSecond = await fsp.readFile(path.join(root, 'writer-check', 'build', 'paper.docx'))
   check('and two DOCX builds of one run are byte-identical', hashOf(docxBytes) === hashOf(docxSecond), true)
+
+  // ---- the HTML: one page, no network, from the same parse
+  const htmlBuild = await call('rs_build', { slug: 'writer-check', format: 'html' })
+  check('the HTML builds', htmlBuild.value.view.ok && htmlBuild.value.text.includes('build/paper.html'), true)
+  const page = await fsp.readFile(path.join(root, 'writer-check', 'build', 'paper.html'), 'utf8').catch(() => null)
+  check('and the page is on disk', page !== null && page.length > 500, true)
+  check('as a complete document', page.startsWith('<!doctype html>') && page.trimEnd().endsWith('</html>'), true)
+  check('with its style INLINE, so it opens with no network', page.includes('<style>') && /href=["']https?:[^"']*\.css/.test(page) === false, true)
+  check('and nothing executable in it', /<script/i.test(page), false)
+  check('carrying the run\'s title', page.includes('A written run'), true)
+  check('and the document\'s own prose', page.includes('raised completion by 25 points'), true)
+  check('with the claim markers gone', page.includes('{#c0001}'), false)
+  check('and the style\'s own reference heading', page.includes('>References<'), true)
+  check('and the reference list in its own block', page.includes('class="refs"'), true)
+  // The safety rule: a URL that arrived from a source record must not become
+  // executable content in a file this plugin produced.
+  check('a javascript: URL is dropped rather than emitted', htmlModule.safeUrl('javascript:alert(1)'), '')
+  check('while an https one survives', htmlModule.safeUrl('https://doi.org/10.1/x'), 'https://doi.org/10.1/x')
+  check('and a title cannot inject markup', htmlModule.escapeHtml('<script>x</script>'), '&lt;script&gt;x&lt;/script&gt;')
+  check('the builder reports that the page is self-contained', htmlModule.buildHtmlReport({ markdown: '# t\n\nx\n', title: 't' }).report.selfContained, true)
+
+  // ---- the TeX: a file, and the command PRINTED rather than run
+  const texBuild = await call('rs_build', { slug: 'writer-check', format: 'tex' })
+  check('the TeX builds', texBuild.value.view.ok && texBuild.value.text.includes('build/paper.tex'), true)
+  // The whole reason a `.tex` is a legitimate output for a package that spawns no
+  // process: the compile step is the person's, and the command is handed over.
+  check('and PRINTS the command instead of running it', texBuild.value.text.includes('pdflatex -output-directory=build build/paper.tex'), true)
+  const tex = await fsp.readFile(path.join(root, 'writer-check', 'build', 'paper.tex'), 'utf8').catch(() => null)
+  check('the file is on disk', tex !== null && tex.length > 300, true)
+  check('with a preamble that needs no bibliography engine', tex.includes('\\documentclass') && tex.includes('\\begin{document}') && tex.includes('\\end{document}'), true)
+  check('and none of the citation machinery a second engine would add', /\\cite\{|\\bibliography\{|addbibresource/.test(tex), false)
+  check('carrying the run\'s title', tex.includes('A written run'), true)
+  check('and the document\'s own prose', tex.includes('raised completion by 25 points'), true)
+  check('with the claim markers gone', tex.includes('{#c0001}'), false)
+  check('and the style\'s reference heading', tex.includes('\\section*{References}'), true)
+  check('and the reference list in a hanging-indent group', tex.includes('\\begin{hangparas}'), true)
+  // A title with TeX's own characters in it either compiles or does not, and the
+  // failure would be a line number in a log the agent may never see.
+  check('the ten characters that mean something to TeX are escaped', texModule.escapeTex('a & b % c $ d # e _ f { g } h ~ i ^ j \\ k'), 'a \\& b \\% c \\$ d \\# e \\_ f \\{ g \\} h \\textasciitilde{} i \\textasciicircum{} j \\textbackslash{} k')
+  check('and a backslash is escaped once, not twice', texModule.escapeTex('\\&'), '\\textbackslash{}\\&')
+  check('an unknown style has no page setup and says so', await codeOf(() => texModule.buildTexReport({ markdown: '# t\n', style: 'harvard' })), 'UNKNOWN_STYLE')
+  check('a URL that is not one is dropped from \\href', texModule.safeTexUrl('javascript:alert(1)'), '')
+
+  // ---- `all` writes every ready format in one call
+  const all = await call('rs_build', { slug: 'writer-check', format: 'all' })
+  check('format=all writes every ready format', all.value.view.ok && FORMATS_READY.every((one) => all.value.text.includes('build/')), true)
+  check('and names them all as ready', FORMATS_READY.length === FORMATS.length && FORMATS_READY.length === 7, true)
+  const buildDir = await fsp.readdir(path.join(root, 'writer-check', 'build'))
+  check('and each one is on disk with the report', ['paper.md', 'paper.docx', 'paper.html', 'paper.tex', 'references.ris', 'references.bib', 'references.enw', 'build.json'].every((name) => buildDir.includes(name)), true)
 
   const capabilities = await call('rs_open', { action: 'capabilities' })
   check('rs_open action=capabilities answers', capabilities.value.view.ok, true)
@@ -949,7 +999,7 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
     await codeOf(() => runBuild({ runDir: dir, format: 'md', draft: 'clean', styleId: 'apa7', slug: 'ledger-check', integrityAnswered: false })),
     'GATE_UNANSWERED',
   )
-  check('a format this build does not have yet is refused BY NAME', await codeOf(() => runBuild({ runDir: dir, format: 'tex', draft: 'watermark', styleId: 'apa7', slug: 'ledger-check' })), 'FORMAT_NOT_YET')
+  check('a format that is not one of ours is refused by name', await codeOf(() => runBuild({ runDir: dir, format: 'pdf', draft: 'watermark', styleId: 'apa7', slug: 'ledger-check' })), 'BAD_FORMAT')
   check('and an unknown style is refused', await codeOf(() => runBuild({ runDir: dir, format: 'md', draft: 'watermark', styleId: 'harvard', slug: 'ledger-check' })), 'UNKNOWN_STYLE')
   check('an empty document is refused rather than built empty', await codeOf(() => runBuild({ runDir: path.join(root, 'tool-check'), format: 'md', draft: 'watermark', styleId: 'apa7', slug: 'tool-check' })), 'DOC_EMPTY')
 

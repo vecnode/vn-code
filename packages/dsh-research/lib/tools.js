@@ -75,7 +75,7 @@ import {
 } from './ledger.js'
 import { STRENGTHS, findBrokenCitations, locatorLabel, nextClaimId } from './syntax.js'
 import { assembleDocument, parseOutline, scanDocument, validateStructure, wordCount } from './doc.js'
-import { FORMATS, FORMATS_READY, ensureIntegrityGate, formatNotYetMessage, hashOf, loadRefs, loadStyles, readRunState, runBuild } from './build.js'
+import { FORMATS, FORMATS_READY, ensureIntegrityGate, hashOf, loadRefs, loadStyles, readRunState, runBuild } from './build.js'
 import { API_ROUTES } from './api.js'
 import { ladderReport, r1Sources, r2Claims } from './verify.js'
 import {
@@ -234,7 +234,7 @@ export function buildTools(deps = {}) {
             'What this build of dsh-research offers',
             '- tools: ' + capabilities.tools.join(', '),
             '- routes: ' + capabilities.routes.join(', '),
-            '- build formats ready now: ' + capabilities.formats.join(', ') + ' (docx, html and tex arrive later; each refuses by name until then)',
+            '- build formats ready now: ' + capabilities.formats.join(', ') + ' (every format this plugin advertises is implemented; `tex` writes the file and PRINTS the pdflatex command rather than running it)',
             '- citation styles: ' + styles.join(', '),
             '- gates: ' + GATE_IDS.join(', ') + ' (the first two frame a run; `g3-integrity` is opened by a clean build)',
             '- document syntax: `[sentence]{#c0142}` for a claim, `[@key]` / `[@key, p. 7]` / `[-@key]` for a citation',
@@ -1098,7 +1098,7 @@ export function buildTools(deps = {}) {
   const build = {
     name: 'rs_build',
     description: [
-      'Build the document. `format=md` is the reader-ready Markdown: citations resolved by the style, the reference list computed from the ledger (never typed by the model), and claim endnotes in a draft. `ris` / `bib` / `enw` export the run\'s LIBRARY for Zotero, EndNote or pandoc.',
+      'Build the document. `format=md` is the reader-ready Markdown: citations resolved by the style, the reference list computed from the ledger (never typed by the model), and claim endnotes in a draft. `format=docx` writes a real Office document from the SAME Markdown through this package\'s own OOXML writer - no process is spawned, and two builds of one run are byte-identical. `format=html` writes one self-contained page, no network needed. `ris` / `bib` / `enw` export the run\'s LIBRARY for Zotero, EndNote or pandoc.',
       'TWO DRAFTS, and the difference is the whole point. `draft=watermark` (the default) always builds: it puts a banner at the top and an endnote on every claim naming its status and its rung, so a half-checked document cannot be mistaken for a finished one. `draft=clean` is the mode whose output looks finished, so it REFUSES while the document and its ledger disagree, while a claim a check found unsupported is still in the text, or until a person has answered gate `g3-integrity` - which this call opens, and which is answered in the Research tab.',
       'Every build writes `build/build.json` beside the artifacts: what was built, from the sha256 of which document, and the claim statuses as they were at that moment. A question about a document that was handed to somebody is answerable from the folder.',
       'Nothing leaves this machine and no engine is run: this plugin spawns no process, so a format that needs a LaTeX engine names the command for you to run instead of running it.',
@@ -1114,7 +1114,7 @@ export function buildTools(deps = {}) {
         // value is not allowed. The authority on what can actually be written is
         // `rs_open action=capabilities`, and the skills point there rather than
         // listing formats that would go stale.
-        format: { type: 'string', enum: [...FORMATS, 'all'], description: '`md` (default), `ris`, `bib`, `enw`, or `all` for every format this build has; `docx`, `html` and `tex` refuse by name until the phase that brings them.' },
+        format: { type: 'string', enum: [...FORMATS, 'all'], description: '`md` (default), `docx`, `html`, `tex`, `ris`, `bib`, `enw`, or `all` for every format this build has. `tex` writes the file and PRINTS the pdflatex command: this plugin runs no engine.' },
         draft: { type: 'string', enum: ['watermark', 'clean'], description: '`watermark` (default) always builds; `clean` is gated.' },
         style: { type: 'string', description: 'Citation style id. Defaults to the run\'s own.' },
       },
@@ -1142,12 +1142,7 @@ export function buildTools(deps = {}) {
         const formats = wanted === 'all' ? FORMATS_READY : [wanted]
         const outputs = []
         const reports = []
-        const notYet = []
         for (const format of formats) {
-          if (!FORMATS_READY.includes(format)) {
-            notYet.push(format)
-            continue
-          }
           const result = await runBuild({
             runDir: dir,
             format,
@@ -1164,9 +1159,6 @@ export function buildTools(deps = {}) {
           })
           outputs.push(...result.outputs)
           reports.push(result.report)
-        }
-        if (outputs.length === 0) {
-          throw new ResearchError('FORMAT_NOT_YET', formatNotYetMessage(notYet[0]))
         }
 
         const report = reports[0]
@@ -1190,7 +1182,6 @@ export function buildTools(deps = {}) {
         lines.push('Files:')
         for (const one of outputs) lines.push('  ' + one.path + '  ' + sizeOf(one.bytes) + '  sha256 ' + String(one.sha256).slice(0, 12) + '…')
         lines.push('  build/build.json  (the report above, stored)')
-        if (notYet.length > 0) lines.push('Not in this build yet: ' + notYet.join(', ') + '.')
         lines.push('')
         if (draft !== 'clean') {
           lines.push('This is a DRAFT: the banner and the endnotes are what say so. `draft=clean` needs the document and its ledger to agree, no unsupported claim, and gate `g3-integrity` answered - it is waiting in the Research tab.')
