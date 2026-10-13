@@ -23,7 +23,7 @@ back when you say where the work is.
 
 ## The folder is the deliverable
 
-```
+```text
 <root>/<slug>/
   RUN.json      what it is: title, kind, language, style, structure, timestamps
   passport.json the user's instruction VERBATIM, every gate answer, the receipts
