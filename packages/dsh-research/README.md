@@ -4,7 +4,7 @@
 open in any session, and edit yourself.**
 
 A run is `RUN.json` plus a `passport.json` that records your instructions and every
-answer **in your own words**. Seven `rs_*` tools work over an append-only claim and
+answer **in your own words**. Nine `rs_*` tools work over an append-only claim and
 source ledger; a human answers the frame gates in the Research tab rather than the
 model; and every claim in the prose is a span the ledger tracks, so a citation that
 does not exist cannot be built into a document without being reported by name.

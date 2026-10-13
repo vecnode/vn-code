@@ -1,7 +1,7 @@
 {
   "name": "dsh-research",
   "version": "0.1.0-alpha.2",
-  "description": "Research: a run is a folder with RUN.json and a passport.json that records what the human decided in their own words. Seven rs_* tools (open, new, plan, read, write, cite, build) over an append-only claim and source ledger, a document dialect where every claim is a span the ledger tracks, six citation styles, a dependency-free Markdown/DOCX builder, two frame gates plus a build gate answered by a person in the right bar rather than by the model, and the Research tab that shows a run while it is being worked on. Host half plus UI, no vendored engine, no npm dependency, and no socket of its own.",
+  "description": "Research: a run is a folder with RUN.json and a passport.json that records what the human decided in their own words. Nine rs_* tools (open, new, plan, read, write, cite, verify, review, build) over an append-only claim and source ledger, a document dialect where every claim is a span the ledger tracks, six citation styles, a dependency-free Markdown/DOCX builder, two frame gates plus a build gate answered by a person in the right bar rather than by the model, six bundled skills, and the Research tab that shows a run while it is being worked on. Host half plus UI, no vendored engine, no npm dependency, and no socket of its own.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
