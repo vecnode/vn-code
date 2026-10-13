@@ -3094,6 +3094,210 @@ check(
   check('proto-lab lab renders its frame', dplMarkup.includes('class="dpl"') && dplMarkup.includes('class="dpl-bar"') && dplMarkup.includes('Reroll'))
 }
 
+// ------------------------------------------------------------ dsh-research
+// The Research tab: the run list, the gates a person answers, and the provenance
+// behind them.
+//
+// The claim worth driving is the GATE FORM, because the whole package turns on it
+// and it lives HERE, in the browser half: a gate that needs the user's own words
+// cannot be sent without them, an override cannot be sent without a reason, and
+// the POST body carries exactly the five fields the host route validates - text
+// sent EXACTLY as typed, because the label promises "verbatim". The render pieces
+// are exported as plain-prop components for exactly this reason: a server render
+// runs no effect, so the body a check can reach is always its READING state, and
+// the form, the timeline and the provenance block would otherwise be untested
+// markup.
+{
+  const dsr = loadBundle('packages/dsh-research/lib/client.js', {})
+  check('research bundle id', dsr.id, 'dsh-research')
+  check('research inject', JSON.stringify(dsr.exports.inject), '["slots","sidebarRightTabs"]')
+  const dsrCssTag = dsr.document.head.children
+    .filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-research/research.css')
+    .pop()
+  check(
+    'research stylesheet injected',
+    dsrCssTag !== undefined && dsrCssTag.textContent.includes('.dsr-gate{') && dsrCssTag.textContent.includes('.dsr-run[aria-current="true"]'),
+  )
+
+  const dsrTypes = []
+  const dsrSeats = {}
+  dsr.exports.apply({
+    slots: {
+      inject: (name, fn) => fn(),
+      register(spec, component) {
+        dsrSeats[spec.name + (spec.key ? '#' + spec.key : '')] = { spec, component }
+        return () => {}
+      },
+    },
+    sidebarRightTabs: { register: (definition) => (dsrTypes.push(definition), () => {}), entries: () => [] },
+    effect: (fn) => fn(),
+    logger: { debug() {}, warn() {} },
+  })
+  check('research registers ONE page type', dsrTypes.length === 1 && dsrTypes[0].id + '/' + dsrTypes[0].kind, 'dsh-research/dsh-research')
+  // A page type must claim NO file: a pattern or a `canOpen` here would take a
+  // surface away from a file type the pack already opens.
+  check('research claims no pattern and no file', dsrTypes[0].patterns === undefined && dsrTypes[0].canOpen === undefined, true)
+  check(
+    'research seats',
+    Object.keys(dsrSeats).sort().join(','),
+    'sidebar.right.pane.tab#dsh-research,sidebar.right.pane.tab.title#dsh-research',
+  )
+  // The capsule, CALLED - the two expressions the Start page evaluates.
+  const dsrCapsule = (dsrTypes[0].guide ?? [])[0] ?? {}
+  check(
+    'research guide capsule answers the Start page',
+    typeof dsrCapsule.title === 'function' && typeof dsrCapsule.description === 'function' && dsrCapsule.title() === 'Research' && dsrCapsule.description().length > 0 && Number.isFinite(dsrCapsule.order),
+  )
+  check('research capsule carries no bare `label`', dsrCapsule.label === undefined, true)
+
+  const dsrTitle = dsrSeats['sidebar.right.pane.tab.title#dsh-research'].component
+  check('research title seat renders', renderToStaticMarkup(h(dsrTitle, {})).includes('>Research<'))
+  const dsrBody = dsrSeats['sidebar.right.pane.tab#dsh-research'].component
+  const dsrMarkup = renderToStaticMarkup(h(dsrBody, {}))
+  check('research body renders its reading state', dsrMarkup.includes('class="dsr"') && dsrMarkup.includes('data-dsr-root="research"'))
+
+  const R = dsr.exports.__internals
+  const pendingGate = {
+    id: 'g2-intake',
+    stage: 'frame',
+    question: 'Does this document report experiments or data analyses that YOU ran yourself?',
+    requiresText: true,
+    options: [
+      { value: 'no_experiments_declared', label: 'No - this run reports no experiments of mine' },
+      { value: 'experiments_declared', label: 'Yes - I ran experiments this document reports', overrides: true },
+    ],
+    answer: null,
+  }
+  const answeredGate = {
+    ...pendingGate,
+    answer: { at: '2026-01-02T03:04:05.000Z', value: 'no_experiments_declared', text: 'Nothing was run - this is a desk review.', reason: '' },
+  }
+
+  // ---- the pure halves, driven directly
+  check('a gate with no answer is pending', R.isAnswered(pendingGate), false)
+  check('and one with an answer is not', R.isAnswered(answeredGate), true)
+  check('the pending list keeps host order', R.pendingGates({ gates: [answeredGate, pendingGate] }).map((gate) => gate.id).join(','), 'g2-intake')
+  check('the answered list is the other half', R.answeredGates({ gates: [answeredGate, pendingGate] }).map((gate) => gate.id).join(','), 'g2-intake')
+  check('the label comes from the option the answer names', R.answerLabel(answeredGate), 'No - this run reports no experiments of mine')
+  check('and the text is the person\'s own words', R.answerText(answeredGate), 'Nothing was run - this is a desk review.')
+  check('a run is named by its title', R.runLabel({ title: 'A paper', slug: 'a-paper' }), 'A paper')
+  check('and by its slug when it has none', R.runLabel({ title: '  ', slug: 'a-paper' }), 'a-paper')
+  check('and never renders undefined', R.runLabel(null), '')
+  check('the run row counts what is waiting', R.pendingCount({ gates: { pending: 2, total: 2 } }), 2)
+  check('a row with no counters waits on nothing', R.pendingCount({}), 0)
+  check('an unknown stage shows as itself, not blank', R.stageLabel('invented-later').length > 0, true)
+  check('a timestamp renders as a time', R.formatStamp('2026-01-02T03:04:05.000Z').length > 0, true)
+  check('an absent timestamp renders as a blank, not "Invalid Date"', R.formatStamp(''), '')
+  // The divisor is 1024, so the UNIT has to be binary: this panel and the host
+  // half's own `sizeOf` report the same run, and "2 kB" for 2048 bytes would be a
+  // different number (2000) wearing the same label.
+  check('bytes read as a binary size', /^2(\.0)? KiB$/.test(R.formatBytes(2048)), true)
+  check('a small file reads in bytes', R.formatBytes(999), '999 B')
+  check('and nonsense reads as nothing', R.formatBytes('nonsense'), '')
+
+  // ---- the rules the whole package turns on
+  check('an override option wants a reason', R.wantsReason(pendingGate, 'experiments_declared'), true)
+  check('a plain confirm does not', R.wantsReason(pendingGate, 'no_experiments_declared'), false)
+  check(
+    'with no declared overrides, any choice but the first wants one',
+    R.wantsReason({ options: [{ value: 'a' }, { value: 'b' }] }, 'b') && R.wantsReason({ options: [{ value: 'a' }, { value: 'b' }] }, 'a') === false,
+    true,
+  )
+  check(
+    'the POST body carries EXACTLY what the host route validates',
+    Object.keys(R.gatePayload('a-run', pendingGate, { value: 'no_experiments_declared', text: 'Mine.', reason: '' })).sort().join(','),
+    'id,slug,text,value',
+  )
+  check(
+    'and a reason rides along only when there is one',
+    Object.keys(R.gatePayload('a-run', pendingGate, { value: 'experiments_declared', text: '', reason: 'Because.' })).sort().join(','),
+    'id,reason,slug,text,value',
+  )
+  // Verbatim means verbatim: the space a person typed survives to the route.
+  check('the answer text is not trimmed or reworded', R.gatePayload('a-run', pendingGate, { value: 'x', text: '  as typed  ', reason: '' }).text, '  as typed  ')
+  check('and the project query encodes the slug', R.projectQuery('a b/c'), '/api/dsh-research/project?slug=a%20b%2Fc')
+
+  // ---- the form itself, as a person meets it
+  const formMarkup = renderToStaticMarkup(h(R.GateForm, { gate: pendingGate, onSubmit: () => {} }))
+  check('the pending gate form draws the question', formMarkup.includes('YOU ran yourself'), true)
+  check('and both options', formMarkup.includes('No - this run reports no experiments of mine') && formMarkup.includes('Yes - I ran experiments this document reports'), true)
+  check('and a box for the person\'s own words', formMarkup.includes('data-dsr-field="text"'), true)
+  check('and does not offer the submit before a choice is made', formMarkup.includes('disabled'), true)
+  check('and says the answer is recorded verbatim', formMarkup.includes('verbatim'), true)
+
+  const timelineMarkup = renderToStaticMarkup(h(R.AnsweredTimeline, { gates: [answeredGate] }))
+  check('an answered gate shows the person\'s words', timelineMarkup.includes('Nothing was run - this is a desk review.'), true)
+  check('and never shows it as a form', timelineMarkup.includes('data-dsr-field'), false)
+
+  // Provenance is the one place a long instruction must arrive WHOLE: a summary
+  // of what the user asked for is the failure this package exists to prevent.
+  const longInstruction = 'I want this recorded exactly as I wrote it, at length. '.repeat(9)
+  const provMarkup = renderToStaticMarkup(
+    h(R.PassportBlock, {
+      passport: { instructions: [{ at: '2026-01-02T03:04:05.000Z', verbatim: longInstruction }], receipts: [{ at: '2026-01-02T03:04:05.000Z', tool: 'rs_new', summary: 'created a run' }] },
+    }),
+  )
+  check('a long instruction reaches the panel in full', provMarkup.includes(longInstruction), true)
+  check('and the receipt names its tool', provMarkup.includes('rs_new'), true)
+
+  const filesMarkup = renderToStaticMarkup(h(R.FileList, { files: [{ path: 'doc/paper.md', bytes: 2048 }] }))
+  check('the file list shows a path and a size', filesMarkup.includes('doc/paper.md') && /2(\.0)? KiB/.test(filesMarkup), true)
+  check('and an empty run says so rather than drawing nothing', renderToStaticMarkup(h(R.FileList, { files: [] })).length > 20, true)
+
+  // The person's own edit - the feature that makes a run something you keep and
+  // change rather than a report you read: a `.md` file under `doc/` or `plan/` is a
+  // button, and nothing else is, because a hand-edited ledger is not a ledger.
+  const editableMarkup = renderToStaticMarkup(
+    h(R.FileList, {
+      files: [{ path: 'doc/paper.md', bytes: 100 }, { path: 'sources/smith.pdf', bytes: 10 }, { path: 'ledger/claims.jsonl', bytes: 20 }],
+      onEdit: () => {},
+      openPath: 'doc/paper.md',
+    }),
+  )
+  check('a document file is offered for editing', editableMarkup.includes('data-dsr-file="doc/paper.md"'), true)
+  check('a stored source is not', editableMarkup.includes('data-dsr-file="sources/smith.pdf"'), false)
+  check('and neither is a ledger', editableMarkup.includes('data-dsr-file="ledger/claims.jsonl"'), false)
+  check('the open file is marked as current', editableMarkup.includes('aria-current="true"'), true)
+  check('without an onEdit nothing is a button', renderToStaticMarkup(h(R.FileList, { files: [{ path: 'doc/paper.md', bytes: 1 }] })).includes('data-dsr-file'), false)
+
+  const editorMarkup = renderToStaticMarkup(h(R.FileEditor, { file: 'doc/paper.md', text: '# A paper\n\nA sentence.\n', verdict: null, onSave: () => {}, onClose: () => {} }))
+  check('the editor renders a box with the file\'s text', editorMarkup.includes('data-dsr-field="document"') && editorMarkup.includes('A sentence.'), true)
+  check('and a Save and a Close', editorMarkup.includes('data-dsr-save="doc/paper.md"') && editorMarkup.includes('>Close<'), true)
+  check('and says where the save lands and what the syntax is', editorMarkup.includes('on disk') && editorMarkup.includes('{#c0142}'), true)
+  const okVerdict = renderToStaticMarkup(
+    h(R.FileEditor, { file: 'doc/paper.md', text: 'x', verdict: { ok: true, words: 2, claims: 1, errors: [], warnings: [] }, onSave: () => {}, onClose: () => {} }),
+  )
+  check('a clean save says the ledger still agrees', okVerdict.includes('data-dsr-verdict="ok"'), true)
+  // The verdict is what a human edit gets INSTEAD of a refusal, so it has to name
+  // what broke: "there is a problem" would send the person hunting for it.
+  const badVerdict = renderToStaticMarkup(
+    h(R.FileEditor, {
+      file: 'doc/paper.md',
+      text: 'x',
+      verdict: { ok: false, words: 2, claims: 1, errors: [{ code: 'span-unrecorded', detail: 'claim c0009 is marked in the document but has no ledger row' }], warnings: [] },
+      onSave: () => {},
+      onClose: () => {},
+    }),
+  )
+  check('a save that broke the agreement names the code', badVerdict.includes('data-dsr-verdict="problems"') && badVerdict.includes('span-unrecorded'), true)
+
+  // An empty root must name the tool call that starts a run - an agent reads this
+  // screen too, and "no runs" with no next step is a dead end.
+  check('the empty state names the tool call', renderToStaticMarkup(h(R.EmptyState, {})).includes('rs_new'), true)
+
+  // ---- source-level pins on the two things that would quietly undo the point
+  const dsrSource = readFileSync(path.join(repo, 'packages/dsh-research/lib/client.js'), 'utf8')
+  check('the tab polls only while it is visible', dsrSource.includes('visibilitychange') && dsrSource.includes('visibilityState'), true)
+  check('and reads this plugin\'s own routes only', /['"]https?:\/\//.test(dsrSource), false)
+  // The four paths the panel may call, BY VALUE: the row registers these exact
+  // strings, so a typo here is a 404 in a panel nobody is watching.
+  check(
+    'the panel\'s route constants are the row\'s own',
+    [R.STATE_ROUTE, R.PROJECT_ROUTE, R.GATE_ROUTE, R.FILE_ROUTE].join(','),
+    '/api/dsh-research/state,/api/dsh-research/project,/api/dsh-research/gate,/api/dsh-research/file',
+  )
+}
+
 // -------------------------------------------------------------- dsh-browser
 // The Browser tab, and the REPLACEMENT for the shipped iframe one. This bundle
 // is hand-written (no generated fork), so these are source-level pins on the two

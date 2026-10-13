@@ -1,0 +1,38 @@
+{
+  "name": "dsh-research",
+  "version": "0.1.0-alpha.2",
+  "description": "Research: a run is a folder with RUN.json and a passport.json that records what the human decided in their own words. Seven rs_* tools (open, new, plan, read, write, cite, build) over an append-only claim and source ledger, a document dialect where every claim is a span the ledger tracks, six citation styles, a dependency-free Markdown/DOCX builder, two frame gates plus a build gate answered by a person in the right bar rather than by the model, and the Research tab that shows a run while it is being worked on. Host half plus UI, no vendored engine, no npm dependency, and no socket of its own.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "checks",
+    "skills",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-research-node.mjs",
+    "check:node": "node checks/check-research-node.mjs",
+    "check:refs": "node checks/check-research-refs.mjs",
+    "check:styles": "node checks/check-research-styles.mjs",
+    "check:all": "node checks/check-research-node.mjs && node checks/check-research-refs.mjs && node checks/check-research-styles.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-session",
+        "dsh-rightbar"
+      ]
+    }
+  },
+  "license": "MIT"
+}
