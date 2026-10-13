@@ -159,6 +159,7 @@ const ledgerModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'ledger
 const docModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'doc.js')).href)
 const syntaxModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'syntax.js')).href)
 const buildModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'build.js')).href)
+const viewModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'view.js')).href)
 const refsModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'refs.js')).href)
 const stylesModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'styles', 'index.js')).href)
 const apiModule = await import(pathToFileURL(path.join(pkgDir, 'lib', 'api.js')).href)
@@ -191,6 +192,7 @@ const { assembleDocument, renderBody, renderReferences, scanDocument, sectionsOf
 const { findCitations, findClaimSpans, normalizeLocator, nextClaimId, parseKey } = syntaxModule
 const { FORMATS_READY, composeMarkdown, readRunState, runBuild } = buildModule
 const { ALL_GATES, libraryFile, readLibrary } = runModule
+const { projectDetail } = viewModule
 const { API_ROUTES } = apiModule
 
 console.log('check-research-node: the run model, the ledgers, the document, the gates, the tools, the routes, the security claim')
@@ -945,6 +947,35 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('a bibliography export is a real file', exports.outputs[0].path, 'build/references.bib')
   const bib = await fsp.readFile(path.join(dir, 'build', 'references.bib'), 'utf8')
   check('holding the source', bib.includes('smith2024'), true)
+}
+
+// ---------------------------------------------------------------------------
+// The panel's payload: bounded, one round trip, and the same run the tools see
+// ---------------------------------------------------------------------------
+{
+  const detail = await projectDetail({ env, workspace, slug: 'ledger-check' })
+  check(
+    'the panel payload carries EXACTLY the keys the client was pinned to',
+    Object.keys(detail).sort().join(','),
+    'claims,document,files,gates,ledger,notes,outline,passport,run,sources,structure',
+  )
+  check('it carries the current claims, not the revisions', detail.claims.length, 2)
+  check('and ledger keeps its null-means-absent meaning', typeof detail.ledger.claims === 'number' && detail.ledger.current.claims === detail.claims.length, true)
+  check('a claim row carries its bindings as labels', Array.isArray(detail.claims[0].sources) && typeof detail.claims[0].status === 'string', true)
+  check('a claim that nothing has checked says so', detail.claims.every((claim) => claim.tier === '' || typeof claim.tier === 'string'), true)
+  check('a source row says whether it can be checked at all', detail.sources.some((source) => source.hasText === false), true)
+  check('the outline counts the words and the citations', detail.outline.words > 0 && typeof detail.outline.citations === 'number', true)
+  check('and lists its sections', detail.outline.sections.length >= 1, true)
+  check('the structure chip is a verdict, not a promise', typeof detail.structure.ok === 'boolean' && Array.isArray(detail.structure.codes), true)
+
+  // The cap is what keeps a 1500 ms poll cheap, and it must SAY it truncated
+  // rather than quietly sending a short list.
+  const many = { ...(await readClaims(path.join(root, 'ledger-check'))) }
+  check('the panel caps each list', viewModule.MAX_PANEL_CLAIMS > 0 && viewModule.MAX_PANEL_SOURCES > 0, true)
+  check('and a claim view truncates a long text with a marker', viewModule.claimView({ id: 'c0001', text: 'x'.repeat(900) }).text.length <= viewModule.CLAIM_TEXT_CHARS, true)
+  check('a source view counts its bytes', viewModule.sourceView({ key: 'k', title: 't', files: [{ bytes: 10 }, { bytes: 5 }] }).bytes, 15)
+  check('and survives a record with no authors at all', viewModule.sourceView({ key: 'k', title: 't' }).authors.length, 0)
+  check('many claims fold to one row each', many.current.length, 2)
 }
 
 // ---------------------------------------------------------------------------

@@ -82,6 +82,10 @@ window.__ModuleLoader__.load({
     const GATE_ROUTE = API_ROOT + '/gate'
     /** A run's own text files: GET reads one, POST saves one. */
     const FILE_ROUTE = API_ROOT + '/file'
+    /** Build a format: the same code path `rs_build` drives. */
+    const BUILD_ROUTE = API_ROOT + '/build'
+    /** The formats this build can write, and the ones it refuses by name. */
+    const FORMATS_COMING = ['docx', 'html', 'tex']
     /** The style tag's identity, so the injection happens exactly once. */
     const CSS_TAG = 'dsh-research/research.css'
     /**
@@ -181,6 +185,27 @@ window.__ModuleLoader__.load({
 .dsr-verdict[data-dsr-verdict="ok"]{background:var(--dsw-alias-state-success-bg,rgba(46,160,67,.14));color:var(--dsw-alias-state-success-primary,#1a7f37)}
 .dsr-verdict[data-dsr-verdict="problems"]{background:var(--dsw-alias-state-warning-bg,rgba(214,158,46,.18));color:var(--dsw-alias-state-warning-primary,#8a6d1f)}
 .dsr-verdictLine{margin-top:2px;word-break:break-word}
+.dsr-claim{padding:5px 0;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.14))}
+.dsr-claimHead{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.dsr-claimId{font-family:var(--dsw-font-mono,ui-monospace,'Cascadia Code',Consolas,monospace);color:var(--dsw-alias-label-tertiary,#8f8f8f);font-size:10.5px}
+.dsr-st{flex:none;border-radius:5px;padding:0 5px;font-size:10.5px;border:.5px solid transparent}
+.dsr-st[data-status="unverified"]{background:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.14));color:var(--dsw-alias-label-secondary,#666)}
+.dsr-st[data-status="located"]{background:var(--dsw-alias-state-info-bg,rgba(56,132,255,.16));color:var(--dsw-alias-state-info-primary,#2f6fdb)}
+.dsr-st[data-status="supported"]{background:var(--dsw-alias-state-success-bg,rgba(46,160,67,.16));color:var(--dsw-alias-state-success-primary,#1a7f37)}
+.dsr-st[data-status="partially-supported"]{background:var(--dsw-alias-state-warning-bg,rgba(214,158,46,.18));color:var(--dsw-alias-state-warning-primary,#8a6d1f)}
+.dsr-st[data-status="unsupported"],.dsr-st[data-status="contradicted"],.dsr-st[data-status="misattributed"]{background:var(--dsw-alias-state-error-bg,rgba(192,57,43,.16));color:var(--dsw-alias-state-error-primary,#c0392b)}
+.dsr-claimText{word-break:break-word;margin-top:2px}
+.dsr-claimMeta{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#8f8f8f)}
+.dsr-bind{font-family:var(--dsw-font-mono,ui-monospace,'Cascadia Code',Consolas,monospace)}
+.dsr-src{padding:4px 0;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.14))}
+.dsr-srcKey{font-family:var(--dsw-font-mono,ui-monospace,'Cascadia Code',Consolas,monospace);color:var(--dsw-alias-label-secondary,#666)}
+.dsr-srcTitle{word-break:break-word;margin-top:1px}
+.dsr-outlineRow{display:flex;gap:8px;align-items:baseline;padding:2px 0}
+.dsr-outlineTitle{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsr-outlineNum{flex:none;color:var(--dsw-alias-label-tertiary,#8f8f8f);font-variant-numeric:tabular-nums;font-size:10.5px}
+.dsr-buildRow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.dsr-buildOut{margin-top:4px;font-size:11px;color:var(--dsw-alias-label-secondary,#666)}
+.dsr-buildOut code{font-family:var(--dsw-font-mono,ui-monospace,'Cascadia Code',Consolas,monospace)}
 `
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
       const tag = document.createElement('style')
@@ -269,6 +294,66 @@ window.__ModuleLoader__.load({
       if (title !== '') return title
       const slug = typeof run.slug === 'string' ? run.slug.trim() : ''
       return slug !== '' ? slug : '(untitled run)'
+    }
+
+    /** The claims the host sent, in host order. */
+    function claimsOf(project) {
+      return listOf(project === null || project === undefined ? null : project.claims)
+    }
+
+    /** The sources the host sent, in host order. */
+    function sourcesOf(project) {
+      return listOf(project === null || project === undefined ? null : project.sources)
+    }
+
+    /** The outline block, or a shape that renders as "nothing written yet". */
+    function outlineOf(project) {
+      const outline = project === null || project === undefined ? null : project.outline
+      if (outline === null || outline === undefined || typeof outline !== 'object') {
+        return { source: '', words: 0, parts: [], sections: [], citations: 0 }
+      }
+      return {
+        source: String(outline.source ?? ''),
+        words: Number(outline.words) || 0,
+        parts: listOf(outline.parts),
+        sections: listOf(outline.sections),
+        citations: Number(outline.citations) || 0,
+      }
+    }
+
+    /** The structure chip: whether the document and the ledgers agree right now. */
+    function structureOf(project) {
+      const structure = project === null || project === undefined ? null : project.structure
+      if (structure === null || structure === undefined || typeof structure !== 'object') {
+        return { ok: true, errors: 0, warnings: 0, codes: [] }
+      }
+      return {
+        ok: structure.ok === true,
+        errors: Number(structure.errors) || 0,
+        warnings: Number(structure.warnings) || 0,
+        codes: listOf(structure.codes).map((code) => String(code)),
+      }
+    }
+
+    /** How many claims carry each status, for the section title. */
+    function statusRoll(claims) {
+      const counts = {}
+      for (const claim of listOf(claims)) {
+        const status = String(claim.status ?? 'unverified')
+        counts[status] = (counts[status] ?? 0) + 1
+      }
+      return counts
+    }
+
+    /**
+     * The build buttons: every format this build can write, then the ones it
+     * refuses by name - DISABLED and labelled with the phase, because a button
+     * that silently does nothing is worse than one that says why it cannot.
+     */
+    function buildFormats(ready) {
+      const can = listOf(ready).map((id) => String(id))
+      const all = [...can, ...FORMATS_COMING.filter((id) => !can.includes(id))]
+      return all.map((id) => ({ id, ready: can.includes(id) }))
     }
 
     /**
@@ -437,7 +522,16 @@ window.__ModuleLoader__.load({
       } catch (err) {
         body = null
       }
-      if (!response.ok) throw new Error(errorMessageOf(body, response.status))
+      if (!response.ok) {
+        // The route's CODE travels with the throw as well as its sentence: a caller
+        // that has to show WHICH refusal it was (the build's `GATE_UNANSWERED`
+        // against its `FORMAT_NOT_YET`) must not have to make a second request to
+        // find out, and matching on the prose would break the first time a message
+        // was reworded.
+        const error = new Error(errorMessageOf(body, response.status))
+        if (body !== null && typeof body === 'object' && typeof body.code === 'string' && body.code !== '') error.code = body.code
+        throw error
+      }
       return body
     }
 
@@ -652,6 +746,196 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dsr-sub' }, 'What the agent did'),
         receipts.length === 0 ? h('div', { className: 'dsr-note' }, 'No tool call has been receipted yet.') : null,
         h('ul', { className: 'dsr-receipts' }, ...rows),
+      )
+    }
+
+    /**
+     * The claims ledger, as a reader needs it: what was asserted, how far it has
+     * been checked, and what it rests on.
+     *
+     * The status is a CHIP and not a sentence, because the whole column is a
+     * status board: a person scanning it must see which claims are unverified
+     * without reading. The tier and the judge are shown beside it because "who
+     * decided this, and at which rung" is the question a reader asks of every
+     * verdict - and a claim with no binding says so on its own line, since a claim
+     * that can never pass r1 is the one most worth seeing.
+     */
+    function ClaimsSection(props) {
+      const claims = listOf(props.claims)
+      const roll = statusRoll(claims)
+      const summary = Object.keys(roll).length === 0 ? '' : Object.entries(roll).map(([status, count]) => count + ' ' + status).join(', ')
+      return h(
+        Section,
+        { name: 'claims', title: 'Claims (' + claims.length + (summary === '' ? '' : ': ' + summary) + ')' },
+        claims.length === 0 ? h('div', { className: 'dsr-note' }, 'No claim yet. A claim is a `[sentence]{#c0142}` span in the text, declared with the sources it rests on.') : null,
+        ...claims.map((claim) =>
+          h(
+            'div',
+            { key: 'claim-' + String(claim.id), className: 'dsr-claim', 'data-dsr-claim': String(claim.id) },
+            h(
+              'div',
+              { className: 'dsr-claimHead' },
+              h('span', { className: 'dsr-claimId' }, String(claim.id)),
+              h('span', { className: 'dsr-st', 'data-status': String(claim.status) }, String(claim.status)),
+              claim.tier === '' ? null : h('span', { className: 'dsr-claimId' }, String(claim.tier)),
+              claim.strengthVerdict === '' ? null : h('span', { className: 'dsr-claimId' }, 'written as ' + String(claim.strength) + ', ' + String(claim.strengthVerdict)),
+              claim.section === '' ? null : h('span', { className: 'dsr-claimId' }, '§' + String(claim.section)),
+            ),
+            h('div', { className: 'dsr-claimText' }, String(claim.text)),
+            h(
+              'div',
+              { className: 'dsr-claimMeta' },
+              listOf(claim.sources).length === 0
+                ? h('span', null, 'no source bound: this claim cannot pass r1')
+                : h(
+                    'span',
+                    { className: 'dsr-bind' },
+                    listOf(claim.sources)
+                      .map((binding) => String(binding.key) + (binding.locator === '' ? '' : ' · ' + String(binding.locator)))
+                      .join('; '),
+                  ),
+              claim.judge === '' ? null : h('span', null, 'judged by ' + String(claim.judge)),
+            ),
+            claim.reason === '' ? null : h('div', { className: 'dsr-note' }, String(claim.reason)),
+          ),
+        ),
+      )
+    }
+
+    /**
+     * The sources ledger: what is in it, and - the part that decides what can be
+     * checked - whether it carries bytes and text at all.
+     *
+     * "no text" is not decoration: with no text, `r2-locate` has nothing to search,
+     * so a quote can never be confirmed against that source. Saying so where the
+     * source is listed is what stops a run looking fully cited when it is not.
+     */
+    function SourcesSection(props) {
+      const sources = listOf(props.sources)
+      return h(
+        Section,
+        { name: 'sources', title: 'Sources (' + sources.length + ')' },
+        sources.length === 0 ? h('div', { className: 'dsr-note' }, 'No source yet. The agent ingests one with `rs_cite` - this plugin fetches nothing itself.') : null,
+        ...sources.map((source) =>
+          h(
+            'div',
+            { key: 'src-' + String(source.key), className: 'dsr-src', 'data-dsr-source': String(source.key) },
+            h(
+              'div',
+              { className: 'dsr-claimHead' },
+              h('span', { className: 'dsr-srcKey' }, String(source.key)),
+              h('span', { className: 'dsr-claimId' }, String(source.kind) + (source.year === '' ? '' : ' · ' + String(source.year))),
+              h('span', { className: 'dsr-claimId', 'data-dsr-bytes': source.files === 0 ? 'none' : 'some' }, source.files === 0 ? 'no bytes' : source.files + ' file(s)'),
+              h('span', { className: 'dsr-claimId', 'data-dsr-text': source.hasText ? 'yes' : 'none' }, source.hasText ? 'text from ' + String(source.textSource) : 'no text'),
+            ),
+            h('div', { className: 'dsr-srcTitle' }, String(source.title)),
+          ),
+        ),
+      )
+    }
+
+    /** The document as it stands: the outline, with the words and claims in each part. */
+    function OutlineSection(props) {
+      const outline = outlineOf(props.project)
+      return h(
+        Section,
+        { name: 'outline', title: 'Outline' },
+        outline.sections.length === 0
+          ? h('div', { className: 'dsr-note' }, 'Nothing written yet. `rs_write` writes a section; the panel can edit it afterwards.')
+          : h(
+              'div',
+              { 'data-dsr-outline': String(outline.sections.length) },
+              h('div', { className: 'dsr-note' }, outline.words + ' words, ' + outline.citations + ' source(s) cited' + (outline.parts.length > 0 ? ', assembled from ' + outline.parts.map((part) => String(part.file)).join(', ') : '')),
+              ...outline.sections.map((section) =>
+                h(
+                  'div',
+                  { key: 'section-' + String(section.slug), className: 'dsr-outlineRow' },
+                  h('span', { className: 'dsr-outlineTitle', title: String(section.title), style: { paddingLeft: Math.max(0, Number(section.level) - 1) * 8 } }, String(section.title)),
+                  h('span', { className: 'dsr-outlineNum' }, String(section.words) + 'w · ' + String(section.claims) + 'c'),
+                ),
+              ),
+            ),
+      )
+    }
+
+    /**
+     * Build, from the panel.
+     *
+     * `draft=watermark` always builds - it is the mode that says out loud what has
+     * not been checked - and `clean` is the one that has to hold up, so the refusal
+     * it can answer with is shown where the button is rather than in a banner.
+     */
+    function BuildSection(props) {
+      const formats = buildFormats(props.ready)
+      const [draft, setDraft] = React.useState('watermark')
+      const [busy, setBusy] = React.useState('')
+      const [result, setResult] = React.useState(null)
+      const [failed, setFailed] = React.useState(null)
+
+      const run = async (id) => {
+        setBusy(id)
+        setFailed(null)
+        setResult(null)
+        const answer = await props.onBuild(id, draft)
+        setBusy('')
+        if (answer === null || answer === undefined) return
+        if (answer.ok === true) setResult(answer)
+        else setFailed(answer)
+      }
+
+      return h(
+        Section,
+        { name: 'build', title: 'Build' },
+        h(
+          'div',
+          { className: 'dsr-buildRow' },
+          ...formats.map((format) =>
+            h(
+              'button',
+              {
+                key: format.id,
+                type: 'button',
+                className: 'dsr-btn',
+                disabled: !format.ready || busy !== '',
+                title: format.ready ? 'write build/' + (format.id === 'md' ? 'paper.md' : 'references.' + format.id) : 'not in this build yet',
+                'data-dsr-build': format.id,
+                'data-dsr-ready': format.ready ? 'yes' : 'no',
+                onClick: () => run(format.id),
+              },
+              busy === format.id ? 'Building…' : format.id + (format.ready ? '' : ' (later)'),
+            ),
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dsr-buildRow' },
+          ...['watermark', 'clean'].map((mode) =>
+            h(
+              'button',
+              {
+                key: mode,
+                type: 'button',
+                className: 'dsr-btn',
+                'aria-current': draft === mode ? 'true' : undefined,
+                'data-dsr-draft': mode,
+                onClick: () => setDraft(mode),
+              },
+              mode === 'watermark' ? 'draft (watermarked)' : 'clean (gated)',
+            ),
+          ),
+        ),
+        h('div', { className: 'dsr-hint' }, draft === 'clean' ? 'A clean build refuses while the document and its ledger disagree, while a claim is unsupported, or until gate `g3-integrity` is answered.' : 'A draft always builds, and marks every claim that nothing has checked.'),
+        failed === null ? null : h('div', { className: 'dsr-err', 'data-dsr-build-error': String(failed.code ?? 'error') }, String(failed.message ?? 'the build was refused')),
+        result === null
+          ? null
+          : h(
+              'div',
+              { className: 'dsr-buildOut', 'data-dsr-built': String(listOf(result.outputs).length) },
+              ...listOf(result.outputs).map((output) =>
+                h('div', { key: 'out-' + String(output.path) }, h('code', null, String(output.path)), '  ' + formatBytes(output.bytes) + '  sha256 ' + String(output.sha256).slice(0, 12) + '…'),
+              ),
+              h('div', null, 'the report is in build/build.json'),
+            ),
       )
     }
 
@@ -1005,6 +1289,39 @@ window.__ModuleLoader__.load({
         [read],
       )
 
+      /**
+       * Build one format, and hand the answer back to the section that asked.
+       *
+       * The refusal is RETURNED rather than thrown into the banner, because a
+       * refusal is the expected answer here: `draft=clean` refuses until the gate is
+       * answered, and a format this build does not have refuses by name. Either
+       * belongs beside the button that caused it, where the person can read why and
+       * what to do, not in a strip at the top of the column.
+       */
+      const buildNow = React.useCallback(
+        async (format, draft) => {
+          if (selectedRef.current === null) return { ok: false, code: 'NO_RUN', message: 'No run is selected.' }
+          busy.current = true
+          let answer = null
+          try {
+            answer = await fetchJson(BUILD_ROUTE, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ slug: selectedRef.current, format, draft }),
+            })
+          } catch (err) {
+            busy.current = false
+            return { ok: false, code: err !== null && err !== undefined && typeof err.code === 'string' ? err.code : 'ERROR', message: problemText(err) }
+          }
+          busy.current = false
+          // The build wrote files, so the run's file list and ledger counts are
+          // stale the moment it returns.
+          await read()
+          return answer
+        },
+        [read],
+      )
+
       // The poll. Started once, stopped while the document is hidden, and fired
       // immediately when it comes back - a tab nobody is looking at must not read
       // a disk every 1500 ms, and a tab that just became visible must not show
@@ -1091,14 +1408,26 @@ window.__ModuleLoader__.load({
       } else if (project === null) {
         panel = h('div', { className: 'dsr-detail', 'data-dsr-detail': selected === null ? '' : selected }, h(RunHeader, { run: head }), h('div', { className: 'dsr-note' }, 'Reading the run…'))
       } else {
+        const structure = structureOf(project)
+        const readyFormats = payload === null || payload.capabilities === undefined || payload.capabilities === null ? [] : listOf(payload.capabilities.formats)
         panel = h(
           'div',
           { className: 'dsr-detail', 'data-dsr-detail': selected === null ? '' : selected },
           h(RunHeader, { run: head }),
+          // The one-line answer to "is this document currently sound?", which is
+          // what a person wants before they touch anything: whether the prose and
+          // the ledger still agree, and by which codes if they do not.
+          h(
+            'div',
+            { className: 'dsr-note', 'data-dsr-structure': structure.ok ? 'ok' : 'problems' },
+            structure.ok
+              ? 'The document agrees with its ledger' + (structure.warnings > 0 ? ' (' + structure.warnings + ' warning(s): ' + structure.codes.join(', ') + ')' : '')
+              : structure.errors + ' structure error(s): ' + structure.codes.join(', ') + ' - a draft still builds; a clean one will not',
+          ),
           projectNotes.length === 0 ? null : h('div', { className: 'dsr-notes' }, ...projectNotes.map((line, index) => h('div', { key: 'note-' + index, className: 'dsr-note' }, String(line)))),
           projectProblem === null ? null : h('div', { className: 'dsr-err', 'data-dsr-problem': 'project' }, projectProblem),
           // GATES FIRST. A pending gate is the whole reason this column is open,
-          // so it outranks the provenance and the file list below it.
+          // so it outranks everything below it.
           h(
             Section,
             { name: 'gates', title: pending.length > 0 ? 'Waiting on you (' + pending.length + ')' : 'Gates' },
@@ -1107,16 +1436,20 @@ window.__ModuleLoader__.load({
               : h('div', { 'data-dsr-pending': String(pending.length) }, ...pending.map((gate) => h(GateForm, { key: String(gate.id), gate, onSubmit: submitGate }))),
           ),
           h(AnsweredTimeline, { gates: answered }),
-          h(PassportBlock, { passport: project.passport }),
-          // The editor sits above the file list: a click in the list opens it, and
-          // a box that appeared BELOW the thing that opened it would be off-screen
-          // in the column this tab actually lives in.
+          // Then the document as it stands, then what it rests on, then the files
+          // (which is where an edit starts), then the build, and the provenance last
+          // - it is the record of how all of the above came to be.
+          h(OutlineSection, { project }),
+          h(ClaimsSection, { claims: claimsOf(project) }),
+          h(SourcesSection, { sources: sourcesOf(project) }),
+          h(FileList, { files: project.files, onEdit: openFile, openPath: editing }),
           editing === null
             ? null
             : editingText === null
               ? h('div', { className: 'dsr-note', 'data-dsr-editor': 'reading' }, 'Reading ' + editing + '…')
               : h(FileEditor, { key: editing, file: editing, text: editingText, verdict, onSave: saveFile, onClose: closeFile }),
-          h(FileList, { files: project.files, onEdit: openFile, openPath: editing }),
+          h(BuildSection, { ready: readyFormats, onBuild: buildNow }),
+          h(PassportBlock, { passport: project.passport }),
         )
       }
 
@@ -1220,9 +1553,11 @@ window.__ModuleLoader__.load({
     exports.__internals = {
       definition, ResearchBody, ResearchTitle,
       RunRow, RunHeader, GateForm, AnsweredTimeline, PassportBlock, FileList, FileEditor, EmptyState,
+      ClaimsSection, SourcesSection, OutlineSection, BuildSection,
       // payload readers and labels
       listOf, runsOf, gatesOf, optionsOf, pendingCount, isAnswered, pendingGates, answeredGates,
       answerLabel, answerText, runLabel, stageLabel, STAGE_LABELS,
+      claimsOf, sourcesOf, outlineOf, structureOf, statusRoll, buildFormats, FORMATS_COMING,
       // formatting
       formatStamp, formatBytes, truncate,
       // what the POST is allowed to carry
@@ -1230,7 +1565,7 @@ window.__ModuleLoader__.load({
       // the network, and every failure as a string
       fetchJson, errorMessageOf, problemText,
       // identity, addresses and the one sentence the form promises
-      TYPE_ID, TAB_SLOT, TITLE_SLOT, API_ROOT, STATE_ROUTE, PROJECT_ROUTE, GATE_ROUTE, FILE_ROUTE,
+      TYPE_ID, TAB_SLOT, TITLE_SLOT, API_ROOT, STATE_ROUTE, PROJECT_ROUTE, GATE_ROUTE, FILE_ROUTE, BUILD_ROUTE,
       CSS_TAG, POLL_MS, QUESTION_CUT, VERBATIM_NOTE, NEW_RUN_HINT,
     }
 

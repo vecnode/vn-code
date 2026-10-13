@@ -54,6 +54,7 @@ import {
 import { GATE_IDS, TOOL_NAMES, buildTools, workspaceOf } from './tools.js'
 import { FORMATS_READY, ensureIntegrityGate, readRunState, runBuild } from './build.js'
 import { readSources, sourcesByKey } from './ledger.js'
+import { projectDetail } from './view.js'
 import {
   API_ROOT,
   API_ROUTES,
@@ -162,7 +163,7 @@ export function registerRoutes(options) {
   /** One run, in one round trip, because the panel polls it while the agent works. */
   register(PROJECT_ROUTE, ['GET', 'HEAD'], async (request) => {
     const slug = new URL(request.url).searchParams.get('slug') ?? ''
-    return json(200, { ok: true, ...(await projectView({ ...routeEnv(), slug })) })
+    return json(200, { ok: true, ...(await projectDetail({ ...routeEnv(), ...CAPABILITIES, slug })) })
   })
 
   /**

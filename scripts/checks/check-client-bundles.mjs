@@ -3281,6 +3281,57 @@ check(
   )
   check('a save that broke the agreement names the code', badVerdict.includes('data-dsr-verdict="problems"') && badVerdict.includes('span-unrecorded'), true)
 
+  // ---- what the document rests on, and the build
+  const claimsMarkup = renderToStaticMarkup(
+    h(R.ClaimsSection, {
+      claims: [
+        { id: 'c0001', text: 'Completion rose by 25 points.', status: 'unverified', tier: '', strength: 'causal', strengthVerdict: '', section: 'results', judge: '', reason: '', sources: [{ key: 'smith2024', locator: 'p. 7' }] },
+        { id: 'c0002', text: 'Nothing supports this one.', status: 'unsupported', tier: 'r3-support', strength: 'descriptive', strengthVerdict: 'overstated', section: 'intro', judge: 'a reader', reason: 'the source says the opposite', sources: [] },
+      ],
+    }),
+  )
+  check('the claims section draws a chip per claim', claimsMarkup.includes('data-status="unsupported"') && claimsMarkup.includes('data-status="unverified"'), true)
+  check('and names the source and the locator it rests on', claimsMarkup.includes('smith2024') && claimsMarkup.includes('p. 7'), true)
+  check('and says when a claim can never pass r1', claimsMarkup.includes('cannot pass r1'), true)
+  check('and who judged the ones that were judged', claimsMarkup.includes('judged by a reader') && claimsMarkup.includes('the source says the opposite'), true)
+  check('and shows a claim\'s own strength verdict when it has one', claimsMarkup.includes('overstated'), true)
+
+  const sourcesMarkup = renderToStaticMarkup(
+    h(R.SourcesSection, {
+      sources: [
+        { key: 'smith2024', kind: 'journal-article', year: '2024', title: 'The effect of X on Y', files: 1, bytes: 100, hasText: true, textSource: 'crossref' },
+        { key: 'jones2023', kind: 'report', year: '2023', title: 'A report', files: 0, bytes: 0, hasText: false, textSource: '' },
+      ],
+    }),
+  )
+  // Whether a source can be checked at all is the point of this section: no text
+  // means `r2-locate` has nothing to search, and no bytes means nothing was kept.
+  check('the sources section says what can be checked', sourcesMarkup.includes('no text') && sourcesMarkup.includes('no bytes'), true)
+  check('and where the text came from when there is one', sourcesMarkup.includes('text from crossref'), true)
+
+  const outlineMarkup = renderToStaticMarkup(
+    h(R.OutlineSection, {
+      project: { outline: { source: 'sections', words: 1200, citations: 3, parts: [{ slug: 'results', file: 'doc/sections/results.md' }], sections: [{ slug: 'results', title: 'Results', level: 2, words: 400, claims: 2 }] } },
+    }),
+  )
+  check('the outline names its sections and their weight', outlineMarkup.includes('Results') && outlineMarkup.includes('400w'), true)
+  check('and an unwritten document says so', renderToStaticMarkup(h(R.OutlineSection, { project: {} })).includes('Nothing written yet'), true)
+
+  const buildMarkup = renderToStaticMarkup(h(R.BuildSection, { ready: ['md', 'ris', 'bib', 'enw'], onBuild: async () => null }))
+  check('the build section offers what it can write', ['md', 'ris', 'bib', 'enw'].every((id) => buildMarkup.includes('data-dsr-build="' + id + '"')), true)
+  // A button that silently does nothing is worse than one that says why it cannot.
+  check('and DISABLES the formats it cannot, naming them', buildMarkup.includes('data-dsr-build="docx"') && buildMarkup.includes('data-dsr-ready="no"') && buildMarkup.includes('(later)'), true)
+  check('and offers both drafts', buildMarkup.includes('data-dsr-draft="watermark"') && buildMarkup.includes('data-dsr-draft="clean"'), true)
+
+  // ---- the new pure readers
+  check('the structure reader invents no verdict', R.structureOf({}).ok, true)
+  check('and reports a real one with its codes', R.structureOf({ structure: { ok: false, errors: 2, warnings: 1, codes: ['unknown-source'] } }).codes.join(','), 'unknown-source')
+  check('the build list puts the ready formats first', R.buildFormats(['md']).map((one) => one.id + (one.ready ? '+' : '-')).join(','), 'md+,docx-,html-,tex-')
+  check('the status roll counts what the host sent', JSON.stringify(R.statusRoll([{ status: 'unverified' }, { status: 'unverified' }, { status: 'supported' }])), '{"unverified":2,"supported":1}')
+  check('the outline reader survives a payload with no outline', R.outlineOf({}).sections.length, 0)
+  check('and the claims reader one with no claims', R.claimsOf({}).length, 0)
+  check('the build route constant is the row\'s own', R.BUILD_ROUTE, '/api/dsh-research/build')
+
   // An empty root must name the tool call that starts a run - an agent reads this
   // screen too, and "no runs" with no next step is a dead end.
   check('the empty state names the tool call', renderToStaticMarkup(h(R.EmptyState, {})).includes('rs_new'), true)
