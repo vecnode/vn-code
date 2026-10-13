@@ -3317,16 +3317,27 @@ check(
   check('the outline names its sections and their weight', outlineMarkup.includes('Results') && outlineMarkup.includes('400w'), true)
   check('and an unwritten document says so', renderToStaticMarkup(h(R.OutlineSection, { project: {} })).includes('Nothing written yet'), true)
 
-  const buildMarkup = renderToStaticMarkup(h(R.BuildSection, { ready: ['md', 'ris', 'bib', 'enw'], onBuild: async () => null }))
-  check('the build section offers what it can write', ['md', 'ris', 'bib', 'enw'].every((id) => buildMarkup.includes('data-dsr-build="' + id + '"')), true)
-  // A button that silently does nothing is worse than one that says why it cannot.
-  check('and DISABLES the formats it cannot, naming them', buildMarkup.includes('data-dsr-build="docx"') && buildMarkup.includes('data-dsr-ready="no"') && buildMarkup.includes('(later)'), true)
+  const buildMarkup = renderToStaticMarkup(h(R.BuildSection, { ready: ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex', 'package'], onBuild: async () => null }))
+  check('the build section offers what it can write', ['md', 'ris', 'bib', 'enw', 'docx', 'html', 'tex', 'package'].every((id) => buildMarkup.includes('data-dsr-build="' + id + '"')), true)
+  // Every format the host advertises is implemented, so the panel offers them all and
+  // there is no "(later)" left to label. Asserted as an ABSENCE, because the failure
+  // this guards against is a stale disabled branch coming back.
+  check('and labels none of them as not-yet, because none of them are', buildMarkup.includes('(later)') || buildMarkup.includes('data-dsr-ready="no"'), false)
   check('and offers both drafts', buildMarkup.includes('data-dsr-draft="watermark"') && buildMarkup.includes('data-dsr-draft="clean"'), true)
 
   // ---- the new pure readers
   check('the structure reader invents no verdict', R.structureOf({}).ok, true)
   check('and reports a real one with its codes', R.structureOf({ structure: { ok: false, errors: 2, warnings: 1, codes: ['unknown-source'] } }).codes.join(','), 'unknown-source')
-  check('the build list puts the ready formats first', R.buildFormats(['md']).map((one) => one.id + (one.ready ? '+' : '-')).join(','), 'md+,docx-,html-,tex-')
+  // The panel's format list is EXACTLY what the host reports, all clickable. It used
+  // to append a hardcoded "coming soon" list so a format could be shown disabled with
+  // the phase that would bring it - and that list is the reason the panel would have
+  // gone on saying "docx (later)" after the DOCX writer landed. A list kept in the
+  // client cannot know a builder shipped and silently omits one the host grew, so the
+  // host is the authority; its own check asserts that everything it advertises is
+  // implemented.
+  check('the build list is exactly what the host reports, all ready', R.buildFormats(['md', 'docx', 'package']).map((one) => one.id + (one.ready ? '+' : '-')).join(','), 'md+,docx+,package+')
+  check('and it invents nothing the host did not report', R.buildFormats(['md']).map((one) => one.id).join(','), 'md')
+  check('and `all` is not offered as a button', R.buildFormats(['md', 'all']).map((one) => one.id).join(','), 'md')
   check('the status roll counts what the host sent', JSON.stringify(R.statusRoll([{ status: 'unverified' }, { status: 'unverified' }, { status: 'supported' }])), '{"unverified":2,"supported":1}')
   check('the outline reader survives a payload with no outline', R.outlineOf({}).sections.length, 0)
   check('and the claims reader one with no claims', R.claimsOf({}).length, 0)

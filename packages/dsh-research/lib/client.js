@@ -84,8 +84,6 @@ window.__ModuleLoader__.load({
     const FILE_ROUTE = API_ROOT + '/file'
     /** Build a format: the same code path `rs_build` drives. */
     const BUILD_ROUTE = API_ROOT + '/build'
-    /** The formats this build can write, and the ones it refuses by name. */
-    const FORMATS_COMING = ['docx', 'html', 'tex']
     /** The style tag's identity, so the injection happens exactly once. */
     const CSS_TAG = 'dsh-research/research.css'
     /**
@@ -350,10 +348,20 @@ window.__ModuleLoader__.load({
      * refuses by name - DISABLED and labelled with the phase, because a button
      * that silently does nothing is worse than one that says why it cannot.
      */
+    /**
+     * The formats to offer, which are the formats the HOST says it can write.
+     *
+     * There used to be a hardcoded list of "coming soon" ids appended here, so the
+     * panel could show a disabled button with the phase that would bring it. Every
+     * format this plugin advertises is implemented now, and a list kept in the client
+     * is the wrong authority anyway: it cannot know a builder landed, and it silently
+     * omits one the host grew. The host's `capabilities.formats` is the only thing
+     * that knows, and its own check asserts that everything it advertises is
+     * implemented - so what it reports is what can be clicked.
+     */
     function buildFormats(ready) {
-      const can = listOf(ready).map((id) => String(id))
-      const all = [...can, ...FORMATS_COMING.filter((id) => !can.includes(id))]
-      return all.map((id) => ({ id, ready: can.includes(id) }))
+      const can = listOf(ready).map((id) => String(id)).filter((id) => id !== 'all')
+      return can.map((id) => ({ id, ready: true }))
     }
 
     /**
@@ -896,13 +904,13 @@ window.__ModuleLoader__.load({
                 key: format.id,
                 type: 'button',
                 className: 'dsr-btn',
-                disabled: !format.ready || busy !== '',
-                title: format.ready ? 'write build/' + (format.id === 'md' ? 'paper.md' : 'references.' + format.id) : 'not in this build yet',
+                disabled: busy !== '',
+                title: 'write build/' + (format.id === 'md' ? 'paper.md' : format.id === 'package' ? 'submission/' : format.id === 'html' ? 'paper.html' : format.id === 'tex' ? 'paper.tex' : 'references.' + format.id),
                 'data-dsr-build': format.id,
-                'data-dsr-ready': format.ready ? 'yes' : 'no',
+                'data-dsr-ready': 'yes',
                 onClick: () => run(format.id),
               },
-              busy === format.id ? 'Building…' : format.id + (format.ready ? '' : ' (later)'),
+              busy === format.id ? 'Building…' : format.id,
             ),
           ),
         ),
@@ -1557,7 +1565,7 @@ window.__ModuleLoader__.load({
       // payload readers and labels
       listOf, runsOf, gatesOf, optionsOf, pendingCount, isAnswered, pendingGates, answeredGates,
       answerLabel, answerText, runLabel, stageLabel, STAGE_LABELS,
-      claimsOf, sourcesOf, outlineOf, structureOf, statusRoll, buildFormats, FORMATS_COMING,
+      claimsOf, sourcesOf, outlineOf, structureOf, statusRoll, buildFormats,
       // formatting
       formatStamp, formatBytes, truncate,
       // what the POST is allowed to carry
