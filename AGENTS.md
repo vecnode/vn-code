@@ -95,7 +95,8 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 - `app/` — the Rust/**egui** shell: a cargo workspace whose binary is `vncode`, a
   control panel that opens idle, resolves and creates the root its harness home lives
   in (`$VNCODE_HOME`, with `DSH_HOME` at `<root>/home` unless `-DshHome`, a home chosen
-  in the panel or a writable inherited `DSH_HOME` says otherwise), starts the pinned
+  in the panel, a writable inherited `DSH_HOME`, or an installation already on the machine
+  while its own home is still fresh says otherwise), starts the pinned
   harness on **Start** and ends it on **Stop** (a launcher, not a desktop edition). It
   composes every child's environment rather than inheriting one, cleans every path before
   it uses one, and **draws no web view**: the interface opens in a browser it found
@@ -127,8 +128,10 @@ Run the check that owns the area, and say which ones you ran:
   does not have being refused BY NAME, so no build can promise a web view it does not
   draw), the panel's install/uninstall path, the home ladder (an unwritable inherited
   `DSH_HOME` falls through, an impossible `-DshHome` refuses by name, a writable inherited
-  one is joined, and `VNCODE_HOME` reaches no child), and that `app/src-tauri` is gone (it
-  also runs `cargo test --workspace`; it skips loudly with no cargo and no built
+  one is joined, the installation already on the machine is used while the app's own home is
+  fresh and NOT once it holds a session, and `VNCODE_HOME` reaches no child — every run
+  confined on `VNCODE_HOME`, `DSH_HOME` and `USERPROFILE`/`HOME`), and that `app/src-tauri` is
+  gone (it also runs `cargo test --workspace`; it skips loudly with no cargo and no built
   binary);
 - `check-audio-browser.mjs` — the check that drives a
   real browser (with none installed it skips loudly);

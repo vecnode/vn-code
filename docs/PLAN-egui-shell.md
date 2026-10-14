@@ -132,6 +132,9 @@ flowchart TD
     Flag["-DshHome given"] -->|probe| F{"writable?"}
     F -->|"no"| Refuse["REFUSE, naming the flag and the path<br/>(an explicit instruction is never silently ignored)"]
     F -->|"yes"| Use["export it as DSH_HOME"]
+    Found["the installation on this machine<br/>(~/.dsh: a harness home, writable,<br/>and this app's own home still fresh)"] -->|probe| G{"writable?"}
+    G -->|"yes"| Use
+    G -->|"no"| GNote["named in the log, and skipped"] --> Own
     Env["inherited DSH_HOME"] -->|probe| E{"writable?"}
     E -->|"yes"| Use
     E -->|"no"| ENote["named in the log, and skipped"] --> Own
@@ -143,9 +146,36 @@ flowchart TD
 | # | candidate | whose choice it is | when it is refused |
 |---|---|---|---|
 | 1 | `-DshHome <dir>` | the person's, typed — including `-DshHome %USERPROFILE%\.dsh` to share one home with `run-web` | **a refusal**, always, with the flag and the path named |
-| 2 | the inherited `DSH_HOME` | the parent process's — **joined when it works**, so an app launched from inside a harness session shares the sessions and the key that session already has | named and **skipped**, loudly: a parent's confinement is not a statement about where state should live |
-| 3 | **`<VNCODE_HOME>/home`** | the app's — **the default** | the app creates it and proves it; it is inside the root it already proved, and it is the home the Install button targets |
-| — | `~/.dsh` | **not a candidate at all** | it is an *input*, not a destination: offered once as **Adopt** (section 7), or used in place with `-DshHome` |
+| 2 | the home chosen in the panel (`prefs.json`) | the person's, clicked — including **Use my own home**, which makes the app's own root explicit and stops the rung below from looking | named and skipped if it has gone |
+| 3 | the inherited `DSH_HOME` | the parent process's — **joined when it works**, so an app launched from inside a harness session shares the sessions and the key that session already has | named and **skipped**, loudly: a parent's confinement is not a statement about where state should live |
+| 4 | **the installation already on this machine** (`~/.dsh`) | the machine's, and used only as a courtesy: a harness home, **writable by a child**, and the app's own home still holding nothing of the person's | named and skipped when it cannot be written, or when that home has a session or a key of its own |
+| 5 | **`<VNCODE_HOME>/home`** | the app's — **the default** | the app creates it and proves it; it is inside the root it already proved, and it is the home the Install button targets |
+
+Row 4 is a **measured correction**, and it is deliberately narrow. Without it the app came up
+on a fresh, bare harness — no pack, no model key — beside a complete installation at `~/.dsh`,
+and its owner's word for that was *"still does not run normally"*. Three conditions, all
+required, and each one is a `cargo test` case:
+
+* the harness's own default home exists and has the **shape** of a harness home;
+* a child can **write** there — a real probe, because the harness composes its profile into a
+  home on every boot, and using a home the app cannot write is the failure this whole revision
+  exists to prevent;
+* the app's own home still holds **nothing of the person's** — no `skills/`, no `sessions/`, no
+  credentials file with content. The harness's own first-boot furniture does not count
+  (`adopt::home_is_untouched_by_a_person`), which is the same measurement that decides the
+  Adopt offer in §8.
+
+So it is a one-time courtesy rather than a policy: the moment that home has something of the
+person's in it, the app stops looking, and **Use my own home** in the panel makes the app's own
+root an explicit, remembered choice. The check drives both halves — a scratch "machine" home
+with sessions and a key is used, and the same home is left alone once the app's own home has a
+session in it.
+
+It does **not** check whether that home is *live*: the harness keeps no lock to read, so an app
+started beside a running `dsh web` shares one home with it rather than two, which is the point
+of the rung and also its one caveat. The panel's `home` row names the path and its origin, so
+which home is in use is never a guess, and `-DshHome` or **Use my own home** is the way to keep
+them apart.
 
 **Why the furniture sits outside the home.** Because the app must not write its own records
 into a home it did not create, and `appdata.rs`'s own header already says so about the npm
@@ -166,10 +196,13 @@ origin **and** the refused candidates with their reasons. There is deliberately 
 flag**: `-DshHome` already means "do not decide this for me", and it still refuses rather
 than moving.
 
-**What it does not do.** It never writes a probe, a note or anything else into a home it
-refused, and it never *reads the value* of a credential there — the only thing it may do
-with `~/.dsh` is offer to **Adopt** it (section 8), which copies from a home it can read
-into one it has proved it can write.
+**What it does not do.** It never writes a note, a log or a record into a home it refused —
+the one write it makes there is the probe file at that home's root, created and deleted, which
+is what "a child can write in it" means and the only way to know. It never *reads the value* of
+a credential: the Adopt offer and the freshness guard both go by file SIZE. And the only thing
+it ever does with `~/.dsh` besides probing it is to **use it** (row 4, when the conditions hold)
+or to offer **Adopt** (section 8), which copies from a home it can read into one it has proved
+it can write.
 
 ## 3. The child's environment is composed, never inherited
 
@@ -496,8 +529,17 @@ grew with the work rather than after it. What landed (190 tests in the workspace
    fallback;
 5. assert a third run whose inherited `DSH_HOME` **is** writable joins it, and that the app
    root's `home/` is never created;
-6. re-run the token scan over whatever the run wrote — in BOTH roots, because M0 changed
+6. assert a fourth run, with a scratch *person's* home holding a harness home (a profile, a
+   session, a credentials file with content), **uses the installation on that machine** — and
+   that a fifth run, with a session of its own already in `<app root>/home`, does **not**;
+7. re-run the token scan over whatever the run wrote — in BOTH roots, because M0 changed
    where files land, and "the token reached no file" has to hold for the new location too.
+
+Every run is confined on all three axes — `VNCODE_HOME`, `DSH_HOME` **and** `USERPROFILE`/`HOME`
+— because the app now reads the person's home to decide rung 4. The check that did not control
+`USERPROFILE` would drive the harness against the real `~/.dsh` of whoever ran it, and the check
+that did not REMOVE an inherited `DSH_HOME` from its own environment would fail on a machine
+where one is exported (this one). Both were measured while rung 4 was written.
 
 The existing assertions stay exactly as they are: the foreign ready line is refused, the
 token is in no stream and no file, Stop frees the port and kills the grandchild, `-Help`
@@ -566,6 +608,11 @@ and `~/.dsh` is never a default. What remains:
 1. **Adopt and the credentials file**: skills/sessions/storages/attachments copied in one
    click, `.credentials.yaml` behind a second one — or never copied, and the key re-entered
    in the harness's own Models page?
+2. **The installation already on this machine** — **decided, and shipped** (§2 row 4): it is
+   used while the app's own home holds nothing of the person's, because the alternative was
+   measured and it was a bare harness beside a working one. The question that remains is only
+   *how loud* the panel should be about it, not whether the rung exists; **Use my own home**
+   is the way out, and it is one click.
 2. **A web view** — **decided, and not planned.** The owner's decision is that this app shows
    the interface in a browser it found: no `embed`, no `Pane`, no engine vendored. If that
    ever changes it is a new plan, not an unfinished phase, and the argument to beat is section

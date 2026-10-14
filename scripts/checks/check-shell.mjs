@@ -196,30 +196,45 @@ const isFree = (port) =>
 /**
  * Start `vncode -Mode headless` against the stub and collect everything it says.
  *
- * Every run is confined to a scratch APP ROOT (`VNCODE_HOME`) and a scratch harness
- * home, so a check can never write into the machine's own `~/.dsh` or into the
- * `%LOCALAPPDATA%\vncode` a person's real app uses. `env` overrides either, which is
- * how the confined-home cases are built.
+ * Every run is confined to a scratch APP ROOT (`VNCODE_HOME`), a scratch harness home,
+ * AND a scratch USER HOME (`USERPROFILE`/`HOME`), so a check can never write into the
+ * machine's own `~/.dsh` or into the `%LOCALAPPDATA%\vncode` a person's real app uses.
+ * That last one is not decoration: the app USES an installation it finds on the machine
+ * (`~/.dsh`), so a check that left `USERPROFILE` alone would drive the harness against a
+ * person's real home. `env` overrides any of them, which is how the confined, joined and
+ * found-installation cases are built.
  */
-function startShell({ mode = 'good', label, env = {}, dshHome } = {}) {
+function startShell({ mode = 'good', label, env = {}, dshHome, userHome, seed } = {}) {
   const home = dshHome === undefined ? path.join(scratch, `home-${label}`) : dshHome
   const appRoot = path.join(scratch, `app-${label}`)
+  const person = userHome === undefined ? path.join(scratch, `user-${label}`) : userHome
   if (dshHome === undefined) {
     fs.rmSync(home, { recursive: true, force: true })
     fs.mkdirSync(home, { recursive: true })
   }
   fs.rmSync(appRoot, { recursive: true, force: true })
   fs.mkdirSync(appRoot, { recursive: true })
+  fs.mkdirSync(person, { recursive: true })
+  // A case may seed the app's own root - which is how "this home already holds
+  // something of the person's" is built.
+  if (seed) seed(appRoot)
   const pidFile = path.join(scratch, `grandchild-${label}.pid`)
   fs.rmSync(pidFile, { force: true })
   const args = ['-Mode', 'headless', '-DshVersion', '0.0.0-check']
   // The flag is only passed when a home was named: `-DshHome` is the STRICT rung of
   // the ladder, so an inherited-home case must not carry one.
   if (dshHome !== undefined && dshHome !== null) args.push('-DshHome', dshHome)
+  let base = { ...process.env }
+  // THIS check's environment is not the app's. The machine running the check may well
+  // have a DSH_HOME of its own exported (the harness that started this shell does), and
+  // the app's ladder would rightly join it - so it is REMOVED here and every case that
+  // wants an inherited home passes one explicitly. Same for the app's own root.
+  delete base.DSH_HOME
+  delete base.VNCODE_HOME
   const child = spawn(binary, args, {
     cwd: repo,
     env: {
-      ...process.env,
+      ...base,
       // The seam: the shell runs THIS instead of the pinned harness, through the
       // same argv and the same ready-line watch as the real thing.
       VNCODE_STUB_CLI: process.execPath,
@@ -228,10 +243,12 @@ function startShell({ mode = 'good', label, env = {}, dshHome } = {}) {
       VNCODE_STUB_HOST: EVIL_HOST,
       VNCODE_STUB_TOKEN: TOKEN,
       VNCODE_STUB_PID_FILE: pidFile,
-      // The app's own root and the home the run starts from, both in scratch. The
-      // caller's overrides win, which is how a refused or a joined inherited home is
-      // built.
+      // The app's own root, the home the run starts from, and the person's home - all
+      // in scratch. The caller's overrides win, which is how a refused, a joined or a
+      // found home is built.
       VNCODE_HOME: appRoot,
+      USERPROFILE: person,
+      HOME: person,
       ...env,
     },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -453,8 +470,57 @@ async function checkConfinedHome() {
   joined.child.stdin.write('stop\n')
   await waitFor(joined, () => joined.exit !== null, 20000, 'the joined run to stop')
 
+  // 4. THE INSTALLATION ALREADY ON THE MACHINE is used. This is the measured failure:
+  //    a complete installation at `~/.dsh` - pack and key - with the app coming up on a
+  //    fresh, bare harness of its own beside it, which the person's word for was "still
+  //    does not run normally". The person's home here is scratch, so the rung is proved
+  //    without going anywhere near a real one.
+  const person = path.join(scratch, 'person-found')
+  const installed = path.join(person, '.dsh')
+  fs.rmSync(person, { recursive: true, force: true })
+  fs.mkdirSync(path.join(installed, 'profiles', 'web'), { recursive: true })
+  fs.mkdirSync(path.join(installed, 'sessions'), { recursive: true })
+  fs.writeFileSync(path.join(installed, 'sessions', 'c1.json'), '{}')
+  fs.writeFileSync(path.join(installed, '.credentials.yaml'), 'deepseek: {apiKey: x}\n')
+  const found = startShell({ label: 'found', dshHome: null, userHome: person })
+  if (!(await waitFor(found, () => runningPort(found) !== null, 20000, 'a ready line on the installation already on the machine'))) {
+    return
+  }
+  if (!found.out.includes(`[stub] DSH_HOME=${installed}`)) {
+    fail(`the installation already on the machine was not used\n--- stdout ---\n${found.out}`)
+  }
+  if (!found.out.includes('the installation already on this machine')) {
+    fail(`the panel does not say which home it is using\n--- stdout ---\n${found.out}`)
+  }
+  if (fs.existsSync(path.join(found.appRoot, 'home', 'sessions'))) {
+    fail('the app created its own home and used it as well')
+  }
+  found.child.stdin.write('stop\n')
+  await waitFor(found, () => found.exit !== null, 20000, 'the found-installation run to stop')
+
+  // 5. ...but NOT once the app's own home holds something of the person's. A session in
+  //    `<app root>/home` must beat the installation on the machine, or the courtesy in
+  //    case 4 would be a policy that overrode somebody's own home.
+  const theirs = startShell({
+    label: 'theirs',
+    dshHome: null,
+    userHome: person,
+    seed: (appRoot) => {
+      fs.mkdirSync(path.join(appRoot, 'home', 'sessions'), { recursive: true })
+      fs.writeFileSync(path.join(appRoot, 'home', 'sessions', 'mine.json'), '{}')
+    },
+  })
+  if (!(await waitFor(theirs, () => runningPort(theirs) !== null, 20000, 'a ready line on the app\'s own home'))) {
+    return
+  }
+  if (!theirs.out.includes(`[stub] DSH_HOME=${theirs.appRoot}${path.sep}home`)) {
+    fail(`a home holding a session of its own was overridden\n--- stdout ---\n${theirs.out}`)
+  }
+  theirs.child.stdin.write('stop\n')
+  await waitFor(theirs, () => theirs.exit !== null, 20000, 'the own-home run to stop')
+
   console.log(
-    'check-shell: an unwritable inherited home falls through, an impossible -DshHome refuses by name, a writable one is joined',
+    'check-shell: an unwritable inherited home falls through, an impossible -DshHome refuses by name, a writable one is joined, and the installation on the machine is used only while the app`s own home is fresh',
   )
 }
 

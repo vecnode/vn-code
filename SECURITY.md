@@ -104,7 +104,17 @@ as a default: that folder belongs to whichever harness used it first, and a home
 did not create is a home it cannot promise. A candidate is used only after a real write
 probe, the first rung of the ladder is a `-DshHome` the person typed (a refusal there
 ends the run rather than quietly using another path), and **the app never writes a
-probe, a note or anything else into a home it refused**.
+note, a log or a record into a home it refused** — the one write it makes outside its own
+root is the probe file, created and deleted at the root of a home it is considering, because
+"a child can write here" is not knowable any other way.
+
+**Using an installation that is already on the machine is not an exception to that**, and it
+is deliberately narrow: `~/.dsh` is used in place only when it has the shape of a harness home,
+a child can write in it, **and** this app's own home still holds nothing of the person's — no
+skills, no sessions, no credentials file with content (`adopt::home_is_untouched_by_a_person`).
+The alternative was measured and it was worse: a fresh, bare harness with no pack and no key
+beside a complete installation. The moment that home holds something of yours, the app stops
+looking, and **Use my own home** in the panel makes its own root an explicit, remembered choice.
 
 Four hardening rules travel with those paths, and each is a `cargo test` case:
 

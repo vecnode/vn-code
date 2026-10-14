@@ -89,10 +89,21 @@ Windows `\\?\` form stripped). **The first candidate that passes a real write pr
 | # | candidate | when |
 |---|---|---|
 | 1 | `-DshHome <dir>` | the person named it. A refusal here **ends the run**, naming the flag - an explicit instruction is never silently ignored |
-| 2 | the home chosen in the panel | a click in the panel outranks an environment variable; if it has gone, the ladder continues with a line saying so |
+| 2 | the home chosen in the panel | a click in the panel outranks an environment variable; if it has gone, the ladder continues with a line saying so. **Use my own home** puts rung 5 here |
 | 3 | an inherited `DSH_HOME` | it is writable: the app JOINS the home of the session that started it, sharing that session's sessions and key |
-| 4 | `<VNCODE_HOME>/home` | the default, created and proved by the app |
-| — | `~/.dsh` | never chosen by the app on its own: the panel offers **Use it** (share it, remembered) or **Adopt** (copy the durable things here), and `-DshHome` does it by hand |
+| 4 | **the installation already on this machine** | `~/.dsh` has the shape of a harness home, a child can **write** in it, and this app's own home still holds nothing of yours |
+| 5 | `<VNCODE_HOME>/home` | the default, created and proved by the app |
+
+Rung 4 is a measured correction rather than a default. Without it the app came up on a fresh,
+bare harness - no pack, no model key - beside a complete installation at `~/.dsh`, and the word
+for that was "still does not run normally". It is deliberately narrow: **a one-time courtesy,
+not a policy**. The moment that home holds something of yours the app stops looking, and **Use
+my own home** makes this app's own root an explicit, remembered choice. "Nothing of yours" is
+`adopt::home_is_untouched_by_a_person`: no `skills/`, no `sessions/`, no credentials file with
+content - the harness's own first-boot furniture (a composed `profiles/`, an empty
+`.credentials.yaml`, a `storages/`) does not count, which is the same measurement that decides
+the Adopt offer below. The panel still offers **Use it** / **Adopt** for the case where you want
+the app's own root to hold everything.
 
 A directory the app CREATED is hardened to `0700` on Unix, because it holds
 `.credentials.yaml` and an npm cache; a directory the app merely JOINED is never touched,

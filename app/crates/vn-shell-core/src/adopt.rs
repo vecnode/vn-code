@@ -114,6 +114,22 @@ fn credentials_have_content(path: &Path) -> bool {
     std::fs::metadata(path).map(|meta| meta.len() > 0).unwrap_or(false)
 }
 
+/// Whether a home holds nothing of YOURS yet.
+///
+/// "Yours" is what a person accumulates and what only they can replace: skills, the
+/// session transcripts, and a credentials file with CONTENT. The harness's own
+/// furniture does not count - it composes `profiles/<name>/`, writes an empty
+/// `.credentials.yaml` and a `storages/` into a fresh home on its very first boot.
+///
+/// This is the guard for a decision with real consequences: **using an installation
+/// that is already on the machine** (see `home::Origin::Found`). It is what keeps that
+/// from ever overriding a home somebody has actually used.
+pub fn home_is_untouched_by_a_person(home: &Path) -> bool {
+    !has_content(&home.join("skills"))
+        && !has_content(&home.join("sessions"))
+        && !credentials_have_content(&home.join(CREDENTIALS))
+}
+
 /// Whether there is anything left to bring across - the rule that decides whether the
 /// panel offers Adopt at all.
 ///
@@ -343,6 +359,30 @@ mod tests {
             available.items.iter().map(|item| item.name).collect::<Vec<_>>(),
             vec!["sessions"]
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_fresh_home_is_untouched_even_after_the_harness_has_booted_in_it() {
+        let root = scratch("untouched");
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        assert!(home_is_untouched_by_a_person(&home), "an empty home is untouched");
+        // What the harness writes by itself must not change that answer.
+        std::fs::create_dir_all(home.join("profiles").join("web")).unwrap();
+        std::fs::create_dir_all(home.join("storages")).unwrap();
+        std::fs::write(home.join(CREDENTIALS), b"").unwrap();
+        assert!(
+            home_is_untouched_by_a_person(&home),
+            "a composed profile, storages and an EMPTY credentials file are the harness's own"
+        );
+        // What a PERSON leaves there does.
+        std::fs::write(home.join(CREDENTIALS), b"deepseek: {apiKey: x}\n").unwrap();
+        assert!(!home_is_untouched_by_a_person(&home), "a key with content is yours");
+        std::fs::write(home.join(CREDENTIALS), b"").unwrap();
+        std::fs::create_dir_all(home.join("sessions")).unwrap();
+        std::fs::write(home.join("sessions").join("c1.json"), b"{}").unwrap();
+        assert!(!home_is_untouched_by_a_person(&home), "a transcript is yours");
         let _ = std::fs::remove_dir_all(&root);
     }
 

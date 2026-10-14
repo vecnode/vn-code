@@ -57,11 +57,18 @@ its own ladder decides which folder that is:
 | 1 | `-DshHome <dir>` | the person named it. **A refusal here ends the run** — an explicit instruction is never silently ignored |
 | 2 | the home chosen in the panel (`prefs.json`) | a click outranks an environment variable; if it has moved or gone, the ladder continues and says so |
 | 3 | an inherited `DSH_HOME` | it is writable: the app JOINS the home of the session that started it, sharing its sessions and its key |
-| 4 | `<VNCODE_HOME>/home` | **the default**, created and proved by the app |
-| — | `~/.dsh` | never a default: it belongs to whichever harness used it first. The panel offers **Use it** (share it, remembered) or **Adopt** (copy the durable things here) |
+| 4 | the installation already on this machine (`~/.dsh`) | it has the shape of a harness home, **a child can write in it**, and the app's own home still holds nothing of the person's — no skills, no sessions, no credentials with content. A one-time courtesy, not a policy: the moment that home has something of yours in it, the app stops looking. `Use my own home` in the panel makes the app's own root an explicit, remembered choice |
+| 5 | `<VNCODE_HOME>/home` | **the default**, created and proved by the app |
 
 A candidate is used only after a real write probe, and every refused candidate is
 named in the log and in the panel — see `docs/PLAN-egui-shell.md` §2.
+
+Row 4 is the one measured on a real machine: the app used to come up on a fresh, bare
+harness — no pack, no model key — beside a complete installation at `~/.dsh`, which its
+owner's word for was "still does not run normally". The guard is what keeps it honest:
+`adopt::home_is_untouched_by_a_person` counts only what a person accumulates, so the
+harness's own first-boot furniture (a composed `profiles/`, an empty `.credentials.yaml`,
+a `storages/`) cannot make a home look used, and a home that IS used is never overridden.
 
 For a harness started by **anything else** (`scripts\run-web.bat`, `npx dsh web`, the
 CLI by hand), the harness's own resolver is still what decides, highest precedence

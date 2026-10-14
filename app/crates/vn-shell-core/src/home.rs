@@ -61,6 +61,10 @@ pub enum Origin {
     Remembered,
     /// `DSH_HOME` was inherited from this shell's own environment.
     Inherited,
+    /// **The installation already on this machine**: the harness's own default home
+    /// when it holds a real installation, a child can write in it, and the app's own
+    /// home still holds nothing of the person's.
+    Found,
     /// This app's own home, inside the root.
     Owned,
     /// `VNCODE_HOME` named the app's root.
@@ -77,6 +81,7 @@ impl Origin {
             Origin::Flag => "from -DshHome",
             Origin::Remembered => "the home you chose in this panel",
             Origin::Inherited => "from the inherited DSH_HOME",
+            Origin::Found => "the installation already on this machine",
             Origin::Owned => "this app's own home (the default)",
             Origin::NamedRoot => "from VNCODE_HOME",
             Origin::PlatformRoot => "this app's root in the platform's data directory",
@@ -239,6 +244,9 @@ pub struct Inputs<'a> {
     pub remembered: Option<&'a Path>,
     /// `DSH_HOME` inherited from whatever started this app.
     pub inherited: Option<&'a str>,
+    /// The installation already on this machine, when the caller decided it should be
+    /// used (see [`found_installation`]).
+    pub found: Option<&'a Path>,
     /// The platform's own per-user data root.
     pub data_root: Option<&'a Path>,
     /// Where `.dsh-version.json` was found.
@@ -322,6 +330,20 @@ pub fn home_candidates(inputs: &Inputs<'_>, app_root: Option<&Path>) -> Vec<Cand
     }
     if let Some(inherited) = inputs.inherited {
         candidates.extend(candidate(inherited, Origin::Inherited, false, inputs));
+    }
+    // THE INSTALLATION ALREADY ON THIS MACHINE. Not a default and never a guess: it is
+    // a rung only when the caller has established - by probing - that this is a harness
+    // home a child can write in, and that the app's own home still holds nothing of the
+    // person's. Measured: without this rung the app came up on a fresh, bare harness
+    // beside a complete installation (`pack + key`) at `~/.dsh`, and the person's word
+    // for that was "still does not run normally".
+    if let Some(found) = inputs.found {
+        candidates.push(Candidate {
+            path: found.to_path_buf(),
+            origin: Origin::Found,
+            strict: false,
+            problem: None,
+        });
     }
     if let Some(root) = app_root {
         candidates.push(Candidate {
@@ -418,8 +440,13 @@ pub fn resolve_with(
 /// filesystem - the probe WRITES, which is the only proof this app accepts.
 ///
 /// `remembered` is the home the person chose in the panel, read from the app root by
-/// the caller (so this function reads no preferences of its own).
-pub fn from_env(flag: Option<&str>, remembered: Option<&Path>) -> Resolution {
+/// the caller (so this function reads no preferences of its own); `found` is the
+/// installation already on the machine, decided by [`found_installation`].
+pub fn from_env(
+    flag: Option<&str>,
+    remembered: Option<&Path>,
+    found: Option<&Path>,
+) -> Resolution {
     let named_root = std::env::var("VNCODE_HOME").ok();
     let inherited = std::env::var("DSH_HOME").ok();
     let data_root = crate::appdata::data_root();
@@ -431,12 +458,44 @@ pub fn from_env(flag: Option<&str>, remembered: Option<&Path>) -> Resolution {
         flag,
         remembered,
         inherited: inherited.as_deref(),
+        found,
         data_root: data_root.as_deref(),
         tree_root: tree.as_deref(),
         cwd: cwd.as_deref(),
         user_home: user_home.as_deref(),
     };
     resolve_with(&inputs, &mut crate::appdata::probe)
+}
+
+/// **The installation already on this machine**, when it should be used.
+///
+/// Three conditions, and all three are required:
+///
+/// 1. the harness's own default home (`~/.dsh`) exists and has the SHAPE of a harness
+///    home - a profile, sessions, storages or a credentials file;
+/// 2. a child can **write** there, because the harness composes its profile into the
+///    home on every boot (`appdata::harness_home_is_writable` - a real write probe);
+/// 3. the app's own home still holds **nothing of the person's**
+///    (`adopt::home_is_untouched_by_a_person`): no skills, no sessions, no credentials
+///    with content. The harness's own first-boot furniture - a composed `profiles/`, an
+///    empty `.credentials.yaml`, a `storages/` - is not the person's.
+///
+/// The first two are why this is not a default: a home the app did not create is one it
+/// cannot promise, and it says so by only using it when it can be written. The third is
+/// what makes it a ONE-TIME courtesy rather than a policy - the moment somebody's own
+/// home has a session or a key in it, the app stops second-guessing and uses that.
+pub fn found_installation(default: Option<&Path>, own_home: Option<&Path>) -> Option<PathBuf> {
+    let found = default?;
+    if !looks_like_a_harness_home(found) {
+        return None;
+    }
+    if !crate::appdata::harness_home_is_writable(found) {
+        return None;
+    }
+    match own_home {
+        Some(own) if !crate::adopt::home_is_untouched_by_a_person(own) => None,
+        _ => Some(found.to_path_buf()),
+    }
 }
 
 /// Whether a directory has the shape of a harness home.
@@ -523,6 +582,71 @@ mod tests {
             user_home: Some(Path::new("/home/someone")),
             ..Inputs::default()
         }
+    }
+
+    #[test]
+    fn the_installation_already_on_the_machine_is_used_when_the_apps_home_is_fresh() {
+        // The measured failure this rung answers: a machine with a complete
+        // installation at `~/.dsh` (pack + key), and an app that came up on a fresh,
+        // bare harness of its own beside it.
+        let mut probe = prober(&["/data/vncode", "/home/someone/.dsh"]);
+        let resolved = resolve_with(
+            &Inputs { found: Some(Path::new("/home/someone/.dsh")), ..inputs() },
+            &mut probe,
+        );
+        assert_eq!(resolved.home_path(), Some(Path::new("/home/someone/.dsh")));
+        assert_eq!(resolved.home.as_ref().unwrap().origin, Origin::Found);
+        assert!(
+            resolved.row().1.contains("already on this machine"),
+            "{}",
+            resolved.row().1
+        );
+
+        // ...and the app's OWN home is still the rung that wins when nothing was found.
+        let mut probe = prober(&["/data/vncode", "/data/vncode/home"]);
+        let resolved = resolve_with(&inputs(), &mut probe);
+        assert_eq!(resolved.home_path(), Some(Path::new("/data/vncode/home")));
+        assert_eq!(resolved.home.as_ref().unwrap().origin, Origin::Owned);
+    }
+
+    #[test]
+    fn a_typed_home_and_an_inherited_one_both_beat_the_found_installation() {
+        let mut probe = prober(&["/data/vncode", "/flag/.dsh", "/home/someone/.dsh"]);
+        let resolved = resolve_with(
+            &Inputs {
+                flag: Some("/flag/.dsh"),
+                found: Some(Path::new("/home/someone/.dsh")),
+                ..inputs()
+            },
+            &mut probe,
+        );
+        assert_eq!(resolved.home_path(), Some(Path::new("/flag/.dsh")));
+
+        let mut probe = prober(&["/data/vncode", "/parent/.dsh", "/home/someone/.dsh"]);
+        let resolved = resolve_with(
+            &Inputs {
+                inherited: Some("/parent/.dsh"),
+                found: Some(Path::new("/home/someone/.dsh")),
+                ..inputs()
+            },
+            &mut probe,
+        );
+        assert_eq!(resolved.home_path(), Some(Path::new("/parent/.dsh")));
+        assert_eq!(resolved.home.as_ref().unwrap().origin, Origin::Inherited);
+    }
+
+    #[test]
+    fn a_found_installation_that_cannot_be_written_falls_through_with_a_line() {
+        // The app may only USE a home a child can write in; when it cannot, the rung is
+        // refused like any other and the app's own home is used instead.
+        let mut probe = prober(&["/data/vncode", "/data/vncode/home"]);
+        let resolved = resolve_with(
+            &Inputs { found: Some(Path::new("/locked/.dsh")), ..inputs() },
+            &mut probe,
+        );
+        assert_eq!(resolved.home_path(), Some(Path::new("/data/vncode/home")));
+        assert_eq!(resolved.refused.len(), 1);
+        assert!(resolved.refused[0].line().contains("/locked/.dsh"));
     }
 
     #[test]

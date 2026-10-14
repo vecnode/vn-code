@@ -31,6 +31,7 @@ use egui::{Color32, RichText};
 use vn_shell_core::adopt::Offer;
 use vn_shell_core::appprefs::AppPrefs;
 use vn_shell_core::browser::{self, Browser};
+use vn_shell_core::home::Origin;
 use vn_shell_core::keystate::KeyState;
 use vn_shell_core::options::Options;
 use vn_shell_core::prefs::Preferences;
@@ -296,6 +297,33 @@ impl Shell {
         }
     }
 
+    /// Leave the installation this app found on the machine, and use its own home.
+    ///
+    /// The way out of the courtesy `home::found_installation` extends: that rung is
+    /// only ever used while the app's own home holds nothing of the person's, and this
+    /// makes "my own home" an EXPLICIT choice - remembered, so the app stops looking.
+    fn use_own_home(&mut self) {
+        let Some(root) = self.context.plan.app_root() else {
+            self.notice = Some(
+                "this app could not create a root of its own, so it has no home to offer"
+                    .to_string(),
+            );
+            return;
+        };
+        let own = vn_shell_core::appdata::owned_home(root);
+        let cwd = std::env::current_dir().ok();
+        match self.context.app_prefs.set_home(&own.to_string_lossy(), cwd.as_deref()) {
+            Ok(()) => {
+                self.save_prefs();
+                self.notice = Some(format!(
+                    "{} will be used from the next Start - press **Install pack** there to add this pack's bundles",
+                    own.display()
+                ));
+            }
+            Err(error) => self.notice = Some(error),
+        }
+    }
+
     /// Forget the remembered home, so the ladder decides again on the next Start.
     fn forget_home(&mut self) {
         self.context.app_prefs.clear_home();
@@ -546,6 +574,31 @@ impl Shell {
                             }
                         });
                     }
+                }
+                // ...and when the home in use is one this app FOUND rather than made,
+                // one click says "use my own home after all" - remembered, so the app
+                // stops looking on the next run.
+                if self
+                    .context
+                    .plan
+                    .home
+                    .home
+                    .as_ref()
+                    .map(|selection| selection.origin == Origin::Found)
+                    .unwrap_or(false)
+                {
+                    ui.label("using the installation on this machine");
+                    ui.add_enabled_ui(!live && !busy, |ui| {
+                        if ui
+                            .button("Use my own home")
+                            .on_hover_text(
+                                "run against this app's own root instead, from the next Start",
+                            )
+                            .clicked()
+                        {
+                            self.use_own_home();
+                        }
+                    });
                 }
                 match self.context.adopt_offer.clone() {
                     Offer::Available(adoption) => {

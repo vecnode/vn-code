@@ -177,7 +177,18 @@ impl Plan {
 pub fn plan(options: &Options, remembered: Option<&Path>) -> Result<Plan, String> {
     let root = launch::repo_root();
     let version = launch::resolve_version(options)?;
-    let resolved = home::from_env(options.dsh_home.as_deref(), remembered);
+    // THE INSTALLATION ALREADY ON THIS MACHINE, decided before the ladder runs: a real
+    // harness home, a child can write in it, and this app's own home still holds
+    // nothing of the person's. Without this the app came up on a fresh, bare harness
+    // beside a complete installation - measured, and the person's word for it was
+    // "still does not run normally".
+    let own_home = vn_shell_core::appdata::app_root()
+        .map(|root| vn_shell_core::appdata::owned_home(&root));
+    let found = vn_shell_core::home::found_installation(
+        vn_shell_core::home::existing_default_home().as_deref(),
+        own_home.as_deref(),
+    );
+    let resolved = home::from_env(options.dsh_home.as_deref(), remembered, found.as_deref());
     let chosen = launch::choose_launch(root.as_deref(), resolved.home_path(), &version);
     let mut notes = resolved.notes();
     // The preflight, as a NOTE here rather than a refusal: the panel says it the
