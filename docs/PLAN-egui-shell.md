@@ -338,13 +338,15 @@ the panel offers two deliberate actions, and the app makes neither decision on i
 ### Adopt: what happens to the home the app did not choose
 
 The app's home starts empty, and the user's real installation — sessions, skills, the model
-key — is in `~/.dsh`. So the panel offers **Adopt**, once, whenever a home that already has
-this state exists (the harness's default, or an inherited `DSH_HOME` that was refused) and
-the chosen home is empty: it copies the durable, *small* things into the chosen home —
+key — is usually in `~/.dsh`. So the panel offers **Adopt** whenever a home that already has
+this state exists (the harness's default, or an inherited `DSH_HOME` that was refused) and the
+chosen home has **nothing of yours** in it: it copies the durable, *small* things across —
 `skills/`, `sessions/`, `storages/`, `attachments/` — and it never touches the caches
 (`dsh-pdf/artifacts`, `dsh-diagrams/*`, `dsh-media/*`, up to 8 GiB by `docs/PATHS.md`, all
-reproducible). This is why joining a *writable* inherited `DSH_HOME` matters: an app started
-from inside a harness session is already on that session's home and never needs Adopt at all.
+reproducible). A composed `profiles/` does **not** make a home "used": the harness creates it
+by itself on the first boot, and counting it is how the offer — and with it the key — was lost
+after one run. This is also why joining a *writable* inherited `DSH_HOME` matters: an app
+started from inside a harness session is already on that session's home and needs no Adopt.
 Three rules:
 
 1. **Nothing is written into the source home**, ever. Adopt reads from it and writes into

@@ -155,12 +155,15 @@ Where `~/.dsh` already holds an installation, the panel offers two deliberate ac
 makes neither decision for you: **Use it** remembers that path and runs the harness against
 itself (sharing one set of sessions, skills and keys with `scripts\run-web.bat`), with
 **Forget it** to undo; and **Adopt** copies in `skills/`, `sessions/`, `storages/` and
-`attachments/`, one click. The caches are never copied (512 MiB, 200 MiB and up to 8 GiB, all
-reproducible), `profiles/` is never copied (the Install button re-creates it), and
-**`.credentials.yaml` is a second click** - a byte-for-byte copy, so its value is never read
-into this process, which is what keeps [`SECURITY.md`](../SECURITY.md)'s presence-only promise
-true. Nothing is ever written into the source home, a file that already exists is never
-overwritten, and a link is skipped rather than followed.
+`attachments/`, one click. The offer lasts as long as the home has **nothing of yours** in it
+- a composed `profiles/` does not count, because the harness creates that by itself on the
+first boot, and counting it is how a person's own key stopped being offered. The caches are
+never copied (512 MiB, 200 MiB and up to 8 GiB, all reproducible), `profiles/` is never copied
+(the Install button re-creates it), and **`.credentials.yaml` is a second click** - a
+byte-for-byte copy, so its value is never read into this process, which is what keeps
+[`SECURITY.md`](../SECURITY.md)'s presence-only promise true. Nothing is ever written into the
+source home, a file that already exists is never overwritten, and a link is skipped rather than
+followed.
 
 ### Where npm's cache goes, and why it is chosen rather than assumed
 

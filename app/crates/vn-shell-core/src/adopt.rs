@@ -98,14 +98,22 @@ fn names() -> String {
     format!("{} or {}", names.join(", "), last)
 }
 
-/// Whether a directory has none of the durable trees yet - the rule that decides
-/// whether the panel offers Adopt at all.
+/// Whether a home has none of YOUR things yet - the rule that decides whether the
+/// panel offers Adopt at all.
 ///
-/// A home with a `profiles/` or a `sessions/` is one this app has already used (or
-/// the user has), and copying an older installation over it would be a merge nobody
-/// asked for. So Adopt is for an untouched home, which is exactly the first run.
+/// "Yours" is exactly what Adopt would copy: the durable trees, and the credential
+/// document. A home that already has a `sessions/` or a `.credentials.yaml` has a life
+/// of its own, and copying an older installation into it is a merge nobody asked for -
+/// so Adopt is for a home with nothing of yours in it.
+///
+/// **`profiles/` is deliberately NOT part of this test**, and that is a bug this rule
+/// had: the harness composes `profiles/<name>/` into the home on its VERY FIRST boot,
+/// so a home the app created stopped looking "untouched" after one run - and the one
+/// thing a person most wants to bring across (their key, their sessions) could never be
+/// offered again. Adopt does not copy `profiles/` anyway; the installer re-creates it.
 pub fn target_is_untouched(target: &Path) -> bool {
-    !target.join("profiles").exists() && !target.join("sessions").exists()
+    DURABLE.iter().all(|(name, _)| !target.join(name).exists())
+        && !target.join(CREDENTIALS).exists()
 }
 
 /// Whether the source can be read at all. A source that cannot is not adopted
@@ -258,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn adopt_is_offered_only_for_an_untouched_home() {
+    fn adopt_is_offered_only_for_a_home_with_nothing_of_yours_in_it() {
         let root = scratch("offer");
         let source = root.join(".dsh");
         std::fs::create_dir_all(source.join("sessions")).unwrap();
@@ -266,8 +274,24 @@ mod tests {
         std::fs::create_dir_all(&fresh).unwrap();
 
         assert!(matches!(offer(Some(&source), Some(&fresh)), Offer::Available(_)));
-        // A home this app has already installed into is not adopted over.
-        std::fs::create_dir_all(fresh.join("profiles")).unwrap();
+
+        // A home the harness has already booted in is STILL offered: it composes
+        // `profiles/` by itself on the first boot, so counting that as "used" is how
+        // a person's key and sessions stopped being offered at all. Measured against a
+        // real run's log, where the home was `<tree>/.vncode/home` with `profiles/web`
+        // in it and the key was still in `~/.dsh`.
+        std::fs::create_dir_all(fresh.join("profiles").join("web")).unwrap();
+        assert!(
+            matches!(offer(Some(&source), Some(&fresh)), Offer::Available(_)),
+            "a composed profile must not close the offer"
+        );
+
+        // A home with sessions of its own, or with a credentials file, is not adopted
+        // over: it has a life of its own.
+        std::fs::create_dir_all(fresh.join("sessions")).unwrap();
+        assert_eq!(offer(Some(&source), Some(&fresh)), Offer::Nothing);
+        std::fs::remove_dir_all(fresh.join("sessions")).unwrap();
+        std::fs::write(fresh.join(CREDENTIALS), b"deepseek: {}\n").unwrap();
         assert_eq!(offer(Some(&source), Some(&fresh)), Offer::Nothing);
         let _ = std::fs::remove_dir_all(&root);
     }
