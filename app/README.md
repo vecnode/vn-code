@@ -204,13 +204,16 @@ click away: **Stop and install the pack** while the harness is running (the inst
 the profile, so the stop has to happen first - this does both in one press), or **Install the
 pack here** when it is idle, or **Use .dsh** to run the home that already has everything.
 
-### The port: never one that something already answers on
+### The port: a port of this app's own, never the shared one
 
-`3080` is what every `dsh web` on the machine reaches for, so the app prefers it **only when a
-bind succeeds AND nothing answers on it** - two tests, because they are different questions.
-Measured on the machine this was written on: an app instance bound `127.0.0.1:3080` while
-another harness answered on it, so the tab the app opened was served by the wrong process, whose
-launch token the app did not have.
+`3080` is what every `dsh web` on the machine reaches for, and the app **no longer asks for it**.
+Measured on the machine this was written on: an app instance bound `127.0.0.1:3080` while another
+harness answered on it, so the tab the app opened was served by the wrong process, whose launch
+token the app did not have - and the button that should have opened a tab looked broken. A free
+port costs nothing here, because the app opens the tab itself with the token in it: nobody types
+an address and nothing has to be remembered per origin. `-Port 3080` is still the way to ask for
+the shared origin on purpose, and Stop asserts BOTH that the port is free and that nothing
+answers on it any more.
 
 ### Where npm's cache goes, and why it is chosen rather than assumed
 

@@ -533,7 +533,7 @@ fn work(shell: Arc<Supervisor>, options: Options, plan: Plan, inbox: mpsc::Recei
         shell.with_status(|status| status.phase = Phase::Stopping);
         shell.push_log("[vncode] stopping the harness before it was ready");
         kill_tree(&mut child);
-        let free = ports::port_is_free(port);
+        let free = ports::port_is_free(port) && ports::port_is_unanswered(port);
         shell.with_status(|status| status.mark_stopped(free));
         shell.push_log(&shell.status().safe_line());
         shell.live.store(false, Ordering::SeqCst);
@@ -599,9 +599,10 @@ fn work(shell: Arc<Supervisor>, options: Options, plan: Plan, inbox: mpsc::Recei
     kill_tree(&mut child);
 
     // The measurement, not the assumption: the port is asked whether it is free
-    // again. A kill that returns success while a grandchild survives is exactly
-    // the failure this catches.
-    let free = ports::port_is_free(port);
+    // again - and whether anything ANSWERS on it, which is the stronger question now
+    // that the app takes a port of its own. A kill that returns success while a
+    // grandchild survives is exactly the failure this catches.
+    let free = ports::port_is_free(port) && ports::port_is_unanswered(port);
     shell.with_status(|status| status.mark_stopped(free));
     shell.push_log(&shell.status().safe_line());
     shell.live.store(false, Ordering::SeqCst);
