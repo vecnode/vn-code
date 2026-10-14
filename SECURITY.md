@@ -146,7 +146,12 @@ Every child's environment is **composed rather than inherited**
 (`vn-shell-runtime`'s `env.rs`): `DSH_HOME` is set, the app's own `VNCODE_HOME` and the
 launcher's console markers are *removed* — an environment is inherited unless a variable
 is removed, a leak that was measured while this was written and is now read back out of
-the child by `check-shell.mjs`.
+the child by `check-shell.mjs` — and `TMP`/`TEMP`/`TMPDIR` point at `<app root>/tmp` when
+the machine's own temp refuses a child, which is the case a real log measured (the
+harness's spill store died on `mkdtemp`). **`Open tab` is the one control that hands the
+launch token to another process**, on demand and in memory: the panel's address row draws
+the URL with its query stripped, the log redacts `token=` on the way in, and nothing
+writes it down.
 
 ## Lock it down
 

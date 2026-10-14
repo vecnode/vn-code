@@ -147,6 +147,7 @@ process.stdout.write('[stub] DSH_HOME=' + (process.env.DSH_HOME ?? '(unset)') + 
 process.stdout.write('[stub] VNCODE_HOME=' + (process.env.VNCODE_HOME ?? '(unset)') + '\\n')
 process.stdout.write('[stub] npm_config_cache=' + (process.env.npm_config_cache ?? '(unset)') + '\\n')
 process.stdout.write('[stub] VNCODE_CONSOLE=' + (process.env.VNCODE_CONSOLE ?? '(unset)') + '\\n')
+process.stdout.write('[stub] TEMP=' + (process.env.TEMP ?? '(unset)') + '\\n')
 
 // A grandchild of our own: the process TREE is what Stop must take down, and a
 // supervisor that only killed its direct child would leave this one alive.
@@ -383,14 +384,29 @@ async function checkConfinedHome() {
   fs.writeFileSync(blocker, 'a file, not a directory')
   const impossible = path.join(blocker, 'home')
 
-  // 1. inherited and unwritable: fall through to the app's own home.
-  const confined = startShell({ label: 'confined', env: { DSH_HOME: impossible } })
+  // 1. inherited and unwritable: fall through to the app's own home. The MACHINE's
+  //    temp is made unwritable in the same run, because that is the pair measured on a
+  //    real machine: `%TEMP%` refused the child while the app's own root worked, and
+  //    the harness's spill store died on `mkdtemp` because of it.
+  const confined = startShell({
+    label: 'confined',
+    env: { DSH_HOME: impossible, TEMP: impossible, TMP: impossible, TMPDIR: impossible },
+  })
   if (!(await waitFor(confined, () => runningPort(confined) !== null, 20000, 'a ready line with an unwritable inherited home'))) {
     return
   }
-  const expected = path.join(confined.appRoot, 'home')
+  const expected = path.join(fs.realpathSync(confined.appRoot), 'home')
   if (!confined.out.includes(`[stub] DSH_HOME=${expected}`)) {
     fail(`the child was not given <app root>/home\nexpected: ${expected}\n--- stdout ---\n${confined.out}`)
+  }
+  // ...and the temp it was given must be one it can write in, which the machine's was
+  // not: the app's own `<app root>/tmp`.
+  const expectedTemp = path.join(fs.realpathSync(confined.appRoot), 'tmp')
+  if (!confined.out.toLowerCase().includes(`[stub] temp=${expectedTemp.toLowerCase()}`)) {
+    fail(`the child was not given a writable temp\nexpected: ${expectedTemp}\n--- stdout ---\n${confined.out}`)
+  }
+  if (!confined.out.includes('for temp instead')) {
+    fail(`moving the child's temp was not explained\n--- stdout ---\n${confined.out}`)
   }
   if (!confined.out.includes('was refused')) {
     fail(`the refused inherited home was not named\n--- stdout ---\n${confined.out}`)

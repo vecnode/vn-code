@@ -140,6 +140,34 @@ pub fn owned_home(app_root: &std::path::Path) -> PathBuf {
     app_root.join("home")
 }
 
+/// A scratch directory this application owns, under its own root: `<root>/tmp`.
+///
+/// Used only when the machine's own temp is not writable by a CHILD of this app -
+/// measured, from a log of a real run: the harness's `dsh-spill-local` row died with
+/// `EPERM: operation not permitted, mkdtemp 'C:\Users\…\AppData\Local\Temp\dsh-spill-XXXXXX'`
+/// and the entry that owned it did not activate. The child had inherited `TEMP`, and
+/// the confinement that grants this app its own root does not necessarily grant
+/// `%TEMP%` to a process under it.
+pub fn owned_temp(app_root: &std::path::Path) -> PathBuf {
+    app_root.join("tmp")
+}
+
+/// The machine's own temp directory, as the CHILD would inherit it.
+///
+/// `TMPDIR` first (Node's `os.tmpdir()` on POSIX), then `TMP`, then `TEMP` - the same
+/// order Node uses, because the child is a Node program and that is the variable it
+/// will read.
+pub fn machine_temp() -> Option<PathBuf> {
+    for name in ["TMPDIR", "TMP", "TEMP"] {
+        if let Some(value) = std::env::var_os(name) {
+            if !value.is_empty() {
+                return Some(PathBuf::from(value));
+            }
+        }
+    }
+    None
+}
+
 /// The npm cache this application owns, under its own root.
 ///
 /// `<app root>/npm-cache` - `%LOCALAPPDATA%\vncode\npm-cache` by default, the

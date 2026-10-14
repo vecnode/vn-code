@@ -182,6 +182,7 @@ accident.** Every process the father starts gets an environment built from the p
 | `DSH_HOME` | the chosen home, **always** | the child's home must be a fact, not an inference. Today it is exported only when the user named one, so "which home is this instance using" is answered by the harness's own resolver and not by this app |
 | `npm_config_cache` | the app's own cache, chosen by write probe (`appdata::choose_npm_cache`) | already done for the `npx` rung; the same choice is right for the installer |
 | `PATH` | the vendored runtime's `node` directory first, when one is used | anything the harness or a skill spawns resolves the same Node the harness runs on |
+| `TMP`, `TEMP`, `TMPDIR` | `<app root>/tmp`, and **only** when the machine's own temp is not writable by a child | measured, from a real run: `dsh-spill-local: EPERM … mkdtemp 'C:\Users\…\AppData\Local\Temp\dsh-spill-XXXXXX'`, and the entry that owned it did not activate. The machine's temp is preferred and left untouched whenever it works, because it is the machine's |
 | the working directory | the workspace the panel names | a child that inherits whatever directory the app was launched from is a second, invisible decision. **This one has a coupling to keep**: `keystate.rs` reads `.env` in the *shell's* cwd because the harness inherits it, so the value the panel names as `ProjectEnv` and the value the harness reads must come from the same composed cwd — one commit, or the panel lies about where the key came from |
 | `VNCODE_HOME` and the seven `VNCODE_*` console markers | **removed** | the app's internal name for its root, and the launcher's own markers (`VNCODE_CONSOLE`, `VNCODE_ARGV`, `VNCODE_ARGS`, `VNCODE_PAUSE`, `VNCODE_NOPAUSE`, `VNCODE_QUIET`, `VNCODE_NO_WT`). A variable that is merely *not set* is still INHERITED - measured while M0 was built: `VNCODE_HOME`, set for the app, reached the harness, and the check now reads the child's own answer back |
 
@@ -225,6 +226,12 @@ heard of is the OS's business, and it is always reachable.
   and it stores an **id**, never a path: a hand-edited preferences file cannot name a program
   to run. The panel's `surface` row draws a chooser over what was actually found, and says
   which browser the last launch used.
+* **`Open tab` is the button that carries the launch token.** The panel's address row draws the
+  URL with its query stripped — that URL is a credential — so the button is the way in: it
+  opens the harness in the chosen browser, and it is also the way BACK in after a tab is
+  closed by accident or after the automatic open was missed. It is the only place in the panel
+  that hands the token to another process, and it does it the only way the rules allow: one
+  argv element of a program this app found, never a shell, never a disk.
 * **Three rules travel with every launch**: the URL is one argv element, only a loopback URL
   is accepted (checked here *again*, at the last function before a process starts), and no
   shell is ever in the middle. `check-shell.mjs` asserts the argv and the refusal without
@@ -278,16 +285,17 @@ this revision adds are the ones that answer "why did it do that".
 
 ```
 ┌ vncode ─────────────────────────────────────────────────────────────┐
-│ harness   ● stopped            [ Start ]   [ Stop ]                 │
+│ harness   ● stopped   [ Start ]  [ Stop ]  [ Open tab ]             │
 │ found an installation  [ Use .dsh ]  [ Adopt .dsh ]  [ Forget it ]  │
 │ pin       0.2.0-rc.2 (from .dsh-version.json)                       │
 │ vncode    C:\Users\…\AppData\Local\vncode          (this app's root)│
 │ home      C:\Users\…\AppData\Local\vncode\home     = DSH_HOME       │
 │           the default · created by this app — refused: DSH_HOME=…   │
 │           (Access is denied)                                        │
-│ harness env  DSH_HOME=… · npm_config_cache=… · PATH=runtime\win-x64…│
+│ harness env  DSH_HOME=… · npm_config_cache=… · TMP=… · PATH=…       │
 │ surface   [ Google Chrome ▾ ] · opened in Google Chrome (a new tab) │
-│ …  pin, runtime, profile, pack, address, process, key, last stop …  │
+│ address   127.0.0.1:3080 · the launch token is added by Open tab    │
+│ …  pin, runtime, profile, pack, process, key, last stop …           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 

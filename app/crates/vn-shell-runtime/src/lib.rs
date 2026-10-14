@@ -68,6 +68,10 @@ pub struct Plan {
     pub home: home::Resolution,
     /// The npm cache a child is given, chosen by writing where npm really writes.
     pub npm_cache: Option<vn_shell_core::appdata::CacheChoice>,
+    /// A temp directory to hand the child instead of the machine's - set only when a
+    /// child cannot write in the machine's (`env::choose_temp`), which the harness's
+    /// own spill store proved it sometimes cannot.
+    pub temp: Option<PathBuf>,
     /// The directory the harness will run in, captured once. It is composed into
     /// the child, because `keystate` reads `.env` in the shell's cwd BECAUSE the
     /// harness inherits it - so one value has to serve both.
@@ -199,11 +203,24 @@ pub fn plan(options: &Options, remembered: Option<&Path>) -> Result<Plan, String
     if let Some(note) = cache_note {
         notes.push(note);
     }
+    // ...and a temp directory the child can write in. The machine's is preferred and
+    // left alone when it works; it is moved only for the measured case where a
+    // confinement grants this app its own root and denies `%TEMP%` to the process
+    // under it - which is how the harness's `dsh-spill-local` row failed to activate.
+    let (temp, temp_note) = env::choose_temp(
+        resolved.app_root_path(),
+        vn_shell_core::appdata::machine_temp(),
+        &mut vn_shell_core::appdata::probe,
+    );
+    if let Some(note) = temp_note {
+        notes.push(note);
+    }
     Ok(Plan {
         version,
         launch: chosen,
         home: resolved,
         npm_cache,
+        temp,
         workspace: std::env::current_dir().ok(),
         root,
         port_hint: ports::choose_port(options),

@@ -14,6 +14,7 @@
 //! | `DSH_HOME` | the chosen home, always | the child's home must be a fact, not an inference. The harness's own resolver is not consulted: it is TOLD |
 //! | `npm_config_cache` | the cache chosen by write probe | an npm cache this account cannot write in fails the whole install with `EPERM`, and the advice that follows ("run as Administrator") is what created it |
 //! | `PATH` | the vendored runtime's `node` directory first | anything the harness or a skill spawns resolves the same Node the harness runs on |
+//! | `TMP`, `TEMP`, `TMPDIR` | `<app root>/tmp`, but **only** when the machine's own temp is not writable by a child | measured, from a real run's log: `dsh-spill-local: EPERM … mkdtemp 'C:\Users\…\AppData\Local\Temp\dsh-spill-XXXXXX'` - the child inherited a temp directory the confinement does not grant it, and the row that owned it did not activate. The machine's temp is left alone whenever it works, because it is the machine's |
 //! | `VNCODE_HOME` | **removed** | the app's own word for its root. The harness knows `DSH_HOME` and nothing else; a second spelling would invite a plugin to depend on it - and an inherited one would leak this app's private layout into the child. A check reads this back out of the CHILD, which is how the leak was caught |
 //! | `VNCODE_CONSOLE` and the six other console markers | removed | they belong to the launcher's console layer, not to a child of this app |
 //! | `npm_config_cache` | removed when no cache was usable | "no writable cache was found" must mean npm uses its own default, not whatever the parent happened to export |
@@ -122,6 +123,9 @@ pub struct Facts<'a> {
     pub launch: &'a Launch,
     pub home: Option<&'a Path>,
     pub cache: Option<&'a CacheChoice>,
+    /// A temp directory to hand the child INSTEAD of the machine's, when the
+    /// machine's is not writable by a child ([`choose_temp`]).
+    pub temp: Option<&'a Path>,
     pub workspace: Option<&'a Path>,
     /// The `PATH` this app inherited. Passed in rather than read here, so a test can
     /// name one.
@@ -155,6 +159,16 @@ pub fn compose(facts: &Facts<'_>) -> ChildEnv {
 
     if let Some(cache) = facts.cache {
         pairs.push((OsString::from("npm_config_cache"), cache.path.as_os_str().to_os_string()));
+    }
+
+    // A temp directory the child can actually write in. All three spellings are set
+    // when one is given: the child is a Node program, and `os.tmpdir()` reads
+    // `TMPDIR`, then `TMP`, then `TEMP` - a child that found an unwritable one of
+    // those would fail exactly the way the spill store did.
+    if let Some(temp) = facts.temp {
+        for name in ["TMPDIR", "TMP", "TEMP"] {
+            pairs.push((OsString::from(name), temp.as_os_str().to_os_string()));
+        }
     }
 
     // The app's own variables go, and so do the console layer's markers. `VNCODE_HOME`
@@ -198,6 +212,59 @@ pub fn choose_cache(
     }
 }
 
+/// The temp directory a child is given: the machine's when a child can write in it,
+/// else `<app root>/tmp`, else nothing (with the reason).
+///
+/// The probe is the operation itself, done in the directory the child would really
+/// use. The machine's temp is preferred and left UNTOUCHED when it works - moving a
+/// machine-wide directory on a hunch would put a build's scratch files somewhere
+/// nobody expects. It is moved only for the measured case: a confinement that grants
+/// this app its own root and denies `%TEMP%` to the process under it.
+pub fn choose_temp(
+    app_root: Option<&Path>,
+    machine: Option<PathBuf>,
+    probe: &mut impl FnMut(&Path) -> Result<appdata::Probed, String>,
+) -> (Option<PathBuf>, Option<String>) {
+    if let Some(machine) = machine.as_deref() {
+        if probe(machine).is_ok() {
+            return (None, None);
+        }
+    }
+    let Some(app_root) = app_root else {
+        return (
+            None,
+            Some(format!(
+                "[vncode] warning: {} is not writable by this account and this app has no root of its own, so the child keeps a temp directory it may not be able to use",
+                machine
+                    .as_deref()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "the machine's temp".to_string())
+            )),
+        );
+    };
+    let owned = appdata::owned_temp(app_root);
+    match probe(&owned) {
+        Ok(_) => (
+            Some(owned.clone()),
+            Some(format!(
+                "[vncode] note: {} is not writable by a child of this app, so the child is given {} for temp instead (the harness's own scratch stores write there)",
+                machine
+                    .as_deref()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "the machine's temp (unset)".to_string()),
+                owned.display()
+            )),
+        ),
+        Err(error) => (
+            None,
+            Some(format!(
+                "[vncode] warning: neither the machine's temp nor {} can be written: {error}",
+                owned.display()
+            )),
+        ),
+    }
+}
+
 /// The plan's own environment, for the harness. One place builds it, so a variable
 /// cannot be set for the harness and forgotten for the installer.
 pub fn for_plan(plan: &crate::Plan) -> ChildEnv {
@@ -205,6 +272,7 @@ pub fn for_plan(plan: &crate::Plan) -> ChildEnv {
         launch: &plan.launch,
         home: plan.home.home_path(),
         cache: plan.npm_cache.as_ref(),
+        temp: plan.temp.as_deref(),
         workspace: plan.workspace.as_deref(),
         inherited_path: std::env::var_os("PATH").as_deref(),
     })
@@ -278,6 +346,7 @@ mod tests {
             launch: &launch,
             home: Some(Path::new("/root/home")),
             cache: Some(&cache),
+            temp: None,
             workspace: Some(Path::new("/work")),
             inherited_path: Some(OsStr::new("/usr/bin")),
         });
@@ -300,6 +369,7 @@ mod tests {
             launch: &launch,
             home: Some(Path::new("/root/home")),
             cache: None,
+            temp: None,
             workspace: None,
             inherited_path: None,
         });
@@ -345,6 +415,7 @@ mod tests {
             launch: &launch,
             home: None,
             cache: None,
+            temp: None,
             workspace: None,
             inherited_path: Some(OsStr::new("/usr/bin")),
         });
@@ -359,6 +430,7 @@ mod tests {
             launch: &launch,
             home: Some(Path::new("/root/home")),
             cache: None,
+            temp: None,
             workspace: Some(Path::new("/work")),
             inherited_path: None,
         });
@@ -411,6 +483,91 @@ mod tests {
         ));
         assert_eq!(Path::new(&arguments[1]), expected);
         assert_eq!(home_or_problem(&resolved).unwrap(), expected);
+    }
+
+    #[test]
+    fn a_temp_directory_is_handed_over_only_when_one_was_chosen() {
+        let launch = vendored();
+        // No temp chosen: the machine's is the child's, untouched.
+        let composed = compose(&Facts {
+            launch: &launch,
+            home: Some(Path::new("/root/home")),
+            cache: None,
+            temp: None,
+            workspace: None,
+            inherited_path: None,
+        });
+        for name in ["TMPDIR", "TMP", "TEMP"] {
+            assert_eq!(composed.get(name), None, "{name} was set with nothing to set");
+        }
+        // Chosen: all three spellings, because the child is a Node program and
+        // `os.tmpdir()` reads them in that order.
+        let composed = compose(&Facts {
+            launch: &launch,
+            home: Some(Path::new("/root/home")),
+            cache: None,
+            temp: Some(Path::new("/root/tmp")),
+            workspace: None,
+            inherited_path: None,
+        });
+        for name in ["TMPDIR", "TMP", "TEMP"] {
+            assert_eq!(composed.get(name), Some(OsStr::new("/root/tmp")), "{name}");
+        }
+    }
+
+    #[test]
+    fn the_machines_temp_is_left_alone_when_a_child_can_write_in_it() {
+        let mut probe = |path: &Path| {
+            Ok(vn_shell_core::appdata::Probed { path: path.to_path_buf(), created: false })
+        };
+        let (temp, note) = choose_temp(
+            Some(Path::new("/root")),
+            Some(PathBuf::from("/machine/temp")),
+            &mut probe,
+        );
+        assert_eq!(temp, None, "the machine's temp must not be moved on a hunch");
+        assert_eq!(note, None);
+    }
+
+    #[test]
+    fn a_temp_a_child_cannot_write_falls_to_the_apps_own_root_and_says_so() {
+        // The measured case: `%TEMP%` refuses the child while the app's own root is
+        // writable, and the harness's spill store dies on `mkdtemp` without this.
+        let mut probe = |path: &Path| {
+            if path == vn_shell_core::appdata::owned_temp(Path::new("/root")) {
+                Ok(vn_shell_core::appdata::Probed {
+                    path: path.to_path_buf(),
+                    created: true,
+                })
+            } else {
+                Err("not writable: access is denied".to_string())
+            }
+        };
+        let (temp, note) = choose_temp(
+            Some(Path::new("/root")),
+            Some(PathBuf::from("/machine/temp")),
+            &mut probe,
+        );
+        let owned = vn_shell_core::appdata::owned_temp(Path::new("/root"));
+        assert_eq!(temp.as_deref(), Some(owned.as_path()));
+        let note = note.expect("the move must be reported");
+        assert!(note.contains("/machine/temp"), "{note}");
+        // Built through the same join the app uses, so this reads the same on Windows.
+        assert!(note.contains(&owned.display().to_string()), "{note}");
+    }
+
+    #[test]
+    fn no_temp_anywhere_is_a_warning_rather_than_a_silent_inheritance() {
+        let mut probe = |_path: &Path| Err("not writable: access is denied".to_string());
+        let (temp, note) =
+            choose_temp(Some(Path::new("/root")), Some(PathBuf::from("/machine/temp")), &mut probe);
+        assert_eq!(temp, None);
+        assert!(note.expect("a warning is due").contains("neither"), "the warning must say so");
+        // ...and with no app root either, the warning still names what was tried.
+        let mut probe = |_path: &Path| Err("nope".to_string());
+        let (temp, note) = choose_temp(None, Some(PathBuf::from("/machine/temp")), &mut probe);
+        assert_eq!(temp, None);
+        assert!(note.expect("a warning is due").contains("/machine/temp"));
     }
 
     #[test]

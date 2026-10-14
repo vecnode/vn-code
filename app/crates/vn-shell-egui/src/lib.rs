@@ -233,6 +233,32 @@ impl Shell {
         }
     }
 
+    /// Open the harness in the chosen browser, WITH the launch token.
+    ///
+    /// The one place in the panel that hands the token to another process, and it does
+    /// it the only way the security rules allow: the URL leaves as a single argv
+    /// element of a program this app found, never through a shell and never onto a
+    /// disk. The panel's own address row keeps drawing the token-less form.
+    fn open_tab(&mut self) {
+        self.notice = None;
+        let Some(url) = self.status().navigate_url().map(str::to_string) else {
+            self.notice = Some(
+                "there is no address to open yet - press Start and wait for the harness to be ready"
+                    .to_string(),
+            );
+            return;
+        };
+        match browser::launch(&self.context.browser, &url) {
+            Ok(label) => self.surface = Some(format!("{label} (a new tab)")),
+            Err(error) => {
+                self.surface = None;
+                self.notice = Some(format!(
+                    "{error}. Choose another browser in the Surface row and press Open tab again."
+                ));
+            }
+        }
+    }
+
     /// Remember a browser, and say so if the preferences file could not be written.
     ///
     /// The choice takes effect on the NEXT Start, because the tab is opened once the
@@ -377,7 +403,7 @@ impl eframe::App for Shell {
                     Err(error) => {
                         self.surface = None;
                         self.notice = Some(format!(
-                            "{error}. The address is on the panel - paste it into any browser."
+                            "{error}. Press Open tab to try again, or choose another browser in the Surface row."
                         ));
                     }
                 }
@@ -418,6 +444,22 @@ impl Shell {
                     let label = if self.stopping { "Stopping…" } else { "Stop" };
                     if ui.button(label).clicked() {
                         self.stop();
+                    }
+                });
+                // THE BUTTON THAT CARRIES THE TOKEN. The address row shows the URL
+                // WITHOUT its query, because that URL is a credential; this opens the
+                // one with it, in the chosen browser, as one argv element. It is also
+                // the way back in after a tab is closed by accident, and the only way
+                // in at all if the automatic open was missed.
+                ui.add_enabled_ui(status.phase == Phase::Running, |ui| {
+                    if ui
+                        .button("Open tab")
+                        .on_hover_text(
+                            "opens the harness in the chosen browser, with the launch token the panel never draws",
+                        )
+                        .clicked()
+                    {
+                        self.open_tab();
                     }
                 });
 
@@ -740,14 +782,27 @@ impl Shell {
             ui.end_row();
 
             ui.label(RichText::new("address").strong());
-            match status.public_url() {
-                // The displayable URL: no query, therefore no launch token.
-                Some(url) => ui.label(url),
-                None => ui.label(RichText::new(match status.port {
-                    Some(port) => format!("127.0.0.1:{port} (not listening yet)"),
-                    None => "not chosen yet".to_string(),
-                }).weak()),
-            };
+            ui.horizontal(|ui| {
+                match status.public_url() {
+                    // The displayable URL: no query, therefore no launch token.
+                    Some(url) => {
+                        ui.label(RichText::new(url).monospace());
+                        ui.label(
+                            RichText::new("· the launch token is added by Open tab, never drawn")
+                                .weak(),
+                        );
+                    }
+                    None => {
+                        ui.label(
+                            RichText::new(match status.port {
+                                Some(port) => format!("127.0.0.1:{port} (not listening yet)"),
+                                None => "not chosen yet".to_string(),
+                            })
+                            .weak(),
+                        );
+                    }
+                };
+            });
             ui.end_row();
 
             ui.label(RichText::new("process").strong());

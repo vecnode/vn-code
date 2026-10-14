@@ -118,6 +118,7 @@ the plan, because a variable that is merely *not set* is still inherited:
 | `DSH_HOME` | the chosen home, always - the harness is TOLD, never asked |
 | `npm_config_cache` | the cache chosen by write probe; **removed** when none was usable, so npm's own default stands rather than an inherited value |
 | `PATH` | the vendored runtime's `node` directory first, when one is used |
+| `TMP`, `TEMP`, `TMPDIR` | `<app root>/tmp` - but **only** when the machine's temp is not writable by a child. Measured, from a real run: `dsh-spill-local: EPERM … mkdtemp 'C:\Users\…\AppData\Local\Temp\dsh-spill-XXXXXX'`, and the row that owned it did not activate. The machine's temp is left alone whenever it works |
 | the working directory | the workspace the panel names, captured once - `keystate` reads `<cwd>/.env` because the harness inherits it, so one value serves both |
 | `VNCODE_HOME` and the seven `VNCODE_*` console markers | **removed** - the app's own word for its root, and the launcher's own markers, are none of a child's business |
 
@@ -171,6 +172,11 @@ is the advice that *created* the unwritable directory. So the cache is picked:
 2. the harness home, `$DSH_HOME/vncode/npm-cache`;
 3. `runtime/npm-cache` inside the checkout.
 
+The child's **temp directory** is chosen the same way, and for the same kind of reason:
+the machine's `TMP`/`TEMP`/`TMPDIR` is used when a child can write in it, and
+`$VNCODE_HOME/tmp` when it cannot — the case a real log showed, where the harness's own
+`dsh-spill-local` row died on `mkdtemp` and did not activate.
+
 Each candidate is probed **where npm actually writes** (`<cache>/_cacache/tmp`, not
 the cache root - a cache whose root is writable while its `_cacache` tree belongs to
 an elevated run fails in exactly the reported way), the first usable one wins, and a
@@ -187,7 +193,12 @@ harness and the installer will be given, the browser chooser and which browser t
 launch used, the pin and where it came from, which runtime will be used, the profile and the
 profiles this home has, whether the pack is installed, the address (never the
 token), which of `keystate`'s four layers supplied a DeepSeek key, and the result of
-the last Stop or setup run. Its buttons - **Install pack**, **Uninstall pack**, and
+the last Stop or setup run. Its buttons - **Install pack**, **Uninstall pack**, **Adopt**,
+**Use it** / **Forget it**, and **Open tab** - run this pack's own installers, this app's own
+copy of a home, and the browser. **Open tab** is the one that carries the launch token: the
+address row always draws the URL *without* its query (that URL is a credential), so this button
+is how a tab is opened - or re-opened after it was closed - with the key. Below that is the
+**location map** -
 **Adopt** - run this pack's own installers and this app's own copy. Below that is the **location map** -
 `docs/PATHS.md` as rows, each with a size and a `reveal` button - and then the model
 provider, which is a chooser with one entry (`DeepSeek (official)`) and is read-only

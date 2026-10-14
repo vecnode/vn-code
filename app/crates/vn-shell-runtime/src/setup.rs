@@ -482,6 +482,7 @@ mod tests {
             launch: &vn_shell_core::launch::Launch::Npx,
             home: None,
             cache: None,
+            temp: None,
             workspace: None,
             inherited_path: None,
         })
@@ -492,6 +493,7 @@ mod tests {
             launch: &vn_shell_core::launch::Launch::Npx,
             home: Some(Path::new(home)),
             cache: None,
+            temp: None,
             workspace: None,
             inherited_path: None,
         })
