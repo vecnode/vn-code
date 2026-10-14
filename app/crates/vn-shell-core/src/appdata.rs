@@ -315,8 +315,10 @@ pub fn choose_npm_cache(candidates: &[PathBuf]) -> Option<CacheChoice> {
             return Some(CacheChoice { path: candidate.clone(), warning });
         }
         if index == 0 {
+            // A NOTE, not a log line: the caller prefixes its own. A second
+            // `[vncode] note:` inside it reads as a bug in the transcript.
             warning = Some(format!(
-                "[vncode] note: {} is NOT usable by this account, so npm's cache is going somewhere else - an elevated run probably created that directory, and npm's own advice to 'run as Administrator' is what does it",
+                "{} is NOT usable by this account, so npm's cache is going somewhere else - an elevated run probably created that directory, and npm's own advice to 'run as Administrator' is what does it",
                 candidate.display()
             ));
         }

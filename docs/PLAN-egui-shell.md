@@ -325,29 +325,38 @@ this revision adds are the ones that answer "why did it do that".
 
 ### The home this app did not create: two buttons, not a policy
 
-When `~/.dsh` (or wherever the harness's default lives) is a harness home this app can write,
-the panel offers two deliberate actions, and the app makes neither decision on its own:
+When `~/.dsh` (or wherever the harness's default lives) is a harness home, the panel offers two
+deliberate actions, and the app makes neither decision on its own:
 
 - **Use it** — remember that path in `prefs.json` and run the harness against it from the next
   Start, so the app and `scripts\run-web.bat` share one home: one set of sessions, skills and
-  keys. **Forget it** takes the choice back, because a remembered home that cannot be
+  keys. Offered only when a child can **write** there, because the harness composes its profile
+  at boot. **Forget it** takes the choice back, because a remembered home that cannot be
   un-remembered is a trap.
-- **Adopt** — the copy described below, for somebody who wants the app's own root to hold
-  everything.
+- **Adopt** — the copy described below, offered whenever the source can be **read**, which is
+  the case it exists for. Wiring both buttons from one writable-filtered path was a bug: a
+  person whose `~/.dsh` was unwritable got *neither* button, and no way to reach their key.
 
 ### Adopt: what happens to the home the app did not choose
 
 The app's home starts empty, and the user's real installation — sessions, skills, the model
-key — is usually in `~/.dsh`. So the panel offers **Adopt** whenever a home that already has
-this state exists (the harness's default, or an inherited `DSH_HOME` that was refused) and the
-chosen home has **nothing of yours** in it: it copies the durable, *small* things across —
-`skills/`, `sessions/`, `storages/`, `attachments/` — and it never touches the caches
+key — is usually in `~/.dsh`. So the panel offers **Adopt** whenever the source has something
+left to bring and the target has nothing to overwrite: it copies the durable, *small* things
+across — `skills/`, `sessions/`, `storages/`, `attachments/` — and it never touches the caches
 (`dsh-pdf/artifacts`, `dsh-diagrams/*`, `dsh-media/*`, up to 8 GiB by `docs/PATHS.md`, all
-reproducible). A composed `profiles/` does **not** make a home "used": the harness creates it
-by itself on the first boot, and counting it is how the offer — and with it the key — was lost
-after one run. This is also why joining a *writable* inherited `DSH_HOME` matters: an app
-started from inside a harness session is already on that session's home and needs no Adopt.
-Three rules:
+reproducible). Three things this rule learned from a real run, where the panel said
+`DeepSeek key: not found` while the key sat in `~/.dsh` and there was no button to press:
+
+* A composed `profiles/` does **not** make a home "used" — the harness creates it on its first
+  boot, and Adopt does not copy it anyway.
+* Neither does an **empty** `.credentials.yaml`, which the harness also writes on that boot.
+  The test is a file SIZE — "does the source's have content, and is the target's absent or
+  empty" — never a read, so `SECURITY.md`'s presence-only promise holds.
+* A durable tree is offered when the target's copy is missing **or empty**, which is what keeps
+  a half-filled home from closing the offer.
+
+This is also why joining a *writable* inherited `DSH_HOME` matters: an app started from inside a
+harness session is already on that session's home and needs no Adopt. Three rules:
 
 1. **Nothing is written into the source home**, ever. Adopt reads from it and writes into
    the home it proved it can write.
@@ -442,7 +451,7 @@ CEF, no Servo, no chromium download, and now no embedded web view at all.
 ## 12. The checks
 
 `cargo test --workspace` and `scripts/checks/check-shell.mjs` are the contract, and both
-grew with the work rather than after it. What landed (184 tests in the workspace):
+grew with the work rather than after it. What landed (190 tests in the workspace):
 
 - the two ladders' precedence, and that **an unwritable inherited `DSH_HOME` falls through**
   instead of refusing — the exact regression this revision exists to prevent;
@@ -453,11 +462,22 @@ grew with the work rather than after it. What landed (184 tests in the workspace
 - an unwritable **`-DshHome` still refuses**, and the message names the flag and the path;
 - the composed environment's exact output: `DSH_HOME` always present and equal to the chosen
   home, `VNCODE_HOME` and the console markers **removed** (not merely unset — the leak the
-  first run of the check found), `npm_config_cache` removed when no cache was usable, and
-  the vendored `node` first on `PATH` when there is one;
+  first run of the check found), `npm_config_cache` removed when no cache was usable, the
+  vendored `node` first on `PATH` when there is one, and `TMP`/`TEMP`/`TMPDIR` all pointing at
+  `<app root>/tmp` when the machine's temp is unwritable;
+- the path hygiene, one case each: `~`, a relative path, `..` folding, a rooted path with no
+  drive, an empty value and a NUL, and the Windows verbatim form;
+- the browser table: Chrome first, the OS opener last, per-OS guards, a remembered id that has
+  gone falling through, the URL as **one argv element**, and the loopback refusal;
+- `ports::port_is_unanswered` — a port something ANSWERS on is not free, whatever a bind says;
 - the installer command carries `-DshHome` and the composed environment;
-- Adopt's own rules: only the durable trees, the credentials file as a separate byte copy
-  that never reaches the log, no overwrite, links skipped, a refused source named;
+- Adopt's own rules: only the durable trees, the credentials file as a separate byte copy that
+  never reaches the log, no overwrite, links skipped, a refused source named, and an offer that
+  survives the harness's own first boot (a composed `profiles/`, an empty `.credentials.yaml`
+  and a `storages/` are not "something of yours");
+- the app preferences: round-trip, atomic write, and a record this build cannot vouch for
+  DISCARDED rather than repaired — including a browser id it does not know, because a
+  preferences file must not be able to name a program;
 - no candidate at all (nothing resolvable, nothing creatable) is a **named failure listing
   every path and every error**, never a bare "cannot start".
 
@@ -504,7 +524,9 @@ stops the plan rather than the phase.
 | risk | why it is real | the answer |
 |---|---|---|
 | **two homes on one machine, by design** | the app's default home is `<root>/home`, while `run-web` keeps using `~/.dsh` — separate installations until somebody joins them | a writable inherited `DSH_HOME` is joined automatically, so an app launched *from* a harness session shares that session's home; otherwise the panel names the home, its origin and every refusal, and offers **Use it** (share that one, remembered), **Forget it** (undo that) and **Adopt** (copy the durable contents here) |
-| **the app's home becomes a second-class citizen** | sessions, skills and the key live in `~/.dsh`, so a fresh home looks like a wiped install | **Use it** shares the existing home in one click, and **Adopt** copies it in one (the credentials file behind a second), with the panel saying what it did |
+| **the app's home becomes a second-class citizen** | sessions, skills and the key live in `~/.dsh`, so a fresh home looks like a wiped install — and the harness's own first boot writes a `profiles/`, an EMPTY `.credentials.yaml` and a `storages/` into it, which is how the offer used to vanish after one run | **Use it** shares the existing home in one click (offered when a child can write there), and **Adopt** copies what is missing in one (offered whenever the source can be read; the credentials file behind a second click, decided by file SIZE rather than a read) |
+| **a home with no pack looks like a broken app** | the harness comes up as the bare DeepSeek Harness — no right bar, no editor, no themes — and on a home of its own no key either | the panel says exactly that, names the two ways out (**Install the pack here**, or **Use .dsh**), and when the harness is running offers **Stop and install the pack**, which does the stop the installer needs before it can re-link the profile |
+| **two harnesses reach for one port** | `3080` is the default every `dsh web` wants, and a second instance landing on it serves the tab — with a launch token it does not know | the default port is preferred only when a bind succeeds AND nothing ANSWERS on it (a connect probe, which refuses to be fooled); otherwise a free one |
 | **the probe tests the wrong operation** | the npm-cache bug is the precedent: a writable root over an unwritable `_cacache/tmp` passed a naive probe | the probe stays *the operation itself* (create, write, delete) and is run on the home the harness will actually compose into — and it now reports whether it CREATED the directory, which is what keeps "harden it to 0700" from touching somebody else's home |
 | **a path means two things to two processes** | `-DshHome ~/x` used to create a literal `~`, a relative path used to depend on when it was read, and Windows `/tmp/x` is drive-relative | every rung goes through `userpath`: `~` expanded, relative resolved against a cwd captured once, `.`/`..` folded, a rooted-without-a-drive path attached to the current drive, and the REAL path exported |
 | **a preferences file names a program to run** | a hand-edited file that stored a path would be an execution primitive | `prefs.json` stores an **id** the browser table already knows, validated on read; a record this build cannot vouch for is DISCARDED rather than repaired |

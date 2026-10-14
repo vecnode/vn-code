@@ -98,22 +98,43 @@ fn names() -> String {
     format!("{} or {}", names.join(", "), last)
 }
 
-/// Whether a home has none of YOUR things yet - the rule that decides whether the
+/// Whether a directory has anything in it at all, without reading any of it.
+fn has_content(path: &Path) -> bool {
+    std::fs::read_dir(path).map(|mut entries| entries.next().is_some()).unwrap_or(false)
+}
+
+/// Whether a credentials document holds anything, by SIZE - never by reading it.
+///
+/// `SECURITY.md` promises this app touches that file for presence only. A length is
+/// presence: it answers "is there a key here" without a byte of the value reaching
+/// this process, and that is exactly the question the offer needs. The harness writes
+/// an empty `.credentials.yaml` into a fresh home on its first boot, so counting mere
+/// existence as "yours" would close the offer for the one thing a person wants most.
+fn credentials_have_content(path: &Path) -> bool {
+    std::fs::metadata(path).map(|meta| meta.len() > 0).unwrap_or(false)
+}
+
+/// Whether there is anything left to bring across - the rule that decides whether the
 /// panel offers Adopt at all.
 ///
-/// "Yours" is exactly what Adopt would copy: the durable trees, and the credential
-/// document. A home that already has a `sessions/` or a `.credentials.yaml` has a life
-/// of its own, and copying an older installation into it is a merge nobody asked for -
-/// so Adopt is for a home with nothing of yours in it.
+/// It used to be `!target.join("profiles").exists()`, and both halves of that were
+/// wrong in the same way: the harness composes `profiles/` on its FIRST boot AND
+/// writes an empty `.credentials.yaml` and a `storages/` beside it, so a home the app
+/// created stopped looking "untouched" after one run - and the key and sessions a
+/// person most wants to bring across could never be offered again. Measured against a
+/// real run: the profile held only the base bundles, the panel said `DeepSeek key: not
+/// found`, and there was no button to press.
 ///
-/// **`profiles/` is deliberately NOT part of this test**, and that is a bug this rule
-/// had: the harness composes `profiles/<name>/` into the home on its VERY FIRST boot,
-/// so a home the app created stopped looking "untouched" after one run - and the one
-/// thing a person most wants to bring across (their key, their sessions) could never be
-/// offered again. Adopt does not copy `profiles/` anyway; the installer re-creates it.
-pub fn target_is_untouched(target: &Path) -> bool {
-    DURABLE.iter().all(|(name, _)| !target.join(name).exists())
-        && !target.join(CREDENTIALS).exists()
+/// The honest rule is what Adopt itself promises: **something to bring, and nothing
+/// to overwrite**. A durable tree counts when the source has it and the target has
+/// nothing there (or nothing in it); the credential document counts when the source
+/// has one with content and the target's is absent or empty.
+pub fn target_has_room_for(source: &Path, target: &Path) -> bool {
+    DURABLE.iter().any(|(name, _)| {
+        let from = source.join(name);
+        from.exists() && !has_content(&target.join(name))
+    }) || (credentials_have_content(&source.join(CREDENTIALS))
+        && !credentials_have_content(&target.join(CREDENTIALS)))
 }
 
 /// Whether the source can be read at all. A source that cannot is not adopted
@@ -125,7 +146,8 @@ pub fn source_is_readable(source: &Path) -> bool {
 /// What the panel should offer, decided from two paths and the filesystem.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Offer {
-    /// Nothing to offer: the ordinary first run with no other home on the machine.
+    /// Nothing to offer: the ordinary first run with no other home on the machine, or
+    /// a home that already has everything this one could bring.
     Nothing,
     /// Adopt is available, with this list.
     Available(Adoption),
@@ -135,6 +157,12 @@ pub enum Offer {
 }
 
 /// Decide the offer from the source (usually `~/.dsh`) and the chosen home.
+///
+/// The source is deliberately NOT filtered by writability, and that is a bug this
+/// wiring had: `Use it` needs a home a child can write in, but **Adopt exists exactly
+/// for the home that cannot be written** - it only has to be READ. Passing the
+/// writable-filtered path here meant a person whose `~/.dsh` was unwritable got
+/// neither button, which is the worst of both.
 pub fn offer(source: Option<&Path>, home: Option<&Path>) -> Offer {
     let (Some(source), Some(home)) = (source, home) else {
         return Offer::Nothing;
@@ -142,26 +170,28 @@ pub fn offer(source: Option<&Path>, home: Option<&Path>) -> Offer {
     if !source.is_dir() {
         return Offer::Nothing;
     }
-    if !target_is_untouched(home) {
-        return Offer::Nothing;
-    }
     if !source_is_readable(source) {
         return Offer::Unreadable(source.to_path_buf());
     }
+    if !target_has_room_for(source, home) {
+        return Offer::Nothing;
+    }
     let adoption = plan(source, home);
-    if adoption.items.is_empty() {
+    if adoption.items.is_empty() && adoption.credential().is_none() {
         Offer::Nothing
     } else {
         Offer::Available(adoption)
     }
 }
 
-/// Build the list of things to copy: the durable trees the source actually has.
+/// Build the list of things to copy: the durable trees the source has and the target
+/// has nothing of. The copy itself never overwrites, so this is about the OFFER - a
+/// tree already present is not something to advertise.
 pub fn plan(source: &Path, target: &Path) -> Adoption {
     let mut items = Vec::new();
     for (name, note) in DURABLE {
         let from = source.join(name);
-        if !from.exists() {
+        if !from.exists() || has_content(&target.join(name)) {
             continue;
         }
         items.push(Item {
@@ -266,33 +296,68 @@ mod tests {
     }
 
     #[test]
-    fn adopt_is_offered_only_for_a_home_with_nothing_of_yours_in_it() {
+    fn adopt_is_offered_whenever_there_is_something_left_to_bring() {
         let root = scratch("offer");
         let source = root.join(".dsh");
         std::fs::create_dir_all(source.join("sessions")).unwrap();
-        let fresh = root.join("home");
-        std::fs::create_dir_all(&fresh).unwrap();
+        std::fs::write(source.join("sessions").join("c1.json"), b"{}").unwrap();
+        std::fs::create_dir_all(source.join("skills")).unwrap();
+        std::fs::write(source.join(CREDENTIALS), b"deepseek: {apiKey: x}\n").unwrap();
+        let target = root.join("home");
+        std::fs::create_dir_all(&target).unwrap();
 
-        assert!(matches!(offer(Some(&source), Some(&fresh)), Offer::Available(_)));
+        assert!(matches!(offer(Some(&source), Some(&target)), Offer::Available(_)));
 
-        // A home the harness has already booted in is STILL offered: it composes
-        // `profiles/` by itself on the first boot, so counting that as "used" is how
-        // a person's key and sessions stopped being offered at all. Measured against a
-        // real run's log, where the home was `<tree>/.vncode/home` with `profiles/web`
-        // in it and the key was still in `~/.dsh`.
-        std::fs::create_dir_all(fresh.join("profiles").join("web")).unwrap();
+        // A home the harness has already booted in is STILL offered. It composes
+        // `profiles/`, an EMPTY `.credentials.yaml` and a `storages/` by itself, so
+        // counting any of those as "yours" is how a person's key and sessions stopped
+        // being offered after one run - measured: the log said `DeepSeek key: not
+        // found` while the key sat in `~/.dsh`, with no button to press.
+        std::fs::create_dir_all(target.join("profiles").join("web")).unwrap();
+        std::fs::create_dir_all(target.join("storages")).unwrap();
+        std::fs::write(target.join(CREDENTIALS), b"").unwrap();
         assert!(
-            matches!(offer(Some(&source), Some(&fresh)), Offer::Available(_)),
-            "a composed profile must not close the offer"
+            matches!(offer(Some(&source), Some(&target)), Offer::Available(_)),
+            "a composed profile and an EMPTY credentials file must not close the offer"
         );
 
-        // A home with sessions of its own, or with a credentials file, is not adopted
-        // over: it has a life of its own.
-        std::fs::create_dir_all(fresh.join("sessions")).unwrap();
-        assert_eq!(offer(Some(&source), Some(&fresh)), Offer::Nothing);
-        std::fs::remove_dir_all(fresh.join("sessions")).unwrap();
-        std::fs::write(fresh.join(CREDENTIALS), b"deepseek: {}\n").unwrap();
-        assert_eq!(offer(Some(&source), Some(&fresh)), Offer::Nothing);
+        // Both trees land, and the key is still the separate click.
+        let available = match offer(Some(&source), Some(&target)) {
+            Offer::Available(adoption) => adoption,
+            other => panic!("expected an offer, got {other:?}"),
+        };
+        let names: Vec<&str> = available.items.iter().map(|item| item.name).collect();
+        assert_eq!(names, vec!["skills", "sessions"], "{names:?}");
+        assert!(available.credential().is_some(), "the key must still be on offer");
+
+        // A home that already HAS them has nothing left to offer - which is what
+        // keeps the panel from nagging - and a target tree with content is not
+        // advertised even while the other one is.
+        std::fs::create_dir_all(target.join("skills")).unwrap();
+        std::fs::write(target.join("skills").join("a.md"), b"#").unwrap();
+        let available = match offer(Some(&source), Some(&target)) {
+            Offer::Available(adoption) => adoption,
+            other => panic!("sessions are still missing: {other:?}"),
+        };
+        assert_eq!(
+            available.items.iter().map(|item| item.name).collect::<Vec<_>>(),
+            vec!["sessions"]
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_target_with_its_own_session_and_key_has_nothing_left_to_bring() {
+        let root = scratch("nothing-left");
+        let source = root.join(".dsh");
+        std::fs::create_dir_all(source.join("sessions")).unwrap();
+        std::fs::write(source.join("sessions").join("old.json"), b"{}").unwrap();
+        std::fs::write(source.join(CREDENTIALS), b"deepseek: {apiKey: old}\n").unwrap();
+        let target = root.join("home");
+        std::fs::create_dir_all(target.join("sessions")).unwrap();
+        std::fs::write(target.join("sessions").join("mine.json"), b"{}").unwrap();
+        std::fs::write(target.join(CREDENTIALS), b"deepseek: {apiKey: mine}\n").unwrap();
+        assert_eq!(offer(Some(&source), Some(&target)), Offer::Nothing);
         let _ = std::fs::remove_dir_all(&root);
     }
 

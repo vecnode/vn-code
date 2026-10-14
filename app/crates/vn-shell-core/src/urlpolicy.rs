@@ -24,19 +24,27 @@ pub fn is_internal(url: &Url) -> bool {
 
 /// The platform's own "open this URL" program, with the URL as ONE argv element.
 ///
-/// `explorer.exe` is what the pack's `dsh-open-in-app` uses for the same job on
-/// Windows; `open` and `xdg-open` are the macOS and Linux spellings. Returned as a
-/// `Command` rather than run here, so a caller can start it - and a check can read
-/// the argv - without a browser opening as a side effect of running the tests.
+/// **Windows** gets `rundll32.exe url.dll,FileProtocolHandler <url>`: the documented
+/// way for a PROGRAM (rather than a shell) to ask the shell for the default browser.
+/// `explorer.exe <url>` was the previous spelling and it is unreliable from a
+/// non-interactive child - measured on the machine this was written on, where a button
+/// that spawned `explorer.exe` appeared to do nothing at all. **macOS/Linux** get
+/// `open` / `xdg-open`.
+///
+/// Both are programs with the URL as one argument - never a command string, never a
+/// shell - and both are returned as a `Command` rather than run here, so a caller can
+/// start one (and a check can read the argv) without a browser opening as a side effect
+/// of running the tests.
 pub fn opener_command(url: &str) -> Command {
-    let program = if cfg!(target_os = "windows") {
-        "explorer.exe"
+    let mut command = if cfg!(target_os = "windows") {
+        let mut command = Command::new("rundll32.exe");
+        command.arg("url.dll,FileProtocolHandler");
+        command
     } else if cfg!(target_os = "macos") {
-        "open"
+        Command::new("open")
     } else {
-        "xdg-open"
+        Command::new("xdg-open")
     };
-    let mut command = Command::new(program);
     command.arg(url);
     command
 }
@@ -99,21 +107,21 @@ mod tests {
 
     #[test]
     fn the_opener_is_a_program_with_the_url_as_one_argument() {
-        // The rule the launch path depends on: `explorer.exe`/`open`/`xdg-open` with
-        // exactly one argument, and no shell in between.
-        let command = opener_command("http://127.0.0.1:3080/?token=x");
+        // The rule the launch path depends on: one program, exactly one URL argument,
+        // and no shell in between.
+        let url = "http://127.0.0.1:3080/?token=x";
+        let command = opener_command(url);
+        let program = command.get_program().to_string_lossy().to_string();
         let args: Vec<String> =
             command.get_args().map(|arg| arg.to_string_lossy().to_string()).collect();
-        assert_eq!(args, vec!["http://127.0.0.1:3080/?token=x".to_string()]);
-        let program = command.get_program().to_string_lossy().to_string();
-        let expected = if cfg!(target_os = "windows") {
-            "explorer.exe"
-        } else if cfg!(target_os = "macos") {
-            "open"
+        if cfg!(target_os = "windows") {
+            assert_eq!(program, "rundll32.exe");
+            assert_eq!(args, vec!["url.dll,FileProtocolHandler".to_string(), url.to_string()]);
         } else {
-            "xdg-open"
-        };
-        assert_eq!(program, expected);
+            let expected = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+            assert_eq!(program, expected);
+            assert_eq!(args, vec![url.to_string()]);
+        }
     }
 
     #[test]

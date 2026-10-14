@@ -517,7 +517,9 @@ mod tests {
         let floor = command(&Browser::default_opener(), url).unwrap();
         let program = floor.get_program().to_string_lossy().to_string();
         let expected = if cfg!(windows) {
-            "explorer.exe"
+            // NOT `explorer.exe`, which is unreliable from a non-interactive child -
+            // measured: a button that spawned it appeared to do nothing.
+            "rundll32.exe"
         } else if cfg!(target_os = "macos") {
             "open"
         } else {

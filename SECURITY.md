@@ -127,9 +127,14 @@ Four hardening rules travel with those paths, and each is a `cargo test` case:
 4. **The browser launch is checked at the last moment.** `browser::command` refuses any
    URL that is not loopback — the ready line was already checked, and a rule that holds
    at one end of a pipe is not a rule — starts a PROGRAM with the URL as exactly one
-   argv element, and never a shell. The Chrome-first table's last rung is the platform's
-   own opener, so "a browser this build has never heard of" is still the OS's business
-   rather than a refusal.
+   argv element, and never a shell. On Windows the platform opener is
+   `rundll32.exe url.dll,FileProtocolHandler`, which is a program rather than a shell;
+   `explorer.exe` was dropped because it silently did nothing from a child. The
+   Chrome-first table's last rung is the platform's own opener, so "a browser this build
+   has never heard of" is still the OS's business rather than a refusal. **`Open tab` is
+   the one control that hands the token to a browser**, on demand and in memory: the
+   panel's address row draws the URL with its query stripped, and the log redacts
+   `token=` on the way in.
 
 **Adopt** is the one thing that reads such a home: it copies `skills/`, `sessions/`,
 `storages/` and `attachments/` into the home the app proved it can write, never the
@@ -137,10 +142,11 @@ caches (`dsh-pdf` 512 MiB, `dsh-diagrams` 200 MiB, `dsh-media` up to 8 GiB — a
 reproducible), never the composed `profiles/`, never over a file that already exists,
 and never through a symlink it would have to follow. The credentials file is a
 **separate click** and a **byte-for-byte copy**: its value is never parsed, never held
-in a `KeyState`, never drawn — the presence-only rule above is exactly as it was. **Use
-it** takes the other approach: it points the app at the existing home rather than copying
-it, which hands that home's keys to a process this app starts — the same trust the
-`scripts\run-web.bat` path already extends.
+in a `KeyState`, never drawn — the presence-only rule above is exactly as it was, and the
+*offer* is decided by the file's SIZE (has the source's got content, is the target's
+absent or empty) rather than by reading it. **Use it** takes the other approach: it points
+the app at the existing home rather than copying it, which hands that home's keys to a
+process this app starts — the same trust the `scripts\run-web.bat` path already extends.
 
 Every child's environment is **composed rather than inherited**
 (`vn-shell-runtime`'s `env.rs`): `DSH_HOME` is set, the app's own `VNCODE_HOME` and the
@@ -148,10 +154,7 @@ launcher's console markers are *removed* — an environment is inherited unless 
 is removed, a leak that was measured while this was written and is now read back out of
 the child by `check-shell.mjs` — and `TMP`/`TEMP`/`TMPDIR` point at `<app root>/tmp` when
 the machine's own temp refuses a child, which is the case a real log measured (the
-harness's spill store died on `mkdtemp`). **`Open tab` is the one control that hands the
-launch token to another process**, on demand and in memory: the panel's address row draws
-the URL with its query stripped, the log redacts `token=` on the way in, and nothing
-writes it down.
+harness's spill store died on `mkdtemp`).
 
 ## Lock it down
 

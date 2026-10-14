@@ -163,6 +163,10 @@ pub struct Shell {
     pack_checked: Option<std::time::Instant>,
     /// So a setup run finishing forces that re-read without polling for it.
     setup_was_running: bool,
+    /// Set when the reader asked to install the pack while the harness was running:
+    /// the Stop has to finish before the installer may touch the profile, so the
+    /// install is remembered and started the moment the stop lands.
+    install_when_stopped: bool,
     /// The second click of Adopt: take the credentials file too. Off by default, and
     /// it is a byte copy - the key's value is never read into this process.
     adopt_key: bool,
@@ -190,6 +194,7 @@ impl Shell {
             adopt_key: false,
             adopt_note: None,
             surface: None,
+            install_when_stopped: false,
         }
     }
 
@@ -385,6 +390,13 @@ impl eframe::App for Shell {
             self.last_stop = Some(outcome);
             self.stopping = false;
             self.stop_outcome = None;
+            // ...and if the reader asked "install the pack here" while the harness was
+            // up, this is the moment it may run: the installer re-links the profile,
+            // which it must not do under a live harness.
+            if self.install_when_stopped {
+                self.install_when_stopped = false;
+                self.run_setup(SetupKind::Install);
+            }
         }
 
         self.theme(ctx);
@@ -622,6 +634,48 @@ impl Shell {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("! ").color(Color32::from_rgb(0xff, 0xb0, 0x00)));
                     ui.label(notice);
+                });
+                ui.separator();
+            }
+            // THE ONE THING THAT MAKES THIS APP LOOK BROKEN. A harness started in a
+            // home whose profile lists no pack comes up as the bare DeepSeek Harness:
+            // no right bar, no editor, no themes - and, on a home of its own, no model
+            // key. The note says so; this puts the FIX one click away, including the
+            // Stop the install needs first. Measured on a real run: the note named an
+            // installer script, and the reader was looking at a button for it.
+            if self.pack_note.is_some() && self.context.setup_entries.is_some() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        RichText::new("this home has no vncode pack")
+                            .color(Color32::from_rgb(0xff, 0xb0, 0x00))
+                            .strong(),
+                    );
+                    ui.label(
+                        RichText::new(format!("· {}", self.pack_note.clone().unwrap_or_default()))
+                            .weak(),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    let setup = self.context.setup.status();
+                    let busy = setup.running || self.context.adopt.is_running();
+                    if status.phase.is_live() {
+                        if ui
+                            .add_enabled(!busy && !self.stopping, egui::Button::new("Stop and install the pack"))
+                            .on_hover_text(
+                                "the installer re-links the profile, so the harness has to stop first - this does both",
+                            )
+                            .clicked()
+                        {
+                            self.install_when_stopped = true;
+                            self.stop();
+                        }
+                    } else if ui
+                        .add_enabled(!busy, egui::Button::new("Install the pack here"))
+                        .on_hover_text("runs scripts/setup/install.* with this home's -DshHome")
+                        .clicked()
+                    {
+                        self.run_setup(SetupKind::Install);
+                    }
                 });
                 ui.separator();
             }

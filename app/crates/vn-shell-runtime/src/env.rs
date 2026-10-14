@@ -206,7 +206,7 @@ pub fn choose_cache(
         None => (
             None,
             Some(
-                "[vncode] warning: no writable npm cache was found, so npm will use its own default - which may be the very directory this shell moved away from".to_string(),
+                "no writable npm cache was found, so npm will use its own default - which may be the very directory this app moved away from".to_string(),
             ),
         ),
     }
@@ -234,7 +234,7 @@ pub fn choose_temp(
         return (
             None,
             Some(format!(
-                "[vncode] warning: {} is not writable by this account and this app has no root of its own, so the child keeps a temp directory it may not be able to use",
+                "{} is not writable by this account and this app has no root of its own, so the child keeps a temp directory it may not be able to use",
                 machine
                     .as_deref()
                     .map(|path| path.display().to_string())
@@ -247,7 +247,7 @@ pub fn choose_temp(
         Ok(_) => (
             Some(owned.clone()),
             Some(format!(
-                "[vncode] note: {} is not writable by a child of this app, so the child is given {} for temp instead (the harness's own scratch stores write there)",
+                "{} is not writable by a child of this app, so the child is given {} for temp instead (the harness's own scratch stores write there)",
                 machine
                     .as_deref()
                     .map(|path| path.display().to_string())
@@ -258,7 +258,7 @@ pub fn choose_temp(
         Err(error) => (
             None,
             Some(format!(
-                "[vncode] warning: neither the machine's temp nor {} can be written: {error}",
+                "neither the machine's temp nor {} can be written: {error}",
                 owned.display()
             )),
         ),

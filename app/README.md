@@ -137,7 +137,12 @@ table has never heard of:
 |---|---|---|
 | Chromium | Google Chrome, Microsoft Edge, Brave, Chromium, Vivaldi, Opera | the program, with the URL as exactly ONE argv element |
 | Firefox | Mozilla Firefox | the same |
-| the floor | `explorer.exe` (Windows), `open` (macOS), `xdg-open` (Linux) | the same - a program, never a command string |
+| the floor | `rundll32.exe url.dll,FileProtocolHandler` (Windows), `open` (macOS), `xdg-open` (Linux) | the same - a program, never a command string |
+
+The Windows floor is `rundll32`, not `explorer.exe`: the latter is unreliable from a
+non-interactive child, and it was measured doing **nothing at all** when the panel's button
+spawned it. `rundll32 url.dll,FileProtocolHandler <url>` is the documented way a program (not
+a shell) asks the shell for the default browser.
 
 The choice is remembered in `<app root>/prefs.json` as an **id**, never a program path, so a
 hand-edited preferences file cannot name something to run; a remembered browser that has been
@@ -155,15 +160,46 @@ Where `~/.dsh` already holds an installation, the panel offers two deliberate ac
 makes neither decision for you: **Use it** remembers that path and runs the harness against
 itself (sharing one set of sessions, skills and keys with `scripts\run-web.bat`), with
 **Forget it** to undo; and **Adopt** copies in `skills/`, `sessions/`, `storages/` and
-`attachments/`, one click. The offer lasts as long as the home has **nothing of yours** in it
-- a composed `profiles/` does not count, because the harness creates that by itself on the
-first boot, and counting it is how a person's own key stopped being offered. The caches are
-never copied (512 MiB, 200 MiB and up to 8 GiB, all reproducible), `profiles/` is never copied
-(the Install button re-creates it), and **`.credentials.yaml` is a second click** - a
-byte-for-byte copy, so its value is never read into this process, which is what keeps
-[`SECURITY.md`](../SECURITY.md)'s presence-only promise true. Nothing is ever written into the
-source home, a file that already exists is never overwritten, and a link is skipped rather than
-followed.
+`attachments/`, one click.
+
+Two rules came out of a real run, and both were bugs before they were rules:
+
+* **`Use it` needs a home a child can WRITE in; `Adopt` only needs one it can READ.** Passing
+  the writable-filtered path to both meant a person whose `~/.dsh` was unwritable got *neither*
+  button - the worst of both, and no way to reach their key. `Use it` appears only when the home
+  is usable; `Adopt` appears whenever the source can be read.
+* **Adopt is offered while there is something left to bring, and nothing to overwrite.** The
+  test used to be "the home has no `profiles/`", and that was wrong twice over: the harness
+  composes `profiles/<name>/` on its FIRST boot and writes an empty `.credentials.yaml` and a
+  `storages/` beside it, so a home the app created stopped looking "untouched" after one run and
+  the offer vanished. Measured: the panel said `DeepSeek key: not found` while the key sat in
+  `~/.dsh`, with no button to press. A durable tree is now offered when the source has it and
+  the target has nothing in it; the credential document when the source's has **content** and
+  the target's is absent or empty - a file SIZE, never a read, so the presence-only rule stands.
+
+The caches are never copied (512 MiB, 200 MiB and up to 8 GiB, all reproducible), `profiles/`
+is never copied (the Install button re-creates it), and **`.credentials.yaml` is a second
+click** - a byte-for-byte copy, so its value is never read into this process, which is what
+keeps [`SECURITY.md`](../SECURITY.md)'s presence-only promise true. Nothing is ever written
+into the source home, a file that already exists is never overwritten, and a link is skipped
+rather than followed.
+
+### A home with no pack is the one state that looks broken
+
+A harness started in a home whose profile lists none of this pack's bundles comes up as the
+**bare DeepSeek Harness**: no right bar, no editor, no themes - and, on a home of its own, no
+model key, so nothing answers either. The panel says that in so many words and puts the fix one
+click away: **Stop and install the pack** while the harness is running (the installer re-links
+the profile, so the stop has to happen first - this does both in one press), or **Install the
+pack here** when it is idle, or **Use .dsh** to run the home that already has everything.
+
+### The port: never one that something already answers on
+
+`3080` is what every `dsh web` on the machine reaches for, so the app prefers it **only when a
+bind succeeds AND nothing answers on it** - two tests, because they are different questions.
+Measured on the machine this was written on: an app instance bound `127.0.0.1:3080` while
+another harness answered on it, so the tab the app opened was served by the wrong process, whose
+launch token the app did not have.
 
 ### Where npm's cache goes, and why it is chosen rather than assumed
 

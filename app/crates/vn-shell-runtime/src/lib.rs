@@ -232,13 +232,19 @@ pub fn plan(options: &Options, remembered: Option<&Path>) -> Result<Plan, String
 /// a profile that never had it installed still starts, just unadorned. This is the
 /// same warning `run-web.ps1` prints, from the same source of truth: the web
 /// profile's own bundle list.
+///
+/// The words name the PANEL, not the installer scripts, because that is where a reader
+/// of this note is standing: the panel's **Install pack** button runs exactly those
+/// scripts, with this home's `-DshHome`, and it is one click. Measured on a real run:
+/// the note said "run scripts/setup/install.bat" to somebody looking at a window that
+/// has a button for it, and the app went on looking broken.
 pub fn missing_pack_note(home: Option<&Path>, profile: &str) -> Option<String> {
     let home = home?;
     let profile_dir = home.join("profiles").join(profile);
     let manifest = profile_dir.join("package.json");
     if !manifest.is_file() {
         return Some(format!(
-            "there is no {profile} profile at {} yet - run scripts/setup/install.bat (or ./scripts/setup/install.sh) first if you expected this pack's bundles",
+            "there is no {profile} profile at {} yet, so the harness will come up unadorned. Press **Install pack** (stop the harness first) to add this pack's bundles to THIS home",
             profile_dir.display()
         ));
     }
@@ -257,7 +263,7 @@ pub fn missing_pack_note(home: Option<&Path>, profile: &str) -> Option<String> {
         None
     } else {
         Some(format!(
-            "the {profile} profile at {} does not list this pack's bundles yet - run scripts/setup/install.bat (or ./scripts/setup/install.sh) first if you expected the pack to be there",
+            "the {profile} profile at {} does not list this pack's bundles, so the harness comes up unadorned (no right bar, no editor, no themes). Press **Install pack** to add them to THIS home - or **Use .dsh** to run the home that already has them",
             profile_dir.display()
         ))
     }
@@ -888,7 +894,9 @@ mod tests {
         std::fs::create_dir_all(root.join("profiles").join("web")).unwrap();
         let note = missing_pack_note(Some(&root), "web").expect("a note is due");
         assert!(note.contains("no web profile"), "{note}");
-        assert!(note.contains("install.bat"), "{note}");
+        // The words point at the PANEL's button, which is where the reader is - not
+        // at an installer script they would have to run by hand.
+        assert!(note.contains("**Install pack**"), "{note}");
         // A profile with the manifest but without the pack gets the other note.
         std::fs::write(
             root.join("profiles").join("web").join("package.json"),
@@ -897,6 +905,8 @@ mod tests {
         .unwrap();
         let note = missing_pack_note(Some(&root), "web").expect("a note is due");
         assert!(note.contains("does not list this pack's bundles"), "{note}");
+        assert!(note.contains("unadorned"), "{note}");
+        assert!(note.contains("**Use .dsh**"), "{note}");
         // ...and one that lists the pack gets nothing at all.
         std::fs::write(
             root.join("profiles").join("web").join("package.json"),

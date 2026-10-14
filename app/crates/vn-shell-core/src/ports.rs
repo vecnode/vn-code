@@ -38,13 +38,40 @@ pub fn port_is_free(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
-/// The port to ask the harness for: `-Port`, else the harness's own default when
-/// it is free, else any free one.
+/// Whether nothing ANSWERS on this loopback port - asked by connecting, not by binding.
+///
+/// The bind test above answers "may I have this port"; this one answers "is somebody
+/// already there", and they are not the same question. Measured on the machine this was
+/// written on: an app instance whose harness held `127.0.0.1:3080` while the browser the
+/// user was chatting through held it too - one process had bound it, the other answered
+/// on it, and the URL the app opened was answered by the WRONG harness, whose launch
+/// token it did not have. A connect refuses to be fooled by that: if anything accepts
+/// the connection, this port is not "free" whatever a bind says.
+pub fn port_is_unanswered(port: u16) -> bool {
+    match std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        std::time::Duration::from_millis(250),
+    ) {
+        // Something is listening: this port is somebody's.
+        Ok(stream) => {
+            drop(stream);
+            false
+        }
+        Err(_) => true,
+    }
+}
+
+/// The port to ask the harness for: `-Port`, else the harness's own default when it is
+/// free AND nothing answers on it, else any free one.
+///
+/// Both tests, because the app is not the only harness on a machine: `3080` is the
+/// default every `dsh web` reaches for, and a second instance that lands on it produces
+/// a tab that shows somebody else's harness - or a `401`.
 pub fn choose_port(options: &Options) -> Option<u16> {
     if options.port > 0 {
         return Some(options.port);
     }
-    if port_is_free(DEFAULT_PORT) {
+    if port_is_free(DEFAULT_PORT) && port_is_unanswered(DEFAULT_PORT) {
         return Some(DEFAULT_PORT);
     }
     free_port()
@@ -62,6 +89,18 @@ mod tests {
     }
 
     #[test]
+    fn a_port_something_answers_on_is_not_free_however_a_bind_answers() {
+        // The measured case: a harness holding 3080 while another process also answers
+        // on it. The connect probe refuses to call that free.
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert!(!port_is_unanswered(port), "a listening port must read as somebody's");
+        // ...and a port nothing listens on reads as nobody's.
+        drop(listener);
+        assert!(port_is_unanswered(port), "nothing is there once the listener is gone");
+    }
+
+    #[test]
     fn with_no_flag_the_harness_own_default_comes_first() {
         // Only true while nothing holds it; when the machine's own harness is
         // running, the answer is a different free port and this assertion would be
@@ -69,7 +108,7 @@ mod tests {
         let options = Options::default();
         let chosen = choose_port(&options);
         assert!(chosen.is_some(), "no port could be chosen at all");
-        if port_is_free(DEFAULT_PORT) {
+        if port_is_free(DEFAULT_PORT) && port_is_unanswered(DEFAULT_PORT) {
             assert_eq!(chosen, Some(DEFAULT_PORT));
         } else {
             assert_ne!(chosen, Some(DEFAULT_PORT), "a held port was chosen anyway");

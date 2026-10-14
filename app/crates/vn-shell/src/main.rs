@@ -176,10 +176,16 @@ fn window(options: Options, mode: Mode) -> i32 {
     // What the panel offers about a home this app did not create: USE it in place, or
     // ADOPT a copy of it. The source is the harness's own default (`~/.dsh`), and it
     // is only an offer - the app never walks to it on its own (see `home.rs`).
-    let existing_home = home::existing_default_home().filter(|path| {
-        home::looks_like_a_harness_home(path) && appdata::harness_home_is_writable(path)
-    });
-    if let Some(path) = existing_home.as_deref() {
+    //
+    // TWO FILTERS, and they are not the same one. `Use it` runs the harness AGAINST
+    // that home, so the home has to be writable by a child; `Adopt` only has to READ
+    // it, and it exists exactly for the home that cannot be written. Passing the
+    // writable-filtered path to both - which this wiring did - left a person whose
+    // `~/.dsh` was unwritable with neither button, and no way to reach their key.
+    let found_home = home::existing_default_home().filter(|path| home::looks_like_a_harness_home(path));
+    let usable_home =
+        found_home.clone().filter(|path| appdata::harness_home_is_writable(path));
+    if let Some(path) = found_home.as_deref() {
         // Compared in their REAL forms, so `~/.dsh` and a junction to it are one
         // home rather than two.
         let using_it = plan
@@ -189,13 +195,20 @@ fn window(options: Options, mode: Mode) -> i32 {
                     == vn_shell_core::userpath::canonical(path)
             })
             .unwrap_or(false);
+        let usable = usable_home.is_some();
         println!(
             "[vncode] found an existing harness home at {}{}",
             path.display(),
-            if using_it { " (in use)" } else { " - the panel offers Use or Adopt" }
+            if using_it {
+                " (in use)"
+            } else if usable {
+                " - the panel offers Use or Adopt"
+            } else {
+                " - it is not writable by a child, so the panel offers Adopt only"
+            }
         );
     }
-    let adopt_offer = vn_shell_core::adopt::offer(existing_home.as_deref(), plan.home_path());
+    let adopt_offer = vn_shell_core::adopt::offer(found_home.as_deref(), plan.home_path());
     match &adopt_offer {
         vn_shell_core::adopt::Offer::Available(adoption) => {
             println!("[vncode] adopt is available: {}", adoption.line())
@@ -241,7 +254,7 @@ fn window(options: Options, mode: Mode) -> i32 {
         browser: chosen,
         app_prefs,
         prefs_root: app_root,
-        existing_home,
+        existing_home: usable_home,
     });
 
     let native = eframe::NativeOptions {
