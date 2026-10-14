@@ -2820,7 +2820,7 @@ check(
 // places, which is what these assert the fork no longer does. A hand edit that
 // skipped the patch list would show up here on the next re-sync.
 const barSource = readFileSync(path.join(repo, 'packages/dsh-rightbar/lib/client.js'), 'utf8')
-const syncSource = readFileSync(path.join(repo, 'scripts/sync-vendored.ps1'), 'utf8')
+const syncSource = readFileSync(path.join(repo, 'scripts/tools/sync-vendored.ps1'), 'utf8')
 check('right bar has no two-pane cap', /dockPaneIds\)\((?:state|layout|surface\.layout)\)\.length [<>]=? 2/.test(barSource), false)
 const dockTreeSource = readFileSync(path.join(repo, 'packages/dsh-rightbar/vendor/dock-tree.js'), 'utf8')
 // alpha.3, and the reason the cap lift alone was not enough: the kit RENDERS a

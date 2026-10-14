@@ -259,7 +259,7 @@ if [ -f "$harness_home/profiles/web/package.json" ]; then
     process.exit(Array.isArray(held) && held.indexOf("dsh-rightbar") >= 0 ? 0 : 1);
   ' "$harness_home/profiles/web/package.json" >/dev/null 2>&1; then
     printf "  - the web profile at %s does not list this pack's bundles yet.\n" "$harness_home/profiles/web"
-    printf '    Run ./scripts/install.sh first if you expected the pack to be there.\n'
+    printf '    Run ./scripts/setup/install.sh first if you expected the pack to be there.\n'
   fi
 fi
 

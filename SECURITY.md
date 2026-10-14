@@ -31,7 +31,7 @@ Supported: `main`, and the harness line pinned in `.dsh-version.json`
 (**0.2.0-rc.2**); any other published line is **not** tested and not claimed.
 `dsh-rightbar`, `dsh-rightbar-files` and `dsh-open-in-app` are forks of that line's
 client bundles, so a line bump is deliberate: bump the pin, run
-`scripts/sync-vendored.ps1`, re-verify. The pack targets the **web profile only**,
+`scripts/tools/sync-vendored.ps1`, re-verify. The pack targets the **web profile only**,
 stays alpha until promoted, and its installer is idempotent — uninstall removes
 only the bundle, its patch layer and the skill folders it wrote (each marked
 `.vncode-<package>`).
@@ -95,6 +95,58 @@ Host/Origin fence are checked on every request, and only then does a pack route
 run.
 
 ![A sequence diagram of one authenticated call: the page exchanges the launch token for a session cookie, asks a pack route with that cookie, and the gates verify the cookie and the Host/Origin fence before dispatching anything; the alternate region shows the refusal - 401 without a session, 403 for a foreign authority or a cross-site fetch](./assets/security.svg)
+
+## The app's own root, the home inside it, and the browser
+
+`app/` owns a root — `$VNCODE_HOME` (`%LOCALAPPDATA%\vncode` by default) — and hands
+the harness a home inside it, `<root>/home`, as `DSH_HOME`. It does **not** use `~/.dsh`
+as a default: that folder belongs to whichever harness used it first, and a home the app
+did not create is a home it cannot promise. A candidate is used only after a real write
+probe, the first rung of the ladder is a `-DshHome` the person typed (a refusal there
+ends the run rather than quietly using another path), and **the app never writes a
+probe, a note or anything else into a home it refused**.
+
+Four hardening rules travel with those paths, and each is a `cargo test` case:
+
+1. **A path is cleaned before it is used** (`userpath.rs`): `~` expanded, relative
+   resolved against a captured cwd, `.`/`..` folded lexically, a NUL or an empty value
+   refused by name, and the exported path is the REAL one with the Windows `\\?\` form
+   stripped. A path that means two things to two processes is how a write lands
+   somewhere nobody chose.
+2. **Only a directory this app CREATED is hardened** to `0700` on Unix — the home holds
+   `.credentials.yaml`, the root holds an npm cache that can hold registry credentials.
+   A home the app merely JOINED is never chmodded: it has an owner and a history, and
+   the probe reports `created` precisely so those two cases cannot be confused. On
+   Windows nothing is chmodded: the directories live under the user's profile and
+   inherit its ACL, and a half-written ACL is worse than an inherited one.
+3. **Nothing in the preferences can name a program.** `<root>/prefs.json` stores a
+   browser **id** the table already knows and a home path, both validated on read; a
+   record this build cannot vouch for (wrong version, unknown id, empty path) is
+   DISCARDED rather than repaired. This matters because the app runs a program for you:
+   a stored path would be an execution primitive.
+4. **The browser launch is checked at the last moment.** `browser::command` refuses any
+   URL that is not loopback — the ready line was already checked, and a rule that holds
+   at one end of a pipe is not a rule — starts a PROGRAM with the URL as exactly one
+   argv element, and never a shell. The Chrome-first table's last rung is the platform's
+   own opener, so "a browser this build has never heard of" is still the OS's business
+   rather than a refusal.
+
+**Adopt** is the one thing that reads such a home: it copies `skills/`, `sessions/`,
+`storages/` and `attachments/` into the home the app proved it can write, never the
+caches (`dsh-pdf` 512 MiB, `dsh-diagrams` 200 MiB, `dsh-media` up to 8 GiB — all
+reproducible), never the composed `profiles/`, never over a file that already exists,
+and never through a symlink it would have to follow. The credentials file is a
+**separate click** and a **byte-for-byte copy**: its value is never parsed, never held
+in a `KeyState`, never drawn — the presence-only rule above is exactly as it was. **Use
+it** takes the other approach: it points the app at the existing home rather than copying
+it, which hands that home's keys to a process this app starts — the same trust the
+`scripts\run-web.bat` path already extends.
+
+Every child's environment is **composed rather than inherited**
+(`vn-shell-runtime`'s `env.rs`): `DSH_HOME` is set, the app's own `VNCODE_HOME` and the
+launcher's console markers are *removed* — an environment is inherited unless a variable
+is removed, a leak that was measured while this was written and is now read back out of
+the child by `check-shell.mjs`.
 
 ## Lock it down
 
@@ -165,7 +217,7 @@ restart does not log a browser out — rotate the secret for that.
   themselves — no CDN, no runtime download. Each records a sha256 per file and a
   digest in `lib/vendor/…/VERSION.json`, re-hashed offline by `build.mjs --check`;
   forked bundles carry a GENERATED banner and are checked by
-  `scripts/sync-vendored.ps1 -Check`.
+  `scripts/tools/sync-vendored.ps1 -Check`.
 - **One binary may be downloaded, and only when the machine has none**: ffmpeg. The
   repository ships a **pin** (`packages/dsh-media/lib/binaries.json`: official URL
   plus SHA-256 per platform-arch), never a 130–170 MB build. `PATH` wins; the

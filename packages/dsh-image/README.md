@@ -48,8 +48,8 @@ The tracked check drives the bundle through a real React runtime: the type defin
 Both installers pick the package up from `packages/`; it is a new bundle, so the profile learns about it once:
 
 ```
-scripts\install.bat -Force        # Windows
-./scripts/install.sh -Force       # macOS / Linux
+scripts\setup\install.bat -Force        # Windows
+./scripts/setup/install.sh -Force       # macOS / Linux
 ```
 
 Then restart `npx @deepseek-ai/dsh web` and hard-refresh; after that it is a live link and editing `lib/client.js` needs only a restart.

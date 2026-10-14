@@ -3,15 +3,16 @@
 ![Language: JavaScript](https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black)
 ![Language: Rust](https://img.shields.io/badge/language-Rust-000000?logo=rust&logoColor=white)    
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Platforms: Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)      
 ![DeepSeek Harness 0.2.0-rc.2](https://img.shields.io/badge/dsh-0.2.0--rc.2-4f8cff)
-![Platforms: Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+[![egui: 0.36.2, planned](https://img.shields.io/badge/shell-egui_0.36.2_planned-4f8cff)](docs/PLAN-egui-shell.md)
 
 Agent-Human IDE/ADE ⌨️    
 Web and Desktop versions, bundles [`Plugins`](packages/),  [`Skills`](docs/) and [`Interfaces`](docs/)
 
 ![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner3.png)
 
-Supports core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design. Standard **dsh bundles**. The plugins are plain JavaScript with **zero npm dependencies**; the launchers run on **Windows, macOS and Linux** (PowerShell on one side, plain POSIX shell on the other).
+Cross-platform IDE/ADE. Supports core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design. Standard **dsh bundles** are plain JavaScript with **zero npm dependencies**; the launchers run on **Windows, macOS and Linux**.
 
 <p align="left">
   <img src="assets/img1.png" alt="The vncode window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
@@ -21,7 +22,7 @@ Supports core [DSH](https://www.deepseek.com/harness/en/) for professional Engin
 
 | | Windows | macOS / Linux |
 |---|---|---|
-| **Native window** | `scripts\run-desktop.bat` | `cargo build --release` in `app/src-tauri` |
+| **Native window** | `scripts\run-desktop.bat` | `cargo build --release` in `app` |
 | **Browser tab** | `scripts\run-web.bat` | `./scripts/run-web.sh` |
 
 Both start the pinned harness and open the URL it prints: the native window loads
@@ -29,6 +30,14 @@ it in a WebView2 / WKWebView / WebKitGTK window, the other in Chrome, falling ba
 to your default browser. The URL is opened only when it names a **loopback**
 address, and the launch token is never written to a file - both rules are in
 [SECURITY.md](SECURITY.md).
+
+The native window is a Rust **egui** shell: a small control panel that opens first and
+starts nothing, shows where everything lives, starts the pinned harness on **Start** (the
+same launch path `run-web` uses), shows it in the browser it found on your machine —
+Chrome first, everything else reachable, and no web view of its own — and ends the whole
+instance again on **Stop**. The plan it was built from is
+[`docs/PLAN-egui-shell.md`](docs/PLAN-egui-shell.md), including the **egui 0.36.2** line
+the badge above pins.
 
 
 ## Plugins

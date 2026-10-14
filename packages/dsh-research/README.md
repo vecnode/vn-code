@@ -279,10 +279,9 @@ quote, the claims and sources, and the gate form driven the way a person drives 
 (pick the option that overrides the default, watch the reason box appear, pick the
 plain one, watch it go, type, and Submit comes alive). It skips **loudly** on a host
 with no browser or no React UMD build, because a check that downloads one to pass is
-not a check. The design and the reasoning behind every phase are in
-`docs/DESIGN-dsh-research.md`, and the review that produced alpha.3 — measured
-against an external academic-research suite — is in
-`docs/REVIEW-dsh-research-alpha.3.md`.
+not a check. The pack keeps no alpha-by-alpha design or review document: this
+README, the package's own checks and the eight skills are the record of what the
+engine does and what proves it.
 
 **It records statistics; it does not recompute them.** Nothing here calculates a
 p-value from a test statistic, checks that `d = 0.61` follows from the means it was
@@ -338,7 +337,7 @@ Then the pack-wide checks that own the area:
 ```sh
 node scripts/checks/check-client-bundles.mjs    # the tab and its editor, rendered for real
 node scripts/checks/check-node-routes.mjs       # the manifest and every bundled-skill registration
-node scripts/checks/check-dist-layout.mjs       # the ship list
+node scripts/checks/check-scripts.mjs          # the scripts tree, the console contract
 node scripts/checks/check-no-secrets.mjs
 ```
 
@@ -347,7 +346,7 @@ A case a host cannot run — a symlink without the privilege to create one — s
 
 ## Install
 
-With the vncode pack: `scripts\install.bat` (Windows) or `./scripts/install.sh`
+With the vncode pack: `scripts\setup\install.bat` (Windows) or `./scripts/setup/install.sh`
 (macOS / Linux) in **that** repository, which discovers this package under
 `packages/`. Nothing has to be installed first, and nothing is downloaded. Then
 restart the harness and open the Research tab, or ask the agent for

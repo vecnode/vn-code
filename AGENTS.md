@@ -11,9 +11,15 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 ## Hard rules — do not break these
 
 1. **One install target.** The web profile only. No desktop edition, no
-   `-Target desktop`, no desktop detection. `app/` plus
-   `scripts/run-desktop.bat` is a **launcher** of the same pinned `dsh web` on a
-   free loopback port — it installs nothing and touches no profile or core file.
+   `-Target desktop`, no desktop detection. `app/` plus `scripts/run-desktop.*` is a
+   **launcher** of the same pinned `dsh web` on a free loopback port — it patches no
+   core file and adds no second server. It installs exactly one thing, and only when
+   asked: its panel's Install button runs this pack's own installer
+   (`scripts/setup/install.*`), which adds these bundles to the `web` profile and
+   nothing else — and it is given `-DshHome <the home the app chose>`, so the pack
+   lands in the profile the app will actually run. Uninstall runs the matching pair.
+   Both are disabled while a harness is running, and neither touches a row or a core
+   file.
 2. **Nothing patches core.** A row change is a new bundle layer.
    `dsh-vn-master` is the pack's final layer (it installs last), so pack-wide row
    patches belong there, and a package that *replaces* a row carries that row's
@@ -24,9 +30,14 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
    `%USERPROFILE%` or `\`). macOS/Linux tooling is POSIX shell and must **never**
    require PowerShell — Node.js with npm/npx and nothing else.
 4. **Launchers.** Every entry point lives in `scripts/`, one per action per host
-   (`install.bat` / `install.sh`, `run-web.*`, `uninstall.*`), and there are **no
-   forwarders**. On Windows the entry point calls the PowerShell worker beside it
-   and gets its console behaviour from the one shared layer:
+   (`run-web.*`, `run-desktop.*`), and there are **no forwarders**. The install and
+   uninstall pairs live one level down in `scripts/setup/`, beside the workers they
+   call, and the app's own buttons run those same entry points. Nothing else sits at
+   the top level: `console/` is the shared console layer, `tools/` is
+   maintainer-only, `checks/` is the contract, and `check-scripts.mjs` fails on a
+   stray file. On Windows the entry point calls the PowerShell worker beside it (or
+   the console layer, for the setup pair) and gets its console behaviour from the one
+   shared layer:
 
        if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
        call "%~dp0console\adapt.cmd" "%~f0" "<window title>"
@@ -78,10 +89,22 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   makes them useful outside this repository) and they are ADDITIONAL to
   `scripts/checks/`, never a replacement for it: `dsh-supercollider` ships three,
   and the pack-wide checks still own the routes, the bundle and the manifest.
-- `scripts/` — the launchers, the installer workers, the shared console layer and
-  `scripts/checks/`.
-- `app/` — the Rust/Tauri launcher window (a launcher, not a desktop edition).
-- `docs/` — install, build, deploy, distribute, release, paths, compatibility.
+- `scripts/` — the launchers (`run-web.*`, `run-desktop.*`), and three folders:
+  `console/` (the shared console layer), `setup/` (install and uninstall, which the
+  app's buttons run), `tools/` (maintainer-only) and `checks/`.
+- `app/` — the Rust/**egui** shell: a cargo workspace whose binary is `vncode`, a
+  control panel that opens idle, resolves and creates the root its harness home lives
+  in (`$VNCODE_HOME`, with `DSH_HOME` at `<root>/home` unless `-DshHome`, a home chosen
+  in the panel or a writable inherited `DSH_HOME` says otherwise), starts the pinned
+  harness on **Start** and ends it on **Stop** (a launcher, not a desktop edition). It
+  composes every child's environment rather than inheriting one, cleans every path before
+  it uses one, and **draws no web view**: the interface opens in a browser it found
+  (`browser.rs`), so there is no `embed`, no `Pane` and no engine vendored. `app/README.md`
+  explains it and `docs/PLAN-egui-shell.md` is the plan it was built from. `check-shell.mjs`
+  is what proves it, and it drives the real binary.
+- `docs/` — install, build, deploy, release, paths, compatibility, and the shell's
+  plan. There is no distributer and no ship list any more: the distribution is this
+  repository, and the app installs the pack itself.
 - `.dsh-version.json` — the pinned harness line and the pack manifest
   (its versions must match every `package.json`; `check-node-routes.mjs` enforces
   that).
@@ -91,12 +114,22 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 Run the check that owns the area, and say which ones you ran:
 
 - `check-no-secrets.mjs` — before anything is pushed;
-- `check-dist-layout.mjs` — the distribution, the console contract, the ship list;
+- `check-scripts.mjs` — the `scripts/` layout, the console contract, and both setup
+  entry points driven with `-Help` (which installs nothing);
 - `check-node-routes.mjs` — every Node route, the manifest, the pack-wide patches;
 - `check-client-bundles.mjs` — every browser bundle, loaded and driven for real;
 - `check-media-node.mjs`, `check-pdf-node.mjs`,
-  `check-browser-node.mjs`, `check-splash.mjs` — the tool
+  `check-browser-node.mjs` — the tool
   and host halves;
+- `check-shell.mjs` — the native shell, **driven**: the ready line and its
+  refusals, the launch token in no stream and no file (in both roots a run writes),
+  Stop freeing the port and killing the tree, the flags (including a `-Mode` this build
+  does not have being refused BY NAME, so no build can promise a web view it does not
+  draw), the panel's install/uninstall path, the home ladder (an unwritable inherited
+  `DSH_HOME` falls through, an impossible `-DshHome` refuses by name, a writable inherited
+  one is joined, and `VNCODE_HOME` reaches no child), and that `app/src-tauri` is gone (it
+  also runs `cargo test --workspace`; it skips loudly with no cargo and no built
+  binary);
 - `check-audio-browser.mjs` — the check that drives a
   real browser (with none installed it skips loudly);
 - `check-skill-examples.mjs`, `check-media-examples.mjs` — every fenced example in

@@ -93,6 +93,6 @@ node scripts/checks/check-node-routes.mjs      # the screenshot route: type, sig
 
 ## Install
 
-`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux: the launcher auto-discovers this package as a standard `dsh.bundle`,
+`scripts\setup\install.bat` on Windows, `./scripts/setup/install.sh` on macOS/Linux: the launcher auto-discovers this package as a standard `dsh.bundle`,
 and a bundle the profile does not list yet is added by one plain run. The web profile live-links it from this repo, so a code edit needs a
 restart of `npx @deepseek-ai/dsh web` plus a hard refresh; `scripts\run-web.bat` / `./scripts/run-web.sh` starts it and opens the printed URL.

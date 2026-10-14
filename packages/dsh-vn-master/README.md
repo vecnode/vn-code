@@ -29,8 +29,8 @@ Nothing else consumes those services, and the shipped Session export guards its 
 - **No `dsh.client`, ever, unless the work really is a browser surface.** The moment this package declares one it joins the boot graph and needs its own check — and it should then be a deliberately named plugin, not the browser-free master.
 - **No published service, no `inject` edge, no code.** `lib/index.js` is the no-op row; every patch here is a row statement.
 - **A disable that belongs to the package REPLACING a row stays with that package** — `dsh-rightbar` disables `ui-sidebar-right` / `ui-sidebar-files` — so a partial `-Plugin` install still mounts exactly one bar, or one Browser tab.
-- **Never move a provider's services here.** `sidebarRightTabs` / `sidebarRight` come from the generated fork in `dsh-rightbar/lib/client.js`; a fork belongs in the package `scripts/sync-vendored.ps1` regenerates.
-- Adding a pack-wide patch is a `cordis.patch.yml` change here plus one `scripts\install.bat` / `./scripts/install.sh` run (a changed layer needs the profile re-synced). The rows are composed at boot, so a running profile needs a **restart** and a hard browser refresh before the change is visible.
+- **Never move a provider's services here.** `sidebarRightTabs` / `sidebarRight` come from the generated fork in `dsh-rightbar/lib/client.js`; a fork belongs in the package `scripts/tools/sync-vendored.ps1` regenerates.
+- Adding a pack-wide patch is a `cordis.patch.yml` change here plus one `scripts\setup\install.bat` / `./scripts/setup/install.sh` run (a changed layer needs the profile re-synced). The rows are composed at boot, so a running profile needs a **restart** and a hard browser refresh before the change is visible.
 
 ## Verify
 

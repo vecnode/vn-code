@@ -140,15 +140,15 @@ SuperCollider, and none is ever weakened to make a change pass.
 
 ## Install
 
-With the vncode pack: `scripts\install.bat` (Windows) or `./scripts/install.sh`
+With the vncode pack: `scripts\setup\install.bat` (Windows) or `./scripts/setup/install.sh`
 (macOS / Linux) in **that** repository, which discovers this package under
 `packages/`.
 
 On its own:
 
 ```
-scripts\install.ps1 -Force        # Windows
-./scripts/install.sh --force      # macOS / Linux
+scripts\setup\install.bat -Force  # Windows
+./scripts/setup/install.sh --force      # macOS / Linux
 ```
 
 Then restart the harness and hard-refresh the browser. Nothing has to be

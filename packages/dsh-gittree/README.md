@@ -45,4 +45,4 @@ node scripts/checks/check-client-bundles.mjs
 
 ## Install
 
-The launcher (`scripts\install.bat` / `./scripts/install.sh`) auto-discovers it as a standard `dsh.bundle`; the first install after it appeared needs one plain launcher run (or `-Force`). Edits need a restart of `npx @deepseek-ai/dsh web` plus a hard refresh.
+The launcher (`scripts\setup\install.bat` / `./scripts/setup/install.sh`) auto-discovers it as a standard `dsh.bundle`; the first install after it appeared needs one plain launcher run (or `-Force`). Edits need a restart of `npx @deepseek-ai/dsh web` plus a hard refresh.

@@ -90,16 +90,16 @@ rem --- which artefact runs ---------------------------------------------------
 set "VN_BUILT=%~dp0..\vncode.exe"
 if exist "%VN_BUILT%" goto :run
 
-set "VN_MANIFEST=%~dp0..\app\src-tauri\Cargo.toml"
+set "VN_MANIFEST=%~dp0..\app\Cargo.toml"
 if not exist "%VN_MANIFEST%" (
-  echo [vncode] Neither vncode.exe nor app\src-tauri\Cargo.toml is in the
+  echo [vncode] Neither vncode.exe nor app\Cargo.toml is in the
   echo   folder above this one, so there is no shell to run and no source to
   echo   build one from.
   echo.
   echo   Run scripts\run-desktop.bat from a repository checkout, or from one of
-  echo   the SOURCE distributions on the releases page - they carry
-  echo   app\src-tauri. A folder from an older release carries a prebuilt
-  echo   vncode.exe instead, and if that is gone there is nothing here to run.
+  echo   the SOURCE distributions on the releases page - they carry app\. A
+  echo   folder from an older release carries a prebuilt vncode.exe instead, and
+  echo   if that is gone there is nothing here to run.
   echo.
   echo   Neither is needed to USE vncode: run START-HERE.bat, or
   echo   scripts\run-web.bat, to start the same app in a browser tab.
@@ -110,8 +110,9 @@ if defined VN_NOBUILD goto :afterbuild
 
 rem The source checkout's own artefact, resolved ONCE, so the build leg and the
 rem failure leg below name the same file - and so the fallback at :buildfailed
-rem has something to run.
-set "VN_APP=%~dp0..\app\src-tauri\target\release\vncode-desktop.exe"
+rem has something to run. The workspace puts it under app\target, and the crate
+rem is named for the FILE the distribution ships: vncode.
+set "VN_APP=%~dp0..\app\target\release\vncode.exe"
 
 where cargo >nul 2>nul
 if errorlevel 1 (
@@ -122,13 +123,13 @@ if errorlevel 1 (
   goto :failed
 )
 
-echo [vncode] Building app\src-tauri in the folder above ^(cargo does nothing when it is current^)...
+echo [vncode] Building app in the folder above ^(cargo does nothing when it is current^)...
 cargo build --release --manifest-path "%VN_MANIFEST%"
 if errorlevel 1 goto :buildfailed
 
 :afterbuild
 rem -NoBuild LANDED HERE, before the line above ever ran, so resolve it again.
-if not defined VN_APP set "VN_APP=%~dp0..\app\src-tauri\target\release\vncode-desktop.exe"
+if not defined VN_APP set "VN_APP=%~dp0..\app\target\release\vncode.exe"
 set "VN_BUILT=%VN_APP%"
 if not exist "%VN_BUILT%" (
   echo [vncode] The build reported success but the program is not at
@@ -150,8 +151,11 @@ echo.
 echo Usage: scripts\run-desktop.bat [flags]
 echo.
 echo   -Port ^<n^>          listen on this port instead of a free one
-echo   -DshHome ^<dir^>     override DSH_HOME (default: %%DSH_HOME%%, else %%USERPROFILE%%\.dsh)
+echo   -DshHome ^<dir^>     use this harness home (default: the one the app chose;
+echo                      a leading ~ is expanded here)
 echo   -DshVersion ^<ver^>  override the pinned dsh version from .dsh-version.json
+echo   -Mode ^<mode^>       chrome (the harness UI in a browser - the default),
+echo                      panel (open idle and start nothing) or headless (no window)
 echo   -NoBuild           never run cargo; use the binary already built
 echo   -NoPause           never hold this window open
 echo   -NoTerminal        stay in this console; do not relaunch
@@ -162,11 +166,11 @@ echo a Chrome tab - same pin, same profile and same flags as scripts\run-web.bat
 echo.
 echo From a distribution folder it runs the vncode.exe in the folder above
 echo this one and needs nothing installed. From a source checkout it builds
-echo app\src-tauri there with cargo first, which needs the Rust toolchain and
+echo app there with cargo first, which needs the Rust toolchain and
 echo Node.js 22 or newer.
 echo.
 echo macOS and Linux: the same shell builds with "cargo build --release" in
-echo app/src-tauri and runs beside ./scripts/run-web.sh, the browser launcher.
+echo app and runs beside ./scripts/run-web.sh, the browser launcher.
 echo.
 if "%VNCODE_PAUSE%"=="1" pause
 exit /b 0
@@ -176,7 +180,7 @@ rem A build can fail for one reason this launcher can do nothing about and the
 rem reader can fix in one step: THE SHELL IT IS REPLACING IS STILL RUNNING.
 rem Windows will not let cargo remove a program that is still mapped by a live
 rem process, so `cargo build` stops at
-rem   failed to remove file ...\vncode-desktop.exe: Access is denied. (os error 5)
+rem   failed to remove file ...\vncode.exe: Access is denied. (os error 5)
 rem - and the launch used to end there, even though a perfectly good shell was
 rem sitting on disk. Reported from the machine this was written on, where the
 rem window was simply reopened from a second double-click. So: warn, name the

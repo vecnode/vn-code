@@ -1,0 +1,50 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/vn-shell-core",
+    "crates/vn-shell-runtime",
+    "crates/vn-shell-paths",
+    "crates/vn-shell-egui",
+    "crates/vn-shell",
+]
+
+# One pin per dependency, so the shell cannot end up with two of anything. The
+# binary is `vncode.exe` because that is the name the distribution ships, the
+# launcher looks for and the built shell is named: the distribution is this app.
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+rust-version = "1.95"
+
+[workspace.dependencies]
+vn-shell-core = { path = "crates/vn-shell-core" }
+vn-shell-runtime = { path = "crates/vn-shell-runtime" }
+vn-shell-paths = { path = "crates/vn-shell-paths" }
+vn-shell-egui = { path = "crates/vn-shell-egui" }
+vn-shell-pane = { path = "crates/vn-shell-pane" }
+
+serde_json = "1"
+flate2 = "1"
+url = "2"
+
+# The window and the panel. `0.36` is the line this shell is pinned to: Rust 1.95,
+# edition 2024, wgpu as the DEFAULT renderer (through 0.33 it was glow) and
+# accesskit as a default feature, so the panel is exposed to a screen reader on
+# all three platforms.
+eframe = { version = "0.36", default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "wgpu",
+    "wayland",
+    "x11",
+] }
+egui = "0.36"
+
+[profile.release]
+# What the shipped binary is built with. Symbols off and one codegen unit is the
+# ordinary release shape; `lto = "thin"` is the one that pays for itself in a
+# binary that links a GPU stack.
+lto = "thin"
+strip = "symbols"

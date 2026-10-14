@@ -2,14 +2,21 @@
 
 | | Windows | macOS / Linux |
 |---|---|---|
-| **Install** | `scripts\install.bat` | `./scripts/install.sh` |
+| **Install** | `scripts\setup\install.bat` | `./scripts/setup/install.sh` |
 | **Run** | `scripts\run-web.bat` | `./scripts/run-web.sh` |
-| **Remove** | `scripts\uninstall.bat` | `./scripts/uninstall.sh` |
+| **Remove** | `scripts\setup\uninstall.bat` | `./scripts/setup/uninstall.sh` |
+| **The app** | `scripts\run-desktop.bat` | `./scripts/run-desktop.sh` |
 
 Double-click the `.bat` files on Windows; run the `.sh` files from anywhere (each
-resolves the repository root from its own location). Every entry point, its worker
-and the shared console layer live in `scripts/`; the repository root carries no
-`.bat` and no `.sh`.
+resolves the repository root from its own location). **The app can do the install
+for you**: open the native shell and press **Install pack** in its control panel -
+it runs the same `setup/install.*` entry point and shows the installer's output in
+its own log. The two are interchangeable, and neither needs an administrator.
+
+`scripts/` carries the entry points a person runs (`run-web.*`, `run-desktop.*`) at
+its top level, and everything else in a folder: `setup/` (install and uninstall,
+with their workers), `console/` (the shared console layer), `tools/`
+(maintainer-only) and `checks/`. The repository root carries no `.bat` and no `.sh`.
 
 | | |
 |---|---|
@@ -21,10 +28,11 @@ and the shared console layer live in `scripts/`; the repository root carries no
 
 On Windows each entry point calls the PowerShell worker beside it (`install.bat`
 -> `install-all.ps1`, `uninstall.bat` -> `uninstall-all.ps1`, `run-web.bat` ->
-`run-web.ps1`), and `run-desktop.bat` opens the same pinned harness in a native
-window. The POSIX `.sh` files do the work themselves and need Node.js with npm/npx
-only. Direct calls: `powershell -NoProfile -ExecutionPolicy Bypass -File
-scripts\install-all.ps1 -Force` and `sh scripts/install-all.sh -Force` (the same
+`run-web.ps1`), and `run-desktop.bat` builds and opens the native shell.
+`run-desktop.sh` is the same on macOS/Linux, in plain POSIX shell. The POSIX `.sh`
+files do the work themselves and need Node.js with npm/npx only. Direct calls:
+`powershell -NoProfile -ExecutionPolicy Bypass -File
+scripts\setup\install-all.ps1 -Force` and `sh scripts/setup/install-all.sh -Force` (the same
 with `uninstall-all.*` and `run-web.*`).
 
 Flags on both halves: `-Force`, `-Plugin <name>`, `-DshHome`, `-ProfileName`,
@@ -65,7 +73,7 @@ terminal prints the app's exit status.
 
 `npx --yes @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add <bundle>` (with
 `pnpm` on `PATH`) installs one bundle by hand, and `remove <bundle>` takes it out.
-`scripts\uninstall.bat` / `./scripts/uninstall.sh` removes every bundle this pack
+`scripts\setup\uninstall.bat` / `./scripts/setup/uninstall.sh` removes every bundle this pack
 added; both installers prune the retired names `dsh-files` and `dsh-focus` first.
 
 ## Troubleshooting
@@ -74,5 +82,8 @@ added; both installers prune the retired names `dsh-files` and `dsh-focus` first
 |---|---|
 | the run launcher says the port is in use | 3080 is taken; use that instance or pass `-Port 3099` |
 | `scripts\run-web.bat` flashes and closes, or no browser opens | run it from the repo root (the worker reads `.dsh-version.json` there) with `node`/`npx` on `PATH`; the URL is in the app's own output |
+| the app came up in a home you did not expect | that is the ladder in [docs/PATHS.md](PATHS.md): a `-DshHome` you typed is used or refused by name, a home you chose in the panel is remembered in `prefs.json`, a writable inherited `DSH_HOME` is joined, and otherwise the app creates `$VNCODE_HOME/home` (`%LOCALAPPDATA%\vncode\home`). The panel's `harness home` row names the path, the reason, whether the app created or joined it, and every candidate it refused |
+| the app's own data is somewhere you did not expect | `$VNCODE_HOME` names it. The default is the platform's per-user data directory plus `vncode`; `<tree>\.vncode` is used only when even that cannot be written (a workspace-scoped confinement) |
+| no browser opens when you press Start | the panel's `surface` row names the browser it will use and, after a launch, the one it did; the chooser lists everything detected plus `the default browser`, which is the OS's own opener and works for any browser this build does not know. `-Mode chrome` is the default; the address is on the panel either way, so a copy can always be pasted into a browser by hand |
 | `Permission denied` on a `.sh` | `chmod +x scripts/*.sh` |
 | an edited plugin never appears after a refresh | it should: the host stat-polls every plugin's `client.js` (500 ms) and republishes it, so reload the page - and hard-reload if it still shows the old build, because the index ships no cache headers. A `lib/index.js` change (routes, tools) and any row/profile change DO need a host restart. `document.querySelector('[data-dsh-cmdbar-dock]').dataset.dshCmdbarVersion` names the build a page is running |

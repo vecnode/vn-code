@@ -5,8 +5,8 @@
   "description": "Personal plugin pack for DeepSeek Harness (Windows/MacOS/Linux). Installs into the raw web/CLI profile only (npx @deepseek-ai/dsh web).",
   "license": "MIT",
   "scripts": {
-    "install:web": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-all.ps1",
-    "uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/uninstall-all.ps1"
+    "install:web": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup/install-all.ps1",
+    "uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup/uninstall-all.ps1"
   },
   "engines": {
     "node": ">=22"

@@ -2,7 +2,7 @@
 //
 // Why this exists: the vncode pack has four tracked checks that judge a bundle —
 // `check-node-routes.mjs` (route registrations), `check-client-bundles.mjs` (the
-// browser bundle), `check-dist-layout.mjs` (it ships) and `check-node-routes.mjs`
+// browser bundle), `check-scripts.mjs` (the launchers) and `check-node-routes.mjs`
 // again for the manifest. None of them runs in THIS repository, and none of them
 // can tell you *here* whether the row mounts, the ten tools declare the output
 // contract the registry enforces, or the client bundle is a classic script a

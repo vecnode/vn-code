@@ -46,7 +46,7 @@ node scripts/checks/check-client-bundles.mjs
 
 ## Install
 
-The repo launcher (`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux) auto-discovers this package — it is a standard `dsh.bundle`, so a bundle the profile does not list yet is added by one plain launcher run (no `-Force`). The web profile links it into this repo, so code edits need a restart of `npx @deepseek-ai/dsh web` plus a hard browser refresh; `scripts\run-web.bat` / `./scripts/run-web.sh` starts that server and opens the URL it prints in Chrome.
+The repo launcher (`scripts\setup\install.bat` on Windows, `./scripts/setup/install.sh` on macOS/Linux) auto-discovers this package — it is a standard `dsh.bundle`, so a bundle the profile does not list yet is added by one plain launcher run (no `-Force`). The web profile links it into this repo, so code edits need a restart of `npx @deepseek-ai/dsh web` plus a hard browser refresh; `scripts\run-web.bat` / `./scripts/run-web.sh` starts that server and opens the URL it prints in Chrome.
 
 ## Layout
 

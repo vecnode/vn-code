@@ -1,0 +1,15 @@
+[package]
+name = "vn-shell-egui"
+description = "The vncode shell's control panel: the first page, the status, the location map and the log."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+vn-shell-core.workspace = true
+vn-shell-runtime.workspace = true
+vn-shell-paths.workspace = true
+eframe.workspace = true
+egui.workspace = true

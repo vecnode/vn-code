@@ -5,8 +5,8 @@ rem  in this repository.
 rem
 rem  WHY THIS FILE EXISTS
 rem  --------------------
-rem  scripts\install.bat, scripts\uninstall.bat, scripts\run-web.bat,
-rem  scripts\run-desktop.bat and scripts\run-dist.bat all have to answer the
+rem  scripts\setup\install.bat, scripts\setup\uninstall.bat, scripts\run-web.bat,
+rem  scripts\run-desktop.bat and scripts\setup\*.bat all have to answer the
 rem  same five questions before they do any work: which
 rem  window am I in, which PowerShell do I have, can this console show colour,
 rem  should I hold the window open at the end, and what were my real arguments?
@@ -100,7 +100,7 @@ rem never arrives as an argument (measured: scripts\run-desktop.bat with none
 rem starts the shell normally). This file is the ONLY place that has to know,
 rem because it must NOT setlocal - its decisions stay visible to the caller by
 rem design - so repairing both names here, once, covers all five entry points.
-rem check-dist-layout.mjs asserts this normalisation is still here.
+rem check-scripts.mjs asserts this normalisation is still here.
 if not defined VNCODE_ARGV set "VNCODE_ARGV= "
 set "VNCODE_ARGS=%VNCODE_ARGV%"
 

@@ -171,7 +171,7 @@ pass.
 
 ## Install
 
-With the vncode pack: `scripts\install.bat` (Windows) or `./scripts/install.sh`
+With the vncode pack: `scripts\setup\install.bat` (Windows) or `./scripts/setup/install.sh`
 (macOS / Linux) in **that** repository, which discovers this package under
 `packages/`. Both installers also copy the three skills into `$DSH_HOME/skills`.
 Then restart the harness. Nothing has to be installed first.

@@ -29,7 +29,7 @@ It registers through the composition's `connection` service like every other pac
 
 `cordis.patch.yml` hard-disables the shipped client row `ui-open-in-app` and inserts the pack's `native-open-in-app` row, which owns both halves: the forked browser bundle and a dependency-free Node route. The shipped **host** row (`open-in-app`) is deliberately left alone. Removing this package with the uninstaller also removes its patch layer, which brings the shipped client row back on the next restart.
 
-`lib/client.js` is a **generated fork** of the shipped `@deepseek-ai/dsh-client-ui-open-in-app` bundle, never hand-edited: `scripts/sync-vendored.ps1` holds its patch list — the pack route constant, the file-manager id set, and the one line of `launch()` that chooses between the two routes — and fails loudly when a harness bump moves the code it patches.
+`lib/client.js` is a **generated fork** of the shipped `@deepseek-ai/dsh-client-ui-open-in-app` bundle, never hand-edited: `scripts/tools/sync-vendored.ps1` holds its patch list — the pack route constant, the file-manager id set, and the one line of `launch()` that chooses between the two routes — and fails loudly when a harness bump moves the code it patches.
 
 ## Limits
 
@@ -42,14 +42,14 @@ It registers through the composition's `connection` service like every other pac
 ```sh
 node scripts/checks/check-client-bundles.mjs
 node scripts/checks/check-node-routes.mjs
-pwsh -NoProfile -File scripts/sync-vendored.ps1 -Check
+pwsh -NoProfile -File scripts/tools/sync-vendored.ps1 -Check
 ```
 
 `check-node-routes.mjs` drives the launcher's wire validation and the status a real launch answers; the actual window is behind `DSH_CHECK_LAUNCH=1`.
 
 ## Install
 
-The repo launcher (`scripts\install.bat` on Windows, `./scripts/install.sh` on macOS/Linux) auto-discovers this package — it is a standard `dsh.bundle`, so a bundle the profile does not list yet is added by one plain launcher run (no `-Force`). The web profile links it into this repo, so code edits need a restart of `npx @deepseek-ai/dsh web` plus a hard browser refresh.
+The repo launcher (`scripts\setup\install.bat` on Windows, `./scripts/setup/install.sh` on macOS/Linux) auto-discovers this package — it is a standard `dsh.bundle`, so a bundle the profile does not list yet is added by one plain launcher run (no `-Force`). The web profile links it into this repo, so code edits need a restart of `npx @deepseek-ai/dsh web` plus a hard browser refresh.
 
 ## Layout
 

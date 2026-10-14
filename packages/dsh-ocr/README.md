@@ -47,8 +47,8 @@ npm run check            # in packages/dsh-ocr
 Both installers pick the package up from `packages/`; it is a new bundle, so the profile learns about it once:
 
 ```
-scripts\install.bat -Force        # Windows
-./scripts/install.sh -Force       # macOS / Linux
+scripts\setup\install.bat -Force        # Windows
+./scripts/setup/install.sh -Force       # macOS / Linux
 ```
 
 Then restart `npx @deepseek-ai/dsh web`. On Windows this row works immediately with no install; on macOS and Linux, install `tesseract` (with the traineddata for the languages to read) and it is found on PATH.

@@ -2,9 +2,14 @@
 
 The pack targets the harness line DeepSeek ships to the raw web install
 (`npx @deepseek-ai/dsh web`). DSH Desktop is not supported: `app/` plus
-`scripts/run-desktop.bat` is a launcher of that same pinned `dsh web` in a native
-window (a launcher, not a second edition - it installs nothing and writes no
-profile file).
+`scripts/run-desktop.bat` is a launcher of that same pinned `dsh web` (a launcher,
+not a second edition - it installs nothing and writes no profile file). It is a
+Rust/**egui** control panel that opens idle, starts the harness when you press
+Start and ends the whole instance when you press Stop; the harness UI itself is
+the same page a browser tab shows, opened in the browser the app found on the
+machine (Chrome first, every other browser reachable, the OS opener as the floor -
+this app draws no web view of its own, by
+[decision](PLAN-egui-shell.md#4-the-surface-one-url-and-the-browser-this-machine-has)).
 
 ## Current pin
 
@@ -45,7 +50,7 @@ and the keyed seat, so its previews keep working inside the pack's bar.
 ## Upgrading the pack when DSH moves
 
 1. Bump `dsh` in `.dsh-version.json`.
-2. Re-run `scripts/sync-vendored.ps1` and review the diff: a patched fork fails
+2. Re-run `scripts/tools/sync-vendored.ps1` and review the diff: a patched fork fails
    loudly when the core code it patches has moved.
 3. Re-run the installer with `-Force` to re-add the bundles under the new pin.
 4. If a core API moved (registry shape, seat names, route registration), adapt

@@ -4,8 +4,14 @@ A plugin pack for **one install target**: the DeepSeek Harness **web** profile
 (`npx @deepseek-ai/dsh web`, profile `web` under `$DSH_HOME`, default `~/.dsh`).
 Every plugin here is a standard dsh **bundle**; nothing patches a harness file,
 and there is no desktop edition. (`app/` + `scripts/run-desktop.bat` is a
-*launcher*: it starts the same pinned `dsh web` on a free loopback port and shows
-that URL in a native window. It installs nothing and touches no profile file.)
+*launcher*: a Rust/**egui** control panel that opens idle, owns the root its harness
+home lives in — `$VNCODE_HOME`, with the harness's `DSH_HOME` at `<root>/home` unless
+`-DshHome` or a writable inherited `DSH_HOME` says otherwise — starts the same pinned
+`dsh web` on a free loopback port when you press Start, shows that URL in the browser it
+found on the machine — Chrome first, everything else reachable, the OS opener as the floor;
+it draws no web view of its own — and ends the whole instance when you press Stop. The one
+thing it installs is this pack, into the home it chose, by running the same installer a person
+would click.)
 
 The three planes below are the whole system — what npm ships, what the `web`
 profile boots, and what the page renders:
@@ -90,8 +96,12 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
 
 - one page per plugin: `packages/<name>/README.md`;
 - operations: `docs/INSTALL.md`, `docs/BUILD.md`, `docs/DEPLOY.md`,
-  `docs/DISTRIBUTE.md`, `docs/RELEASE.md`, `docs/PATHS.md`,
+  `docs/RELEASE.md`, `docs/PATHS.md`,
   `docs/COMPATIBILITY.md`;
+- the shell: `app/README.md` (the control panel, the supervisor, the app's own root
+  and the harness home inside it, the browser table, and the crates);
+- a plan, and not shipped behaviour: `docs/PLAN-egui-shell.md` (the Rust/egui
+  shell: one chrome, one web pane, and the runtime and provider seams);
 - security: `SECURITY.md`;
 - **the checks are the contract**: `scripts/checks/*.mjs` are run by hand (there
   is no CI, on purpose) and pin route registrations, bundle wiring, budgets, the

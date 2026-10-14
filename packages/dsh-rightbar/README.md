@@ -2,7 +2,7 @@
 
 **The pack's own right bar** — the web GUI's right-hand column: the tab strip with its "+" control, the docking panel (split / float / fullscreen), the header expand button, the Start guide page, the tab-type registry other plugins register into, and the keyed tab body/title seats.
 
-`lib/client.js` is a GENERATED fork of the shipped `@deepseek-ai/dsh-client-ui-sidebar-right` bundle (the line pinned in `.dsh-version.json`), carrying the patch list in `scripts/sync-vendored.ps1`. `cordis.patch.yml` hard-disables the two core rows and inserts this package's, so exactly one bar is mounted and it is this one:
+`lib/client.js` is a GENERATED fork of the shipped `@deepseek-ai/dsh-client-ui-sidebar-right` bundle (the line pinned in `.dsh-version.json`), carrying the patch list in `scripts/tools/sync-vendored.ps1`. `cordis.patch.yml` hard-disables the two core rows and inserts this package's, so exactly one bar is mounted and it is this one:
 
 ```yaml
 - id: ui-sidebar-right
@@ -52,7 +52,7 @@ The pack's own tab types resolve these services — `dsh-rightbar-files` (Files)
 
 ```sh
 node scripts/checks/check-client-bundles.mjs
-pwsh -NoProfile -File scripts/sync-vendored.ps1 -Check
+pwsh -NoProfile -File scripts/tools/sync-vendored.ps1 -Check
 ```
 
 The client check pins the cap lift, the renderer, the seam, the fill and the fullscreen layer as recorded patches, and fails when a harness bump moves the app's z-index ladder under the bar.

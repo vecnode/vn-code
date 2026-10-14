@@ -27,7 +27,7 @@ The tab's identity is the **core** id on purpose; changing `FILES_ID` would orph
 ## Verify
 
 ```sh
-pwsh -NoProfile -File scripts/sync-vendored.ps1 -Check
+pwsh -NoProfile -File scripts/tools/sync-vendored.ps1 -Check
 ```
 
 ## Layout

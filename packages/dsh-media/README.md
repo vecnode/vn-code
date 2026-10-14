@@ -82,8 +82,8 @@ node scripts/checks/check-media-examples.mjs    # every skill example, parsed an
 ## Install
 
 ```
-scripts\install.bat -Force        # Windows
-./scripts/install.sh -Force       # macOS / Linux
+scripts\setup\install.bat -Force        # Windows
+./scripts/setup/install.sh -Force       # macOS / Linux
 ```
 
 Run the installer once, then restart the app and hard-refresh the browser; nothing has to be

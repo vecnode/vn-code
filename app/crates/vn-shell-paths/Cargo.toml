@@ -1,0 +1,11 @@
+[package]
+name = "vn-shell-paths"
+description = "The vncode shell's location map: what lives under the harness home, what lives outside it, and where a size or a reveal comes from."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+vn-shell-core.workspace = true

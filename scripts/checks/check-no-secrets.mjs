@@ -133,7 +133,7 @@ export const RULES = [
  *
  * Currently empty, and that is the goal.
  *
- *   { file: 'app/src-tauri/src/readyline.rs', rule: 'launch-token-in-url',
+ *   { file: 'app/crates/vn-shell-core/src/readyline.rs', rule: 'launch-token-in-url',
  *     reason: 'the redaction fixture; its token is under the 16-char threshold' }
  */
 export const ALLOWLIST = []

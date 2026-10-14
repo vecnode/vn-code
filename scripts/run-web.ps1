@@ -305,7 +305,7 @@ if (Test-Path $profileManifest) {
 }
 if (-not $packInstalled) {
     Write-Host "  - the web profile at $profileDir does not list this pack's bundles yet."
-    Write-Host '    Run scripts\install.bat (or ./scripts/install.sh) first if you expected the pack to be there.'
+    Write-Host '    Run scripts\setup\install.bat (or ./scripts/setup/install.sh) first if you expected the pack to be there.'
 }
 
 $npx = Get-ToolPath -Names (Get-ToolNames -Name 'npx')

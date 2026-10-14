@@ -89,6 +89,6 @@ node packages/dsh-pdf/vendor/build.mjs --check
 Both installers pick the package up from `packages/`:
 
 ```
-scripts\install.bat -Force        # Windows
-./scripts/install.sh -Force       # macOS / Linux
+scripts\setup\install.bat -Force        # Windows
+./scripts/setup/install.sh -Force       # macOS / Linux
 ```

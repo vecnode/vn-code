@@ -41,4 +41,4 @@ node scripts/checks/check-node-routes.mjs
 
 ## Install
 
-The launcher (`scripts\install.bat` / `./scripts/install.sh`) auto-discovers the package as a standard `dsh.bundle`, and the uninstall twins do the same. It is a live link in the web profile, so code edits need a restart of `npx @deepseek-ai/dsh web` plus a hard refresh.
+The launcher (`scripts\setup\install.bat` / `./scripts/setup/install.sh`) auto-discovers the package as a standard `dsh.bundle`, and the uninstall twins do the same. It is a live link in the web profile, so code edits need a restart of `npx @deepseek-ai/dsh web` plus a hard refresh.
