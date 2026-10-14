@@ -9,6 +9,9 @@ rust-version.workspace = true
 
 [dependencies]
 vn-shell-core.workspace = true
+# For the location map `view` builds: the rows the panel draws and the binary logs
+# follow the home, so the crate that owns the home choice owns their construction.
+vn-shell-paths.workspace = true
 url.workspace = true
 serde_json.workspace = true
 

@@ -29,17 +29,70 @@ needs neither.
 
 | | what happens |
 |---|---|
-| **open** | One native window. **No child process, no port bound, no web view.** The panel resolves the app root and the home (by writing, not by assuming), reads the pin, the key layers, the location map and whether the pack is installed - all of them files on disk - and detects the browsers on this machine |
+| **open** | One native window. **No child process, no port bound, no web view.** Nothing is decided before the first screen: if nobody has named a home (`-DshHome`, an inherited `DSH_HOME`, or a choice remembered from last time), the window **is** the home question - see below. After that, the panel resolves the app root and the home (by writing, not by assuming), reads the pin, the key layers, the location map and whether the pack is installed - all of them files on disk - and detects the browsers on this machine |
 | **Install pack** | Runs `scripts/setup/install.bat` (Windows) or `scripts/setup/install.sh`, the same entry point a person clicks, with its output streaming into the panel's log. It is given `-DshHome <the chosen home>` and the same composed environment as the harness (see below). Disabled while a harness is running, and off in a folder with no `scripts/setup/` |
 | **Uninstall pack** | The matching pair, `scripts/setup/uninstall.*` |
-| **Adopt** | Offered once, while the home in use is untouched, when `~/.dsh` holds a harness home: `skills/`, `sessions/`, `storages/` and `attachments/` copied in, with the credentials file behind its own click |
-| **Start** | The port is chosen (`-Port`, else 3080 if free, else a free one), the child's environment is composed, the harness is spawned from the best rung available (see below), and the shell watches for the ready line for up to 180 s. Stop works during this wait, in 200 ms steps |
-| **Running** | The URL the harness printed is handed to the **chosen browser** - Chrome first when it is installed, the OS opener always in the table - as ONE argv element, and the panel names which browser took it. The panel shows the pid, the port, the address **without its token**, and the uptime |
-| **Stop** | The whole tree dies - `taskkill /T` on Windows, one signal to the child's own process *group* elsewhere - and the port is then **checked** with a bind, not assumed. The panel says `free=yes` or names the port something still holds |
+| **Start** | **One press to a working interface**: if the chosen home's profile lists none of this pack's bundles, the installer runs FIRST and the harness starts when it succeeds (the installer re-links the profile, so it must not run under a live harness - and nothing is running yet). Then the port is chosen (`-Port`, else a free port of this app's own - never the shared `3080`), the child's environment is composed, the harness is spawned from the best rung available (see below), and the shell watches for the ready line for up to 180 s. Stop works during this wait, in 200 ms steps |
+| **Running** | The URL the harness printed is handed to the **chosen browser** - Chrome first when it is installed, the OS opener always in the table - as ONE argv element, and the panel names which browser took it. `Open tab` opens another one on demand, with the launch token the panel never draws |
+| **Stop** | The whole tree dies - `taskkill /T` on Windows, one signal to the child's own process *group* elsewhere - and the port is then **checked**, not assumed: free, and nothing answers on it. The panel says so, or names the port something still holds |
 | **close** | Same as Stop, plus the window geometry is written once, synchronously, into the app's own root |
 
 Stopping something that was never started is not an error: the shell returns to
 the state it opened in.
+
+### The first screen is the home question
+
+The panel used to be fifteen rows and a `~/.dsh` that was chosen for you. It is now a
+choice, then four rows - and the choice comes first:
+
+```text
+  Where should your sessions, skills and key live?
+  ┌ Use the DeepSeek home already on this machine        · recommended ┐
+  │ C:\Users\you\.dsh · the pack is installed · 12 sessions · a key    │
+  │ shared with `dsh web` and run-web.bat, not copied     [Use this home] │
+  ├ Copy it here, and use the copy                                     ┤
+  │ copies into <app root>\home · your key, if you tick it  [Copy it here] │
+  ├ Make a fresh home in this project                                  ┤
+  │ <app root>\home · the pack is installed into it next  [Create it here] │
+  └────────────────────────────────────────────────────────────────────┘
+```
+
+Three cards when this machine already has an installation, **one** when it does not (a
+card that says "nothing found" teaches nothing). The decision is
+`vn_shell_core::firstrun`, which is `cargo test` cases - and the facts on each card come
+from `profile.rs`, the same reader the log's "this home has no pack" note uses, so the
+card and the log cannot disagree.
+
+| the card | when it is offered | what it does |
+|---|---|---|
+| **use the home already on this machine** | it has the shape of a harness home AND a child can WRITE in it | runs the harness against that home itself - the same home `scripts\run-web` uses |
+| **copy it here, and use the copy** | that home can be READ. **This is the way through a confinement** - a home that refuses `%LOCALAPPDATA%` refuses `~/.dsh` with it, and a copy only has to read the source | copies the durable things (skills, sessions, storages, attachments, and the key if ticked) into this app's own home, then Start installs the pack into the copy |
+| **make a fresh home in this project** | always | an empty `<app root>/home`; Start installs the pack into it |
+
+A card that cannot be honoured says why in one sentence instead of offering a button that
+would fail, and the app never writes the choice for you: `prefs.json` is written by a
+click, `Change` on the panel brings the question back, and a `-DshHome` or an inherited
+`DSH_HOME` skips the screen entirely because somebody else already answered it.
+
+### The panel, after that
+
+```text
+  vncode  ● running on 127.0.0.1:53412      [ Start ]  [ Stop ]  [ Open tab ]   up 2m
+  ────────────────────────────────────────────────────────────────────────────────
+  home     C:\Users\you\.dsh · the installation already on this machine   [Change]
+  pack     installed · 24 bundles
+  DeepSeek key  found in the credentials file
+  browser  [ Google Chrome ▾ ] · opened in Google Chrome (a new tab)
+
+  ▸ Details · 1 refused path(s)
+```
+
+Four rows, and every row is either a fact or an action. **`Details`** holds everything
+that did not earn a place there - the pin, the runtime, the root and its origin, the
+composed environment, the profile, the pid, the last setup and stop, the location map with
+its sizes and its `reveal` buttons, the provider row, the refusals and the plan's notes -
+because an inspector is not a control panel. A refusal shows as a badge on the disclosure,
+so it can never be the thing that is hidden.
 
 ### The one trap the composer clears
 
@@ -89,26 +142,29 @@ Windows `\\?\` form stripped). **The first candidate that passes a real write pr
 | # | candidate | when |
 |---|---|---|
 | 1 | `-DshHome <dir>` | the person named it. A refusal here **ends the run**, naming the flag - an explicit instruction is never silently ignored |
-| 2 | the home chosen in the panel | a click in the panel outranks an environment variable; if it has gone, the ladder continues with a line saying so. **Use my own home** puts rung 5 here |
+| 2 | the home chosen on the first-run screen | the click outranks an environment variable; `Change` in the panel brings the question back |
 | 3 | an inherited `DSH_HOME` | it is writable: the app JOINS the home of the session that started it, sharing that session's sessions and key |
 | 4 | **the installation already on this machine** | `~/.dsh` has the shape of a harness home, a child can **write** in it, and this app's own home still holds nothing of yours |
 | 5 | `<VNCODE_HOME>/home` | the default, created and proved by the app |
 
-Rung 4 is a measured correction rather than a default. Without it the app came up on a fresh,
-bare harness - no pack, no model key - beside a complete installation at `~/.dsh`, and the word
-for that was "still does not run normally". It is deliberately narrow: **a one-time courtesy,
-not a policy**. The moment that home holds something of yours the app stops looking, and **Use
-my own home** makes this app's own root an explicit, remembered choice. "Nothing of yours" is
-`adopt::home_is_untouched_by_a_person`: no `skills/`, no `sessions/`, no credentials file with
-content - the harness's own first-boot furniture (a composed `profiles/`, an empty
-`.credentials.yaml`, a `storages/`) does not count, which is the same measurement that decides
-the Adopt offer below. The panel still offers **Use it** / **Adopt** for the case where you want
-the app's own root to hold everything.
+**The first two rungs skip the first-run screen** - somebody already answered the question -
+and rungs 3 to 5 are what the screen is FOR: the app would otherwise be guessing. Rung 4 is a
+measured correction rather than a default. Without it the app came up on a fresh, bare harness -
+no pack, no model key - beside a complete installation at `~/.dsh`, and the word for that was
+"still does not run normally". It is deliberately narrow: **a one-time courtesy, not a policy**.
+The moment that home holds something of yours the app stops looking, and the screen's
+**"Make a fresh home in this project"** card makes this app's own root an explicit choice.
+"Nothing of yours" is `adopt::home_is_untouched_by_a_person`: no `skills/`, no `sessions/`, no
+credentials file with content - the harness's own first-boot furniture (a composed `profiles/`,
+an empty `.credentials.yaml`, a `storages/`) does not count, which is the same measurement that
+decides the copy offer.
 
 A directory the app CREATED is hardened to `0700` on Unix, because it holds
 `.credentials.yaml` and an npm cache; a directory the app merely JOINED is never touched,
-which is why the probe reports whether it created it. The app never writes a probe, a note or
-anything else into a home it refused.
+which is why the probe reports whether it created it. The app never writes a note, a log or
+anything else into a home it refused - the one write it makes outside its own root is the
+probe file, created and deleted at the root of a home it is considering, because "can a child
+write here" is not knowable any other way.
 
 A home this account cannot write in used to be a **refusal** - one sentence asking the
 person to start the app differently, which cannot fix a parent process that confines
@@ -165,44 +221,37 @@ being probed on Linux. Three rules travel with every launch: the URL is one argv
 a **loopback** URL is accepted (checked again here, at the last function before a process
 starts), and no shell is ever in the middle.
 
-### Adopt, and Use: the home this app did not create
+### Adopt, and the copy that makes a read-only home usable
 
-Where `~/.dsh` already holds an installation, the panel offers two deliberate actions, and
-makes neither decision for you: **Use it** remembers that path and runs the harness against
-itself (sharing one set of sessions, skills and keys with `scripts\run-web.bat`), with
-**Forget it** to undo; and **Adopt** copies in `skills/`, `sessions/`, `storages/` and
-`attachments/`, one click.
+Rung 4 of the home ladder uses an installation in place, which needs it to be WRITABLE -
+and a confinement that refuses `%LOCALAPPDATA%` refuses `~/.dsh` with it. The copy card is
+the way through: it only has to READ the source, and it brings across `skills/`,
+`sessions/`, `storages/` and `attachments/`, with `.credentials.yaml` behind its own tick.
 
 Two rules came out of a real run, and both were bugs before they were rules:
 
-* **`Use it` needs a home a child can WRITE in; `Adopt` only needs one it can READ.** Passing
-  the writable-filtered path to both meant a person whose `~/.dsh` was unwritable got *neither*
-  button - the worst of both, and no way to reach their key. `Use it` appears only when the home
-  is usable; `Adopt` appears whenever the source can be read.
-* **Adopt is offered while there is something left to bring, and nothing to overwrite.** The
-  test used to be "the home has no `profiles/`", and that was wrong twice over: the harness
-  composes `profiles/<name>/` on its FIRST boot and writes an empty `.credentials.yaml` and a
-  `storages/` beside it, so a home the app created stopped looking "untouched" after one run and
-  the offer vanished. Measured: the panel said `DeepSeek key: not found` while the key sat in
-  `~/.dsh`, with no button to press. A durable tree is now offered when the source has it and
-  the target has nothing in it; the credential document when the source's has **content** and
-  the target's is absent or empty - a file SIZE, never a read, so the presence-only rule stands.
+* **`Use it` needs a home a child can WRITE in; the copy only needs one it can READ.**
+  Passing the writable-filtered path to both meant a person whose `~/.dsh` was unwritable
+  got *neither* - the worst of both, and no way to reach their key.
+* **A copy is offered while there is something left to bring, and nothing to overwrite.**
+  The test used to be "the home has no `profiles/`", which was wrong twice over: the
+  harness composes `profiles/<name>/` on its FIRST boot and writes an empty
+  `.credentials.yaml` and a `storages/` beside it, so a home the app created stopped
+  looking "untouched" after one run and the offer vanished. Measured: the panel said
+  `DeepSeek key: not found` while the key sat in `~/.dsh`, with no button to press. A
+  durable tree is now offered when the source has it and the target has nothing in it; the
+  credential document when the source's has **content** and the target's is absent or empty
+  - a file SIZE, never a read, so the presence-only rule stands.
 
-The caches are never copied (512 MiB, 200 MiB and up to 8 GiB, all reproducible), `profiles/`
-is never copied (the Install button re-creates it), and **`.credentials.yaml` is a second
-click** - a byte-for-byte copy, so its value is never read into this process, which is what
-keeps [`SECURITY.md`](../SECURITY.md)'s presence-only promise true. Nothing is ever written
-into the source home, a file that already exists is never overwritten, and a link is skipped
-rather than followed.
+The caches are never copied (512 MiB, 200 MiB and up to 8 GiB, all reproducible),
+`profiles/` is never copied (the installer re-creates it, and the pack's links point into
+this repository), nothing is ever written into the source home, a file that already exists
+is never overwritten, and a link is skipped rather than followed.
 
-### A home with no pack is the one state that looks broken
-
-A harness started in a home whose profile lists none of this pack's bundles comes up as the
-**bare DeepSeek Harness**: no right bar, no editor, no themes - and, on a home of its own, no
-model key, so nothing answers either. The panel says that in so many words and puts the fix one
-click away: **Stop and install the pack** while the harness is running (the installer re-links
-the profile, so the stop has to happen first - this does both in one press), or **Install the
-pack here** when it is idle, or **Use .dsh** to run the home that already has everything.
+The install half of that works under the same confinement, and it is measured rather than
+hoped for: with `%LOCALAPPDATA%` deliberately unwritable and only the cache and temp handed
+over (which the environment composer already does), the installer lands 24 bundles and 23
+skills, exit 0. Without the cache it fails with `ENOTDIR` inside the blocked directory.
 
 ### The port: a port of this app's own, never the shared one
 
@@ -239,23 +288,27 @@ around it.
 
 ## The first page
 
-A control panel, not a splash screen. It shows the harness's state and pid, the app's
-own root (`vncode`) and the harness home it decided with the reason **and every
-candidate it refused** (plus whether the app created it or joined it), the environment the
-harness and the installer will be given, the browser chooser and which browser the last
-launch used, the pin and where it came from, which runtime will be used, the profile and the
-profiles this home has, whether the pack is installed, the address (never the
-token), which of `keystate`'s four layers supplied a DeepSeek key, and the result of
-the last Stop or setup run. Its buttons - **Install pack**, **Uninstall pack**, **Adopt**,
-**Use it** / **Forget it**, and **Open tab** - run this pack's own installers, this app's own
-copy of a home, and the browser. **Open tab** is the one that carries the launch token: the
-address row always draws the URL *without* its query (that URL is a credential), so this button
-is how a tab is opened - or re-opened after it was closed - with the key. Below that is the
-**location map** -
-**Adopt** - run this pack's own installers and this app's own copy. Below that is the **location map** -
-`docs/PATHS.md` as rows, each with a size and a `reveal` button - and then the model
-provider, which is a chooser with one entry (`DeepSeek (official)`) and is read-only
-while a harness is live, because the route is read at boot.
+A control panel, not a splash screen - and after the home is chosen it is **four rows and
+three buttons** (the layout is drawn above; the long version is in
+[`docs/PLAN-egui-shell.md`](../docs/PLAN-egui-shell.md)):
+
+| row | what it is |
+|---|---|
+| `home` | the path in use, its origin, whether this app created it, and **`Change`** - which puts the first-run question back in front of you |
+| `pack` | whether this pack is in the profile the harness will load, and `Install pack here` (or `Stop and install`) when it is not |
+| `DeepSeek key` | which of `keystate`'s four layers supplied a key - a layer NAME, never a value - with the one hint worth having when it is missing: the other home has one and `Change` can copy it |
+| `browser` | the chooser over what was actually detected, plus which browser the last launch used |
+
+**`Open tab`** is the one control that carries the launch token: the panel draws the URL
+*without* its query, because that URL is a credential, so this button is how a tab is opened
+- or re-opened after it was closed. **`Details`** (closed by default, badged when a path was
+refused) holds everything else: the pin, the runtime, the app's root and its origin, the
+composed environment, the profile, the pid, the last setup and stop, the **location map**
+(`docs/PATHS.md` as rows, each with a size and a `reveal` button), the model provider - a
+chooser with one entry (`DeepSeek (official)`), read-only while a harness is live because the
+route is read at boot - the refusals, and the plan's notes. The Install/Uninstall pair lives
+there too: uninstall is not a twice-a-day action, and the install the panel offers is on the
+pack row.
 
 The chrome takes its palette from the profile's own `cordis.patch.yml`
 (`ui-state`'s theme, `ui-theme`'s preference), so the native frame and the page it

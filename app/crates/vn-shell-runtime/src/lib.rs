@@ -32,11 +32,13 @@ pub mod adopt;
 pub mod console;
 pub mod env;
 pub mod setup;
+pub mod view;
 
 pub use adopt::{Adopt, AdoptState};
 pub use console::Console;
 pub use env::ChildEnv;
 pub use setup::{EntryPoints, Setup, SetupKind, SetupStatus};
+pub use view::View;
 
 /// How long to wait for the ready line.
 ///

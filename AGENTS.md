@@ -93,11 +93,17 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   `console/` (the shared console layer), `setup/` (install and uninstall, which the
   app's buttons run), `tools/` (maintainer-only) and `checks/`.
 - `app/` — the Rust/**egui** shell: a cargo workspace whose binary is `vncode`, a
-  control panel that opens idle, resolves and creates the root its harness home lives
+  control panel that opens on **the home question** when nobody has named a home — one screen,
+  the cards that answer it (use the installation on this machine / copy it here / make a fresh
+  one, with the writable one pre-selected), decided in `vn_shell_core::firstrun` and remembered
+  only by a click — and then four rows (home, pack, key, browser) with every diagnostic behind
+  one collapsed `Details`. It resolves and creates the root its harness home lives
   in (`$VNCODE_HOME`, with `DSH_HOME` at `<root>/home` unless `-DshHome`, a home chosen
-  in the panel, a writable inherited `DSH_HOME`, or an installation already on the machine
+  on that screen, a writable inherited `DSH_HOME`, or an installation already on the machine
   while its own home is still fresh says otherwise), starts the pinned
-  harness on **Start** and ends it on **Stop** (a launcher, not a desktop edition). It
+  harness on **Start** — installing the pack into that home first when its profile lists none of
+  the pack's bundles, so one press reaches a real interface — and ends it on **Stop** (a
+  launcher, not a desktop edition). It
   composes every child's environment rather than inheriting one, cleans every path before
   it uses one, and **draws no web view**: the interface opens in a browser it found
   (`browser.rs`), so there is no `embed`, no `Pane` and no engine vendored. `app/README.md`

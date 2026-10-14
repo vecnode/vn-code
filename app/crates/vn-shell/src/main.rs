@@ -219,6 +219,30 @@ fn window(options: Options, mode: Mode) -> i32 {
         ),
         vn_shell_core::adopt::Offer::Nothing => {}
     }
+    // The home question, surveyed for the LOG: the panel surveys it again for the
+    // screen, because the answer changes the moment a home is chosen.
+    if let Some(root) = plan.app_root() {
+        let place = vn_shell_core::firstrun::Where::survey(found_home.as_deref(), root);
+        for card in place.cards() {
+            println!(
+                "[vncode] home option: {} -> {} ({})",
+                card.title,
+                card.path.display(),
+                if card.available {
+                    if card.recommended {
+                        "available, suggested"
+                    } else {
+                        "available"
+                    }
+                } else {
+                    "not available"
+                }
+            );
+            if let Some(reason) = card.unavailable.as_deref() {
+                println!("[vncode]   {reason}");
+            }
+        }
+    }
 
     // The browsers on this machine, Chrome first, with the OS opener last: the table
     // is `browser.rs`, and this is the one place it is read.
@@ -241,7 +265,6 @@ fn window(options: Options, mode: Mode) -> i32 {
         supervisor: Arc::clone(&supervisor),
         console,
         setup: Arc::clone(&setup),
-        adopt_offer,
         adopt: Arc::clone(&adopt),
         setup_entries,
         root: repo.clone(),
@@ -254,7 +277,6 @@ fn window(options: Options, mode: Mode) -> i32 {
         browser: chosen,
         app_prefs,
         prefs_root: app_root,
-        existing_home: usable_home,
     });
 
     let native = eframe::NativeOptions {
