@@ -55,6 +55,15 @@ use vn_shell_runtime::{
     Adopt, Console, EntryPoints, Plan, Setup, SetupKind, StopOutcome, Supervisor,
 };
 
+/// Whether THIS build can show the harness inside its own window.
+///
+/// The binary asks, so that `-Mode embed` is a refusal by name in a build with no engine and
+/// a real mode in one that has. The answer travels as a value because `vn-shell-core` is
+/// the pure half and has no engine to learn about.
+pub const fn pane_available() -> bool {
+    cfg!(feature = "pane")
+}
+
 /// How often the panel re-reads the supervisor even when nothing has happened.
 const POLL: Duration = Duration::from_millis(250);
 
@@ -269,6 +278,17 @@ impl Shell {
         let place = context.plan.app_root().map(|root| {
             Where::survey(vn_shell_core::home::existing_default_home().as_deref(), root)
         });
+        // `-Mode embed` opens with the harness page in front: the same window and the same
+        // two tabs, one of them already showing the instance.
+        #[cfg(feature = "pane")]
+        let pane = {
+            let page = vn_shell_pane::PanePage::new();
+            if context.options.mode == Some(vn_shell_core::options::Mode::Embed) {
+                page.in_front()
+            } else {
+                page
+            }
+        };
         Shell {
             context,
             sizes,
@@ -287,7 +307,7 @@ impl Shell {
             adopt_note: None,
             surface: None,
             #[cfg(feature = "pane")]
-            pane: vn_shell_pane::PanePage::new(),
+            pane,
             hand_off: None,
             close_refused: false,
             setup_started: None,

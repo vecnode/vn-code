@@ -9,22 +9,25 @@
 
 use std::fmt;
 
-/// The three shapes the shell can take. `Panel` means "start nothing", which is the
-/// state the app OPENS in.
+/// The shapes the shell can take. `Panel` means "start nothing", which is the state the
+/// app OPENS in.
 ///
-/// There is no `embed`: this app does not draw the shipped interface and does not
-/// pretend to. The interface is a web application, the process that draws it is a
-/// browser, and `browser.rs` is the table that finds one. `-Mode embed` is refused BY
-/// NAME rather than quietly downgraded, because a flag that silently means something
-/// else is a flag nobody can trust.
+/// `Embed` is the pane, and it exists only in a build that has one: this crate is the pure
+/// half and has no engine, so the PARSER is told whether the pane is there ([`Mode::parse_with`])
+/// rather than reading a feature flag. A build without it still refuses `-Mode embed` BY
+/// NAME, with the reason, because a flag that silently means something else is a flag nobody
+/// can trust.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     /// The control panel and nothing else. The harness is not started.
     Panel,
-    /// The panel, with the harness UI opened in a browser this app chose.
+    /// The panel, with the harness UI opened in a browser this app chose - or, in a build
+    /// that has the pane, inside this window.
     Chrome,
     /// No window at all: a supervisor and a log, for a server or a check.
     Headless,
+    /// The harness page in front, drawn inside this window by the OS web engine.
+    Embed,
 }
 
 impl Mode {
@@ -33,22 +36,34 @@ impl Mode {
             Mode::Panel => "panel",
             Mode::Chrome => "chrome",
             Mode::Headless => "headless",
+            Mode::Embed => "embed",
         }
     }
 
+    /// The mode a build WITHOUT a pane parses: `embed` is refused by name.
     pub fn parse(value: &str) -> Result<Mode, String> {
+        Mode::parse_with(value, false)
+    }
+
+    /// The mode a build parses, told whether it can show the harness in its own window.
+    ///
+    /// The answer travels as a VALUE rather than as a feature flag, because this crate has
+    /// no engine and must not learn of one: the binary asks its panel, and both answers are
+    /// `cargo test` cases here.
+    pub fn parse_with(value: &str, pane_available: bool) -> Result<Mode, String> {
         match value.to_ascii_lowercase().as_str() {
             "panel" => Ok(Mode::Panel),
             "chrome" | "browser" => Ok(Mode::Chrome),
             "headless" => Ok(Mode::Headless),
-            // Named, so somebody who read an older plan learns why rather than
-            // wondering whether they typed it wrong.
+            "embed" | "pane" if pane_available => Ok(Mode::Embed),
+            // Named, so somebody who read a plan that promised a pane learns WHY this build
+            // has none rather than wondering whether they typed it wrong.
             "embed" | "pane" => Err(
-                "-Mode embed is not a mode this app has: it draws no web view, on purpose. The harness UI opens in a browser - `-Mode chrome`, which is the default. See docs/PLAN-egui-shell.md"
+                "-Mode embed is not a mode this build has: it was compiled without the pane, so it draws no web view. The harness UI opens in a browser - `-Mode chrome`, which is the default. See docs/PLAN-egui-shell.md"
                     .to_string(),
             ),
             other => Err(format!(
-                "-Mode expects one of panel, chrome or headless - got '{other}'"
+                "-Mode expects one of panel, chrome, headless or embed - got '{other}'"
             )),
         }
     }
@@ -84,7 +99,16 @@ impl Options {
     }
 }
 
+/// Parse the flags for a build WITH NO PANE: `-Mode embed` is refused by name.
 pub fn parse_args(args: impl Iterator<Item = String>) -> Result<Options, String> {
+    parse_args_with(args, false)
+}
+
+/// Parse the flags, told whether this build can show the harness in its own window.
+pub fn parse_args_with(
+    args: impl Iterator<Item = String>,
+    pane_available: bool,
+) -> Result<Options, String> {
     let mut options = Options::default();
     let mut args = args;
     while let Some(argument) = args.next() {
@@ -104,7 +128,8 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<Options, String>
                 options.dsh_version = Some(next_value(&mut args, "-DshVersion")?)
             }
             "-mode" | "--mode" => {
-                options.mode = Some(Mode::parse(&next_value(&mut args, "-Mode")?)?)
+                options.mode =
+                    Some(Mode::parse_with(&next_value(&mut args, "-Mode")?, pane_available)?)
             }
             "-help" | "--help" | "-h" | "/?" => options.help = true,
             other => {
@@ -153,6 +178,28 @@ click.";
 pub fn print_usage() {
     println!();
     println!("{USAGE}");
+    println!();
+}
+
+/// The usage text for a build, told whether it has the pane.
+///
+/// `USAGE` above is the text for a build WITHOUT one, and it stays the text the checks read
+/// back. A build with the pane prints the same flags plus the one it gained, as an
+/// ADDITION rather than as a second copy of the whole text - so the flags, the reasons and
+/// the wording cannot drift apart between the two builds.
+pub fn usage(pane_available: bool) -> String {
+    if !pane_available {
+        return USAGE.to_string();
+    }
+    format!(
+        "{USAGE}\n\n  -Mode embed        open with the harness page in front, drawn inside this\n                     window by the OS web engine (this build has the pane)\n\nThis build has the pane: the harness can be shown inside this window, and the\nbrowser hand-off becomes the floor under it - `Open in my browser` on the pane's\nown bar. Without it the interface opens in a browser, and the panel offers Google\nChrome first when it is installed.\n"
+    )
+}
+
+/// Print the usage text for a build that may have the pane.
+pub fn print_usage_with(pane_available: bool) {
+    println!();
+    println!("{}", usage(pane_available));
     println!();
 }
 
@@ -215,12 +262,31 @@ mod tests {
         assert_eq!(parse_args(args(&["-mode", "HEADLESS"])).unwrap().mode, Some(Mode::Headless));
         assert_eq!(parse_args(args(&["-Mode", "panel"])).unwrap().mode, Some(Mode::Panel));
         let error = parse_args(args(&["-Mode", "sideways"])).unwrap_err();
-        assert!(error.contains("panel, chrome or headless"), "{error}");
-        // `embed` is a mode this app does NOT have, and it says so by name rather
-        // than quietly opening a browser and letting the reader think a pane exists.
+        assert!(error.contains("panel, chrome, headless or embed"), "{error}");
+        // `embed` is a mode a build WITHOUT the pane does not have, and it says so by name
+        // rather than quietly opening a browser and letting the reader think a pane exists.
         let error = parse_args(args(&["-Mode", "embed"])).unwrap_err();
         assert!(error.contains("draws no web view"), "{error}");
         assert!(error.contains("chrome"), "{error}");
+        // ...and the SAME spelling is a real mode in a build that has one. That is why the
+        // answer is passed in rather than compiled in: both are cases here.
+        assert_eq!(
+            parse_args_with(args(&["-Mode", "embed"]), true).unwrap().mode,
+            Some(Mode::Embed)
+        );
+        assert_eq!(Mode::parse_with("pane", true).unwrap(), Mode::Embed);
+        assert_eq!(Mode::name(Mode::Embed), "embed");
+        assert!(Mode::parse_with("embed", false).is_err());
+        // The usage text grows the one flag the pane adds and keeps every other one.
+        let with_pane = usage(true);
+        assert!(with_pane.contains("-Mode embed"), "{with_pane}");
+        for flag in ["-Port", "-DshHome", "-DshVersion", "-Mode", "-Help"] {
+            assert!(with_pane.contains(flag), "the pane's usage text lost {flag}");
+        }
+        assert!(
+            !usage(false).contains("-Mode embed"),
+            "a build with no pane must not advertise one"
+        );
     }
 
     #[test]

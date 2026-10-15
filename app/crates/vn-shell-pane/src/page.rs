@@ -90,6 +90,15 @@ impl PanePage {
         }
     }
 
+    /// Start with the harness page in front.
+    ///
+    /// What `-Mode embed` asks for: the same window and the same two tabs, with the instance
+    /// already in view instead of the control panel.
+    pub fn in_front(mut self) -> PanePage {
+        self.front = Page::Harness;
+        self
+    }
+
     /// Whether this page owns everything below the header, so the panel must not draw its
     /// own rows underneath the view.
     pub fn owns_the_area(&self) -> bool {

@@ -35,7 +35,15 @@ url = "2"
 # `wry` drives the engine the OS already has (WebView2 / WKWebView / WebKitGTK), and it
 # takes any `HasWindowHandle`, so the window stays eframe's: `tao` is a dev-dependency of
 # wry's own examples, not a requirement.
-wry = "0.55"
+#
+# 0.57 rather than 0.55, and the reason is a SECURITY SEAM rather than a feature: the
+# permission handler exists only from 0.57. In the 0.55.1 source the string "permission"
+# appears twice - once in the Windows backend, where it ALLOWS clipboard reads and lets
+# every other kind fall through to the engine's own default, and once in the macOS
+# delegate, where it GRANTS media capture outright. A pane whose rule is "deny everything
+# the harness does not need" cannot be built on a version a page can ask for a camera
+# through.
+wry = "0.57"
 
 # The window and the panel. `0.36` is the line this shell is pinned to: Rust 1.95,
 # edition 2024, wgpu as the DEFAULT renderer (through 0.33 it was glow) and

@@ -16,6 +16,7 @@ node scripts/checks/check-skill-examples.mjs    # every fenced example in the sh
 node scripts/checks/check-media-examples.mjs    # every media/PDF example, shaped and really RUN
 node scripts/checks/check-browser-node.mjs      # dsh-browser: the host renderer and its policy
 node scripts/checks/check-shell.mjs            # the native shell, DRIVEN: ready line, token, stop
+node scripts/checks/check-pane.mjs             # the pane: the default build promises none, the pane build has one
 DSH_CHECK_LAUNCH=1 node scripts/checks/check-node-routes.mjs   # also opens a real directory picker
 ```
 
@@ -60,6 +61,21 @@ browser is not evidence — read the output.
 | script | what it proves |
 |---|---|
 | `check-audio-browser.mjs` | the audio console's device/routing/tone claims against the real browser APIs |
+
+## The checks that need a build this host may not be able to make
+
+`check-pane.mjs` builds the shell **twice** — once with the opt-in `pane` feature and once
+without — and asserts that the two **disagree**, because that disagreement is the whole
+contract: the default build compiles no engine and refuses `-Mode embed` by name, and the
+pane build accepts it and says so in its usage. It runs the pane crate's own tests (the
+rectangle, the visibility table, the loopback re-check, the permission answer) with the
+feature on, and it leaves the DEFAULT binary behind.
+
+It skips loudly when the host cannot build the pane at all — no `cargo`, no route to
+crates.io for `wry`, or no system WebKitGTK on Linux. A build failure that is **not** one of
+those host reasons is a failure, not a skip, so a compile error can never hide behind it.
+It starts no window: `-Mode embed -Help` parses the flag and prints the usage, which is the
+observable that proves the mode is real.
 
 ## The standard a check follows
 

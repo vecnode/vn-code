@@ -618,12 +618,14 @@ function checkFlags() {
 
   const badMode = spawnSync(binary, ['-Mode', 'sideways'], { encoding: 'utf8', shell: false })
   if (badMode.status !== 1) fail(`-Mode sideways exited ${badMode.status}, expected 1`)
-  if (!/panel, chrome or headless/.test(badMode.stderr ?? '')) {
+  if (!/panel, chrome, headless or embed/.test(badMode.stderr ?? '')) {
     fail('-Mode sideways was refused without listing what it accepts')
   }
-  // `embed` is a mode this app does NOT have - it draws no web view - and the flag
-  // is refused BY NAME rather than quietly opening a browser instead. A test that
-  // only checked the accepted spellings would let this build promise a pane.
+  // `embed` is a mode THIS build does not have - it was compiled without the pane, so it
+  // draws no web view - and the flag is refused BY NAME rather than quietly opening a
+  // browser instead. A test that only checked the accepted spellings would let this build
+  // promise a pane. The build that DOES have one is `check-pane.mjs`, and the two must
+  // DISAGREE about this flag: that disagreement is the whole contract.
   const noPane = spawnSync(binary, ['-Mode', 'embed'], { encoding: 'utf8', shell: false })
   if (noPane.status !== 1) fail(`-Mode embed exited ${noPane.status}, expected 1`)
   if (!/draws no web view/.test(noPane.stderr ?? '')) {
@@ -632,7 +634,7 @@ function checkFlags() {
   if (!/chrome/.test(noPane.stderr ?? '')) {
     fail('-Mode embed was refused without naming the mode that does work')
   }
-  console.log('check-shell: the flag set, both refusals, and no promised pane behave')
+  console.log('check-shell: the flag set, both refusals, and this build promises no pane')
 }
 
 function checkTauriIsGone() {

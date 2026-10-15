@@ -22,7 +22,10 @@ use std::path::PathBuf;
 use vn_shell_core::pane::{self, PaneView, PhysicalRect};
 use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::raw_window_handle::HasWindowHandle;
-use wry::{PageLoadEvent, Rect as WryRect, WebContext, WebView, WebViewBuilder};
+use wry::{
+    NewWindowResponse, PageLoadEvent, PermissionKind, PermissionResponse, Rect as WryRect,
+    WebContext, WebView, WebViewBuilder,
+};
 
 /// What the page told us about itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,6 +83,30 @@ impl Engine {
             .with_url(parsed.as_str())
             // The inspector is a debug build's tool, never a shipped one's.
             .with_devtools(cfg!(debug_assertions))
+            // **The three seams, and each one is a rule rather than a preference.**
+            //
+            // The page is the harness and nothing else, so the pane grants what a chat
+            // interface cannot work without and refuses the rest BY NAME - a refusal the
+            // engine cannot talk its way out of, because the decision is taken here and
+            // handed to it.
+            //
+            // Why the whole set is possible at all: `with_permission_handler` arrives in
+            // wry 0.57. In 0.55 the only mention of a permission in the Windows backend
+            // ALLOWS clipboard reads and lets every other kind fall through to the engine's
+            // own default, and the macOS delegate GRANTS media capture outright - so a pane
+            // that denies camera and microphone could not be built on it.
+            .with_permission_handler(permission_response)
+            // A window is never opened from inside the pane. A page that can put a window
+            // on the desktop is a page that can put one over the panel, and the reader's
+            // own way to a browser is a click on the bar.
+            .with_new_window_req_handler(|_url, _features| NewWindowResponse::Deny)
+            // The pane shows the harness; it does not fetch files. Refused with no path
+            // offered, so nothing can be written anywhere the app has not chosen.
+            .with_download_started_handler(|_url, _path| false)
+            // Copy and paste work for the same reason the ONE granted permission does: the
+            // harness's own buttons and composer use them. Without this the page has no
+            // clipboard at all on Windows and Linux.
+            .with_clipboard(true)
             // Rule 2: the handler answers the same question the URL did.
             .with_navigation_handler(|target| pane::may_load(&target).is_ok())
             .with_on_page_load_handler(move |event, _url| match event {
@@ -148,6 +175,21 @@ impl Engine {
     }
 }
 
+/// Which permissions the pane grants: the clipboard, and nothing else.
+///
+/// The one exception is deliberate and narrow. A chat interface's copy buttons and its
+/// composer are clipboard work, and wry 0.55 made the same choice on Windows for the same
+/// reason. Everything a viewer has no business asking for - camera, microphone, screen
+/// capture, location, notifications, MIDI, sensors, and whatever the engine adds next -
+/// falls to `Deny` rather than to the engine's default, because "the engine will probably
+/// ask the person" is not a rule.
+fn permission_response(kind: PermissionKind) -> PermissionResponse {
+    match kind {
+        PermissionKind::ClipboardRead => PermissionResponse::Allow,
+        _ => PermissionResponse::Deny,
+    }
+}
+
 /// Physical pixels into the engine's own rectangle type.
 fn rect(bounds: PhysicalRect) -> WryRect {
     WryRect {
@@ -171,6 +213,30 @@ mod tests {
             converted.size,
             wry::dpi::Size::Physical(PhysicalSize::new(1200, 900))
         );
+    }
+
+    #[test]
+    fn the_pane_grants_the_clipboard_and_denies_everything_else() {
+        assert!(matches!(
+            permission_response(PermissionKind::ClipboardRead),
+            PermissionResponse::Allow
+        ));
+        // A viewer asks for none of these, and the pane answers for itself rather than
+        // leaving it to the engine's default flow.
+        for kind in [
+            PermissionKind::Microphone,
+            PermissionKind::Camera,
+            PermissionKind::DisplayCapture,
+            PermissionKind::Geolocation,
+            PermissionKind::Notifications,
+            PermissionKind::Midi,
+            PermissionKind::Sensors,
+        ] {
+            assert!(
+                matches!(permission_response(kind), PermissionResponse::Deny),
+                "a permission other than the clipboard was not denied"
+            );
+        }
     }
 
     #[test]

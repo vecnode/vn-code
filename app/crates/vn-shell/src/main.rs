@@ -25,7 +25,7 @@ use std::time::Duration;
 
 use vn_shell_core::appprefs::AppPrefs;
 use vn_shell_core::browser;
-use vn_shell_core::options::{parse_args, print_usage, Mode, Options};
+use vn_shell_core::options::{parse_args_with, print_usage_with, Mode, Options};
 use vn_shell_core::prefs::Preferences;
 use vn_shell_core::status::Phase;
 use vn_shell_core::windowstate::{self, WindowState};
@@ -44,7 +44,11 @@ const PROFILE: &str = launch::PROFILE;
 const HEADLESS_TICK: Duration = Duration::from_millis(200);
 
 fn main() {
-    let options = match parse_args(std::env::args().skip(1)) {
+    // Whether this build has the pane decides whether `-Mode embed` is a mode or a refusal
+    // by name, and the answer comes from the panel rather than from a feature flag here: the
+    // flag belongs to the crate that owns the engine, and the pure half is told the answer.
+    let pane_available = vn_shell_egui::pane_available();
+    let options = match parse_args_with(std::env::args().skip(1), pane_available) {
         Ok(options) => options,
         Err(message) => {
             eprintln!("[vncode] {message}");
@@ -52,7 +56,7 @@ fn main() {
         }
     };
     if options.help {
-        print_usage();
+        print_usage_with(pane_available);
         return;
     }
 
