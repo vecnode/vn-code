@@ -213,6 +213,17 @@ it, and the first is what the rest rest on:
    panel draws its rows *instead of* it, never under it. That rule is `vn_shell_core::pane`, and
    it is `cargo test` cases rather than something anybody checks by looking at a window.
 
+7. **What the engine records about WHERE the pane went is taken away again.** A web engine keeps
+   a browsing record, and this one is no exception: **MEASURED**, after a single load of the
+   harness the full URL — token and all — was sitting in `History`, `Favicons` and `Top Sites`
+   inside the pane's own profile under `<app root>/webview`. No care in this app changes what an
+   engine does with a URL it is given, so the app removes those files: at **startup**, before any
+   view exists (the pass that cannot fail, because a delete while the engine is alive is a
+   sharing violation), and again best-effort when a view is given up. Anything left that still
+   carries the token is **named in the pane's own bar** rather than hidden, so an engine version
+   that invents another record file is visible instead of silent — which is also why rule 1 above
+   says the token never leaves the *process* and not that it never touches a disk the engine owns.
+
 ## Lock it down
 
 1. **Keep it on loopback**: the pack's launcher or

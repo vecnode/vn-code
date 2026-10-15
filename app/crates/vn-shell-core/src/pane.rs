@@ -67,13 +67,6 @@ pub struct PaneView {
     pub bounds: PhysicalRect,
 }
 
-impl PaneView {
-    /// The engine rect, for an engine that has no policy of its own.
-    pub fn hidden(rect: RectPoints, scale_factor: f32) -> PaneView {
-        PaneView { visible: false, bounds: physical(rect, scale_factor) }
-    }
-}
-
 /// Whether the pane may be seen, and where it goes.
 pub fn decide(policy: &PanePolicy, scale_factor: f32) -> PaneView {
     let bounds = physical(policy.rect, scale_factor);
@@ -209,7 +202,6 @@ mod tests {
         let view = decide(&policy(false, true, false), 1.5);
         assert!(!view.visible);
         assert_eq!(view.bounds, PhysicalRect { x: 15, y: 30, width: 1200, height: 900 });
-        assert_eq!(PaneView::hidden(rect(), 1.5), view);
     }
 
     #[test]

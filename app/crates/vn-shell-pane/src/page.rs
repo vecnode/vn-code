@@ -54,6 +54,13 @@ pub struct PanePage {
     /// The last thing the engine refused, in its own words, so a refusal is visible
     /// rather than a rectangle that quietly stays blank.
     problem: Option<String>,
+    /// The engine's own profile, kept so that what the ENGINE records about where the pane
+    /// went can be taken away again - see `purge_navigation_records`.
+    data_dir: Option<PathBuf>,
+    /// Whether this run has done its startup purge: once per run, not once per frame.
+    purged: bool,
+    /// A live view has been given up, so the next one owes an explicit load.
+    restarted: bool,
 }
 
 impl Default for PanePage {
@@ -72,6 +79,9 @@ impl PanePage {
             built_for: None,
             loaded: Arc::new(AtomicBool::new(false)),
             problem: None,
+            data_dir: None,
+            purged: false,
+            restarted: false,
         }
     }
 
@@ -104,7 +114,27 @@ impl PanePage {
         data_dir: Option<PathBuf>,
         overlay_open: bool,
     ) {
-        self.tabs(ui, status);
+        // ONCE PER RUN, BEFORE ANY VIEW EXISTS: take away what the engine recorded about where
+        // the pane went last time. This is the pass that CANNOT fail, because nothing is
+        // holding those files open yet - `purge_navigation_records` has the measurement that
+        // made this necessary, and it is a rule about the launch token, not a tidy-up.
+        if !self.purged {
+            self.purged = true;
+            self.data_dir = data_dir.clone();
+            if let Some(dir) = self.data_dir.clone() {
+                let report = crate::engine::purge_navigation_records(&dir);
+                if !report.still_carrying.is_empty() {
+                    // Something this build does not know how to remove is holding the token.
+                    // Saying so is the only honest option: a rule that cannot be kept silently
+                    // is worse than one that names the file that broke it.
+                    self.problem = Some(format!(
+                        "the engine kept the launch token on disk in {} - this build does not know that file, please report it",
+                        report.still_carrying.join(", ")
+                    ));
+                }
+            }
+        }
+        self.tabs(ui);
         if self.front == Page::Panel {
             // The engine is KEPT and hidden: a page that reloads every time somebody looks
             // at the panel is a page that loses where they were.
@@ -115,16 +145,14 @@ impl PanePage {
         self.view(ui, window, status, data_dir, overlay_open);
     }
 
-    /// The two pages, and the state of the instance in one word.
-    fn tabs(&mut self, ui: &mut Ui, status: &Status) {
+    /// The two pages.
+    ///
+    /// **The state is NOT repeated here.** The header already carries `● running`, and the same
+    /// word twice on one screen is the sort of thing that makes a window look unfinished.
+    fn tabs(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.front, Page::Panel, "control panel");
             ui.selectable_value(&mut self.front, Page::Harness, "harness");
-            ui.separator();
-            ui.label(
-                RichText::new(format!("● {}", status.phase.label()))
-                    .color(phase_colour(status.phase)),
-            );
         });
     }
 
@@ -144,31 +172,40 @@ impl PanePage {
         let loaded = self.loaded.load(Ordering::Relaxed);
         let mut reload = false;
 
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal(|ui| {
+            // ONE font, ONE size, for the whole row. The address used to be drawn in a monospace
+            // face, which in this theme renders wider and reads as a bigger, louder label than
+            // everything beside it - a bar where one item shouts looks broken. It is `.strong()`
+            // instead: the address is the fact this row is about.
             match status.public_url() {
                 Some(address) => {
-                    ui.label(RichText::new(address).monospace());
+                    ui.label(RichText::new(address).strong());
                 }
                 None => {
                     ui.label(RichText::new("no address yet").weak());
                 }
             }
             if let Some(uptime) = status.uptime_label() {
-                ui.label(RichText::new(format!("up {uptime}")).weak());
+                ui.add_space(8.0);
+                ui.label(RichText::new(format!("· up {uptime}")).weak());
             }
             if running && has_engine && !loaded {
-                ui.label(RichText::new("· loading…").weak());
+                ui.add_space(8.0);
+                ui.spinner();
+                ui.label(RichText::new("loading…").weak());
             }
-            ui.separator();
-
-            ui.add_enabled_ui(running && has_engine, |ui| {
-                if ui
-                    .button("Reload")
-                    .on_hover_text("ask the engine for the page again")
-                    .clicked()
-                {
-                    reload = true;
-                }
+            // The one action this page owns, held at the far end so the row reads as facts on
+            // the left and a control on the right instead of one long queue of widgets.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_enabled_ui(running && has_engine, |ui| {
+                    if ui
+                        .button("Reload")
+                        .on_hover_text("ask the engine for the page again")
+                        .clicked()
+                    {
+                        reload = true;
+                    }
+                });
             });
         });
 
@@ -203,8 +240,19 @@ impl PanePage {
                     loaded.store(true, Ordering::Relaxed);
                 }
             }) {
-                Ok(engine) => {
+                Ok(mut engine) => {
                     self.loaded.store(false, Ordering::Relaxed);
+                    // MEASURED, from a real run: Stop and then Start left the pane WHITE until
+                    // the page was asked for again by hand. A view recreated on the same engine
+                    // profile inside one process comes up without a paint, so the page is loaded
+                    // a second time here - which is exactly what pressing Reload does. Only when
+                    // this REPLACES a live view: a first view loads the URL it was built with.
+                    if self.restarted {
+                        if let Err(error) = engine.navigate(url) {
+                            self.problem = Some(error.to_string());
+                        }
+                        self.restarted = false;
+                    }
                     self.engine = Some(engine);
                     self.built_for = Some(url.to_string());
                     self.problem = None;
@@ -267,9 +315,18 @@ impl PanePage {
     /// Give up the page, and with it the child view: `Engine`'s own `Drop` destroys the
     /// window, which is what makes "nothing is left holding a stale token" a property of
     /// the type instead of a thing a caller has to remember.
+    ///
+    /// Two things come with giving it up: the NEXT view owes an explicit load (measured - see
+    /// `needs_an_explicit_load`), and what the engine wrote about where the pane went is taken
+    /// away again, best effort. The reliable purge is the one at startup, because a delete while
+    /// the engine is alive is a sharing violation - this one is the attempt that sometimes wins.
     fn retire(&mut self) {
+        self.restarted = needs_an_explicit_load(self.engine.is_some());
         self.engine = None;
         self.built_for = None;
+        if let Some(dir) = &self.data_dir {
+            let _ = crate::engine::purge_navigation_records(dir);
+        }
     }
 
     /// Hide the view without giving up the page.
@@ -291,14 +348,14 @@ fn page_is_current(built_for: Option<&str>, url: Option<&str>) -> bool {
     matches!((built_for, url), (Some(built), Some(url)) if built == url)
 }
 
-/// Colour of the phase badge, matching the panel's own.
-fn phase_colour(phase: Phase) -> Color32 {
-    match phase {
-        Phase::Running => Color32::from_rgb(0x5A, 0xC8, 0x8A),
-        Phase::Starting | Phase::Stopping => Color32::from_rgb(0xE0, 0xB0, 0x5A),
-        Phase::Failed => Color32::from_rgb(0xE0, 0x6C, 0x75),
-        Phase::Idle | Phase::Stopped => Color32::from_rgb(0x8A, 0x92, 0x9E),
-    }
+/// Whether the view that replaces a retired one needs an explicit load.
+///
+/// MEASURED: a view recreated on the same engine profile inside one process comes up without a
+/// paint - Stop and then Start left the pane blank until it was reloaded by hand. So a page that
+/// is replacing a LIVE view is loaded a second time, and a first view is not: it loads the URL
+/// it was built with.
+fn needs_an_explicit_load(replacing_a_live_view: bool) -> bool {
+    replacing_a_live_view
 }
 
 #[cfg(test)]
@@ -334,6 +391,18 @@ mod tests {
         assert!(!page.owns_the_area(), "the panel is in front at the start");
         page.front = Page::Harness;
         assert!(page.owns_the_area(), "the harness page owns everything below the header");
+    }
+
+    #[test]
+    fn only_a_page_that_replaces_a_live_view_is_loaded_twice() {
+        assert!(
+            needs_an_explicit_load(true),
+            "a recreated view comes up blank - measured on a real Stop and Start"
+        );
+        assert!(
+            !needs_an_explicit_load(false),
+            "a first view loads the URL it was built with, and loading it twice would flash"
+        );
     }
 
     #[test]

@@ -67,8 +67,18 @@ use vn_shell_runtime::{
 /// The binary asks, so that `-Mode embed` is a refusal by name in a build with no engine and
 /// a real mode in one that has. The answer travels as a value because `vn-shell-core` is
 /// the pure half and has no engine to learn about.
+///
+/// With the pane it comes from the crate that OWNS the engine rather than from a second
+/// `cfg!` here: one place decides whether this build has an engine, and it is not this one.
+#[cfg(feature = "pane")]
 pub const fn pane_available() -> bool {
-    cfg!(feature = "pane")
+    vn_shell_pane::available()
+}
+
+/// A build without the pane has no engine, and says so without asking anybody.
+#[cfg(not(feature = "pane"))]
+pub const fn pane_available() -> bool {
+    false
 }
 
 /// How often the panel re-reads the supervisor even when nothing has happened.

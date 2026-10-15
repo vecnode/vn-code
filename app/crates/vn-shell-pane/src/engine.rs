@@ -17,7 +17,7 @@
 //!    token" a property of the type rather than a thing a caller has to remember.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use vn_shell_core::pane::{self, PaneView, PhysicalRect};
 use wry::dpi::{PhysicalPosition, PhysicalSize};
@@ -171,11 +171,6 @@ impl Engine {
             EngineError(format!("could not navigate the pane: {error}"))
         })
     }
-
-    /// Whether the view is currently shown, as last applied.
-    pub fn is_visible(&self) -> bool {
-        self.applied_visible
-    }
 }
 
 /// Whether the pane can be built on this platform YET, and why not when it cannot.
@@ -227,6 +222,102 @@ fn rect(bounds: PhysicalRect) -> WryRect {
     }
 }
 
+/// What a purge took away, and what it could not.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct PurgeReport {
+    /// The files and directories that were removed, by name.
+    pub removed: Vec<String>,
+    /// Files that STILL contain `token=` after the purge. Named, never hidden: a build that
+    /// cannot keep a rule has to say which file broke it.
+    pub still_carrying: Vec<String>,
+}
+
+/// The file names a web engine records a VISIT in, matched by PREFIX so the `-journal` siblings
+/// come with them.
+///
+/// MEASURED on this machine, after the pane had loaded the harness once: `?token=` was found in
+/// `History`, `Favicons` and `Top Sites` under `EBWebView/Default`, inside the pane's own profile.
+const NAVIGATION_RECORDS: &[&str] = &[
+    "History",
+    "Favicons",
+    "Top Sites",
+    "Visited Links",
+    "Network Action Predictor",
+    "Shortcuts",
+    "Current Session",
+    "Current Tabs",
+    "Last Session",
+    "Last Tabs",
+];
+
+/// Take away what the engine recorded about **where the pane went**.
+///
+/// ## Why this exists, and why it is a security rule rather than a tidy-up
+///
+/// The launch token is a live credential, and the oldest rule in this pack is that it is never
+/// written to a file. A web engine keeps a browsing record and the pane's engine is no
+/// exception: MEASURED, the full URL - `?token=` and all - was sitting in three files inside the
+/// pane's own profile. No amount of care in this app changes what the engine does with a URL it
+/// was given, so the app takes the record away again.
+///
+/// ## When it runs, and why that matters
+///
+/// At STARTUP, before any view exists - and again, best effort, when a view is given up. Startup
+/// is the one that is guaranteed: a delete while the engine is alive is a sharing violation, so
+/// the pass that cannot fail is the one that runs before anything holds the files.
+///
+/// The list is a prefix list plus a scan rather than a closed list, because engine versions add
+/// files: anything left that still carries the token is RETURNED rather than hidden, so the next
+/// engine version that invents a record file is visible instead of silent.
+pub fn purge_navigation_records(data_dir: &Path) -> PurgeReport {
+    let mut report = PurgeReport::default();
+    let profile = data_dir.join("EBWebView").join("Default");
+    let Ok(entries) = std::fs::read_dir(&profile) else {
+        // No profile yet - a first run. Nothing to take away, and that is not a failure.
+        return report;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !NAVIGATION_RECORDS.iter().any(|prefix| name.starts_with(prefix)) {
+            continue;
+        }
+        let path = entry.path();
+        let gone = if path.is_dir() {
+            std::fs::remove_dir_all(&path).is_ok()
+        } else {
+            std::fs::remove_file(&path).is_ok()
+        };
+        if gone {
+            report.removed.push(name);
+        }
+    }
+
+    // What is left, in case an engine version records a visit somewhere this build has never
+    // heard of. Bounded per file, so a cache blob is never read into memory to be searched.
+    let mut stack = vec![profile];
+    while let Some(directory) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let Ok(metadata) = entry.metadata() else { continue };
+            if metadata.len() > 4 * 1024 * 1024 {
+                continue;
+            }
+            let Ok(bytes) = std::fs::read(&path) else { continue };
+            if bytes.windows(6).any(|window| window == &b"token="[..]) {
+                report.still_carrying.push(
+                    path.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default(),
+                );
+            }
+        }
+    }
+    report
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,6 +333,43 @@ mod tests {
             converted.size,
             wry::dpi::Size::Physical(PhysicalSize::new(1200, 900))
         );
+    }
+
+    #[test]
+    fn the_purge_takes_the_visit_record_away_and_names_what_it_cannot() {
+        // A scratch root the harness can point away from, mirroring vn-shell-core's rule: a
+        // host that denies %TEMP% to a child must not turn this into a failure about the host.
+        let root = match std::env::var_os("VNCODE_TEST_DIR") {
+            Some(value) if !value.is_empty() => PathBuf::from(value),
+            _ => std::env::temp_dir(),
+        };
+        let dir = root.join(format!("vncode-pane-purge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let default = dir.join("EBWebView").join("Default");
+        std::fs::create_dir_all(&default).unwrap();
+        std::fs::write(default.join("History"), b"http://127.0.0.1:1/?token=x").unwrap();
+        std::fs::write(default.join("History-journal"), b"junk").unwrap();
+        std::fs::write(default.join("Favicons"), b"http://127.0.0.1:1/?token=x").unwrap();
+        std::fs::write(default.join("Cookies"), b"a file that is not a visit record").unwrap();
+
+        let report = purge_navigation_records(&dir);
+        assert!(!default.join("History").exists(), "the history database must go");
+        assert!(!default.join("History-journal").exists(), "its -journal sibling goes with it");
+        assert!(!default.join("Favicons").exists(), "the favicon record carries the same URL");
+        assert!(default.join("Cookies").exists(), "a file that is not a visit record stays");
+        assert!(report.removed.iter().any(|name| name == "History"), "{report:?}");
+        assert!(report.still_carrying.is_empty(), "{report:?}");
+
+        // A file this build does not know about is NAMED rather than hidden - that is how the
+        // next engine version that invents a record file gets noticed.
+        std::fs::write(default.join("SomethingNew"), b"http://127.0.0.1:1/?token=x").unwrap();
+        let report = purge_navigation_records(&dir);
+        assert_eq!(report.still_carrying, vec!["SomethingNew".to_string()], "{report:?}");
+
+        // ...and a directory that does not exist yet is not a failure: that is the first run.
+        let report = purge_navigation_records(&dir.join("never-created"));
+        assert_eq!(report, PurgeReport::default());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

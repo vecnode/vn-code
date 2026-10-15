@@ -99,11 +99,18 @@ for (const flag of ['-Port', '-DshHome', '-DshVersion', '-Mode', '-Help']) {
 }
 
 // The pane's own rules - the rectangle, the visibility table, the loopback re-check, the
-// permission answer - are unit tests in the crate, and they run with the feature on.
+// permission answer, and the purge of what the engine records about where the pane went - are
+// unit tests in the crate, and they run with the feature on. Two of them write real files, so
+// they are given a scratch root inside the checkout: a host that denies %TEMP% to a child would
+// otherwise turn those into a failure about the host rather than about the code, which is the
+// same reason `check-shell.mjs` points VNCODE_TEST_DIR here.
+const scratch = path.join(root, '.scratch', 'cargo-test')
+fs.mkdirSync(scratch, { recursive: true })
 const paneTests = spawnSync('cargo', ['test', '-p', 'vn-shell-pane', '--features', 'pane'], {
   cwd: app,
   encoding: 'utf8',
   shell: false,
+  env: { ...process.env, VNCODE_TEST_DIR: scratch },
 })
 check(
   'the pane\'s own tests pass with the feature on',
