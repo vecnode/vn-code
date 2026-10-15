@@ -26,6 +26,7 @@ pub mod keystate;
 pub mod launch;
 pub mod log;
 pub mod options;
+pub mod pane;
 pub mod ports;
 pub mod prefs;
 pub mod profile;

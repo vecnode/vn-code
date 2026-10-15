@@ -5,6 +5,7 @@ members = [
     "crates/vn-shell-runtime",
     "crates/vn-shell-paths",
     "crates/vn-shell-egui",
+    "crates/vn-shell-pane",
     "crates/vn-shell",
 ]
 
@@ -28,6 +29,13 @@ vn-shell-pane = { path = "crates/vn-shell-pane" }
 serde_json = "1"
 flate2 = "1"
 url = "2"
+
+# The ONE web engine in this workspace, and it is optional: only `vn-shell-pane`'s `pane`
+# feature turns it on, and the default build compiles none of it. Nothing is vendored -
+# `wry` drives the engine the OS already has (WebView2 / WKWebView / WebKitGTK), and it
+# takes any `HasWindowHandle`, so the window stays eframe's: `tao` is a dev-dependency of
+# wry's own examples, not a requirement.
+wry = "0.55"
 
 # The window and the panel. `0.36` is the line this shell is pinned to: Rust 1.95,
 # edition 2024, wgpu as the DEFAULT renderer (through 0.33 it was glow) and

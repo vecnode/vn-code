@@ -1,0 +1,23 @@
+[package]
+name = "vn-shell-pane"
+description = "The one crate that owns a web engine: the child web view the panel draws the harness in, behind a default-off `pane` feature."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+# The engine. OFF by default, and that is a rule rather than caution: with it off this
+# crate compiles to `available() == false`, no engine dependency is built, and the shell
+# behaves exactly as it does today - the browser hand-off is the only surface. The
+# feature is turned on by whoever asks for the pane, and P5 is the phase that flips it.
+pane = ["dep:wry"]
+
+[dependencies]
+vn-shell-core.workspace = true
+# The ONLY dependency on a web engine anywhere in this workspace, and it is optional.
+# Nothing is vendored: `wry` drives the engine the OS already has - WebView2 on Windows,
+# WKWebView on macOS, WebKitGTK on Linux - so the pane adds no engine to ship.
+wry = { workspace = true, optional = true }
