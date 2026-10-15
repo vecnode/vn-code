@@ -34,6 +34,13 @@
 //! choose the browser - all go through the same rule: the panel decides, the
 //! supervisor or the runner performs, and the log carries the evidence.
 
+// The hand-off cluster below - `start_hand_off`, `finish_hand_off`, `confined_hint` and the two
+// fields they share - is a BUILD-conditional path. A build WITH the pane starts no browser, so
+// nothing in that build's UI reaches them; a build WITHOUT one has no other surface, so they
+// are kept rather than deleted. The lint is silenced for that one build and nowhere else: the
+// default build, which is what ships, keeps every warning.
+#![cfg_attr(feature = "pane", allow(dead_code))]
+
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -1153,6 +1160,13 @@ impl eframe::App for Shell {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        // The frame carries the window handle the pane is created against, so a build WITHOUT
+        // the pane has nothing to do with it. It is named here rather than prefixed with an
+        // underscore on purpose: the pane build DOES use it, and one name for one parameter is
+        // what keeps both builds the same function instead of two that drift.
+        #[cfg(not(feature = "pane"))]
+        let _ = frame;
+
         // THE CHOICE COMES FIRST, and while it is unmade it IS the window: no header,
         // no log, no rows - one question and the cards that answer it.
         if self.needs_setup() {
@@ -1168,16 +1182,14 @@ impl eframe::App for Shell {
         // child view at all: a child web view paints ABOVE the surface this panel draws on
         // and cannot be clipped, so nothing of ours may go inside its rectangle. The page
         // is drawn INSTEAD of the rows, never over them.
+        //
+        // It is asked for nothing and hands nothing back: with the pane this app starts no
+        // browser, so there is no token to hand to another program, and Stop is one control
+        // in the header this page sits under.
         #[cfg(feature = "pane")]
         {
             let data_dir = self.context.plan.app_root().map(|root| root.join("webview"));
-            match self.pane.show(ui, frame, &status, data_dir, false) {
-                // The floor under the pane, one click away rather than taken away: the
-                // hand-off in `browser.rs`, with the token in ONE argv element.
-                vn_shell_pane::PageAction::OpenInBrowser => self.start_hand_off(),
-                vn_shell_pane::PageAction::Stop => self.stop(),
-                vn_shell_pane::PageAction::None => {}
-            }
+            self.pane.show(ui, frame, &status, data_dir, false);
             if self.pane.owns_the_area() {
                 return;
             }
@@ -1228,20 +1240,27 @@ impl Shell {
                 // back in after a tab is closed by accident. It stays live while a
                 // hand-off is in flight - the button is the control the reader pressed,
                 // and the row below says what the press is doing.
-                let running = status.phase == Phase::Running;
-                let label = if self.hand_off.is_some() { "Opening…" } else { "Open tab" };
-                let open = ui
-                    .add_enabled(running || self.hand_off.is_some(), egui::Button::new(label))
-                    .on_hover_text(
-                        "opens the harness in the chosen browser, with the launch token the panel never draws",
-                    );
-                if open.clicked() {
-                    self.start_hand_off();
-                }
-                if !running {
-                    open.on_disabled_hover_text(
-                        "the harness is not running - press Start, and Open tab lights up",
-                    );
+                //
+                // **Present only in a build WITHOUT the pane.** With the pane this app opens
+                // no browser, so a button that opened one would be a control that contradicts
+                // the surface: the harness is already in this window, one tab away.
+                #[cfg(not(feature = "pane"))]
+                {
+                    let running = status.phase == Phase::Running;
+                    let label = if self.hand_off.is_some() { "Opening…" } else { "Open tab" };
+                    let open = ui
+                        .add_enabled(running || self.hand_off.is_some(), egui::Button::new(label))
+                        .on_hover_text(
+                            "opens the harness in the chosen browser, with the launch token the panel never draws",
+                        );
+                    if open.clicked() {
+                        self.start_hand_off();
+                    }
+                    if !running {
+                        open.on_disabled_hover_text(
+                            "the harness is not running - press Start, and Open tab lights up",
+                        );
+                    }
                 }
 
                 if let Some(uptime) = status.uptime_label() {
@@ -1485,44 +1504,51 @@ impl Shell {
             }
 
             // --- browser ------------------------------------------------------------
-            ui.label(RichText::new("browser").strong());
-            ui.horizontal_wrapped(|ui| {
-                let current = self.context.browser.id;
-                let mut chosen = current;
-                egui::ComboBox::from_id_salt("browser")
-                    .selected_text(self.context.browser.label)
-                    .show_ui(ui, |ui| {
-                        for browser in &self.context.browsers {
-                            if ui.selectable_label(browser.id == current, browser.label).clicked() {
-                                chosen = browser.id;
+            // **Absent from a build WITH the pane.** That build never starts a browser, so a
+            // chooser and a "which browser took it" line would be a row about nothing - and a
+            // control whose answer nothing reads is worse than no control.
+            #[cfg(not(feature = "pane"))]
+            {
+                ui.label(RichText::new("browser").strong());
+                ui.horizontal_wrapped(|ui| {
+                    let current = self.context.browser.id;
+                    let mut chosen = current;
+                    egui::ComboBox::from_id_salt("browser")
+                        .selected_text(self.context.browser.label)
+                        .show_ui(ui, |ui| {
+                            for browser in &self.context.browsers {
+                                if ui.selectable_label(browser.id == current, browser.label).clicked()
+                                {
+                                    chosen = browser.id;
+                                }
                             }
-                        }
-                    });
-                if chosen != current {
-                    self.choose_browser(chosen);
-                }
-                match &self.surface {
-                    Some(what) => ui.label(RichText::new(format!("· opened in {what}")).weak()),
-                    None if self.hand_off.is_some() => {
-                        ui.spinner();
-                        ui.label(
-                            RichText::new(format!(
-                                "· opening in {} - the log says which rung took it",
-                                self.context.browser.label
-                            ))
-                            .weak(),
-                        )
+                        });
+                    if chosen != current {
+                        self.choose_browser(chosen);
                     }
-                    None => ui.label(
-                        RichText::new(match status.phase {
-                            Phase::Running => "· Open tab opens a new one",
-                            _ => "· a new tab when Start runs",
-                        })
-                        .weak(),
-                    ),
-                };
-            });
-            ui.end_row();
+                    match &self.surface {
+                        Some(what) => ui.label(RichText::new(format!("· opened in {what}")).weak()),
+                        None if self.hand_off.is_some() => {
+                            ui.spinner();
+                            ui.label(
+                                RichText::new(format!(
+                                    "· opening in {} - the log says which rung took it",
+                                    self.context.browser.label
+                                ))
+                                .weak(),
+                            )
+                        }
+                        None => ui.label(
+                            RichText::new(match status.phase {
+                                Phase::Running => "· Open tab opens a new one",
+                                _ => "· a new tab when Start runs",
+                            })
+                            .weak(),
+                        ),
+                    };
+                });
+                ui.end_row();
+            }
         });
     }
 

@@ -39,7 +39,7 @@ mod page;
 pub use engine::{Engine, EngineError, LoadState};
 
 #[cfg(feature = "pane")]
-pub use page::{PageAction, PanePage};
+pub use page::PanePage;
 
 #[cfg(test)]
 mod tests {

@@ -25,19 +25,32 @@ Cross-platform IDE/ADE. Wraps core [DSH](https://www.deepseek.com/harness/en/) w
 | **Native window** | `scripts\run-desktop.bat` | `cargo build --release` in `app` |
 | **Browser tab** | `scripts\run-web.bat` | `./scripts/run-web.sh` |
 
-Both start the pinned harness and open the URL it prints: the native window loads
-it in a WebView2 / WKWebView / WebKitGTK window, the other in Chrome, falling back
-to your default browser. The URL is opened only when it names a **loopback**
+Both start the pinned harness and hand the URL it prints to a surface: `run-web` opens
+it in Chrome, falling back to your default browser, and the native window does the same
+unless it was built **with the pane**, in which case it draws the harness inside its own
+window and starts no browser at all. The URL is opened only when it names a **loopback**
 address, and the launch token is never written to a file - both rules are in
 [SECURITY.md](SECURITY.md).
 
 The native window is a Rust **egui** shell: a small control panel that opens first and
 starts nothing, shows where everything lives, starts the pinned harness on **Start** (the
-same launch path `run-web` uses), shows it in the browser it found on your machine —
-Chrome first, everything else reachable, and no web view of its own — and ends the whole
-instance again on **Stop**. The plan it was built from is
-[`docs/PLAN-egui-shell.md`](docs/PLAN-egui-shell.md), including the **egui 0.36.2** line
-the badge above pins.
+same launch path `run-web` uses), shows it in a browser it found or - with the pane - in a
+`harness` tab of its own window, and ends the whole instance again on **Stop**. The plan it
+was built from is [`docs/PLAN-egui-shell.md`](docs/PLAN-egui-shell.md), including the
+**egui 0.36.2** line the badge above pins.
+
+### Testing the compiled release, with the harness drawn inside the window
+
+```sh
+cd app
+cargo build --release -p vn-shell --features pane
+.\target\release\vncode.exe        # macOS / Linux: ./target/release/vncode
+```
+
+Press **Start**, then click the **harness** tab. The pane is **opt-in**: a plain
+`cargo build --release` compiles no engine at all - which is exactly what
+`scripts\run-desktop.bat` runs - and `scripts/checks/check-pane.mjs` is what proves the
+two builds disagree.
 
 
 ## Plugins

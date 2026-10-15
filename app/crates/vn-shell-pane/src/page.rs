@@ -35,21 +35,6 @@ use wry::raw_window_handle::HasWindowHandle;
 
 use crate::engine::{Engine, LoadState};
 
-/// What the person asked for here, for the panel to carry out.
-///
-/// Only the two things this page cannot do alone: the rest of the panel owns the launch
-/// token's hand-off to a browser, and it owns Stop - the tree, the port check and all.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PageAction {
-    /// Nothing this frame.
-    None,
-    /// Show the same address in the person's own browser. The hand-off in `browser.rs` is
-    /// the floor under the pane and stays one click away rather than being taken away.
-    OpenInBrowser,
-    /// Stop the harness.
-    Stop,
-}
-
 /// Which page of the window is in front.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Page {
@@ -105,9 +90,12 @@ impl PanePage {
         self.front == Page::Harness
     }
 
-    /// Draw the page and act on it. `overlay_open` is the host's answer to "is one of my
-    /// own overlays covering this area" - this page has none of its own, and the policy's
-    /// rule for it is tested in `vn_shell_core::pane`.
+    /// Draw the page.
+    ///
+    /// It returns **nothing**, and that is deliberate. This page used to hand two actions back
+    /// to the panel - "open in my browser" and "stop" - and both are gone: with the pane the
+    /// app starts no browser at all, and Stop is one control in the header rather than two.
+    /// What the page owns is the engine and the rectangle; it asks for nothing.
     pub fn show<W: HasWindowHandle>(
         &mut self,
         ui: &mut Ui,
@@ -115,17 +103,16 @@ impl PanePage {
         status: &Status,
         data_dir: Option<PathBuf>,
         overlay_open: bool,
-    ) -> PageAction {
+    ) {
         self.tabs(ui, status);
         if self.front == Page::Panel {
             // The engine is KEPT and hidden: a page that reloads every time somebody looks
             // at the panel is a page that loses where they were.
             self.conceal();
-            return PageAction::None;
+            return;
         }
-        let action = self.bar(ui, status);
+        self.bar(ui, status);
         self.view(ui, window, status, data_dir, overlay_open);
-        action
     }
 
     /// The two pages, and the state of the instance in one word.
@@ -141,19 +128,21 @@ impl PanePage {
         });
     }
 
-    /// The bar: what is running, where it is, and the three things that can be done.
+    /// The bar: where the harness is, and the one thing worth doing to it from here.
+    ///
+    /// **Reload is the only button this page has**, which is the point rather than an
+    /// omission: with the pane this app starts no browser - `Open in my browser` used to live
+    /// here - and **Stop is the header's own control**, so there is one Stop in the window
+    /// instead of two that mean the same thing.
     ///
     /// The address is `public_url` - scheme, host and port, with the query dropped - so
     /// **the launch token is never drawn**, exactly as the panel's own address row never
     /// drew it.
-    fn bar(&mut self, ui: &mut Ui, status: &Status) -> PageAction {
+    fn bar(&mut self, ui: &mut Ui, status: &Status) {
         let running = status.phase == Phase::Running;
-        let live = status.phase.is_live();
         let has_engine = self.engine.is_some();
         let loaded = self.loaded.load(Ordering::Relaxed);
         let mut reload = false;
-        let mut open = false;
-        let mut stop = false;
 
         ui.horizontal_wrapped(|ui| {
             match status.public_url() {
@@ -181,38 +170,11 @@ impl PanePage {
                     reload = true;
                 }
             });
-            ui.add_enabled_ui(running, |ui| {
-                if ui
-                    .button("Open in my browser")
-                    .on_hover_text(
-                        "the same address in your own browser - the way in when the engine cannot start here",
-                    )
-                    .clicked()
-                {
-                    open = true;
-                }
-            });
-            ui.add_enabled_ui(live, |ui| {
-                if ui
-                    .button("Stop")
-                    .on_hover_text("stop the harness and everything it started")
-                    .clicked()
-                {
-                    stop = true;
-                }
-            });
         });
 
         if reload {
             self.reload();
         }
-        if open {
-            return PageAction::OpenInBrowser;
-        }
-        if stop {
-            return PageAction::Stop;
-        }
-        PageAction::None
     }
 
     /// The engine's rectangle, and the page inside it.
