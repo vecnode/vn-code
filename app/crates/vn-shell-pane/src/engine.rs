@@ -78,6 +78,9 @@ impl Engine {
         // Rule 1, at the last function before a navigation.
         let parsed =
             pane::may_load(url).map_err(|error| EngineError(format!("the pane refused: {error}")))?;
+        // A platform this cannot be built on yet refuses BY NAME rather than panicking -
+        // see `platform_supported` for the Linux half and the work it names.
+        platform_supported().map_err(|reason| EngineError(reason.to_string()))?;
         let mut context = WebContext::new(data_dir);
         let view = WebViewBuilder::new_with_web_context(&mut context)
             .with_url(parsed.as_str())
@@ -175,6 +178,32 @@ impl Engine {
     }
 }
 
+/// Whether the pane can be built on this platform YET, and why not when it cannot.
+///
+/// Windows and macOS are the engine's own documented paths: on macOS `build_as_child` makes
+/// the view an `NSView` subview, which needs no extra pump, and on Windows it is a child HWND.
+///
+/// **Linux needs one, and that is why it refuses here.** wry documents that its Linux
+/// `build_as_child` requires `gtk::init` plus `gtk::main_iteration_do` advanced alongside
+/// winit's event loop - and that it **PANICS** when `gtk::init` was not called in the thread.
+/// It is also X11-only, so a Wayland session needs XWayland. That is P4's work, on a machine
+/// with libwebkit2gtk to measure it; until then a Linux build gets a sentence instead of a
+/// panic, and the browser hand-off stays the surface there.
+#[cfg(target_os = "linux")]
+fn platform_supported() -> Result<(), &'static str> {
+    Err(
+        "the pane is not built for Linux yet: wry's child web view needs a GTK loop pumped \
+         beside winit's and works on X11 (or XWayland) only - see P4 of \
+         docs/PLAN-egui-shell.md. A Linux build without `--features pane` uses the browser \
+         hand-off, which is the floor under the pane everywhere",
+    )
+}
+
+#[cfg(not(target_os = "linux"))]
+fn platform_supported() -> Result<(), &'static str> {
+    Ok(())
+}
+
 /// Which permissions the pane grants: the clipboard, and nothing else.
 ///
 /// The one exception is deliberate and narrow. A chat interface's copy buttons and its
@@ -213,6 +242,21 @@ mod tests {
             converted.size,
             wry::dpi::Size::Physical(PhysicalSize::new(1200, 900))
         );
+    }
+
+    #[test]
+    fn a_platform_the_pane_is_not_built_for_yet_refuses_by_name() {
+        // The point of the function is that it is TOTAL: wherever this is compiled, asking
+        // whether the platform is supported gives an answer rather than reaching wry's
+        // documented panic on Linux. On the platforms this can be run on, the answer is yes.
+        #[cfg(target_os = "linux")]
+        {
+            let reason = platform_supported().expect_err("Linux has no pumped GTK loop yet");
+            assert!(reason.contains("P4"), "{reason}");
+            assert!(reason.contains("hand-off"), "{reason}");
+        }
+        #[cfg(not(target_os = "linux"))]
+        assert!(platform_supported().is_ok());
     }
 
     #[test]

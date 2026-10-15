@@ -16,11 +16,20 @@ $VNCODE_HOME                     portable: <tree>\.vncode
   ├── window.json                default: %LOCALAPPDATA%\vncode
   ├── prefs.json                 the browser id and the home you chose
   ├── npm-cache/                 the npx fallback's cache - and nothing else's
+  ├── browser/                   a Chromium THIS app starts, when its own profile is refused
+  ├── webview/                   the pane's engine profile, in a build that has the pane
   └── home/                      DSH_HOME by default: everything that matters
       ├── profiles/  sessions/  storages/  attachments/  skills/
       ├── .credentials.yaml      the model key
       └── dsh-pdf/  dsh-diagrams/  dsh-media/   the pack's caches
 ```
+
+`browser/` and `webview/` are the two directories the app writes for **programs it starts**,
+and they live under this root for the same reason the npm cache does: a session that refuses
+the machine's own data directory does not refuse this one, so a browser or an engine that
+cannot keep its profile where it normally would can keep it here. They are kept **apart** on
+purpose - a Chromium profile and a WebView2 profile in one directory is a way to lose both -
+and neither is a cache: deleting one costs the browser its history, not the app any state.
 
 The root ladder, in order, each rung proved by writing:
 
