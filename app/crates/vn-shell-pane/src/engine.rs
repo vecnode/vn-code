@@ -116,6 +116,22 @@ impl Engine {
         Ok(())
     }
 
+    /// Hide the view without giving up the page.
+    ///
+    /// The panel is in front, or an overlay is: the page stays loaded, keeps its scroll
+    /// position and keeps its connection, and only stops being drawn. This is the whole
+    /// reason the airspace rule is cheap here - the pane is a *page* of one window, so
+    /// hiding it is a page switch rather than a z-order negotiation.
+    pub fn conceal(&mut self) -> Result<(), EngineError> {
+        if self.applied_visible {
+            self.view
+                .set_visible(false)
+                .map_err(|error| EngineError(format!("could not hide the pane: {error}")))?;
+            self.applied_visible = false;
+        }
+        Ok(())
+    }
+
     /// Point the view at another URL of the SAME harness - a new port and token after a
     /// Stop and Start, never a different origin.
     pub fn navigate(&mut self, url: &str) -> Result<(), EngineError> {

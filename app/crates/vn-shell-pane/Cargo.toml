@@ -13,7 +13,7 @@ default = []
 # crate compiles to `available() == false`, no engine dependency is built, and the shell
 # behaves exactly as it does today - the browser hand-off is the only surface. The
 # feature is turned on by whoever asks for the pane, and P5 is the phase that flips it.
-pane = ["dep:wry"]
+pane = ["dep:wry", "dep:egui"]
 
 [dependencies]
 vn-shell-core.workspace = true
@@ -21,3 +21,7 @@ vn-shell-core.workspace = true
 # Nothing is vendored: `wry` drives the engine the OS already has - WebView2 on Windows,
 # WKWebView on macOS, WebKitGTK on Linux - so the pane adds no engine to ship.
 wry = { workspace = true, optional = true }
+# The page itself is drawn with the same egui the panel uses, so the tab strip and the bar
+# are the window's own widgets and not a second look. `egui` and not `eframe`: the window
+# belongs to the shell, and this crate only borrows a `Ui` and a window handle.
+egui = { workspace = true, optional = true }

@@ -33,7 +33,13 @@ pub const fn available() -> bool {
 mod engine;
 
 #[cfg(feature = "pane")]
+mod page;
+
+#[cfg(feature = "pane")]
 pub use engine::{Engine, EngineError, LoadState};
+
+#[cfg(feature = "pane")]
+pub use page::{PageAction, PanePage};
 
 #[cfg(test)]
 mod tests {
