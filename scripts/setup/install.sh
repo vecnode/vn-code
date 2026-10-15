@@ -21,6 +21,9 @@
 #    -ProfileName <n>   install into this profile (default: web)
 #    -DshVersion <ver>  override the pinned dsh version
 #    -Force             re-add even when the version is unchanged
+#    -Resume            add what is missing and skip what the profile already
+#                       lists - the flag the vncode panel passes, so a second
+#                       press does not re-add all 24 bundles
 #    -NoPause           never hold this window open
 #    -Help / -h / --help / /?   print the help and stop
 #
@@ -55,10 +58,16 @@ if vn_wants_help "$@"; then
     exec sh "$here/install-all.sh" -Help
 fi
 
-# Same default as install.bat: force a re-add unless the caller asked already.
+# Same default as install.bat: force a re-add unless the caller asked already - and
+# -Resume is the caller asking for the opposite (the worker's own default: add what is
+# missing, skip what the profile already lists). The panel passes it, because its
+# Install button may be pressed again over a half-finished install.
 extra="-Force"
 case " $* " in
     *" -Force "*|*" -force "*|*" --force "*) extra="" ;;
+esac
+case " $* " in
+    *" -Resume "*|*" -resume "*|*" --resume "*) extra="" ;;
 esac
 
 # shellcheck disable=SC2086

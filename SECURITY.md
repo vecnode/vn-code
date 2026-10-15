@@ -158,6 +158,15 @@ absent or empty) rather than by reading it. **Use it** takes the other approach:
 the app at the existing home rather than copying it, which hands that home's keys to a
 process this app starts — the same trust the `scripts\run-web.bat` path already extends.
 
+**A key never has to come from the machine at all.** The panel's key field asks for it
+instead: a fresh **portable** home (everything inside `<repo>\.vncode`) starts with no
+credentials document and no key, so the panel opens the field once, the person pastes, and
+`keystate::write_env_key` puts `DEEPSEEK_API_KEY=<value>` into `<home>/.env`. That is a
+layer the harness's own resolution reads, it needs no machine credentials, and it keeps
+the secret inside the folder — which is the point of a portable installation. Nothing is
+read on the way: the field is one-way, and the only thing the panel learns afterwards is
+which layer a fresh `keystate::read` found a key in.
+
 Every child's environment is **composed rather than inherited**
 (`vn-shell-runtime`'s `env.rs`): `DSH_HOME` is set, the app's own `VNCODE_HOME` and the
 launcher's console markers are *removed* — an environment is inherited unless a variable
@@ -277,7 +286,19 @@ scanning and push protection as a second net.
 ## What the pack does not do
 
 - No API keys are read: `$DSH_HOME/.credentials.yaml` is touched for **presence**
-  only — a boolean, never a value.
+  only — a boolean, never a value. The app's **key field** is the same rule from the other
+  side: a value the person TYPES into the panel is written to `<home>/.env` as
+  `DEEPSEEK_API_KEY`, which the harness's own credential resolution reads as a documented
+  fallback layer (`@deepseek-ai/dsh-credentials-local`: the managed store first, then the
+  invoking project's `.env`, then the home's). The managed document is **never written by
+  this app** — it is a strict `CredentialRef`-to-string YAML the harness refuses to boot on
+  when it is malformed or readable beyond its owner. What the field guarantees, and what
+  `keystate::write_env_key` is: the value is masked in the window, held in memory only while
+  the field is open, never parsed back, never held in a `KeyState`, never drawn, never
+  logged (the log line and the note name the FILE), written atomically with `0600` on Unix,
+  and every other line of an existing `.env` is preserved. A value that cannot be carried
+  unambiguously (a newline, a quote, a backslash) is refused by name, and the sentence
+  names the reason and never the value.
 - No way to weaken the harness's authentication, and no flag, setting or variable
   that turns the session check off.
 - No WebSocket upgrade and **no shell of any kind** — the dock is a read-only

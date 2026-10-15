@@ -44,12 +44,12 @@ use vn_shell_core::appprefs::AppPrefs;
 use vn_shell_core::browser::{self, Browser};
 use vn_shell_core::firstrun::{self, Card, Kind as CardKind, Where};
 use vn_shell_core::home::Origin;
-use vn_shell_core::keystate::KeyState;
+use vn_shell_core::keystate::{self as keystate, KeyState};
 use vn_shell_core::options::Options;
 use vn_shell_core::prefs::Preferences;
 use vn_shell_core::status::{Phase, Status};
 use vn_shell_core::windowstate::WindowState;
-use vn_shell_core::{urlpolicy, windowstate};
+use vn_shell_core::{appdata, urlpolicy, windowstate};
 use vn_shell_paths::{human, Kind, Row};
 use vn_shell_runtime::{
     Adopt, Console, EntryPoints, Plan, Setup, SetupKind, StopOutcome, Supervisor,
@@ -150,7 +150,10 @@ pub struct ShellContext {
     pub browser: Browser,
     /// The app's own preferences, and the root they are written into. The panel is
     /// the ONLY writer: a browser choice or a home choice is a click, and a click
-    /// that did not persist would be a click that lied.
+    /// that did not persist would be a click that lied. The root is the LADDER's -
+    /// the same one the window record, the npm cache and the home live in - so a
+    /// portable folder, a confined run and an ordinary install all remember the
+    /// answer in the place the answer belongs to.
     pub app_prefs: AppPrefs,
     pub prefs_root: Option<std::path::PathBuf>,
 }
@@ -212,10 +215,45 @@ pub struct Shell {
     /// has no root of its own, which is a named failure the panel draws rather than a
     /// screen it cannot honour.
     place: Option<Where>,
+    /// **A browser hand-off in flight, and where its answer lands.**
+    ///
+    /// On its own thread because the rungs are WATCHED for up to `browser::SETTLE`
+    /// (1.5 s) - a window that stopped drawing for that long would read as a hang. The
+    /// panel starts one, keeps drawing, and picks the report up in `logic`.
+    hand_off: Option<Arc<Mutex<Option<browser::HandOff>>>>,
     /// A step waiting for the one now running (see [`Next`]).
     next: Option<Next>,
     /// The one disclosure: everything diagnostic, closed by default.
     details_open: bool,
+    /// A close request was already refused because a copy or an install was in flight.
+    /// The SECOND request is honoured: a window that cannot be closed at all is a
+    /// worse bug than a build interrupted on purpose.
+    close_refused: bool,
+    /// **When the install in flight started, and when it last said anything.**
+    ///
+    /// Measured on a real machine: the installer's first phase is one `npm exec` that
+    /// resolves the harness's whole dependency graph and prints nothing while it does, so
+    /// the pack row sat on its last line for a minute, the window was killed 60 seconds
+    /// in, and nothing had been written to the profile yet. "installing" with a clock
+    /// beside it is the difference between work and a hang; the installer's own line,
+    /// when it arrives, moves `installer_last_at`.
+    setup_started: Option<std::time::Instant>,
+    installer_last: Option<String>,
+    installer_last_at: std::time::Instant,
+    /// **The key field.** `Some` while it is open, and the value is the person's typing.
+    ///
+    /// Three rules travel with it, and they are `keystate::write_env_key`'s: the value is
+    /// drawn with `password(true)` so it cannot be shoulder-read, it is never written into
+    /// a label, a notice, the log or `prefs.json`, and the only thing that comes back out
+    /// of a save is the PATH it was written to. It is cleared the moment it is saved or
+    /// cancelled.
+    key_entry: Option<String>,
+    /// The sentence after a save or a refusal - never the value.
+    key_note: Option<String>,
+    /// Asked once per run: a home with no key gets the field opened for it, because a
+    /// fresh portable home starts with no key at all and the alternative is a person
+    /// staring at "not found" with no way to fix it in the window they are looking at.
+    key_prompted: bool,
 }
 
 impl Shell {
@@ -241,6 +279,14 @@ impl Shell {
             adopt_key: false,
             adopt_note: None,
             surface: None,
+            hand_off: None,
+            close_refused: false,
+            setup_started: None,
+            installer_last: None,
+            installer_last_at: std::time::Instant::now(),
+            key_entry: None,
+            key_note: None,
+            key_prompted: false,
         }
     }
 
@@ -284,7 +330,11 @@ impl Shell {
                 );
                 ui.label(
                     RichText::new(
-                        "Pick one. It is remembered, and `Change` on the next screen brings this back.",
+                        // NO MARKDOWN, AND NO BACKTICKS: this is drawn with `ui.label`,
+                        // so emphasis and code spans reach the reader as punctuation. A
+                        // screen of literal asterisks and grave accents is what the
+                        // owner saw, and it reads as a broken build.
+                        "Pick one. It is remembered, and Change on the next screen brings this back.",
                     )
                     .weak(),
                 );
@@ -293,9 +343,50 @@ impl Shell {
                     self.setup_card(ui, card, preselected == Some(card.kind));
                     ui.add_space(8.0);
                 }
-                if let Some(notice) = self.notice.clone() {
+                // THE WAY ON, IN ONE FIXED PLACE. This screen can honestly offer one card
+                // and grey out two - measured: the home on this machine is not writable
+                // from a confined parent, and the copy has nothing left to bring - and a
+                // reader looking at two red paragraphs and a third card has no way to
+                // tell that the choice is already made for them. The arrow marks the card
+                // the app would take; this button TAKES it.
+                if let Some(taken) = place.preselected() {
+                    let busy = self.context.setup.is_running() || self.context.adopt.is_running();
+                    ui.add_space(2.0);
+                    ui.horizontal_wrapped(|ui| {
+                        if ui
+                            .add_enabled(
+                                !busy,
+                                egui::Button::new(RichText::new(&taken.continue_label).strong()),
+                            )
+                            .on_hover_text(format!(
+                                "takes the card marked with the arrow above: {} - {}",
+                                taken.title,
+                                taken.path.display()
+                            ))
+                            .clicked()
+                        {
+                            self.apply_choice(taken.kind);
+                        }
+                        ui.label(
+                            RichText::new("· the card marked ▸ above, the one the app suggests")
+                                .weak(),
+                        );
+                    });
+                    let taken_count = cards.iter().filter(|card| card.available).count();
+                    if taken_count < cards.len() {
+                        ui.label(
+                            RichText::new(format!(
+                                "{taken_count} of {} can be taken on this machine; each card that cannot says why",
+                                cards.len()
+                            ))
+                            .weak(),
+                        );
+                    }
+                    ui.add_space(6.0);
+                }
+                if !self.notices().is_empty() {
                     ui.add_space(4.0);
-                    ui.label(RichText::new(format!("! {notice}")).color(WARN));
+                    self.draw_notices(ui);
                 }
                 ui.add_space(8.0);
                 ui.separator();
@@ -311,21 +402,46 @@ impl Shell {
     /// One card. Everything a person needs to choose is on it, the button IS the
     /// choice, and a card that cannot be honoured says why in one sentence rather than
     /// offering a button that would fail.
+    ///
+    /// A card that cannot be taken has its button DISABLED and carries the reason in
+    /// words - never a button that would fail, and never a silent grey chip.
     fn setup_card(&mut self, ui: &mut egui::Ui, card: &Card, preselected: bool) {
         let busy = self.context.setup.is_running() || self.context.adopt.is_running();
         ui.group(|ui| {
             ui.horizontal(|ui| {
-                if preselected {
-                    ui.label(RichText::new("▸").color(self.palette().accent).strong());
+                if card.available {
+                    ui.label(
+                        RichText::new(if preselected { "▸" } else { " " })
+                            .color(self.palette().accent)
+                            .strong(),
+                    );
+                } else {
+                    ui.label(RichText::new("×").color(WARN).strong())
+                        .on_hover_text("this one cannot be taken here - the reason is on the card");
                 }
                 ui.label(RichText::new(&card.title).strong());
                 if card.recommended {
                     ui.label(RichText::new("· recommended").color(self.palette().accent));
                 }
             });
-            for fact in &card.facts {
-                ui.label(RichText::new(fact).weak());
+            // THE ONE LINE THAT DECIDES IT, ALWAYS OPEN: where the card goes and what is
+            // there now. The rest of the facts go behind `details`, closed by default -
+            // measured: with every fact drawn open, three cards filled the window and
+            // pushed each card's own reason and button off the bottom of it.
+            ui.label(RichText::new(&card.summary));
+            if !card.facts.is_empty() {
+                egui::CollapsingHeader::new("details")
+                    .id_salt(card.id())
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        for fact in &card.facts {
+                            ui.label(RichText::new(fact).weak());
+                        }
+                    });
             }
+            // THE REASON IS NEVER COLLAPSED. It is the answer to "why can I not press
+            // this", and a greyed-out button with its explanation one click away is a bug
+            // report waiting to happen.
             if let Some(reason) = card.unavailable.as_deref() {
                 ui.label(RichText::new(reason).color(WARN));
             }
@@ -336,12 +452,14 @@ impl Shell {
                     ui.checkbox(&mut self.adopt_key, "include my key")
                         .on_hover_text("copies .credentials.yaml byte for byte");
                 }
-                let label = match card.kind {
-                    CardKind::UseExisting => "Use this home",
-                    CardKind::CopyExisting => "Copy it here and use it",
-                    CardKind::CreateHere => "Create it here",
-                };
-                if ui.add_enabled(card.available && !busy, egui::Button::new(label)).clicked() {
+                // ONE WORDING PER ACTION, and the card's own is the one that counts: the
+                // button here and the one at the foot of the screen take the same card,
+                // so they say the same thing. Deciding the label in the drawing code is
+                // how the foot of the screen and the card drift apart.
+                if ui
+                    .add_enabled(card.available && !busy, egui::Button::new(&card.continue_label))
+                    .clicked()
+                {
                     self.apply_choice(card.kind);
                 }
             });
@@ -363,9 +481,10 @@ impl Shell {
             return;
         }
         self.save_prefs();
-        // A copy runs first and on its own thread. The pack is installed into the copy
-        // when Start is pressed, which is the same rule a fresh home follows: ONE place
-        // decides "this home has no pack yet".
+        // A copy runs first and on its own thread, and the pack follows it into the home
+        // it just filled (see the chain in `logic`). ONE place decides "this home has no
+        // pack yet", which is why the chain is a decision function rather than a second
+        // copy of the rule.
         if kind == CardKind::CopyExisting {
             if let Some(existing) = place.existing.as_ref() {
                 let adoption = vn_shell_core::adopt::plan(&existing.path, &home);
@@ -373,6 +492,92 @@ impl Shell {
             }
         }
         self.replan();
+    }
+
+    /// **The one place in this app that holds a secret**, and the whole of what it does
+    /// with it.
+    ///
+    /// The value is drawn masked, kept in this struct only while the field is open, handed
+    /// to `keystate::write_env_key` - which returns the PATH and never the value - and
+    /// cleared on save. What the panel may print is the path: the log line and the note
+    /// both name the file, because a transcript is the easiest place to leak a key and the
+    /// only safe thing to say about one is where it went.
+    fn key_field(&mut self, ui: &mut egui::Ui) {
+        if self.key_entry.is_none() {
+            if let Some(note) = self.key_note.clone() {
+                ui.label(RichText::new(note).weak());
+            }
+            return;
+        }
+        let mut value = self.key_entry.clone().unwrap_or_default();
+        let mut save = false;
+        let mut cancel = false;
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("key").weak());
+            ui.add(
+                egui::TextEdit::singleline(&mut value)
+                    .password(true)
+                    .desired_width(300.0)
+                    .hint_text("paste the value from the DeepSeek console"),
+            );
+            save = ui
+                .add_enabled(!value.trim().is_empty(), egui::Button::new("Save"))
+                .on_hover_text("writes DEEPSEEK_API_KEY into this home's .env")
+                .clicked();
+            cancel = ui.button("Cancel").clicked();
+        });
+        let where_line = match self.context.plan.home_path() {
+            Some(home) => format!(
+                "written to {} as DEEPSEEK_API_KEY - inside this home, so it travels with the folder. It is never read back and never logged",
+                home.join(keystate::ENV_FILE).display()
+            ),
+            None => "there is no home in use, so there is nowhere to write a key".to_string(),
+        };
+        ui.label(RichText::new(where_line).weak());
+        if let Some(note) = self.key_note.clone() {
+            ui.label(RichText::new(note).weak());
+        }
+        if cancel {
+            self.key_entry = None;
+            self.key_note = None;
+            self.key_prompted = true;
+            return;
+        }
+        // Keep the typing between frames, and save only on the click.
+        self.key_entry = Some(value);
+        if save {
+            self.save_key();
+        }
+    }
+
+    /// Save what is in the field, and say where it went - never what it was.
+    fn save_key(&mut self) {
+        let Some(value) = self.key_entry.clone() else { return };
+        let Some(home) = self.context.plan.home_path().map(std::path::Path::to_path_buf) else {
+            self.key_note =
+                Some("there is no home in use, so there is nowhere to write a key".to_string());
+            return;
+        };
+        match keystate::write_env_key(&home, &value) {
+            Ok(path) => {
+                self.key_entry = None;
+                self.key_prompted = true;
+                self.context.console.push(&format!(
+                    "[vncode] the model key was saved to {} (the value is never read back and never written to a log)",
+                    path.display()
+                ));
+                // Re-read the layers, so the row turns green from the SAME reader the log
+                // line and the harness use - not from an assumption about what was written.
+                self.context.key_state = keystate::read(self.context.plan.home_path());
+                self.key_note = Some(format!(
+                    "saved to {} - the harness resolves it from there as its DEEPSEEK_API_KEY fallback layer",
+                    path.display()
+                ));
+            }
+            // The value stays in the field so it can be fixed, and the sentence never
+            // contains it.
+            Err(message) => self.key_note = Some(message),
+        }
     }
 
     /// Rebuild everything the home choice decided, and say so if it cannot be.
@@ -425,6 +630,32 @@ impl Shell {
         }
     }
 
+    /// What the panel itself has to say, and what the copy had to say.
+    ///
+    /// The copy's own sentence used to be drawn ONLY inside `Details`, which is how a
+    /// press that did nothing at all - "there is nothing to adopt from that home" - read
+    /// as a button that does nothing. Both now stand at the top of whichever screen the
+    /// reader is on: the first-run choice and the panel.
+    fn notices(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        if let Some(notice) = self.notice.as_ref() {
+            lines.push(notice.clone());
+        }
+        if let Some(note) = self.adopt_note.as_ref() {
+            lines.push(note.clone());
+        }
+        lines
+    }
+
+    fn draw_notices(&self, ui: &mut egui::Ui) {
+        for line in self.notices() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("! ").color(WARN));
+                ui.label(line);
+            });
+        }
+    }
+
     fn palette(&self) -> Palette {
         Palette::for_theme(self.context.prefs.palette())
     }
@@ -467,19 +698,45 @@ impl Shell {
     /// this pack starts the BARE harness (no right bar, no editor, no themes), a state
     /// that reads as a broken app; folding the install into Start is what makes "choose
     /// a home, press Start" enough.
+    ///
+    /// It follows that Start must never take the other way out either: with no installer
+    /// beside this app it REFUSES with a sentence rather than opening a bare interface
+    /// and leaving the reader to work out why the pack is missing.
     fn start(&mut self) {
         self.notice = None;
-        if self.pack_missing()
-            && self.context.setup_entries.is_some()
-            && !self.context.setup.is_running()
-        {
-            self.next = Some(Next::Start);
-            self.run_setup(SetupKind::Install);
-            return;
+        let action = start_action(
+            self.pack_missing(),
+            self.context.setup_entries.is_some(),
+            self.context.setup.is_running(),
+        );
+        match action {
+            // The install runs first, and the Start that was waiting for it goes ahead
+            // when it succeeds (see the finish handler in `logic`).
+            StartAction::Install => {
+                self.next = Some(Next::Start);
+                self.run_setup(SetupKind::Install);
+                return;
+            }
+            StartAction::Wait => {
+                self.next = Some(Next::Start);
+                self.notice = Some(
+                    "the pack is being installed into this home - the harness starts as soon as it finishes".to_string(),
+                );
+                return;
+            }
+            StartAction::Refuse => {
+                self.notice = Some(
+                    "this home has none of this pack's bundles, and there is no installer beside this app (scripts/setup/ is missing), so starting the harness here would open the bare interface without the right bar, the editor or the themes. Run the app from the vncode folder, or install the pack yourself, and press Start again.".to_string(),
+                );
+                return;
+            }
+            StartAction::Launch => {}
         }
         self.opened_for = None;
         self.last_stop = None;
         self.surface = None;
+        // A hand-off from the previous instance has nothing to say about this one.
+        self.hand_off = None;
         let remembered = self.context.app_prefs.home.clone();
         if let Err(error) =
             self.context.supervisor.start(self.context.options.clone(), remembered)
@@ -494,7 +751,22 @@ impl Shell {
     /// it the only way the security rules allow: the URL leaves as a single argv
     /// element of a program this app found, never through a shell and never onto a
     /// disk. The panel's own address row keeps drawing the token-less form.
-    fn open_tab(&mut self) {
+    ///
+    /// The work happens on a thread (`browser::SETTLE` is up to 1.5 s, and a walk can take
+    /// several) and the answer is picked up in `logic`. **A hand-off already in flight is
+    /// not restarted**: pressing the button twice must not open two tabs, and the settle
+    /// window is exactly what a second press would otherwise race.
+    ///
+    /// Two facts travel with the walk, and both are MEASUREMENTS rather than policy: the
+    /// profile directory this app can offer a Chromium (`<app root>/browser`, so a
+    /// confinement that refuses the browser its own profile is answered rather than merely
+    /// reported), and whether that retry goes FIRST - it does when this app's own probe of
+    /// the machine's temp directory was refused, because that is what a session which
+    /// confines what this app starts looks like, and a doomed launch is owed to nobody.
+    fn start_hand_off(&mut self) {
+        if self.hand_off.is_some() {
+            return;
+        }
         self.notice = None;
         let Some(url) = self.status().navigate_url().map(str::to_string) else {
             self.notice = Some(
@@ -503,15 +775,76 @@ impl Shell {
             );
             return;
         };
-        match browser::launch(&self.context.browser, &url) {
-            Ok(label) => self.surface = Some(format!("{label} (a new tab)")),
-            Err(error) => {
+        let chosen = self.context.browser.clone();
+        let profile = self
+            .context
+            .plan
+            .app_root()
+            .or(self.context.prefs_root.as_deref())
+            .map(browser::own_profile_dir);
+        let confined = self.context.plan.temp.is_some();
+        let slot = Arc::new(Mutex::new(None));
+        let landing = Arc::clone(&slot);
+        self.hand_off = Some(slot);
+        std::thread::spawn(move || {
+            let report =
+                browser::hand_off(&chosen, &url, profile.as_deref(), confined, browser::SETTLE);
+            if let Ok(mut landing) = landing.lock() {
+                *landing = Some(report);
+            }
+        });
+    }
+
+    /// What the hand-off did, in the log and on the `browser` row.
+    ///
+    /// **Every rung's own sentence goes into the transcript**, because "I pressed the
+    /// button and nothing happened" is a bug report this panel used to be unable to
+    /// answer: the launch's result lived only in a row that said "opened in Google
+    /// Chrome (a new tab)" - which is what it said while Chrome was dying on the way up,
+    /// and what it said while the platform's opener exited zero over a window that never
+    /// appeared. The console redacts on the way in, so the address can be named in full.
+    fn finish_hand_off(&mut self, report: browser::HandOff) {
+        for line in &report.lines {
+            self.context.console.push(&format!("[vncode] {line}"));
+        }
+        match report.took {
+            Some(label) => {
+                // A page in a browser of the person's own, or a window of this app's own
+                // making: the row says which, because they are different windows.
+                self.surface = Some(if report.own_profile {
+                    format!("{label} (a window of its own, with a profile in this folder)")
+                } else {
+                    format!("{label} (a new tab)")
+                });
+                let address = self
+                    .status()
+                    .public_url()
+                    .unwrap_or_else(|| "the harness".to_string());
+                self.context.console.push(&format!("[vncode] opened {address} in {label}"));
+            }
+            None => {
                 self.surface = None;
-                self.notice = Some(format!(
-                    "{error}. Choose another browser in the Surface row and press Open tab again."
-                ));
+                self.context.console.push(&format!("[vncode] {}", report.refusal()));
+                self.notice = Some(format!("{}.{}", report.refusal(), self.confined_hint()));
             }
         }
+    }
+
+    /// The sentence that explains a browser that could not start, when this app has the
+    /// measurement that names the reason.
+    ///
+    /// A browser needs its own profile directory, and a process this app starts inherits
+    /// whatever confinement this app runs under. The app already MEASURES that: when the
+    /// machine's temp directory refuses the probe, a child of this process is confined
+    /// (`env::choose_temp`), and a confined Chrome dies at startup -
+    /// `Crashpad … settings.dat: Access is denied`, measured. The walk answers that with a
+    /// profile inside this folder, so this sentence is what is left when even that did not
+    /// work, and it names the step that exists rather than leaving a grey button.
+    fn confined_hint(&self) -> String {
+        if self.context.plan.temp.is_none() {
+            return String::new();
+        }
+        " This app is running inside a session that confines what it starts - its own probe of the machine's temp directory was refused - so a browser it starts may not be able to write its own profile even in this folder. Start vncode by double-clicking scripts\\run-desktop.bat, outside that session, and the tab opens.".to_string()
     }
 
     /// Remember a browser, and say so if the preferences file could not be written.
@@ -646,11 +979,47 @@ impl eframe::App for Shell {
 
         self.theme(ctx);
         self.observe(ctx);
+        // A WINDOW THAT CLOSES MID-INSTALL TAKES THE INSTALLER WITH IT. Measured on a
+        // real machine: the npm log stopped in the middle of resolving the harness's
+        // dependency graph, the profile was left listing the bare harness, and the next
+        // attempt re-added all twenty-four bundles from scratch because the entry point
+        // implies `-Force`. So the first close request while work is in flight is
+        // refused with a sentence; the second is honoured, because a window nobody can
+        // close is worse.
+        let busy_now = self.context.setup.is_running() || self.context.adopt.is_running();
+        if !busy_now {
+            self.close_refused = false;
+        }
+        if busy_now && !self.close_refused && ctx.input(|input| input.viewport().close_requested())
+        {
+            self.close_refused = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.notice = Some(
+                "an install or a copy is in flight: the window stayed open so it can finish (closing again stops it, and the profile is left as it stands)".to_string(),
+            );
+        }
         // A step that was asked for while another was running. The "was" is read BEFORE
         // the refresh, because the refresh is what consumes the transition.
         let setup_was = self.context.setup.is_running();
         let adopt_was = self.context.adopt.is_running();
         self.refresh_pack_state();
+        // The install's clock. A step that starts timestamps itself, and every new line
+        // the installer prints moves the second mark, so the row can say "nothing for
+        // 40s" about the phase that really is silent instead of about the whole run.
+        let setup_now = self.context.setup.status();
+        if setup_now.running {
+            if self.setup_started.is_none() {
+                self.setup_started = Some(std::time::Instant::now());
+                self.installer_last = None;
+                self.installer_last_at = std::time::Instant::now();
+            }
+            if setup_now.last != self.installer_last {
+                self.installer_last = setup_now.last.clone();
+                self.installer_last_at = std::time::Instant::now();
+            }
+        } else {
+            self.setup_started = None;
+        }
 
         // An install or an uninstall just finished: the homes changed under us - a
         // profile exists now that did not, and a pack may have appeared in it.
@@ -670,30 +1039,70 @@ impl eframe::App for Shell {
                 _ => {}
             }
         }
+        // ASK ONCE, WHEN THERE IS NO KEY AT ALL - and ask in THIS window.
+        //
+        // A fresh portable home starts keyless by construction: nothing is copied from the
+        // machine, and `$DSH_HOME/.env` does not exist yet. Measured: the panel said
+        // "DeepSeek key: not found" beside a home that had 24 bundles and no way to do
+        // anything about it in the screen the person was looking at. So the field opens
+        // itself once per run, the person pastes, and the key lands in the folder.
+        if !self.context.key_state.loaded() && !self.key_prompted && !self.needs_setup() {
+            self.key_prompted = true;
+            self.key_entry = Some(String::new());
+            self.key_note = Some(
+                "this home has no model key yet: paste it here and press Save - it is written into this folder as DEEPSEEK_API_KEY, never read back and never logged (or add it in the harness's Settings > Models once it is running)"
+                    .to_string(),
+            );
+        }
         // A copy just finished: the home it copied INTO is the one in use, so the
-        // location map and the key state are re-read rather than assumed.
+        // location map and the key state are re-read rather than assumed - and the
+        // second half of the card's own promise is kept. "The pack is installed into
+        // the copy next" was a sentence nothing acted on: the copy landed, the pack row
+        // went on saying "not installed here yet", and the person had to work out that
+        // a second press was owed. The installer must not run under a live harness and
+        // nothing is running at this moment, so it starts here.
         if adopt_was && !self.context.adopt.is_running() {
             self.replan();
+            let copied = self.context.adopt.state().failed.is_none();
+            if copied {
+                let live = self.status().phase.is_live();
+                match chain_after_copy(
+                    self.pack_missing(),
+                    self.context.setup_entries.is_some(),
+                    self.context.setup.is_running(),
+                    live,
+                ) {
+                    Some(kind) => self.run_setup(kind),
+                    None if live && self.pack_missing() => {
+                        self.notice = Some(
+                            "the copy is in the home now in use; the pack is installed into it by Stop and install on the pack row, because the installer must not re-link a profile a running harness has read".to_string(),
+                        );
+                    }
+                    None => {}
+                }
+            }
         }
 
         // The browser tab is opened once the ready line names a loopback URL - the
         // same hand-off `scripts/run-web` makes, with the URL as ONE argv element,
         // through a program this app found rather than through a shell. One tab per
         // INSTANCE (keyed on the pid), not one per frame.
+        //
+        // A hand-off already in flight is picked up here rather than waited on: the
+        // rungs are watched for up to `browser::SETTLE`, and a window that stopped
+        // drawing for that long would read as a hang.
+        if let Some(report) = self
+            .hand_off
+            .as_ref()
+            .and_then(|slot| slot.lock().ok().and_then(|slot| slot.clone()))
+        {
+            self.hand_off = None;
+            self.finish_hand_off(report);
+        }
         let status = self.status();
         if status.phase == Phase::Running && self.opened_for != status.pid {
-            if let Some(url) = status.navigate_url() {
-                match browser::launch(&self.context.browser, url) {
-                    Ok(label) => self.surface = Some(format!("{label} (a new tab)")),
-                    Err(error) => {
-                        self.surface = None;
-                        self.notice = Some(format!(
-                            "{error}. Press Open tab to try again, or choose another browser in the Surface row."
-                        ));
-                    }
-                }
-                self.opened_for = status.pid;
-            }
+            self.opened_for = status.pid;
+            self.start_hand_off();
         }
 
         // Poll: the supervisor's state changes on its own thread.
@@ -751,15 +1160,18 @@ impl Shell {
                 // THE BUTTON THAT CARRIES THE TOKEN. The panel draws the URL without
                 // its query, because that URL is a credential; this opens the one with
                 // it, in the chosen browser, as one argv element. It is also the way
-                // back in after a tab is closed by accident.
+                // back in after a tab is closed by accident. It stays live while a
+                // hand-off is in flight - the button is the control the reader pressed,
+                // and the row below says what the press is doing.
                 let running = status.phase == Phase::Running;
+                let label = if self.hand_off.is_some() { "Opening…" } else { "Open tab" };
                 let open = ui
-                    .add_enabled(running, egui::Button::new("Open tab"))
+                    .add_enabled(running || self.hand_off.is_some(), egui::Button::new(label))
                     .on_hover_text(
                         "opens the harness in the chosen browser, with the launch token the panel never draws",
                     );
                 if open.clicked() {
-                    self.open_tab();
+                    self.start_hand_off();
                 }
                 if !running {
                     open.on_disabled_hover_text(
@@ -781,7 +1193,9 @@ impl Shell {
     /// It is given the SAME composed environment and the same `-DshHome` the harness
     /// will be given: an installer that defaulted to the harness's own home would put
     /// this pack into a profile the app is not running, which is the one way a
-    /// working Install button can look like a broken one.
+    /// working Install button can look like a broken one. It is also given `-Resume`,
+    /// which is the difference between a second attempt that costs seconds and one
+    /// that re-adds every bundle the profile already lists (see [`setup_extras`]).
     fn run_setup(&mut self, kind: SetupKind) {
         self.notice = None;
         let Some(entries) = self.context.setup_entries.clone() else {
@@ -791,8 +1205,10 @@ impl Shell {
             return;
         };
         let entry = entries.for_kind(kind).to_path_buf();
+        let extra = setup_extras(kind);
         let (environment, home_arguments) = self.installer_plan();
-        if let Err(message) = self.context.setup.start(kind, &entry, &[], &environment, &home_arguments)
+        if let Err(message) =
+            self.context.setup.start(kind, &entry, &extra, &environment, &home_arguments)
         {
             self.notice = Some(message);
         }
@@ -819,11 +1235,8 @@ impl Shell {
     /// everything diagnostic one disclosure away.
     fn body(&mut self, ui: &mut egui::Ui, status: &Status) {
         egui::CentralPanel::default().show(ui, |ui| {
-            if let Some(notice) = self.notice.clone() {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new("! ").color(WARN));
-                    ui.label(notice);
-                });
+            if !self.notices().is_empty() {
+                self.draw_notices(ui);
                 ui.separator();
             }
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -870,23 +1283,57 @@ impl Shell {
             // --- pack ---------------------------------------------------------------
             ui.label(RichText::new("pack").strong());
             ui.horizontal_wrapped(|ui| {
-                match self.pack_state() {
-                    PackState::Installed(bundles) => {
-                        ui.label(RichText::new(format!("installed · {bundles} bundles")).color(OK));
+                let setup = self.context.setup.status();
+                if setup.running {
+                    // WHAT IS IT DOING, HOW FAR ALONG, AND HOW LONG IT HAS BEEN QUIET.
+                    // The installer's own lines are in the log below, but "installing…"
+                    // with nothing moving is what an install looked like while npm
+                    // resolved the harness's whole dependency graph in silence: minutes of
+                    // nothing, and the word for it was "it doesn't work". The last line,
+                    // the elapsed time and the quiet time are three facts that cannot be
+                    // mistaken for a hang - and the quiet one names the phase, because
+                    // npm's resolution really does print nothing.
+                    ui.spinner();
+                    let elapsed = self
+                        .setup_started
+                        .map(|started| started.elapsed())
+                        .unwrap_or_default();
+                    let quiet = self.installer_last_at.elapsed();
+                    let mut line = format!(
+                        "{}ing · {}",
+                        setup.kind.map(SetupKind::label).unwrap_or("work"),
+                        match setup.last.as_deref() {
+                            Some(last) => last.to_string(),
+                            None => "starting the installer".to_string(),
+                        }
+                    );
+                    line.push_str(&format!(" · {}", short_duration(elapsed)));
+                    if quiet.as_secs() >= QUIET_AFTER_SECS {
+                        line.push_str(&format!(
+                            " · no new output for {} - npm is resolving the harness's dependency graph, which prints nothing (normal, seconds when the cache is warm)",
+                            short_duration(quiet)
+                        ));
                     }
-                    PackState::Bare(0) => {
-                        ui.label(RichText::new("not installed here yet").color(WARN));
-                    }
-                    PackState::Bare(bundles) => {
-                        ui.label(
-                            RichText::new(format!(
-                                "this profile lists {bundles} bundles, none of them this pack"
-                            ))
-                            .color(WARN),
-                        );
+                    ui.label(RichText::new(line).color(WARN));
+                } else {
+                    match self.pack_state() {
+                        PackState::Installed(bundles) => {
+                            ui.label(RichText::new(format!("installed · {bundles} bundles")).color(OK));
+                        }
+                        PackState::Bare(0) => {
+                            ui.label(RichText::new("not installed here yet").color(WARN));
+                        }
+                        PackState::Bare(bundles) => {
+                            ui.label(
+                                RichText::new(format!(
+                                    "this profile lists {bundles} bundles, none of them this pack"
+                                ))
+                                .color(WARN),
+                            );
+                        }
                     }
                 }
-                if self.pack_missing() && self.context.setup_entries.is_some() {
+                if !setup.running && self.pack_missing() && self.context.setup_entries.is_some() {
                     if live {
                         if ui
                             .add_enabled(!busy && !self.stopping, egui::Button::new("Stop and install"))
@@ -900,14 +1347,22 @@ impl Shell {
                         }
                     } else if ui
                         .add_enabled(!busy, egui::Button::new("Install pack here"))
-                        .on_hover_text("runs scripts/setup/install.* with this home's -DshHome")
+                        .on_hover_text(
+                            "runs scripts/setup/install.* with this home's -DshHome, resuming what is already installed",
+                        )
                         .clicked()
                     {
                         self.run_setup(SetupKind::Install);
                     }
                     ui.label(RichText::new("· Start installs it for you too").weak());
-                } else if self.context.setup_entries.is_none() {
+                } else if !setup.running && self.context.setup_entries.is_none() {
                     ui.label(RichText::new("no installer beside this app").weak());
+                }
+                if let Some(code) = setup.exit.filter(|code| *code != 0) {
+                    ui.label(
+                        RichText::new(format!("· the last install FAILED (exit {code}) - the log has the installer's own output"))
+                            .color(WARN),
+                    );
                 }
             });
             ui.end_row();
@@ -919,27 +1374,50 @@ impl Shell {
                     // The layer's NAME, never a value - see `keystate`.
                     Some(source) => {
                         ui.label(RichText::new(format!("found in {}", source.label())).color(OK));
+                        // NO "REPLACE" HERE, deliberately. The managed
+                        // `$DSH_HOME/.credentials.yaml` sits ABOVE the `.env` fallback in
+                        // the harness's own resolution, so a key typed into this window
+                        // would be ignored while a stored one exists - and a button that
+                        // looks like it changes something and does not is worse than no
+                        // button. Changing a stored key is the harness's own Models page.
+                        ui.label(
+                            RichText::new("· change it in the harness's Settings > Models")
+                                .weak(),
+                        );
                     }
                     None => {
                         ui.label(RichText::new("not found").color(WARN));
-                        ui.label(RichText::new("· add one in the harness's Settings > Models").weak());
-                        // The one useful hint while it is missing: the OTHER home has one,
-                        // and `Change` is where it can be copied from.
-                        if self
-                            .place
-                            .as_ref()
-                            .and_then(|place| place.existing.as_ref().map(|existing| existing.key))
-                            == Some(true)
+                        // THE FIELD IS IN THIS WINDOW, because a fresh portable home starts
+                        // with no key and the person is looking at THIS screen. What it
+                        // writes is `<home>/.env` - a layer the harness's own credential
+                        // resolution reads (`@deepseek-ai/dsh-credentials-local` falls back
+                        // to the invoking project's and the home's `.env`) - and never the
+                        // managed `.credentials.yaml`, which this app has no business
+                        // rewriting.
+                        if ui
+                            .button("Add key")
+                            .on_hover_text(format!(
+                                "type it here: it is written to {} as DEEPSEEK_API_KEY, never read back and never logged",
+                                keystate::ENV_FILE
+                            ))
+                            .clicked()
                         {
-                            ui.label(
-                                RichText::new("· the home on this machine has one - Change copies it")
-                                    .weak(),
-                            );
+                            self.key_entry = Some(String::new());
+                            self.key_note = None;
                         }
+                        ui.label(
+                            RichText::new("· or add one in the harness's Settings > Models")
+                                .weak(),
+                        );
                     }
                 };
             });
             ui.end_row();
+            if self.key_entry.is_some() || self.key_note.is_some() {
+                ui.label("");
+                ui.vertical(|ui| self.key_field(ui));
+                ui.end_row();
+            }
 
             // --- browser ------------------------------------------------------------
             ui.label(RichText::new("browser").strong());
@@ -960,6 +1438,16 @@ impl Shell {
                 }
                 match &self.surface {
                     Some(what) => ui.label(RichText::new(format!("· opened in {what}")).weak()),
+                    None if self.hand_off.is_some() => {
+                        ui.spinner();
+                        ui.label(
+                            RichText::new(format!(
+                                "· opening in {} - the log says which rung took it",
+                                self.context.browser.label
+                            ))
+                            .weak(),
+                        )
+                    }
                     None => ui.label(
                         RichText::new(match status.phase {
                             Phase::Running => "· Open tab opens a new one",
@@ -1064,15 +1552,58 @@ impl Shell {
 
             ui.label(RichText::new("vncode root").strong());
             match self.context.plan.app_root() {
-                Some(root) => ui.label(
-                    RichText::new(format!(
-                        "{}  ({})",
-                        root.display(),
-                        self.context.plan.home.app_root_origin_label()
-                    ))
-                    .monospace(),
-                ),
-                None => ui.label(RichText::new("none could be written").color(WARN)),
+                Some(root) => {
+                    let tree = self.context.root.clone();
+                    let portable = tree
+                        .as_deref()
+                        .map(|tree| appdata::portable_root(tree).is_some())
+                        .unwrap_or(false);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            RichText::new(format!(
+                                "{}  ({})",
+                                root.display(),
+                                self.context.plan.home.app_root_origin_label()
+                            ))
+                            .monospace(),
+                        );
+                        // KEEP EVERYTHING IN THIS FOLDER. One click leaves the marker the
+                        // root ladder reads, so the NEXT start puts the home, the
+                        // preferences, the window record and the npm cache inside this
+                        // folder - a portable installation, which is what a folder copied
+                        // to another machine needs. The running app cannot move its own
+                        // root, so the button says "restart" rather than pretending.
+                        if portable {
+                            ui.label(
+                                RichText::new("· this folder, and kept next time").color(OK),
+                            );
+                        } else if let Some(tree) = tree {
+                            let busy = self.context.setup.is_running()
+                                || self.context.adopt.is_running();
+                            if ui
+                                .add_enabled(!busy, egui::Button::new("Keep everything in this folder"))
+                                .on_hover_text(format!(
+                                    "writes {} and restarts the app into it - the home, the preferences and the caches then live inside this folder",
+                                    appdata::portable_marker(&tree).display()
+                                ))
+                                .clicked()
+                            {
+                                match appdata::mark_portable(&tree) {
+                                    Ok(root) => {
+                                        self.notice = Some(format!(
+                                            "this folder is now a portable installation: {} is the root from the next start on - close the app and open it again",
+                                            root.display()
+                                        ));
+                                    }
+                                    Err(error) => self.notice = Some(error),
+                                }
+                            }
+                        }
+                    });
+                }
+                None => {
+                    ui.label(RichText::new("none could be written").color(WARN));
+                }
             };
             ui.end_row();
 
@@ -1297,6 +1828,98 @@ fn can_run_setup(has_entry_points: bool, harness_live: bool, setup_busy: bool) -
     has_entry_points && !harness_live && !setup_busy
 }
 
+/// How long an install may print nothing before the pack row says so out loud.
+///
+/// Measured: the silent phase is npm resolving the harness (`npm exec`), about 50-60 s on
+/// a cold cache and seconds when it is warm. Twenty seconds is long enough that the row
+/// does not narrate ordinary gaps, short enough that nobody concludes it has hung.
+const QUIET_AFTER_SECS: u64 = 20;
+
+/// A duration a person reads at a glance: `4s`, `1m 05s`, `12m`.
+fn short_duration(elapsed: std::time::Duration) -> String {
+    let seconds = elapsed.as_secs();
+    if seconds < 60 {
+        return format!("{seconds}s");
+    }
+    let minutes = seconds / 60;
+    let rest = seconds % 60;
+    if minutes < 60 {
+        return format!("{minutes}m {rest:02}s");
+    }
+    format!("{}h {:02}m", minutes / 60, minutes % 60)
+}
+
+/// What **Start** must do, from three facts the panel already has.
+///
+/// It is a decision rather than four lines inside the button handler because each arm
+/// is a different promise, and one of them was wrong: with the pack missing and no
+/// installer beside the app, the old `if` fell through and started the harness anyway -
+/// the bare interface, which is exactly the state this app's own comments call "reads as
+/// a broken app".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StartAction {
+    /// The home has the pack: start the harness.
+    Launch,
+    /// No pack, and an installer is here: install first, then start.
+    Install,
+    /// An install is already in flight: wait - it starts the harness when it succeeds.
+    Wait,
+    /// No pack and nothing to install it with: refuse, with a sentence.
+    Refuse,
+}
+
+fn start_action(pack_missing: bool, has_installer: bool, installing: bool) -> StartAction {
+    if !pack_missing {
+        return StartAction::Launch;
+    }
+    if !has_installer {
+        return StartAction::Refuse;
+    }
+    if installing {
+        return StartAction::Wait;
+    }
+    StartAction::Install
+}
+
+/// The step a finished **copy** owes the person: install the pack into the home it just
+/// filled, when there is one to install, none already running, and no harness LIVE.
+///
+/// The live case is the installer's own rule rather than a caution: re-linking a profile
+/// under a process that has already read it is what the disabled Install button prevents,
+/// and a copy can be started from the first-run screen while an instance started on
+/// another home is still up. `None` there - the pack row's own `Stop and install` is the
+/// way, and the panel says so.
+///
+/// `None` in every other case too, including a home that already has the pack: the copy
+/// is then the whole job.
+fn chain_after_copy(
+    pack_missing: bool,
+    has_installer: bool,
+    installing: bool,
+    harness_live: bool,
+) -> Option<SetupKind> {
+    (pack_missing && has_installer && !installing && !harness_live).then_some(SetupKind::Install)
+}
+
+/// The flags the panel hands the installer, and the reason each one is there.
+///
+/// `-Resume` is the whole difference between a second attempt that costs seconds and
+/// one that costs a quarter of an hour. The entry point IMPLIES `-Force` so that a
+/// double-click always installs the latest edits, which is right for a person and wrong
+/// for this panel: it re-adds all twenty-four bundles even when twenty-three are already
+/// in the profile at the same version - measured on a real machine, where an install
+/// interrupted by closing the window left the profile listing the bare harness, and the
+/// next press re-resolved the whole dependency graph for every bundle again. `-Resume`
+/// asks for the installer's own default: add what is missing, skip what is current.
+///
+/// Nothing is passed for an uninstall: it has no implied flag to undo.
+fn setup_extras(kind: SetupKind) -> Vec<String> {
+    match kind {
+        SetupKind::Install => vec!["-Resume".to_string()],
+        SetupKind::Uninstall => Vec::new(),
+    }
+}
+
 fn phase_badge(phase: Phase) -> (Color32, &'static str) {    match phase {
         Phase::Idle => (Color32::from_rgb(0x90, 0x94, 0x9a), "stopped"),
         Phase::Starting => (Color32::from_rgb(0xff, 0xb0, 0x00), "starting"),
@@ -1395,6 +2018,55 @@ mod tests {
         // Nothing to run (a folder carrying only app/).
         assert!(!can_run_setup(false, false, false));
         assert!(!can_run_setup(false, true, true));
+    }
+
+    #[test]
+    fn start_installs_refuses_or_waits_rather_than_opening_a_bare_harness() {
+        // The pack is there: the ordinary Start.
+        assert_eq!(start_action(false, true, false), StartAction::Launch);
+        assert_eq!(start_action(false, false, false), StartAction::Launch);
+        // No pack, and an installer beside the app: install first.
+        assert_eq!(start_action(true, true, false), StartAction::Install);
+        // No pack, an installer, and a run already in flight: wait for it.
+        assert_eq!(start_action(true, true, true), StartAction::Wait);
+        // NO PACK AND NOTHING TO INSTALL IT WITH: refuse. This is the arm that used to
+        // fall through and start the bare interface.
+        assert_eq!(start_action(true, false, false), StartAction::Refuse);
+        assert_eq!(start_action(true, false, true), StartAction::Refuse);
+    }
+
+    #[test]
+    fn a_finished_copy_owes_an_install_exactly_when_one_is_missing_and_possible() {
+        assert_eq!(chain_after_copy(true, true, false, false), Some(SetupKind::Install));
+        // The home already has the pack: the copy was the whole job.
+        assert_eq!(chain_after_copy(false, true, false, false), None);
+        // No installer beside this app: the panel says so instead of pretending.
+        assert_eq!(chain_after_copy(true, false, false, false), None);
+        // One installer at a time.
+        assert_eq!(chain_after_copy(true, true, true, false), None);
+        // A LIVE harness: the installer must not re-link the profile it has read - the
+        // pack row's own "Stop and install" is the way, and the panel says so.
+        assert_eq!(chain_after_copy(true, true, false, true), None);
+    }
+
+    #[test]
+    fn the_panel_asks_the_installer_to_resume_and_never_to_force_all_of_it() {
+        // The entry point implies `-Force` for a double-click; the panel must undo that
+        // or a second attempt re-adds every bundle the profile already lists.
+        assert_eq!(setup_extras(SetupKind::Install), vec!["-Resume".to_string()]);
+        // An uninstall has no implied flag to undo, so the panel passes nothing.
+        assert!(setup_extras(SetupKind::Uninstall).is_empty());
+    }
+
+    #[test]
+    fn a_duration_is_written_the_way_a_person_reads_a_clock() {
+        use std::time::Duration;
+        assert_eq!(short_duration(Duration::from_secs(4)), "4s");
+        assert_eq!(short_duration(Duration::from_secs(59)), "59s");
+        // The measured silent phase: npm resolving the harness, about a minute.
+        assert_eq!(short_duration(Duration::from_secs(65)), "1m 05s");
+        assert_eq!(short_duration(Duration::from_secs(600)), "10m 00s");
+        assert_eq!(short_duration(Duration::from_secs(3_725)), "1h 02m");
     }
 
     #[test]

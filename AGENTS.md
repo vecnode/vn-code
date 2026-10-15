@@ -94,13 +94,14 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   app's buttons run), `tools/` (maintainer-only) and `checks/`.
 - `app/` — the Rust/**egui** shell: a cargo workspace whose binary is `vncode`, a
   control panel that opens on **the home question** when nobody has named a home — one screen,
-  the cards that answer it (use the installation on this machine / copy it here / make a fresh
-  one, with the writable one pre-selected), decided in `vn_shell_core::firstrun` and remembered
+  the cards that answer it (copy the machine's home here / make a fresh one in this folder),
+  decided in `vn_shell_core::firstrun` and remembered
   only by a click — and then four rows (home, pack, key, browser) with every diagnostic behind
   one collapsed `Details`. It resolves and creates the root its harness home lives
   in (`$VNCODE_HOME`, with `DSH_HOME` at `<root>/home` unless `-DshHome`, a home chosen
-  on that screen, a writable inherited `DSH_HOME`, or an installation already on the machine
-  while its own home is still fresh says otherwise), starts the pinned
+  on that screen, or a writable inherited `DSH_HOME` says otherwise — **nothing outside its
+  own root is ever the home it runs against**, so `~/.dsh` is the source of the copy offer
+  and nothing else), starts the pinned
   harness on **Start** — installing the pack into that home first when its profile lists none of
   the pack's bundles, so one press reaches a real interface — and ends it on **Stop** (a
   launcher, not a desktop edition). It
@@ -134,8 +135,8 @@ Run the check that owns the area, and say which ones you ran:
   does not have being refused BY NAME, so no build can promise a web view it does not
   draw), the panel's install/uninstall path, the home ladder (an unwritable inherited
   `DSH_HOME` falls through, an impossible `-DshHome` refuses by name, a writable inherited
-  one is joined, the installation already on the machine is used while the app's own home is
-  fresh and NOT once it holds a session, and `VNCODE_HOME` reaches no child — every run
+  one is joined, **an installation at `~/.dsh` is neither used nor offered as a home** in
+  either state, and `VNCODE_HOME` reaches no child — every run
   confined on `VNCODE_HOME`, `DSH_HOME` and `USERPROFILE`/`HOME`), and that `app/src-tauri` is
   gone (it also runs `cargo test --workspace`; it skips loudly with no cargo and no built
   binary);

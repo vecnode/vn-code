@@ -115,14 +115,22 @@ $VNCODE_HOME                              the app's root — the furniture it ow
     └── dsh-pdf/  dsh-diagrams/  dsh-media/   the pack's caches, under their own ceilings
 ```
 
-**The app root** (`$VNCODE_HOME`) — furniture only, and the place the app can always write:
+**The app root** (`$VNCODE_HOME`) — the app's furniture AND its memory, all under one
+root (`prefs.json`, `window.json`, `npm-cache/`, `home/`), and the place the app can
+always write:
 
 | # | candidate | note |
 |---|---|---|
 | 1 | `VNCODE_HOME` in the environment | the app's own override; no new flag is added for it |
-| 2 | **`<OS data root>/vncode`** | the default: `%LOCALAPPDATA%\vncode`, `~/Library/Application Support/vncode`, `$XDG_DATA_HOME/vncode` else `~/.local/share/vncode` — `appdata::data_root`, already written and tested |
-| 3 | `<tree>/.vncode` | the one place a workspace-scoped confinement (this repository's own checks) always allows; gitignored with the rule |
-| 4 | nothing | a **named failure** listing every candidate and its exact error |
+| 2 | **`<tree>/.vncode` when the folder is a portable installation** | it carries the `PORTABLE` marker (written by *Keep everything in this folder* in `Details`), or it already holds a home. It sits above the data root because a folder that already holds this person's sessions must stay the root: otherwise every new run starts a second installation beside them. This is also what makes a confined run - whose only writable root was the folder - remember where it put them |
+| 3 | **`<OS data root>/vncode`** | the default: `%LOCALAPPDATA%\vncode`, `~/Library/Application Support/vncode`, `$XDG_DATA_HOME/vncode` else `~/.local/share/vncode` — `appdata::data_root`, already written and tested |
+| 4 | `<tree>/.vncode` | the one place a workspace-scoped confinement (this repository's own checks) always allows; gitignored with the rule |
+| 5 | nothing | a **named failure** listing every candidate and its exact error |
+
+`prefs.json` is read from the root this ladder chose, with the platform copy as a
+read-only fallback for the one migration that needed it (an older build wrote it under the
+platform root while the root in use was beside the checkout, so the choice could never be
+read back). Every save goes to the ladder's root.
 
 **The harness home** (`$DSH_HOME`) — everything that matters, and the home the panel's
 Install button targets:
@@ -146,30 +154,23 @@ flowchart TD
 | # | candidate | whose choice it is | when it is refused |
 |---|---|---|---|
 | 1 | `-DshHome <dir>` | the person's, typed — including `-DshHome %USERPROFILE%\.dsh` to share one home with `run-web` | **a refusal**, always, with the flag and the path named |
-| 2 | the home chosen in the panel (`prefs.json`) | the person's, clicked on the first-run screen — which is where **use this home** / **copy it here** / **make a fresh one** are decided, and what `Change` brings back | named and skipped if it has gone |
+| 2 | the home chosen in the panel (`prefs.json`) | the person's, clicked on the first-run screen — which is where **copy it here** / **make a fresh one** are decided, and what `Change` brings back | named and skipped if it has gone |
 | 3 | the inherited `DSH_HOME` | the parent process's — **joined when it works**, so an app launched from inside a harness session shares the sessions and the key that session already has | named and **skipped**, loudly: a parent's confinement is not a statement about where state should live |
-| 4 | **the installation already on this machine** (`~/.dsh`) | the machine's, and used only as a courtesy: a harness home, **writable by a child**, and the app's own home still holding nothing of the person's | named and skipped when it cannot be written, or when that home has a session or a key of its own |
-| 5 | **`<VNCODE_HOME>/home`** | the app's — **the default** | the app creates it and proves it; it is inside the root it already proved, and it is the home the Install button targets |
+| 4 | **`<VNCODE_HOME>/home`** | the app's — **the default** | the app creates it and proves it; it is inside the root it already proved, and it is the home the Install button targets |
 
-Row 4 is a **measured correction**, and it is deliberately narrow. Without it the app came up
-on a fresh, bare harness — no pack, no model key — beside a complete installation at `~/.dsh`,
-and its owner's word for that was *"still does not run normally"*. Three conditions, all
-required, and each one is a `cargo test` case:
+**Row 4 used to be `~/.dsh`, as a courtesy, and it is gone.** It was a **measured correction**
+once: without it the app came up on a fresh, bare harness — no pack, no model key — beside a
+complete installation at `~/.dsh`, and its owner's word for that was *"still does not run
+normally"*. What it answered is answered here instead: **Start installs this pack into the home
+in use**, and the **key row** asks for the key. So the ladder never runs against a home outside
+this app's own root, and the one thing that still reads `~/.dsh` is the first-run **copy** —
+a one-way import that only reads.
 
-* the harness's own default home exists and has the **shape** of a harness home;
-* a child can **write** there — a real probe, because the harness composes its profile into a
-  home on every boot, and using a home the app cannot write is the failure this whole revision
-  exists to prevent;
-* the app's own home still holds **nothing of the person's** — no `skills/`, no `sessions/`, no
-  credentials file with content. The harness's own first-boot furniture does not count
-  (`adopt::home_is_untouched_by_a_person`), which is the same measurement that decides the
-  Adopt offer in §8.
-
-So it is a one-time courtesy rather than a policy: the moment that home has something of the
-person's in it, the app stops looking, and the first-run screen's **make a fresh home in this
-project** card makes the app's own root an explicit choice. The check drives both halves — a
-scratch "machine" home with sessions and a key is used, and the same home is left alone once
-the app's own home has a session in it.
+The measurement that offer and the app's own home still share is
+`adopt::home_is_untouched_by_a_person`: no `skills/`, no `sessions/`, no credentials file with
+content. The harness's own first-boot furniture does not count, and it is the same measurement
+that decides the copy offer in §8. The check drives it — a scratch "machine" home with sessions
+and a key is **not** used, in either state.
 
 It does **not** check whether that home is *live*: the harness keeps no lock to read, so an app
 started beside a running `dsh web` shares one home with it rather than two, which is the point
@@ -322,22 +323,22 @@ screens, and the order is the point.
 ```
 ┌ vncode ─────────────────────────────────────────────────────────────┐
 │ Where should your sessions, skills and key live?                    │
-│ Pick one. It is remembered, and `Change` brings this back.          │
+│ Pick one. It is remembered, and Change brings this back.            │
 │ ┌─────────────────────────────────────────────────────────────────┐ │
-│ │ ▸ Use the DeepSeek home already on this machine  · recommended  │ │
-│ │   C:\Users\you\.dsh · the pack is installed · 12 sessions · a key│ │
-│ │   shared with `dsh web` and run-web.bat, not copied             │ │
-│ │                                  [ Use this home ]              │ │
+│ │ ▸ Copy it here, and use the copy  · recommended                 │ │
+│ │   copies into C:\Users\you\proj\.vncode\home                    │ │
+│ │                                  [ Copy it here and continue ]  │ │
 │ └─────────────────────────────────────────────────────────────────┘ │
-│ ┌ Copy it here, and use the copy ─────────────────────────────────┐ │
-│ │ [x] include my key      [ Copy it here and use it ]             │ │
+│ ┌ Use the home in this folder ────────────────────────────────────┐ │
+│ │ C:\Users\you\proj\.vncode\home · empty, and private to this app │ │
+│ │                     [ Create the home here and continue ]       │ │
 │ └─────────────────────────────────────────────────────────────────┘ │
-│ ┌ Make a fresh home in this project ──────────────────────────────┐ │
-│ │ the pack is installed into it next  [ Create it here ]          │ │
-│ └─────────────────────────────────────────────────────────────────┘ │
-│ this app's own root: …\vncode (the platform's data directory)       │
+│ this app's own root: …\proj\.vncode (this folder, portable)         │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+Every card ends inside this folder: the card that ran the harness against `~/.dsh` is gone
+(§2), and the one that remains is the copy, which only reads it.
 
 **Then the panel** — after the choice, four rows and three buttons, with every diagnostic
 one disclosure away:
@@ -345,13 +346,15 @@ one disclosure away:
 ```
 ┌ vncode ─────────────────────────────────────────────────────────────┐
 │ vncode  ● running   [ Start ]  [ Stop ]  [ Open tab ]   up 2m       │
-│ home     C:\Users\you\.dsh · the installation already here [Change] │
+│ home     C:\Users\you\proj\.vncode\home · this app's own home [Change]│
 │ pack     installed · 24 bundles                                     │
 │ DeepSeek key  found in the credentials file                         │
 │ browser  [ Google Chrome ▾ ] · opened in Google Chrome (a new tab)  │
 │ ▸ Details · 1 refused path(s)                                       │
 │ ┌ the log ────────────────────────────────────────────────────────┐ │
 │ │ [vncode] running on http://127.0.0.1:53412/ (pid 26108)         │ │
+│ │ [vncode] handed the page to Google Chrome, which was already    │ │
+│ │          running                                                │ │
 │ └─────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -398,9 +401,13 @@ offers it as a card, and the app makes neither decision on its own:
   and keys. Offered only when a child can **write** there, because the harness composes its
   profile at boot. **`Change`** on the panel brings the question back, because a home that
   cannot be un-chosen is a trap.
-- **Copy it here and use it** — the copy described below, offered whenever the source can be
-  **read**, which is the case it exists for. Wiring both from one writable-filtered path was a
-  bug: a person whose `~/.dsh` was unwritable got *neither*, and no way to reach their key.
+- **Copy it here and use it** — the copy described below, offered while the source can be
+  **read** *and* there is something left to bring, which is the case it exists for. Wiring both
+  from one writable-filtered path was a bug: a person whose `~/.dsh` was unwritable got
+  *neither*, and no way to reach their key. Offering it on readability alone was the second
+  bug, measured: over a home already copied here the press planned no items, refused, and drew
+  its one sentence inside `Details` - so the card is now unavailable in that state, with the
+  reason on it, and the app installs the pack into the copy itself when the copy finishes.
 
 ### Adopt: what happens to the home the app did not choose
 
@@ -612,7 +619,7 @@ stops the plan rather than the phase.
 
 | risk | why it is real | the answer |
 |---|---|---|
-| **two homes on one machine, by design** | the app's default home is `<root>/home`, while `run-web` keeps using `~/.dsh` — separate installations until somebody joins them | a writable inherited `DSH_HOME` is joined automatically, so an app launched *from* a harness session shares that session's home; otherwise the first-run screen makes the choice explicit — **use** the installation (share it), **copy** it here, or **make a fresh home** — and `Change` reopens it. Every refusal is named in `Details` |
+| **two homes on one machine** | the app's home is `<root>/home`, while `run-web` used to keep using `~/.dsh` — separate installations, measured as the panel reporting 24 installed bundles while `run-web` started a home that had none | **closed by the portable rung (§2)**: `run-web` and the panel resolve the SAME home when the folder is a portable installation (`.vncode/PORTABLE`, or a home already inside the root), so the pack, the sessions and the key live in the folder and the two launchers cannot disagree. A writable inherited `DSH_HOME` is still joined; `~/.dsh` stays the harness's own default for a folder that is not portable; otherwise the first-run screen makes the choice explicit — **use** the installation, **copy** it here, or **use the home in this folder** — and `Change` reopens it. When one card is the only one that can be taken, the others' reasons are folded into its `details` instead of being drawn as greyed cards |
 | **the app's home becomes a second-class citizen** | sessions, skills and the key live in `~/.dsh`, so a fresh home looks like a wiped install — and the harness's own first boot writes a `profiles/`, an EMPTY `.credentials.yaml` and a `storages/` into it, which is how the offer used to vanish after one run | the first-run screen's **use this home** card shares the existing home (offered when a child can write there), and **copy it here** brings what is missing (offered whenever the source can be read; the credentials file behind its own tick, decided by file SIZE rather than a read) |
 | **a home with no pack looks like a broken app** | the harness comes up as the bare DeepSeek Harness — no right bar, no editor, no themes — and on a home of its own no key either | **Start installs the pack first** when the chosen home's profile lists none of its bundles, so one press reaches a working interface; the `pack` row also offers **Install pack here**, and **Stop and install** when the harness is live, because the installer re-links the profile and must not run under it |
 | **two harnesses reach for one port** | `3080` is the default every `dsh web` wants, and a second instance landing on it serves the tab — with a launch token it does not know | the app takes **a port of its own** and never asks for the shared one; `-Port` is how somebody asks for it deliberately, and Stop asserts both that the port is free and that nothing answers on it |
@@ -655,23 +662,30 @@ and `~/.dsh` is never a default. What remains:
 1. **Adopt and the credentials file**: skills/sessions/storages/attachments copied in one
    click, `.credentials.yaml` behind a second one — or never copied, and the key re-entered
    in the harness's own Models page?
-2. **The installation already on this machine** — **decided, and shipped** (§2 row 4): it is
-   used while the app's own home holds nothing of the person's, because the alternative was
-   measured and it was a bare harness beside a working one.
-3. **The first-run screen** — **decided, and shipped**, on the owner's four answers: the
-   writable installation is **pre-selected**; the app's harness takes **a port of its own**
-   (never the shared `3080`); **Start installs the pack** when the chosen home has none, so one
-   press reaches a working interface; and all **three cards** are kept (use / copy / create),
-   because "copy" is the only answer that gives somebody their key *and* a home private to this
-   project. What remains open is only how loud the panel should be about which home it is on.
+2. **The installation already on this machine** — **decided, and REMOVED.** It was shipped as
+   §2 row 4 for one revision: used while the app's own home held nothing of the person's,
+   because the alternative was measured and it was a bare harness beside a working one. It is
+   gone because a folder that carries everything it needs must not reach into a person's
+   profile to START, and the app now answers both of that rung's reasons itself — Start
+   installs the pack into the home in use, and the key row asks for the key. `~/.dsh` remains
+   the SOURCE of the first-run copy, which only reads it.
+3. **The first-run screen** — **decided, and shipped**, on the owner's answers: the app's
+   harness takes **a port of its own** (never the shared `3080`); **Start installs the pack**
+   when the chosen home has none, so one press reaches a working interface; and the screen
+   offers **the copy and the folder** — every card ending inside this project. What remains
+   open is only how loud the panel should be about which home it is on.
 2. **A web view** — **decided, and not planned.** The owner's decision is that this app shows
    the interface in a browser it found: no `embed`, no `Pane`, no engine vendored. If that
    ever changes it is a new plan, not an unfinished phase, and the argument to beat is section
    6's row against it.
-3. **`<tree>/.vncode` (the last root candidate)**: keep it? It is the only root a
-   workspace-scoped confinement always grants (this repository's own checks run inside one),
-   and it puts harness state inside the checkout, which some people will find untidy. The
-   alternative is to fail with a named path after the OS data root.
+3. **`<tree>/.vncode` (the last root candidate)** — **decided, and shipped as the portable
+   root**: the folder is not merely the last resort a workspace-scoped confinement grants
+   (this repository's own checks run inside one); it is where a folder that already holds a
+   home, or that carries the `PORTABLE` marker, keeps everything - so a folder copied to
+   another machine is one installation rather than a new one beside an old one. Untidiness
+   inside a checkout is the price, and `.gitignore` holds the rule. What is deliberately
+   NOT done is walking to it: nothing creates the marker, or claims the folder, without a
+   click or a home already inside it.
 4. **The two folder names** — **decided, and shipped**: the root is `…/vncode` and the
    home inside it is `home` (`%LOCALAPPDATA%\vncode\home`). Renaming the inner one later is
    a one-line change in `appdata::owned_home` plus `docs/PATHS.md`, but it would strand an

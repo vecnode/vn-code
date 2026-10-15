@@ -4167,6 +4167,7 @@ dependencies = [
 name = "vn-shell-pane"
 version = "0.1.0"
 dependencies = [
+ "egui",
  "vn-shell-core",
  "wry",
 ]

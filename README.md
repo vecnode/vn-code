@@ -12,7 +12,7 @@ Web and Desktop versions, bundles [`Plugins`](packages/),  [`Skills`](docs/) and
 
 ![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner3.png)
 
-Cross-platform IDE/ADE. Supports core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design. Standard **dsh bundles** are plain JavaScript with **zero npm dependencies**; the launchers run on **Windows, macOS and Linux**.
+Cross-platform IDE/ADE. Wraps core [DSH](https://www.deepseek.com/harness/en/) with Rust for professional Engineering and Design. Standard **dsh bundles** are plain JavaScript with **zero npm dependencies**; the launchers run on **Windows, macOS and Linux**.
 
 <p align="left">
   <img src="assets/img1.png" alt="The vncode window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">

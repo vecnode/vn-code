@@ -142,6 +142,44 @@ function checkConsoleContract() {
 }
 
 // ---------------------------------------------------------------------------
+// 2b. The portable root: ONE rule, in three places
+// ---------------------------------------------------------------------------
+/**
+ * `run-web` and `run-desktop` must start the SAME home.
+ *
+ * A folder that is a portable installation keeps everything inside itself, and the panel
+ * has always used it; `run-web` used `~/.dsh`, so on a real machine the panel reported 24
+ * bundles while `run-web` started a different home. The rule is two facts - the `PORTABLE`
+ * marker, or a home already inside the root - and it is implemented three times (the
+ * shell's `appdata::portable_root` in Rust, and once per launcher worker), because a
+ * launcher cannot call into the app. Three copies of one rule drift unless something
+ * reads them, and this is that something: both workers must test the marker AND the
+ * `home` folder, and must send `DSH_HOME` into the root's own home.
+ */
+function checkPortableRootRule() {
+  for (const relative of ['scripts/run-web.ps1', 'scripts/run-web.sh']) {
+    const text = read(relative)
+    if (text === null) {
+      fail(`${relative} is missing`)
+      continue
+    }
+    if (!text.includes("'PORTABLE'") && !text.includes('/PORTABLE')) {
+      fail(`${relative} does not test for the PORTABLE marker, so a portable folder is not one there`)
+    }
+    if (!/['"/]home['"]?/.test(text) || !/\.vncode/.test(text)) {
+      fail(`${relative} never names <tree>/.vncode/home, so it cannot join the folder's own home`)
+    }
+    if (!text.includes('portable installation')) {
+      fail(`${relative} does not say WHY the home is the folder (the panel prints the same sentence)`)
+    }
+    if (!/export\s+DSH_HOME|env:DSH_HOME/.test(text)) {
+      fail(`${relative} resolves a portable home but never exports DSH_HOME to the harness`)
+    }
+  }
+  console.log('check-scripts: both run-web workers join the folder\u2019s own home when it is portable')
+}
+
+// ---------------------------------------------------------------------------
 // 3. The entry points, really run
 // ---------------------------------------------------------------------------
 /**
@@ -213,6 +251,7 @@ function checkNoCi() {
 // ---------------------------------------------------------------------------
 checkLayout()
 checkConsoleContract()
+checkPortableRootRule()
 checkWindowsEntryPoints()
 checkNoCi()
 

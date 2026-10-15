@@ -45,7 +45,8 @@
     one is already taken; the URL line then carries the port actually used.
 
 .PARAMETER DshHome
-    Override DSH_HOME for this run (default: $env:DSH_HOME, else ~/.dsh).
+    Override DSH_HOME for this run (default: $env:DSH_HOME, else this folder's
+    .vncode/home when the folder is a portable installation, else ~/.dsh).
 
 .PARAMETER DshVersion
     Override the pinned dsh version from .dsh-version.json.
@@ -140,7 +141,9 @@ function Show-Usage {
     Write-Host 'Usage: scripts\run-web.bat [flags]'
     Write-Host ''
     Write-Host '  -Port <n>          listen on this port instead of the default (3080)'
-    Write-Host '  -DshHome <dir>     override DSH_HOME (default: $env:DSH_HOME, else ~/.dsh)'
+    Write-Host '  -DshHome <dir>     override DSH_HOME (default: $env:DSH_HOME, else this'
+    Write-Host "                     folder's .vncode/home when it is a portable"
+    Write-Host '                     installation, else ~/.dsh)'
     Write-Host '  -DshVersion <ver>  override the pinned dsh version from .dsh-version.json'
     Write-Host '  -NoBrowser         start the server only; open nothing'
     Write-Host '  -DefaultBrowser    skip Google Chrome and use the default browser'
@@ -280,6 +283,28 @@ Write-Step "Pinned dsh version: $DshVersion"
 Assert-Tool 'node'
 Assert-Tool 'npx'
 
+# ---------------------------------------------------------------------------
+# WHICH HOME THIS RUN USES - one rule, shared with the app
+# ---------------------------------------------------------------------------
+# Order, and each rung is a reason:
+#   1. -DshHome            the person named it for this run;
+#   2. an inherited DSH_HOME   a harness session that started this shell, which this run
+#                              JOINS - the same rung the app's ladder has;
+#   3. THE PORTABLE ROOT   `<tree>/.vncode/home`, when this folder carries the `PORTABLE`
+#                          marker or already holds a home. A portable installation keeps
+#                          everything inside the folder, so the pack, the sessions and the
+#                          key need nothing in the user's profile - and, just as
+#                          important, `run-web` and `run-desktop` (the panel) then start
+#                          the SAME home. Two launchers pointing at two homes is how a
+#                          pack ends up installed in one and missing in the other, which
+#                          was measured on a real machine: the panel reported 24 bundles
+#                          while `run-web` started `~/.dsh`.
+#   4. ~/.dsh              the harness's own default, for a folder that is not portable.
+#
+# The portable test is the SAME rule `vn_shell_core::appdata::portable_root` applies -
+# the marker, or a home already inside the root. Keep the two in step; a check reads this
+# file and `run-web.sh` for the marker and the `home` folder so the rule cannot drift out
+# of one of the three places unnoticed.
 if ($DshHome) {
     $env:DSH_HOME = $DshHome
     Write-Step "DSH_HOME: $DshHome"
@@ -289,6 +314,21 @@ if ($DshHome) {
 # profile that never had it installed still starts - it just starts unadorned.
 $harnessHome = $DshHome
 if (-not $harnessHome) { $harnessHome = $env:DSH_HOME }
+if (-not $harnessHome) {
+    $portableRoot = Join-Path $repoRoot '.vncode'
+    if ((Test-Path (Join-Path $portableRoot 'PORTABLE')) -or (Test-Path (Join-Path $portableRoot 'home'))) {
+        $harnessHome = Join-Path $portableRoot 'home'
+        $env:DSH_HOME = $harnessHome
+        # The cache follows the home, for the same reason the app's does: npm writing into
+        # the user's shared cache is the one thing a portable folder still depended on, and
+        # a shared cache an elevated run made unwritable is a failure with nothing to do
+        # with this pack. An explicit npm_config_cache always wins.
+        if (-not $env:npm_config_cache) {
+            $env:npm_config_cache = Join-Path $portableRoot 'npm-cache'
+        }
+        Write-Step "DSH_HOME: $harnessHome (this folder, because it is a portable installation)"
+    }
+}
 if (-not $harnessHome) { $harnessHome = Join-Path (Get-HomeDir) '.dsh' }
 $profileDir = Join-Path (Join-Path $harnessHome 'profiles') 'web'
 $profileManifest = Join-Path $profileDir 'package.json'

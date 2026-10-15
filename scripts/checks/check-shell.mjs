@@ -249,6 +249,15 @@ function startShell({ mode = 'good', label, env = {}, dshHome, userHome, seed } 
       VNCODE_HOME: appRoot,
       USERPROFILE: person,
       HOME: person,
+      // THE PLATFORM DATA ROOT TOO, and this one is not decoration: `prefs.json` is
+      // read from the root the ladder chose with the platform root as a read-only
+      // FALLBACK (the migration from an older build that wrote it there), so a check
+      // that left `%LOCALAPPDATA%` alone could pick up a real person's remembered home
+      // and drive the harness against it. `data_root()` reads LOCALAPPDATA on Windows,
+      // XDG_DATA_HOME else ~/.local/share on Linux, and HOME on macOS - the first two
+      // are named here; HOME is already scratch above.
+      LOCALAPPDATA: path.join(scratch, 'localappdata'),
+      XDG_DATA_HOME: path.join(scratch, 'localappdata'),
       ...env,
     },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -470,11 +479,13 @@ async function checkConfinedHome() {
   joined.child.stdin.write('stop\n')
   await waitFor(joined, () => joined.exit !== null, 20000, 'the joined run to stop')
 
-  // 4. THE INSTALLATION ALREADY ON THE MACHINE is used. This is the measured failure:
-  //    a complete installation at `~/.dsh` - pack and key - with the app coming up on a
-  //    fresh, bare harness of its own beside it, which the person's word for was "still
-  //    does not run normally". The person's home here is scratch, so the rung is proved
-  //    without going anywhere near a real one.
+  // 4. AN INSTALLATION AT `~/.dsh` IS NEVER THE HOME THE APP RUNS AGAINST. It used to
+  //    be: a courtesy rung that ran the harness against `~/.dsh` while the app's own home
+  //    was still empty, and the person's word for the world without it was "still does
+  //    not run normally". A folder that carries everything it needs must not reach into a
+  //    person's profile to START - so the app's own home is used whether or not that
+  //    directory is a complete installation, and whether or not it holds a session. The
+  //    person's home here is scratch, so the rule is proved without going near a real one.
   const person = path.join(scratch, 'person-found')
   const installed = path.join(person, '.dsh')
   fs.rmSync(person, { recursive: true, force: true })
@@ -483,24 +494,24 @@ async function checkConfinedHome() {
   fs.writeFileSync(path.join(installed, 'sessions', 'c1.json'), '{}')
   fs.writeFileSync(path.join(installed, '.credentials.yaml'), 'deepseek: {apiKey: x}\n')
   const found = startShell({ label: 'found', dshHome: null, userHome: person })
-  if (!(await waitFor(found, () => runningPort(found) !== null, 20000, 'a ready line on the installation already on the machine'))) {
+  if (!(await waitFor(found, () => runningPort(found) !== null, 20000, 'a ready line on the app\'s own home'))) {
     return
   }
-  if (!found.out.includes(`[stub] DSH_HOME=${installed}`)) {
-    fail(`the installation already on the machine was not used\n--- stdout ---\n${found.out}`)
+  const ownHome = path.join(found.appRoot, 'home')
+  if (!found.out.includes(`[stub] DSH_HOME=${ownHome}`)) {
+    fail(`an installation at ~/.dsh was used as the home\n--- stdout ---\n${found.out}`)
   }
-  if (!found.out.includes('the installation already on this machine')) {
+  if (found.out.includes(`[stub] DSH_HOME=${installed}`)) {
+    fail('the harness was run against ~/.dsh')
+  }
+  if (!found.out.includes('this app\'s own home')) {
     fail(`the panel does not say which home it is using\n--- stdout ---\n${found.out}`)
   }
-  if (fs.existsSync(path.join(found.appRoot, 'home', 'sessions'))) {
-    fail('the app created its own home and used it as well')
-  }
   found.child.stdin.write('stop\n')
-  await waitFor(found, () => found.exit !== null, 20000, 'the found-installation run to stop')
+  await waitFor(found, () => found.exit !== null, 20000, 'the own-home run to stop')
 
-  // 5. ...but NOT once the app's own home holds something of the person's. A session in
-  //    `<app root>/home` must beat the installation on the machine, or the courtesy in
-  //    case 4 would be a policy that overrode somebody's own home.
+  // 5. ...and the SAME answer once the app's own home already holds a session of the
+  //    person's: the rung is gone, so there is no state in which `~/.dsh` wins.
   const theirs = startShell({
     label: 'theirs',
     dshHome: null,
@@ -519,8 +530,43 @@ async function checkConfinedHome() {
   theirs.child.stdin.write('stop\n')
   await waitFor(theirs, () => theirs.exit !== null, 20000, 'the own-home run to stop')
 
+  // 6. THE HOME THE PANEL REMEMBERED IS READ FROM THE ROOT THE LADDER CHOSE. This is
+  //    the one-root rule, driven: `prefs.json` used to be written into the platform's
+  //    data directory while the window record went into the ladder's root, so on a
+  //    machine whose ladder fell through to `<tree>/.vncode` the answer could never be
+  //    read back and the first-run question returned on every launch. The record is
+  //    seeded into the APP ROOT - the scratch root this run's ladder chooses - and the
+  //    child must be given the home it names, with no flag and no screen in between.
+  const remembered = path.join(scratch, 'remembered-home')
+  fs.rmSync(remembered, { recursive: true, force: true })
+  fs.mkdirSync(remembered, { recursive: true })
+  const chosen = startShell({
+    label: 'remembered',
+    dshHome: null,
+    seed: (appRoot) => {
+      fs.writeFileSync(
+        path.join(appRoot, 'prefs.json'),
+        JSON.stringify({ version: 1, browser: null, home: remembered }),
+      )
+    },
+  })
+  if (!(await waitFor(chosen, () => runningPort(chosen) !== null, 20000, 'a ready line on the remembered home'))) {
+    return
+  }
+  if (!chosen.out.includes(`[stub] DSH_HOME=${remembered}`)) {
+    fail(`the remembered home was not used\n--- stdout ---\n${chosen.out}`)
+  }
+  if (!chosen.out.includes('the home you chose in this panel')) {
+    fail('the panel does not say the home was the one somebody chose')
+  }
+  if (fs.existsSync(path.join(chosen.appRoot, 'home'))) {
+    fail('the app created its own home as well as using the remembered one')
+  }
+  chosen.child.stdin.write('stop\n')
+  await waitFor(chosen, () => chosen.exit !== null, 20000, 'the remembered-home run to stop')
+
   console.log(
-    'check-shell: an unwritable inherited home falls through, an impossible -DshHome refuses by name, a writable one is joined, and the installation on the machine is used only while the app`s own home is fresh',
+    'check-shell: an unwritable inherited home falls through, an impossible -DshHome refuses by name, a writable one is joined, an installation at ~/.dsh is never the home in use, and the remembered home is read from the root the ladder chose',
   )
 }
 

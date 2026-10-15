@@ -200,30 +200,61 @@ fn harness_in(directory: &Path) -> Option<PathBuf> {
     Some(dsh)
 }
 
+/// Every cache a previously installed harness might live in, **this project's own
+/// first**.
+///
+/// Measured on the machine this was written on: an app whose root, home, pack, sessions
+/// and key were all inside a portable folder still started its harness out of
+/// `%LOCALAPPDATA%\npm-cache\_npx\…` - the one directory that made "everything is in this
+/// folder" untrue on every single Start. The folder's own cache is where the app's own
+/// installs land (`env::choose_cache` hands it to every child as `npm_config_cache`), so
+/// it is searched first; the checkout's `runtime/npm-cache` is next; and the machine's
+/// shared cache is LAST, which is the order that keeps a portable folder portable while
+/// still finding the harness a `run-web` on the same machine already installed.
+pub fn harness_caches(app_root: Option<&Path>, root: Option<&Path>) -> Vec<PathBuf> {
+    let mut caches = Vec::new();
+    if let Some(app_root) = app_root {
+        caches.push(crate::appdata::npm_cache_dir(app_root));
+    }
+    if let Some(root) = root {
+        caches.push(root.join("runtime").join("npm-cache"));
+    }
+    if let Some(machine) = crate::appdata::npx_cache_root() {
+        caches.push(machine);
+    }
+    caches.dedup();
+    caches
+}
+
+/// The `_npx` installations inside one cache, sorted so two runs on one machine make the
+/// same choice.
+fn npx_candidates(cache_root: &Path) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(cache_root.join("_npx"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path().join("node_modules"))
+        .filter(|path| path.is_dir())
+        .collect();
+    found.sort();
+    found
+}
+
 /// Every place a previously installed harness might be, best candidate first.
 ///
 /// The profile's own link is first because it is EXACTLY the installation a browser
 /// tab runs: `$DSH_HOME/profiles/node_modules/@deepseek-ai/dsh` is a junction into
 /// the npm cache, so following it cannot pick a different harness than the one this
-/// machine is already using. The `_npx` scan behind it is for a machine where the
-/// profile has not been linked yet (or was reinstalled from elsewhere).
-pub fn installed_candidates(home: Option<&Path>, cache_root: Option<&Path>) -> Vec<PathBuf> {
+/// machine is already using. The `_npx` scans behind it are for a machine where the
+/// profile has not been linked yet (or was reinstalled from elsewhere), and they run
+/// over the caches in the order [`harness_caches`] gave them.
+pub fn installed_candidates(home: Option<&Path>, caches: &[PathBuf]) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(home) = home {
         candidates.push(home.join("profiles").join("node_modules"));
     }
-    if let Some(cache_root) = cache_root {
-        let npx = cache_root.join("_npx");
-        if let Ok(entries) = std::fs::read_dir(&npx) {
-            let mut found: Vec<PathBuf> = entries
-                .flatten()
-                .map(|entry| entry.path().join("node_modules"))
-                .filter(|path| path.is_dir())
-                .collect();
-            // Sorted, so two runs on one machine make the same choice.
-            found.sort();
-            candidates.extend(found);
-        }
+    for cache in caches {
+        candidates.extend(npx_candidates(cache));
     }
     candidates
 }
@@ -245,10 +276,10 @@ fn installed_version(dsh: &Path) -> Option<String> {
 /// another version is skipped, and the search continues.
 pub fn installed_harness_in(
     home: Option<&Path>,
-    cache_root: Option<&Path>,
+    caches: &[PathBuf],
     version: &str,
 ) -> Option<Launch> {
-    for directory in installed_candidates(home, cache_root) {
+    for directory in installed_candidates(home, caches) {
         let Some(dsh) = harness_in(&directory) else {
             continue;
         };
@@ -265,9 +296,15 @@ pub fn installed_harness_in(
     None
 }
 
-/// [`installed_harness_in`], against this machine's own npm cache.
-pub fn installed_harness(home: Option<&Path>, version: &str) -> Option<Launch> {
-    installed_harness_in(home, crate::appdata::npx_cache_root().as_deref(), version)
+/// [`installed_harness_in`], against the caches this project owns - its own root's cache
+/// first, then the checkout's, and the machine's shared one last.
+pub fn installed_harness(
+    home: Option<&Path>,
+    app_root: Option<&Path>,
+    root: Option<&Path>,
+    version: &str,
+) -> Option<Launch> {
+    installed_harness_in(home, &harness_caches(app_root, root), version)
 }
 
 /// The test seam, read from the environment.
@@ -308,18 +345,24 @@ pub fn stub_from_env() -> Option<(PathBuf, Vec<String>)> {
 ///
 /// 1. The test seam, if a check set it.
 /// 2. The VENDORED runtime - its own Node, checksum-verified, no npm anywhere.
-/// 3. The harness this machine ALREADY has at the pin, run with the Node on PATH.
+/// 3. The harness this machine ALREADY has at the pin, run with the Node on PATH,
+///    searched in THIS project's caches before the machine's own ([`harness_caches`]).
 ///    This is the rung that matters when npm itself is broken: no cache to write,
 ///    no network, no package manager.
 /// 4. `npx`, the last resort.
-pub fn choose_launch(root: Option<&Path>, home: Option<&Path>, version: &str) -> Launch {
+pub fn choose_launch(
+    root: Option<&Path>,
+    app_root: Option<&Path>,
+    home: Option<&Path>,
+    version: &str,
+) -> Launch {
     if let Some((program, args)) = stub_from_env() {
         return Launch::Stub { program, args };
     }
     if let Some(vendored) = root.and_then(vendored_runtime) {
         return vendored;
     }
-    installed_harness(home, version).unwrap_or(Launch::Npx)
+    installed_harness(home, app_root, root, version).unwrap_or(Launch::Npx)
 }
 
 // ---------------------------------------------------------------------------
@@ -475,5 +518,100 @@ mod tests {
         let version = resolve_version_with(&options, Some(&root)).unwrap();
         assert!(!version.is_empty());
         assert!(version.starts_with("0."), "unexpected pin {version}");
+    }
+
+    // -----------------------------------------------------------------------
+    // Which cache a harness is found in
+    // -----------------------------------------------------------------------
+
+    /// Put one `_npx/<id>/node_modules/@deepseek-ai/dsh` at `version` inside `cache`.
+    fn cache_at(cache: &Path, id: &str, version: &str) {
+        let dsh = cache.join("_npx").join(id).join("node_modules").join("@deepseek-ai").join("dsh");
+        std::fs::create_dir_all(dsh.join("lib")).unwrap();
+        std::fs::write(dsh.join("lib").join("bin.js"), b"// harness").unwrap();
+        std::fs::write(
+            dsh.join("package.json"),
+            format!("{{\"name\":\"@deepseek-ai/dsh\",\"version\":\"{version}\"}}"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn this_projects_own_cache_is_searched_before_the_machines_shared_one() {
+        // The measured complaint: everything of the person's was inside a portable
+        // folder, and the harness still came out of `%LOCALAPPDATA%\npm-cache` on every
+        // Start. The folder's own cache is where this app's own installs land, so it is
+        // the first place looked.
+        let root = crate::scratch::dir("cache-order");
+        let _ = std::fs::remove_dir_all(&root);
+        let app_root = root.join("project-root");
+        // The harness is in the ROOT'S OWN cache - where this app's installs land.
+        cache_at(&crate::appdata::npm_cache_dir(&app_root), "project", "0.2.0-rc.2");
+        let checkout = root.join("checkout");
+
+        let caches = harness_caches(Some(&app_root), Some(&checkout));
+        assert_eq!(caches[0], crate::appdata::npm_cache_dir(&app_root), "this app's own first");
+        assert_eq!(
+            caches[1],
+            checkout.join("runtime").join("npm-cache"),
+            "then the checkout's own"
+        );
+        // ...and the machine's shared cache is the LAST place, never the first.
+        assert_eq!(caches.last().cloned(), crate::appdata::npx_cache_root());
+
+        // The harness is found at the pin...
+        let launch = installed_harness_in(None, &caches, "0.2.0-rc.2").expect("a harness");
+        match launch {
+            Launch::Installed { bin, .. } => assert!(
+                bin.starts_with(crate::appdata::npm_cache_dir(&app_root)),
+                "the wrong cache won: {}",
+                bin.display()
+            ),
+            other => panic!("{other:?}"),
+        }
+        // ...and a cache holding ANOTHER version is skipped rather than used.
+        assert!(installed_harness_in(None, &caches, "9.9.9").is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_profiles_own_link_still_comes_before_every_cache() {
+        // It is EXACTLY the installation a browser tab runs, so it outranks a cache scan
+        // even when both hold the pin.
+        let root = crate::scratch::dir("profile-link");
+        let _ = std::fs::remove_dir_all(&root);
+        let cache = root.join("machine-cache");
+        cache_at(&cache, "machine", "0.2.0-rc.2");
+        let home = root.join("home");
+        let linked = home
+            .join("profiles")
+            .join("node_modules")
+            .join("@deepseek-ai")
+            .join("dsh");
+        std::fs::create_dir_all(linked.join("lib")).unwrap();
+        std::fs::write(linked.join("lib").join("bin.js"), b"// linked").unwrap();
+        std::fs::write(
+            linked.join("package.json"),
+            "{\"name\":\"@deepseek-ai/dsh\",\"version\":\"0.2.0-rc.2\"}",
+        )
+        .unwrap();
+
+        let candidates = installed_candidates(Some(&home), &[cache]);
+        assert_eq!(candidates[0], home.join("profiles").join("node_modules"));
+        let launch = installed_harness_in(Some(&home), &[PathBuf::from("/nowhere")], "0.2.0-rc.2")
+            .expect("the profile's own link is a harness");
+        match launch {
+            Launch::Installed { bin, .. } => assert!(bin.starts_with(&home), "{}", bin.display()),
+            other => panic!("{other:?}"),
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn with_no_app_root_the_machine_cache_is_still_reachable() {
+        // A build run from somewhere with no root of its own must not lose the rung.
+        let caches = harness_caches(None, Some(Path::new("/repo")));
+        assert_eq!(caches[0], PathBuf::from("/repo").join("runtime").join("npm-cache"));
+        assert!(!caches.is_empty());
     }
 }

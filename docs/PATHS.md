@@ -1,6 +1,8 @@
 # Where vncode keeps things
 
-Two roots, and the second one lives inside the first.
+Two roots, and the second one lives inside the first - and **one** of the first: the
+window record, `prefs.json`, the npm cache and the home all live under the single root
+the ladder chose, so a root that cannot be written never splits the app's memory in two.
 
 ## `$VNCODE_HOME` — the app's own root
 
@@ -10,8 +12,8 @@ move, back up or delete without touching a harness. The harness home is a folder
 controls:
 
 ```text
-$VNCODE_HOME                     default: %LOCALAPPDATA%\vncode
-  ├── window.json                the window's size and position
+$VNCODE_HOME                     portable: <tree>\.vncode
+  ├── window.json                default: %LOCALAPPDATA%\vncode
   ├── prefs.json                 the browser id and the home you chose
   ├── npm-cache/                 the npx fallback's cache - and nothing else's
   └── home/                      DSH_HOME by default: everything that matters
@@ -20,15 +22,26 @@ $VNCODE_HOME                     default: %LOCALAPPDATA%\vncode
       └── dsh-pdf/  dsh-diagrams/  dsh-media/   the pack's caches
 ```
 
-| platform | the default root |
+The root ladder, in order, each rung proved by writing:
+
+| # | candidate | when it is used |
+|---|---|---|
+| 1 | `VNCODE_HOME` | the environment named it |
+| 2 | **`<tree>/.vncode`** | this folder is a **portable installation**: it carries the marker (`PORTABLE`, written by `Keep everything in this folder` in the panel's `Details`), **or** it already holds a home - the app has put this person's sessions there, and preferring the platform directory now would start a second installation beside them |
+| 3 | platform data root + `vncode` | the default |
+| 4 | `<tree>/.vncode` | the last resort, where even the data root cannot be written (a workspace-scoped confinement, which is what this repository's own checks run inside). It is gitignored |
+
+| platform | the default root (rung 3) |
 |---|---|
 | Windows | `%LOCALAPPDATA%\vncode` |
 | macOS | `~/Library/Application Support/vncode` |
 | Linux | `$XDG_DATA_HOME/vncode`, else `~/.local/share/vncode` |
 
-`VNCODE_HOME` in the environment names another root; `<tree>/.vncode` is the last
-resort, used only where even the data root cannot be written (a workspace-scoped
-confinement, which is what this repository's own checks run inside). It is gitignored.
+`prefs.json` is read from the root this ladder chose, with the platform copy as a
+**read-only fallback** for one migration: an earlier build wrote the file under the
+platform root while the root in use was beside the checkout, so the home somebody chose
+could not be read back and the first-run question returned on every launch. Every save
+goes to the ladder's root.
 
 **Every path a person or a parent gives is cleaned before it is used** (`userpath.rs`):
 a leading `~` is expanded the way the harness expands it, a relative path is resolved
@@ -57,22 +70,25 @@ its own ladder decides which folder that is:
 | 1 | `-DshHome <dir>` | the person named it. **A refusal here ends the run** — an explicit instruction is never silently ignored |
 | 2 | the home chosen in the panel (`prefs.json`) | a click outranks an environment variable; if it has moved or gone, the ladder continues and says so |
 | 3 | an inherited `DSH_HOME` | it is writable: the app JOINS the home of the session that started it, sharing its sessions and its key |
-| 4 | the installation already on this machine (`~/.dsh`) | it has the shape of a harness home, **a child can write in it**, and the app's own home still holds nothing of the person's — no skills, no sessions, no credentials with content. A one-time courtesy, not a policy: the moment that home has something of yours in it, the app stops looking. `Use my own home` in the panel makes the app's own root an explicit, remembered choice |
-| 5 | `<VNCODE_HOME>/home` | **the default**, created and proved by the app |
-
+| 4 | `<VNCODE_HOME>/home` | **the default**, created and proved by the app |
 A candidate is used only after a real write probe, and every refused candidate is
 named in the log and in the panel — see `docs/PLAN-egui-shell.md` §2.
 
-Row 4 is the one measured on a real machine: the app used to come up on a fresh, bare
-harness — no pack, no model key — beside a complete installation at `~/.dsh`, which its
-owner's word for was "still does not run normally". The guard is what keeps it honest:
-`adopt::home_is_untouched_by_a_person` counts only what a person accumulates, so the
-harness's own first-boot furniture (a composed `profiles/`, an empty `.credentials.yaml`,
-a `storages/`) cannot make a home look used, and a home that IS used is never overridden.
+**Nothing outside the app's own root is ever the home it runs against.** The harness's own
+default (`~/.dsh`) was once row 4 here — a one-time courtesy, used while the app's own home
+was still empty — and it is gone: a folder that carries everything it needs must not reach
+into a person's profile to START. The two things that rung answered are answered here: Start
+installs this pack into the home in use, and the key row asks for the key. That directory
+survives as the READ-ONLY SOURCE of the first-run COPY, which brings a person's own
+sessions and key into the folder and never runs against it.
 
-For a harness started by **anything else** (`scripts\run-web.bat`, `npx dsh web`, the
-CLI by hand), the harness's own resolver is still what decides, highest precedence
-first — and it is `@deepseek-ai/dsh-home-paths` (`resolveDshHome`) that decides it:
+The same rule makes the first-run screen's source safe to offer: the harness's own
+first-boot furniture (a composed `profiles/`, an empty `.credentials.yaml`, a `storages/`)
+cannot make a home look used, and a home that IS used is never overwritten by a copy.
+
+For a harness started by **anything else** (`npx dsh web`, the CLI by hand), the harness's
+own resolver is still what decides, highest precedence first — and it is
+`@deepseek-ai/dsh-home-paths` (`resolveDshHome`) that decides it:
 
 | Precedence | Source | Windows | macOS / Linux |
 |---|---|---|---|
@@ -80,8 +96,22 @@ first — and it is `@deepseek-ai/dsh-home-paths` (`resolveDshHome`) that decide
 | 2 | `$DSH_HOME` (empty or whitespace counts as unset) | as given | as given |
 | 3 | the default | `%USERPROFILE%\.dsh` | `$HOME/.dsh` |
 
+The pack's OWN launcher, `scripts\run-web.bat` / `./scripts/run-web.sh`, resolves the home
+before it starts anything, and it agrees with the app rather than with the default above:
+
+| # | candidate | when it is used |
+|---|---|---|
+| 1 | `-DshHome <dir>` | the person named it for this run |
+| 2 | an inherited `DSH_HOME` | a harness session started this shell, and the run JOINS it |
+| 3 | **`<tree>/.vncode/home`** | this folder is a **portable installation**: it carries the `PORTABLE` marker, or it already holds a home. The pack, the sessions and the key then need nothing in the user's profile, and `run-web` starts the SAME home the panel does — two launchers pointing at two homes is how a pack ends up installed in one and missing in the other |
+| 4 | `~/.dsh` (`%USERPROFILE%\.dsh`) | the harness's own default, for a folder that is not portable |
+
 It is Node's `homedir()`, so the Windows half is `%USERPROFILE%` and never
-`%APPDATA%`, and a `~`/`~/` prefix in a configured path expands against it.
+`%APPDATA%`, and a `~`/`~/` prefix in a configured path expands against it. A portable run
+also points `npm_config_cache` at `<root>/npm-cache` (unless the caller set one), so the
+npx cache does not land in the user's profile either. The portable test is the same rule
+`vn_shell_core::appdata::portable_root` applies, and `check-scripts.mjs` reads both
+launcher workers for the marker and the `home` folder so the three copies cannot drift.
 
 ## What lives under the harness home
 | Path (relative to the home) | What it is |

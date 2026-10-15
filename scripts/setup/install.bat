@@ -24,6 +24,9 @@ rem    -DshHome <dir>     use this harness home instead of $DSH_HOME
 rem    -ProfileName <n>   install into this profile (default: web)
 rem    -DshVersion <ver>  override the pinned dsh version
 rem    -Force             re-add even when the version is unchanged
+rem    -Resume            add what is missing and skip what the profile already
+rem                       lists - the flag the vncode panel passes, so a second
+rem                       press does not re-add all 24 bundles
 rem    -NoPause           never hold this window open
 rem    -NoTerminal        stay in this console; do not relaunch
 rem    -Help / -h / /?    print the help and stop
@@ -65,13 +68,24 @@ rem spelling from it) is also what keeps this safe for a -DshHome path that
 rem legitimately contains "-h".
 if defined VN_HELPREQ set "VNCODE_ARGS=-Help"
 
+rem -Resume asks for the worker's own default (add what is missing, skip what the
+rem profile already lists) INSTEAD of the -Force a double-click implies below. The
+rem vncode panel passes it, because the panel's Install button may be pressed again
+rem over a half-finished install and re-adding all 24 bundles costs a fresh npm
+rem resolution per bundle. It reaches the worker named - install-all.ps1 declares it,
+rem so PowerShell binds it - and all it does here is suppress the implied -Force.
+rem Two spellings are checked the way the -Force test is: a bare -Resume anywhere in
+rem the argument string.
+set "VN_RESUMEREQ="
+if not "%VNCODE_ARGV:-Resume=%"=="%VNCODE_ARGV%" set "VN_RESUMEREQ=1"
+
 rem The implied -Force, skipped for a help request. Safe with no arguments at all
 rem (where VNCODE_ARGV used to be undefined and this line aborted the whole
 rem file) because console\adapt.cmd stores "no arguments" as ONE SPACE: a
 rem defined value holding no flag, so this test reads it exactly as it reads an
 rem argument string that merely lacks -Force - which is the answer wanted here.
 set "VN_EXTRA="
-if not defined VN_HELPREQ if "%VNCODE_ARGV:-Force=%"=="%VNCODE_ARGV%" set "VN_EXTRA=-Force"
+if not defined VN_HELPREQ if not defined VN_RESUMEREQ if "%VNCODE_ARGV:-Force=%"=="%VNCODE_ARGV%" set "VN_EXTRA=-Force"
 
 rem -NoTerminal belongs to the LAUNCHER, not to the install: console\adapt.cmd
 rem is the file that acts on it, deciding whether to relaunch into Windows Terminal.

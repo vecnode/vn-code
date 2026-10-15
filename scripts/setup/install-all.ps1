@@ -57,6 +57,12 @@ param(
     [string]$ProfileName = '',
     [string]$DshVersion = '',
     [switch]$Force,
+    # The panel's own flag. A double-click on install.bat implies -Force so that the
+    # latest edits always install; that is right for a person and wrong for a button
+    # that may be pressed again over a half-finished install. -Resume asks for this
+    # worker's default - add what is missing, skip what the profile already lists - and
+    # exists as a NAMED flag so the panel passes something the entry point can see.
+    [switch]$Resume,
     [switch]$NoPause,
     [switch]$Help
 )
@@ -82,6 +88,9 @@ function Show-Usage {
     Write-Host '  -ProfileName <n>   install into this profile (default: web)'
     Write-Host '  -DshVersion <ver>  override the pinned dsh version from .dsh-version.json'
     Write-Host '  -Force             re-add even when the version is unchanged'
+    Write-Host '  -Resume            add what is missing and skip what is current (the'
+    Write-Host '                     panel presses this; it is what install.bat does NOT'
+    Write-Host '                     do when it implies -Force for a double-click)'
     Write-Host '  -NoPause           never hold this window open'
     Write-Host '  -Help / -h / /?    print this help'
     Write-Host ''
@@ -496,6 +505,17 @@ function Install-To-Profile {
         }
     }
 
+    # ONE `plugin add` FOR EVERYTHING THAT IS MISSING, not one per bundle.
+    #
+    # `dsh plugin` is a thin pnpm forwarder (it runs `pnpm <args>` in the profile
+    # directory and reconciles the bundle list afterwards), so a single invocation adds
+    # every selected folder in one pnpm run. The loop this replaces spent a whole
+    # `npm exec @deepseek-ai/dsh@<pin>` PER BUNDLE - and npm re-resolves the harness's
+    # entire dependency graph on each of those, which is minutes of nothing per bundle
+    # on a cold cache. Measured from a real run's npm log: 1500 lines of resolution for
+    # one `plugin add`, and twenty-four of them in a row with the profile still listing
+    # the bare harness.
+    $toAdd = @()
     foreach ($pkg in $Packages) {
         $already = $installed -contains $pkg.Name
         if ($already -and -not $Force) {
@@ -514,13 +534,28 @@ function Install-To-Profile {
             Write-Host "  - $($pkg.Name): installed version '$effective' is behind repo version '$($pkg.Version)' - re-adding to sync..."
         }
         elseif (-not $already -and -not $Force) {
-            Write-Host "  - adding $($pkg.Name) $($pkg.Version) (first install) ..."
+            Write-Host "  - selected $($pkg.Name) $($pkg.Version) (first install)"
         }
         else {
-            Write-Host "  - adding $($pkg.Name) $($pkg.Version) (-Force) ..."
+            Write-Host "  - selected $($pkg.Name) $($pkg.Version) (-Force)"
         }
-        Invoke-Dsh -DshHome $Target.DshHome -ProfileDir $Target.ProfileDir -Arguments @('plugin', '--profile', $Target.Profile, 'add', $pkg.Folder)
-        Write-Host "  - added $($pkg.Name)"
+        $toAdd += $pkg
+    }
+    if ($toAdd.Count -gt 0) {
+        $folders = @($toAdd | ForEach-Object { $_.Folder })
+        # SAY WHAT IS ABOUT TO HAPPEN, AND HOW LONG THE SILENCE LASTS. `npm exec` resolves
+        # the harness's whole dependency graph before pnpm is reached and prints NOTHING
+        # while it does - measured on a real machine: the panel's progress line stayed on
+        # the last "adding ..." line for a minute, which read as a hang, and the window was
+        # killed 60 seconds in with nothing yet written to the profile. The count and the
+        # warning are printed BEFORE the wait, because after it there is nobody left to
+        # tell. The per-bundle lines above say "selected" rather than "adding": nothing is
+        # being added yet, one pnpm run adds all of them.
+        Write-Host "  - adding $($toAdd.Count) bundle(s) in ONE pnpm run"
+        Write-Host "    npm resolves the harness first and prints NOTHING while it does (about a minute on a cold cache, seconds when it is warm) - that silence is normal, not a stall"
+        Invoke-Dsh -DshHome $Target.DshHome -ProfileDir $Target.ProfileDir `
+            -Arguments (@('plugin', '--profile', $Target.Profile, 'add') + $folders)
+        foreach ($pkg in $toAdd) { Write-Host "  - added $($pkg.Name)" }
     }
 }
 

@@ -102,22 +102,72 @@ fn announce(plan: &runtime::Plan) {
     }
 }
 
+/// The plan, the preferences, and where the preferences were read from.
+///
+/// **The root comes first, and it is the ladder's root.** `prefs.json`, the window
+/// record, the npm cache and the home are four things this app owns, and they live
+/// under ONE directory or the app has two memories: the geometry written into
+/// `<tree>/.vncode` while the home somebody chose was written into
+/// `%LOCALAPPDATA%\vncode`, which is a root the confined run that fell through to the
+/// tree cannot even write. The measured cost of that was the first-run question
+/// returning on every launch, for a person who had answered it.
+///
+/// The root ladder is decided by paths alone - the environment, a portable folder, a real
+/// write probe - so `home::root_from_env` answers it WITHOUT resolving a home, and
+/// nothing is created on the way: resolving a whole plan first would have created
+/// `<root>/home` as a side effect even when the remembered home is somewhere else, and
+/// "the app's own home is never created when it joins another" is a promise the checks
+/// drive. The platform root is then read as a FALLBACK (an older build wrote the record
+/// there) and never written, and ONE plan is resolved with the home that record names.
+struct Planned {
+    plan: runtime::Plan,
+    app_prefs: AppPrefs,
+    /// Where the preferences THIS run will save into: the ladder's root.
+    prefs_root: Option<std::path::PathBuf>,
+    /// Where they were READ from, when that is a different directory - the migration
+    /// the panel mentions once so the move is not silent.
+    read_from: Option<std::path::PathBuf>,
+}
+
+fn plan_and_prefs(options: &Options) -> Result<Planned, String> {
+    let platform = appdata::app_root();
+    let prefs_root = home::root_from_env().or_else(|| platform.clone());
+    let fallback = platform.filter(|platform| Some(platform.as_path()) != prefs_root.as_deref());
+    let (app_prefs, read_from) =
+        AppPrefs::load_from(prefs_root.as_deref(), fallback.as_deref());
+    let plan = runtime::plan(options, app_prefs.home.as_deref())?;
+    let read_from = read_from.filter(|from| Some(from.as_path()) != plan.app_root());
+    Ok(Planned {
+        prefs_root: plan.app_root().map(Path::to_path_buf),
+        plan,
+        app_prefs,
+        read_from,
+    })
+}
+
 /// The window: the control panel, and whatever the reader asks it to start.
 fn window(options: Options, mode: Mode) -> i32 {
     // The app's own root is read FIRST, because two things live in it that decide
     // what the harness gets: the remembered home, and the browser the person chose.
-    let app_root = appdata::app_root();
-    let app_prefs = AppPrefs::load(app_root.as_deref());
-    if app_root.is_some() {
-        println!("[vncode] app preferences: {}", app_prefs.line());
-    }
-    let plan = match runtime::plan(&options, app_prefs.home.as_deref()) {
-        Ok(plan) => plan,
+    let planned = match plan_and_prefs(&options) {
+        Ok(planned) => planned,
         Err(message) => {
             eprintln!("[vncode] {message}");
             return 1;
         }
     };
+    let Planned { plan, app_prefs, prefs_root, read_from } = planned;
+    println!("[vncode] app preferences: {}", app_prefs.line());
+    if let Some(from) = read_from.as_deref() {
+        println!(
+            "[vncode] note: your choice was remembered in {} by an older build; it is saved into {} from now on",
+            from.display(),
+            prefs_root
+                .as_deref()
+                .map(|root| root.display().to_string())
+                .unwrap_or_else(|| "this app's own root".to_string())
+        );
+    }
     banner(mode);
     announce(&plan);
 
@@ -173,18 +223,12 @@ fn window(options: Options, mode: Mode) -> i32 {
         );
     }
 
-    // What the panel offers about a home this app did not create: USE it in place, or
-    // ADOPT a copy of it. The source is the harness's own default (`~/.dsh`), and it
-    // is only an offer - the app never walks to it on its own (see `home.rs`).
-    //
-    // TWO FILTERS, and they are not the same one. `Use it` runs the harness AGAINST
-    // that home, so the home has to be writable by a child; `Adopt` only has to READ
-    // it, and it exists exactly for the home that cannot be written. Passing the
-    // writable-filtered path to both - which this wiring did - left a person whose
-    // `~/.dsh` was unwritable with neither button, and no way to reach their key.
+    // What the panel offers about a home this app did not create: a COPY of it, and
+    // nothing else. The source is the harness's own default (`~/.dsh`), and the app never
+    // walks to it on its own - nothing outside this app's own root is ever the home it
+    // runs AGAINST (see `home.rs`), so the copy is a one-way import and the only thing
+    // that reads that directory at all.
     let found_home = home::existing_default_home().filter(|path| home::looks_like_a_harness_home(path));
-    let usable_home =
-        found_home.clone().filter(|path| appdata::harness_home_is_writable(path));
     if let Some(path) = found_home.as_deref() {
         // Compared in their REAL forms, so `~/.dsh` and a junction to it are one
         // home rather than two.
@@ -195,16 +239,13 @@ fn window(options: Options, mode: Mode) -> i32 {
                     == vn_shell_core::userpath::canonical(path)
             })
             .unwrap_or(false);
-        let usable = usable_home.is_some();
         println!(
             "[vncode] found an existing harness home at {}{}",
             path.display(),
             if using_it {
-                " (in use)"
-            } else if usable {
-                " - the panel offers Use or Adopt"
+                " (in use, because -DshHome or DSH_HOME named it)"
             } else {
-                " - it is not writable by a child, so the panel offers Adopt only"
+                " - the panel offers a COPY of it, never to run against it"
             }
         );
     }
@@ -276,7 +317,7 @@ fn window(options: Options, mode: Mode) -> i32 {
         browsers,
         browser: chosen,
         app_prefs,
-        prefs_root: app_root,
+        prefs_root,
     });
 
     let native = eframe::NativeOptions {
@@ -341,14 +382,18 @@ fn headless(options: Options) -> i32 {
     // reported synchronously, which is why this mode resolves it rather than
     // guessing. The remembered home comes from the app's own root, exactly as it does
     // for the window, so a headless run and a panel run choose the same home.
-    let app_prefs = AppPrefs::load(appdata::app_root().as_deref());
-    let plan = match runtime::plan(&options, app_prefs.home.as_deref()) {
-        Ok(plan) => plan,
+    // The plan and the remembered home are resolved by the SAME function the window
+    // uses, so a headless run and a panel run choose one root and one home - an install
+    // driven from here cannot land in a profile the panel is not running.
+    let planned = match plan_and_prefs(&options) {
+        Ok(planned) => planned,
         Err(message) => {
             eprintln!("[vncode] {message}");
             return 1;
         }
     };
+    let app_prefs = planned.app_prefs;
+    let plan = planned.plan;
     if let Err(message) = supervisor.start(options, app_prefs.home.clone()) {
         eprintln!("[vncode] {message}");
         return 1;

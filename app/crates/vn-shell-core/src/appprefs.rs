@@ -15,6 +15,19 @@
 //!    preferences is a bigger promise than reading them.
 //! 2. **It is written atomically**: a temporary file beside it, then a rename, so a
 //!    crash mid-write leaves the old record rather than half of a new one.
+//!
+//! ## Which root it is read from, and why that is one root and not two
+//!
+//! The record is written into **the root the ladder chose** - the same root as the
+//! window geometry, the npm cache and the home - so a portable folder, a confined run
+//! and an ordinary install all remember the person's answer in the place that answer
+//! belongs to. [`AppPrefs::load_from`] takes that root first and one FALLBACK second,
+//! read only: the platform's own data directory, where every version before this one
+//! wrote the file. Without the fallback, a person whose ladder had already fallen
+//! through to `<tree>/.vncode` would have lost the home they chose - which is the
+//! measured bug this exists for: the file was written under `%LOCALAPPDATA%` while the
+//! root in use was beside the checkout, so the choice could never be read back and the
+//! first-run question returned on every launch.
 
 use std::path::{Path, PathBuf};
 
@@ -37,27 +50,70 @@ pub struct AppPrefs {
     pub home: Option<PathBuf>,
 }
 
+/// What one root's `prefs.json` is.
+enum Read {
+    /// No file there at all: the next candidate may answer.
+    Absent,
+    /// A file this build cannot vouch for. The search STOPS: an older root's record
+    /// must not stand in for one somebody has already written over.
+    Unusable,
+    Ok(AppPrefs),
+}
+
 impl AppPrefs {
     /// Read the record, or an empty one when there is nothing usable there.
     ///
     /// Never fails: a preferences file is a convenience, and an app that refused to
     /// start because its own convenience file was corrupt would be a worse app.
     pub fn load(root: Option<&Path>) -> AppPrefs {
-        let Some(root) = root else {
-            return AppPrefs::default();
+        Self::load_from(root, None).0
+    }
+
+    /// Read the record from the root the LADDER chose, falling back to a second root,
+    /// and say which of the two answered.
+    ///
+    /// The fallback exists for exactly one migration, and it is a real one: the app used
+    /// to write this file into `appdata::app_root()` (the platform's data directory)
+    /// while the window record went into the ladder's root - so on a machine whose
+    /// ladder fell through to `<tree>/.vncode` the chosen home was written where the
+    /// next run could not read it, and the first-run question came back every launch.
+    /// Reading the platform copy once keeps that person's answer; the moment the panel
+    /// saves, the record lands in the ladder's own root, and the fallback goes quiet.
+    ///
+    /// Nothing is ever written into the fallback: it is read, and that is all.
+    pub fn load_from(primary: Option<&Path>, fallback: Option<&Path>) -> (AppPrefs, Option<PathBuf>) {
+        let mut candidates: Vec<&Path> = Vec::new();
+        if let Some(root) = primary {
+            candidates.push(root);
+        }
+        if let Some(root) = fallback.filter(|fallback| Some(*fallback) != primary) {
+            candidates.push(root);
+        }
+        for root in candidates {
+            match Self::read(root) {
+                Read::Ok(prefs) => return (prefs, Some(root.to_path_buf())),
+                // A record this build cannot vouch for is DISCARDED, never repaired -
+                // and never replaced by an older root's record either: that would
+                // resurrect a choice somebody has already overwritten.
+                Read::Unusable => return (AppPrefs::default(), Some(root.to_path_buf())),
+                Read::Absent => continue,
+            }
+        }
+        (AppPrefs::default(), None)
+    }
+
+    /// What one root's record is: absent, there but unusable, or usable.
+    fn read(root: &Path) -> Read {
+        let Ok(text) = std::fs::read_to_string(root.join(FILENAME)) else {
+            return Read::Absent;
         };
-        let text = match std::fs::read_to_string(root.join(FILENAME)) {
-            Ok(text) => text,
-            Err(_) => return AppPrefs::default(),
-        };
-        let json: serde_json::Value = match serde_json::from_str(&text) {
-            Ok(json) => json,
-            Err(_) => return AppPrefs::default(),
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
+            return Read::Unusable;
         };
         if json.get("version").and_then(serde_json::Value::as_u64) != Some(VERSION) {
-            return AppPrefs::default();
+            return Read::Unusable;
         }
-        AppPrefs {
+        Read::Ok(AppPrefs {
             browser: json
                 .get("browser")
                 .and_then(serde_json::Value::as_str)
@@ -71,7 +127,7 @@ impl AppPrefs {
                 .filter(|path| !path.is_empty())
                 .map(PathBuf::from)
                 .filter(|path| userpath::is_plausible(path)),
-        }
+        })
     }
 
     /// Write the record, atomically, creating the app root if it is not there.
@@ -205,6 +261,51 @@ mod tests {
         assert_eq!(AppPrefs::load(Some(&root)), AppPrefs::default());
         assert_eq!(AppPrefs::load(None), AppPrefs::default());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_record_is_read_from_the_ladder_root_and_only_falls_back_when_it_is_absent() {
+        // The migration this exists for: the ladder's root is `<tree>/.vncode` and the
+        // chosen home was written into the platform root by an older build. Reading the
+        // fallback keeps the answer, and the root it came from is reported so the panel
+        // knows where this run will save.
+        let tree = scratch("fallback-tree");
+        let platform = scratch("fallback-platform");
+        std::fs::create_dir_all(&tree).unwrap();
+        std::fs::create_dir_all(&platform).unwrap();
+        let mut older = AppPrefs::default();
+        older.set_home("/tmp/from-the-platform-root", None).unwrap();
+        older.save(&platform).unwrap();
+
+        let (prefs, from) = AppPrefs::load_from(Some(&tree), Some(&platform));
+        assert_eq!(prefs.home.as_deref(), Some(Path::new("/tmp/from-the-platform-root")));
+        assert_eq!(from.as_deref(), Some(platform.as_path()));
+        // ...and nothing was written into the fallback, or into the tree, by reading.
+        assert!(!tree.join(FILENAME).exists());
+
+        // A record in the ladder's own root WINS, and the fallback is not consulted.
+        let mut current = AppPrefs::default();
+        current.set_home("/tmp/from-the-ladder-root", None).unwrap();
+        current.save(&tree).unwrap();
+        let (prefs, from) = AppPrefs::load_from(Some(&tree), Some(&platform));
+        assert_eq!(prefs.home.as_deref(), Some(Path::new("/tmp/from-the-ladder-root")));
+        assert_eq!(from.as_deref(), Some(tree.as_path()));
+
+        // A record the build cannot vouch for STOPS the search: the older root's answer
+        // must not stand in for one that was already written over.
+        std::fs::write(tree.join(FILENAME), b"{ this is not a record }").unwrap();
+        let (prefs, from) = AppPrefs::load_from(Some(&tree), Some(&platform));
+        assert_eq!(prefs, AppPrefs::default());
+        assert_eq!(from.as_deref(), Some(tree.as_path()));
+
+        // With no primary root at all, the fallback still answers - which is the case
+        // where the ladder found nothing writable and the app has no memory.
+        std::fs::remove_file(tree.join(FILENAME)).unwrap();
+        let (prefs, from) = AppPrefs::load_from(None, Some(&platform));
+        assert_eq!(prefs.home.as_deref(), Some(Path::new("/tmp/from-the-platform-root")));
+        assert_eq!(from.as_deref(), Some(platform.as_path()));
+        let _ = std::fs::remove_dir_all(&tree);
+        let _ = std::fs::remove_dir_all(&platform);
     }
 
     #[test]

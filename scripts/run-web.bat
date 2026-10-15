@@ -27,7 +27,9 @@ rem  ONE folder holds the whole console layer.
 rem
 rem  Flags (the same as ./scripts/run-web.sh):
 rem    -Port <n>          listen on this port instead of the default (3080)
-rem    -DshHome <dir>     override DSH_HOME (default: DSH_HOME, else USERPROFILE\.dsh)
+rem    -DshHome <dir>     override DSH_HOME (default: DSH_HOME, else this folder's
+rem                       .vncode\home when it is a portable installation, else
+rem                       USERPROFILE\.dsh)
 rem    -DshVersion <ver>  override the pinned dsh version from .dsh-version.json
 rem    -NoBrowser         start the server only; open nothing
 rem    -DefaultBrowser    skip Google Chrome and use the default browser

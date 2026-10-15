@@ -7,7 +7,7 @@
 //! because the last rung is the platform's own opener, which by definition handles a
 //! browser this table has never heard of.
 //!
-//! ## The three rules a launch keeps
+//! ## The four rules a launch keeps
 //!
 //! 1. **The URL is ONE argv element**, never a command string. It carries the launch
 //!    token, which is a live credential: a shell in the middle of that is a shell
@@ -17,6 +17,10 @@
 //!    argv, and a rule that holds at only one end of a pipe is not a rule.
 //! 3. **No shell, anywhere.** `explorer.exe`, `open` and `xdg-open` are programs, not
 //!    command lines; the Chrome-family entries are programs.
+//! 4. **A spawned process is not a page.** `spawn()` says a process was CREATED and
+//!    nothing more, so every rung is watched for one settle window ([`SETTLE`]) and a
+//!    program that died on the way up is reported as a failure and falls through to the
+//!    next rung - see [`Attempt`] for the measurement that made this a rule.
 //!
 //! Detection is a pure function of [`Facts`] and one `probe` predicate, so the table
 //! and the ORDER in it are `cargo test` cases on every platform, rather than
@@ -25,8 +29,21 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use crate::urlpolicy;
+
+/// How long a program this app started is given to prove it is a browser.
+///
+/// A Chromium or Firefox that is ALREADY running is a relay: it hands the URL to the
+/// running instance and exits, measured on this repository's own machine at 60-90 ms. A
+/// browser that is not running stays alive, because it IS the browser. A program that
+/// cannot start exits quickly with a FAILURE status - and this window is what makes that
+/// visible, because `spawn()` returning `Ok` says only that the process was CREATED.
+pub const SETTLE: Duration = Duration::from_millis(1500);
+
+/// How often the settle loop asks.
+const POLL: Duration = Duration::from_millis(25);
 
 /// Which operating system's table to read. Passed in rather than read from `cfg!`
 /// inside the table, so a test can check all three on any host.
@@ -355,7 +372,18 @@ pub fn resolve(preferred: Option<&str>, detected: &[Browser]) -> Browser {
 }
 
 /// The command that shows `url`, or the reason it may not be shown.
-pub fn command(browser: &Browser, url: &str) -> Result<Command, String> {
+///
+/// A Chromium given a `profile` gets `--user-data-dir=<profile>` in front of the URL, and
+/// the URL is still exactly ONE argv element. See [`own_profile_dir`] for why that is the
+/// one flag this table adds: it is the difference between a browser that writes its profile
+/// wherever the machine's data directory is - which a confinement can refuse, measured as
+/// `Crashpad … settings.dat: Access is denied` and exit `0x80000003` - and one that writes
+/// it inside this app's own root, where the app has already proved it can write.
+pub fn command_with(
+    browser: &Browser,
+    url: &str,
+    profile: Option<&Path>,
+) -> Result<Command, String> {
     let parsed = url::Url::parse(url).map_err(|error| format!("'{url}' is not a URL: {error}"))?;
     if !urlpolicy::is_internal(&parsed) {
         return Err(format!(
@@ -371,6 +399,12 @@ pub fn command(browser: &Browser, url: &str) -> Result<Command, String> {
                 .as_ref()
                 .ok_or_else(|| format!("{} has no program to run", browser.label))?;
             let mut command = Command::new(program);
+            // The profile flag, where the family documents one, and never a guessed flag.
+            if browser.family == Family::Chromium {
+                if let Some(profile) = profile {
+                    command.arg(format!("--user-data-dir={}", profile.display()));
+                }
+            }
             // ONE argv element. Nothing here is a command string.
             command.arg(url);
             command
@@ -382,12 +416,275 @@ pub fn command(browser: &Browser, url: &str) -> Result<Command, String> {
     Ok(command)
 }
 
-/// Start the browser. Returns the label that was used, for the panel to draw.
-pub fn launch(browser: &Browser, url: &str) -> Result<&'static str, String> {
-    command(browser, url)?
+/// [`command_with`] with no profile of its own.
+pub fn command(browser: &Browser, url: &str) -> Result<Command, String> {
+    command_with(browser, url, None)
+}
+
+/// Where a browser this app starts keeps its profile when it cannot keep it where it
+/// normally would: **inside this app's own root**.
+///
+/// The measured failure this answers, from a real run of this shell:
+/// `Google Chrome exited with status 0x80000003 before it could show the page`, and Chrome's
+/// own words were `CreateFile C:\Users\…\AppData\Local\Google\Chrome\User Data\Crashpad\
+/// settings.dat: Access is denied`. A session that confines what it starts denies the
+/// browser the one directory it cannot work without - and it is the same shape of problem
+/// this app already answers for its CHILDREN, which are handed `<app root>/tmp` when the
+/// machine's temp is refused. The browser gets the same treatment: a profile under the root
+/// the app has proved it can write in, and the person's own Chrome is left completely alone
+/// - the retry is a second window, never a second profile in their browser.
+pub fn own_profile_dir(app_root: &Path) -> PathBuf {
+    app_root.join("browser")
+}
+
+/// What one attempt to show the page actually did.
+///
+/// The distinction exists because `spawn()` is not a page: it says a process was
+/// CREATED, and a browser that dies on the way up - a confined parent that denies it its
+/// own profile, a broken install - is created just as successfully as one that opens a
+/// window. Measured on the machine this was written on: `Command::spawn()` returned `Ok`
+/// while Chrome exited `0x80000003` (STATUS_BREAKPOINT) after
+/// `Crashpad … settings.dat: Access is denied`, and the panel went on saying
+/// "opened in Google Chrome (a new tab)" over a window that never appeared.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Attempt {
+    /// Still running when the settle window closed: this process IS the browser.
+    Running,
+    /// Exited ZERO inside the window: a browser that was already running took the URL and
+    /// the relay left. Success, and the measured shape of one.
+    Handed,
+    /// Exited ZERO, but **nothing about this rung's status can be evidence** - the
+    /// platform's own opener reports success whether or not a page appears. The walk stops
+    /// here only because there is nothing left to try; the panel says exactly this rather
+    /// than claiming a tab.
+    Unverified,
+    /// Exited with a failure status before it could show the page. It did NOT open.
+    Died { code: Option<i32> },
+}
+
+impl Attempt {
+    /// Whether the URL is KNOWN to have reached a browser.
+    pub fn took_the_url(self) -> bool {
+        matches!(self, Attempt::Running | Attempt::Handed)
+    }
+
+    /// What happened, in words, for the panel's log.
+    pub fn line(self, label: &str) -> String {
+        match self {
+            Attempt::Running => format!("started {label}, which is still running"),
+            Attempt::Handed => {
+                format!("handed the page to {label}, which was already running")
+            }
+            Attempt::Unverified => format!(
+                "asked {label} for the page; it reports success without saying whether a window appeared, so this app cannot tell"
+            ),
+            Attempt::Died { code } => format!(
+                "{label} exited with {} before it could show the page, so no tab was opened",
+                match code {
+                    // An NTSTATUS failure is printed the way Windows names it, because
+                    // `0x80000003` is a sentence a search engine understands and
+                    // `-2147483645` is not.
+                    Some(code) if code < 0 => format!("status 0x{:08X}", code as u32),
+                    Some(code) => format!("exit code {code}"),
+                    None => "no exit code at all (killed)".to_string(),
+                }
+            ),
+        }
+    }
+}
+
+/// What an exited program's status means.
+///
+/// `verified` is false for a rung whose exit status proves nothing: the platform's own
+/// opener is a `rundll32` call that **always exits zero**, whether or not a window
+/// appeared - measured on a real run, where the log said `handed the page to the default
+/// browser, which was already running` and no page appeared at all. A status that cannot
+/// be evidence must not be reported as if it were.
+pub fn read_status(code: Option<i32>, verified: bool) -> Attempt {
+    match code {
+        Some(0) if verified => Attempt::Handed,
+        Some(0) => Attempt::Unverified,
+        Some(code) => Attempt::Died { code: Some(code) },
+        None => Attempt::Died { code: None },
+    }
+}
+
+/// One way of asking for the page: a program, and whether it is given a profile of its own
+/// inside this app's root.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rung {
+    pub browser: Browser,
+    /// `Some` for the retry that gets through a confinement (`own_profile_dir`).
+    pub profile: Option<PathBuf>,
+}
+
+impl Rung {
+    fn plain(browser: Browser) -> Rung {
+        Rung { browser, profile: None }
+    }
+
+    /// What the panel and the log call this rung.
+    pub fn label(&self) -> &'static str {
+        self.browser.label
+    }
+}
+
+/// The rungs a hand-off tries, in order.
+///
+/// 1. **the browser this run chose**, as the person's own browser - where it normally is;
+/// 2. **the same browser with a profile inside this app's root**, when it is a Chromium and
+///    an app root exists. This is the rung that answers the measured failure: Chrome exited
+///    `0x80000003` because a confinement refused it its own profile directory, and a profile
+///    under the root the app has already proved it can write is the one thing that changes;
+/// 3. **the platform's own opener**, always last.
+///
+/// `prefer_profile` moves rung 2 in FRONT of rung 1, and the caller sets it from a
+/// measurement rather than a hunch: when this app's own probe of the machine's temp
+/// directory was refused, this session confines what the app starts, so the person's own
+/// browser profile is already known to be unreachable and a doomed launch is not owed to
+/// anybody.
+pub fn rungs(chosen: &Browser, profile_dir: Option<&Path>, prefer_profile: bool) -> Vec<Rung> {
+    let mut rungs = Vec::new();
+    let own = profile_dir
+        .filter(|_| chosen.family == Family::Chromium)
+        .map(|dir| Rung { browser: chosen.clone(), profile: Some(dir.to_path_buf()) });
+    if prefer_profile {
+        if let Some(own) = own.clone() {
+            rungs.push(own);
+        }
+    }
+    rungs.push(Rung::plain(chosen.clone()));
+    if !prefer_profile {
+        if let Some(own) = own {
+            rungs.push(own);
+        }
+    }
+    if !chosen.is_default() {
+        rungs.push(Rung::plain(Browser::default_opener()));
+    }
+    rungs
+}
+
+/// What a whole hand-off did: one line per rung, and which one took the URL.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct HandOff {
+    /// The browser that took the URL, when one did.
+    pub took: Option<&'static str>,
+    /// Whether the rung that took it was given a profile inside this app's own root.
+    pub own_profile: bool,
+    /// One line per rung, in the order they were tried - the panel's log.
+    pub lines: Vec<String>,
+    /// Why nothing took it, when nothing did.
+    pub problem: Option<String>,
+}
+
+impl HandOff {
+    pub fn ok(&self) -> bool {
+        self.took.is_some()
+    }
+
+    /// The sentence a reader gets when the page did not reach a browser.
+    pub fn refusal(&self) -> String {
+        let tried: Vec<String> = self.lines.clone();
+        format!(
+            "{} - no browser took the page: {}",
+            self.problem.as_deref().unwrap_or("every browser this app knows refused the page"),
+            tried.join("; ")
+        )
+    }
+}
+
+/// Start `browser` on `url`, and watch it long enough to tell a browser from a program
+/// that died on the way up.
+///
+/// The URL still leaves as ONE argv element of a program, never through a shell, and the
+/// loopback rule is checked again inside [`command_with`] - this function only adds the
+/// measurement the old one was missing.
+pub fn attempt(rung: &Rung, url: &str, settle: Duration) -> Result<Attempt, String> {
+    let watched = rung.browser.label;
+    let mut child = command_with(&rung.browser, url, rung.profile.as_deref())?
         .spawn()
-        .map_err(|error| format!("could not start {}: {error}", browser.label))?;
-    Ok(browser.label)
+        .map_err(|error| format!("could not start {watched}: {error}"))?;
+    // A rung whose exit status is evidence: a browser's relay exit means the running
+    // instance took the URL, and the platform's opener has no such meaning.
+    let verified = !rung.browser.is_default();
+    let deadline = Instant::now() + settle;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(read_status(status.code(), verified)),
+            Ok(None) => {}
+            Err(error) => return Err(format!("could not watch {watched}: {error}")),
+        }
+        if Instant::now() >= deadline {
+            // Still alive: it is the browser. The handle is dropped and the process is
+            // left alone - `Child` has no `Drop` that kills, which is exactly what is
+            // wanted here.
+            return Ok(Attempt::Running);
+        }
+        std::thread::sleep(POLL);
+    }
+}
+
+/// Walk the rungs until one takes the URL, with the runner passed in.
+///
+/// Split from [`hand_off`] so the LADDER - the order, the stop, the profile retry and what
+/// is reported when every rung refuses - is a `cargo test` case rather than a reading of
+/// the spawn site.
+pub fn walk(
+    chosen: &Browser,
+    profile_dir: Option<&Path>,
+    prefer_profile: bool,
+    mut run: impl FnMut(&Rung) -> Result<Attempt, String>,
+) -> HandOff {
+    let mut report = HandOff::default();
+    for rung in rungs(chosen, profile_dir, prefer_profile) {
+        match run(&rung) {
+            Ok(attempt) => {
+                report.lines.push(attempt.line(rung.label()));
+                if attempt.took_the_url() {
+                    report.took = Some(rung.label());
+                    report.own_profile = rung.profile.is_some();
+                    return report;
+                }
+                // An UNVERIFIED rung is the last one that can be tried - the opener is the
+                // floor - so the walk ends with the honest "cannot tell" rather than with a
+                // claim. Nothing left to try means nothing left to say.
+                if attempt == Attempt::Unverified && rung.browser.is_default() {
+                    report.took = None;
+                    report.problem = Some(format!(
+                        "{} could not show the page, and the platform's own opener reports success without telling this app whether a window appeared",
+                        chosen.label
+                    ));
+                    return report;
+                }
+            }
+            Err(error) => report.lines.push(error),
+        }
+    }
+    report.problem = Some(format!(
+        "{} could not show the page, and neither could the platform's own opener",
+        chosen.label
+    ));
+    report
+}
+
+/// Show `url` in the chosen browser, falling through to a profile of this app's own and
+/// then to the platform's opener.
+///
+/// **Why a fall-through rather than one program.** A browser started as a raw child of a
+/// confined process is a browser the confinement can refuse: measured on a real run, Chrome
+/// exited `0x80000003` after `Access is denied` on its own profile directory - and the same
+/// Chrome, given a profile inside the root this app has proved it can write, is a different
+/// proposition. One rung that dies is therefore not the end of the road, and a rung that
+/// dies is never reported as a tab that opened.
+pub fn hand_off(
+    chosen: &Browser,
+    url: &str,
+    profile_dir: Option<&Path>,
+    prefer_profile: bool,
+    settle: Duration,
+) -> HandOff {
+    walk(chosen, profile_dir, prefer_profile, |rung| attempt(rung, url, settle))
 }
 
 /// The stable ids this build knows, for validating a preferences file.
@@ -572,5 +869,228 @@ mod tests {
         }
         assert!(known_ids().contains(&"default"));
         assert!(known_ids().contains(&"chrome"));
+    }
+
+    // -----------------------------------------------------------------------
+    // A spawned process is not a page
+    // -----------------------------------------------------------------------
+
+    fn chrome() -> Browser {
+        Browser {
+            id: "chrome",
+            label: "Google Chrome",
+            family: Family::Chromium,
+            program: Some(PathBuf::from("chrome")),
+        }
+    }
+
+    #[test]
+    fn a_relay_that_left_cleanly_took_the_url_and_a_crash_did_not() {
+        // The measured pair: a browser that was already running exits 0, and the Chrome
+        // this repository watched die exits 0x80000003 after Crashpad was refused.
+        assert_eq!(read_status(Some(0), true), Attempt::Handed);
+        assert!(read_status(Some(0), true).took_the_url());
+        assert_eq!(
+            read_status(Some(0x80000003u32 as i32), true),
+            Attempt::Died { code: Some(-2147483645) }
+        );
+        assert!(!read_status(Some(0x80000003u32 as i32), true).took_the_url());
+        assert!(!read_status(Some(101), true).took_the_url(), "a non-zero exit is never a tab");
+        assert!(!read_status(None, true).took_the_url());
+        // The words a person reads, and the reason the high half is printed as hex.
+        let line = read_status(Some(0x80000003u32 as i32), true).line("Google Chrome");
+        assert!(line.contains("0x80000003"), "{line}");
+        assert!(line.contains("no tab was opened"), "{line}");
+        assert!(read_status(Some(0), true).line("Google Chrome").contains("already running"));
+    }
+
+    #[test]
+    fn the_platform_opener_reports_success_it_cannot_back_up() {
+        // MEASURED, from a real run: `rundll32 url.dll,FileProtocolHandler <url>` exits
+        // ZERO whether or not a window appears - the log said "handed the page to the
+        // default browser, which was already running" over a screen with nothing on it. A
+        // status that cannot be evidence is not reported as one, and the walk does not
+        // claim a tab for it.
+        let unverified = read_status(Some(0), false);
+        assert_eq!(unverified, Attempt::Unverified);
+        assert!(!unverified.took_the_url());
+        let line = unverified.line("the default browser");
+        assert!(line.contains("cannot tell"), "{line}");
+        // ...and a FAILURE status from the opener is still a failure.
+        assert_eq!(read_status(Some(1), false), Attempt::Died { code: Some(1) });
+    }
+
+    #[test]
+    fn a_rung_that_died_falls_through_to_the_profile_of_this_apps_own() {
+        // The measured failure this rung exists for: Chrome dies on its OWN profile
+        // directory, and the same Chrome given one inside this app's root is a different
+        // proposition. The walk stops at the first rung that takes the URL.
+        let mut tried: Vec<(String, bool)> = Vec::new();
+        let report = walk(&chrome(), Some(Path::new("/root/browser")), false, |rung| {
+            tried.push((rung.browser.id.to_string(), rung.profile.is_some()));
+            if rung.profile.is_some() {
+                Ok(Attempt::Running)
+            } else {
+                Ok(Attempt::Died { code: Some(0x80000003u32 as i32) })
+            }
+        });
+        assert_eq!(
+            tried,
+            vec![("chrome".to_string(), false), ("chrome".to_string(), true)],
+            "the person's own browser first, then one with a profile of ours"
+        );
+        assert!(report.ok());
+        assert_eq!(report.took, Some("Google Chrome"));
+        assert!(report.own_profile, "the row must say the window is this app's own");
+        assert_eq!(report.lines.len(), 2, "{:?}", report.lines);
+        assert!(report.lines[1].contains("still running"), "{:?}", report.lines);
+    }
+
+    #[test]
+    fn a_confined_session_is_offered_the_profile_of_our_own_first() {
+        // `prefer_profile` is set from a measurement - this app's own temp probe was
+        // refused - so the person's profile is already known to be unreachable and a
+        // doomed launch is not owed to anybody.
+        let ladder = super::rungs(&chrome(), Some(Path::new("/root/browser")), true);
+        assert_eq!(ladder.len(), 3, "{ladder:?}");
+        assert!(ladder[0].profile.is_some(), "the profile of our own comes first");
+        assert!(ladder[1].profile.is_none());
+        assert!(ladder[2].browser.is_default());
+        // The ordinary order, when nothing measured a confinement.
+        let ladder = super::rungs(&chrome(), Some(Path::new("/root/browser")), false);
+        assert!(ladder[0].profile.is_none());
+        assert!(ladder[1].profile.is_some());
+        assert!(ladder[2].browser.is_default());
+    }
+
+    #[test]
+    fn only_a_chromium_is_given_a_profile_flag_and_the_url_stays_one_argument() {
+        // The flag goes where the family documents one - Chrome and its relatives - and
+        // the URL is STILL exactly one argv element, which is the rule that carries the
+        // launch token.
+        let url = "http://127.0.0.1:3080/?token=x";
+        let built = command_with(&chrome(), url, Some(Path::new(r"C:\root\browser"))).unwrap();
+        let args: Vec<String> =
+            built.get_args().map(|arg| arg.to_string_lossy().to_string()).collect();
+        assert_eq!(args.len(), 2, "{args:?}");
+        assert_eq!(args[0], r"--user-data-dir=C:\root\browser");
+        assert_eq!(args[1], url, "the URL must still be exactly one argument");
+
+        // Firefox has no such flag in this table, so it is never given one.
+        let firefox = Browser {
+            id: "firefox",
+            label: "Mozilla Firefox",
+            family: Family::Firefox,
+            program: Some(PathBuf::from("firefox")),
+        };
+        let built = command_with(&firefox, url, Some(Path::new("/root/browser"))).unwrap();
+        let args: Vec<String> =
+            built.get_args().map(|arg| arg.to_string_lossy().to_string()).collect();
+        assert_eq!(args, vec![url.to_string()], "{args:?}");
+
+        // ...and the floor never takes one either: it is handed a URL, not a browser.
+        let built = command_with(&Browser::default_opener(), url, Some(Path::new("/root/b")))
+            .unwrap();
+        let args: Vec<String> =
+            built.get_args().map(|arg| arg.to_string_lossy().to_string()).collect();
+        assert!(args.iter().all(|arg| !arg.starts_with("--user-data-dir")), "{args:?}");
+        assert_eq!(args.last().map(String::as_str), Some(url));
+
+        // The loopback rule still holds with a profile in front of the URL.
+        assert!(command_with(&chrome(), "http://evil.example/", Some(Path::new("/root/b"))).is_err());
+    }
+
+    #[test]
+    fn the_profile_this_app_offers_lives_inside_its_own_root() {
+        let dir = own_profile_dir(Path::new("/root"));
+        assert_eq!(dir, Path::new("/root").join("browser"));
+        assert!(dir.starts_with("/root"), "the browser writes where the app can: {}", dir.display());
+    }
+
+    #[test]
+    fn a_rung_that_died_falls_through_to_the_platforms_own_opener() {
+        // The rung that DIED is not the end of the road: the floor is tried, and the
+        // report names the browser that really took the URL.
+        let mut tried: Vec<&'static str> = Vec::new();
+        let report = walk(&chrome(), None, false, |rung| {
+            tried.push(rung.browser.id);
+            if rung.browser.is_default() {
+                Ok(Attempt::Running)
+            } else {
+                Ok(Attempt::Died { code: Some(0x80000003u32 as i32) })
+            }
+        });
+        assert_eq!(tried, vec!["chrome", "default"], "the floor must be the last rung");
+        assert!(report.ok());
+        assert_eq!(report.took, Some("the default browser"));
+        assert_eq!(report.lines.len(), 2);
+        assert!(report.lines[0].contains("no tab was opened"), "{:?}", report.lines);
+        assert!(report.lines[1].contains("still running"), "{:?}", report.lines);
+    }
+
+    #[test]
+    fn the_first_rung_that_takes_the_url_ends_the_walk() {
+        let mut tried: Vec<&'static str> = Vec::new();
+        let report = walk(&chrome(), None, false, |rung| {
+            tried.push(rung.browser.id);
+            Ok(Attempt::Handed)
+        });
+        assert_eq!(tried, vec!["chrome"], "a working rung must not be followed by another tab");
+        assert_eq!(report.took, Some("Google Chrome"));
+        // A refusal to start at all is a rung that failed, not an error out of the walk.
+        let report = walk(&chrome(), None, false, |rung| {
+            if rung.browser.is_default() {
+                Ok(Attempt::Handed)
+            } else {
+                Err("could not start Google Chrome: access is denied".to_string())
+            }
+        });
+        assert!(report.ok());
+        assert!(report.lines[0].contains("access is denied"), "{:?}", report.lines);
+    }
+
+    #[test]
+    fn a_chosen_default_opener_is_not_tried_twice() {
+        let floor = super::rungs(&Browser::default_opener(), None, false);
+        assert_eq!(floor.len(), 1, "the floor must not be followed by itself");
+        let ladder = super::rungs(&chrome(), None, false);
+        assert_eq!(ladder.len(), 2);
+        assert!(ladder[1].browser.is_default());
+        // Every rung the walk tries is a real one, in the table's own order.
+        let (facts, programs) = windows();
+        let detected = detect_with(&facts, &present(&programs));
+        assert_eq!(super::rungs(&detected[1], None, false)[0].browser.id, "firefox");
+    }
+
+    #[test]
+    fn nothing_taking_the_url_is_reported_with_every_rung_it_tried() {
+        let report = walk(&chrome(), None, false, |_rung| Ok(Attempt::Died { code: Some(5) }));
+        assert!(!report.ok());
+        assert_eq!(report.took, None);
+        let refusal = report.refusal();
+        assert!(refusal.contains("Google Chrome"), "{refusal}");
+        assert!(refusal.contains("platform's own opener"), "{refusal}");
+        // Each rung's own sentence survives into the refusal, so the reader can see
+        // that BOTH were tried.
+        assert_eq!(refusal.matches("no tab was opened").count(), 2, "{refusal}");
+    }
+
+    #[test]
+    fn an_opener_that_reports_success_over_nothing_is_never_called_a_tab() {
+        // The real run this pins: Chrome died, the opener exited 0, and the panel said
+        // "opened ... in the default browser" while the screen stayed empty. The walk now
+        // ends in a refusal that names what could NOT be verified.
+        let report = walk(&chrome(), Some(Path::new("/root/browser")), true, |rung| {
+            if rung.browser.is_default() {
+                Ok(Attempt::Unverified)
+            } else {
+                Ok(Attempt::Died { code: Some(0x80000003u32 as i32) })
+            }
+        });
+        assert!(!report.ok(), "an unverifiable opener is not a tab");
+        assert_eq!(report.took, None);
+        let refusal = report.refusal();
+        assert!(refusal.contains("reports success without telling this app"), "{refusal}");
+        assert_eq!(report.lines.len(), 3, "all three rungs were tried: {:?}", report.lines);
     }
 }

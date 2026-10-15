@@ -179,19 +179,19 @@ impl Plan {
 pub fn plan(options: &Options, remembered: Option<&Path>) -> Result<Plan, String> {
     let root = launch::repo_root();
     let version = launch::resolve_version(options)?;
-    // THE INSTALLATION ALREADY ON THIS MACHINE, decided before the ladder runs: a real
-    // harness home, a child can write in it, and this app's own home still holds
-    // nothing of the person's. Without this the app came up on a fresh, bare harness
-    // beside a complete installation - measured, and the person's word for it was
-    // "still does not run normally".
-    let own_home = vn_shell_core::appdata::app_root()
-        .map(|root| vn_shell_core::appdata::owned_home(&root));
-    let found = vn_shell_core::home::found_installation(
-        vn_shell_core::home::existing_default_home().as_deref(),
-        own_home.as_deref(),
+    // NOTHING OUTSIDE THIS APP'S OWN ROOT IS EVER THE HOME. The "installation already on
+    // this machine" rung is gone: a folder that carries everything it needs must not
+    // reach into a person's profile to start, and the two things that rung answered - a
+    // home with no pack, and a home with no key - are answered by Start (which installs
+    // the pack into the home in use) and by the key row. `~/.dsh` survives as the source
+    // of the COPY offer alone, which only reads.
+    let resolved = home::from_env(options.dsh_home.as_deref(), remembered);
+    let chosen = launch::choose_launch(
+        root.as_deref(),
+        resolved.app_root_path(),
+        resolved.home_path(),
+        &version,
     );
-    let resolved = home::from_env(options.dsh_home.as_deref(), remembered, found.as_deref());
-    let chosen = launch::choose_launch(root.as_deref(), resolved.home_path(), &version);
     let mut notes = resolved.notes();
     // The preflight, as a NOTE here rather than a refusal: the panel says it the
     // moment it opens. Only an explicit `-DshHome` actually stops a Start (see
@@ -246,18 +246,23 @@ pub fn plan(options: &Options, remembered: Option<&Path>) -> Result<Plan, String
 /// same warning `run-web.ps1` prints, from the same source of truth: the web
 /// profile's own bundle list.
 ///
-/// The words name the PANEL, not the installer scripts, because that is where a reader
-/// of this note is standing: the panel's **Install pack** button runs exactly those
-/// scripts, with this home's `-DshHome`, and it is one click. Measured on a real run:
-/// the note said "run scripts/setup/install.bat" to somebody looking at a window that
-/// has a button for it, and the app went on looking broken.
+/// The words name the PANEL's own controls, which is where a reader of this note is
+/// standing: **Start** installs the pack into THIS home before it starts the harness, and
+/// **Install pack here** does the same on demand. Measured on a real run: the note said
+/// "run scripts/setup/install.bat" to somebody looking at a window that has a button for
+/// it, and the app went on looking broken.
+///
+/// NO MARKDOWN, and that is a rule rather than a preference: this string is drawn with
+/// `ui.label`, so `**Install pack**` reaches the reader as literal asterisks - measured
+/// on the first-run screen, beside the cards. Emphasis belongs in the docs, not in a
+/// sentence a person reads in the window.
 pub fn missing_pack_note(home: Option<&Path>, profile: &str) -> Option<String> {
     let home = home?;
     let profile_dir = home.join("profiles").join(profile);
     let manifest = profile_dir.join("package.json");
     if !manifest.is_file() {
         return Some(format!(
-            "there is no {profile} profile at {} yet, so the harness will come up unadorned. Press **Install pack** (stop the harness first) to add this pack's bundles to THIS home",
+            "there is no {profile} profile at {} yet, so the harness will come up unadorned. Start installs this pack into THIS home first, or press Install pack here on the pack row",
             profile_dir.display()
         ));
     }
@@ -276,7 +281,7 @@ pub fn missing_pack_note(home: Option<&Path>, profile: &str) -> Option<String> {
         None
     } else {
         Some(format!(
-            "the {profile} profile at {} does not list this pack's bundles, so the harness comes up unadorned (no right bar, no editor, no themes). Press **Install pack** to add them to THIS home - or **Use .dsh** to run the home that already has them",
+            "the {profile} profile at {} does not list this pack's bundles, so the harness comes up unadorned (no right bar, no editor, no themes). Start installs them into THIS home first (or press Install pack here on the pack row). To run the home that already has them instead, press Change and choose it",
             profile_dir.display()
         ))
     }
@@ -908,9 +913,11 @@ mod tests {
         std::fs::create_dir_all(root.join("profiles").join("web")).unwrap();
         let note = missing_pack_note(Some(&root), "web").expect("a note is due");
         assert!(note.contains("no web profile"), "{note}");
-        // The words point at the PANEL's button, which is where the reader is - not
-        // at an installer script they would have to run by hand.
-        assert!(note.contains("**Install pack**"), "{note}");
+        // The words point at the PANEL's own controls, which is where the reader is -
+        // not at an installer script they would have to run by hand, and not at a button
+        // this build no longer has.
+        assert!(note.contains("Start installs"), "{note}");
+        assert!(note.contains("Install pack here"), "{note}");
         // A profile with the manifest but without the pack gets the other note.
         std::fs::write(
             root.join("profiles").join("web").join("package.json"),
@@ -920,7 +927,16 @@ mod tests {
         let note = missing_pack_note(Some(&root), "web").expect("a note is due");
         assert!(note.contains("does not list this pack's bundles"), "{note}");
         assert!(note.contains("unadorned"), "{note}");
-        assert!(note.contains("**Use .dsh**"), "{note}");
+        assert!(note.contains("press Change and choose it"), "{note}");
+        // MARKDOWN IS NOT RENDERED HERE. This sentence is drawn with `ui.label`, so
+        // `**bold**` reaches the reader as asterisks - measured on the first-run screen,
+        // where the note sat beside the cards. No emphasis, anywhere in a note.
+        for note in [
+            missing_pack_note(Some(&root), "web").unwrap(),
+            missing_pack_note(Some(&root.join("nothing")), "web").unwrap(),
+        ] {
+            assert!(!note.contains("**"), "a note carries markdown emphasis: {note}");
+        }
         // ...and one that lists the pack gets nothing at all.
         std::fs::write(
             root.join("profiles").join("web").join("package.json"),

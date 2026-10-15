@@ -145,11 +145,19 @@ pub struct SetupStatus {
     pub exit: Option<i32>,
     /// The last thing worth saying, in words that are safe to draw.
     pub detail: Option<String>,
+    /// **The last line the installer printed that is worth drawing**, while it runs.
+    ///
+    /// The panel's `pack` row shows this, and it is the answer to a real report: an
+    /// install that re-resolves the harness's dependency graph prints nothing for
+    /// minutes, so a row saying "installing…" and nothing else read as an app that had
+    /// stopped. The line is the installer's own - `- adding dsh-editor 0.1.0-alpha.13
+    /// (first install)` - trimmed and bounded, never composed here.
+    pub last: Option<String>,
 }
 
 impl Default for SetupStatus {
     fn default() -> Self {
-        SetupStatus { kind: None, running: false, exit: None, detail: None }
+        SetupStatus { kind: None, running: false, exit: None, detail: None, last: None }
     }
 }
 
@@ -227,7 +235,13 @@ impl Setup {
         }
         {
             let mut status = self.status.lock().unwrap_or_else(|error| error.into_inner());
-            *status = SetupStatus { kind: Some(kind), running: true, exit: None, detail: None };
+            *status = SetupStatus {
+                kind: Some(kind),
+                running: true,
+                exit: None,
+                detail: None,
+                last: None,
+            };
         }
         self.running.store(true, Ordering::SeqCst);
         let shell = Arc::clone(self);
@@ -260,6 +274,47 @@ impl Setup {
         }
         self.running.store(false, Ordering::SeqCst);
     }
+
+    /// Remember the last line worth drawing while a run is in flight.
+    fn note(&self, line: String) {
+        let mut status = self.status.lock().unwrap_or_else(|error| error.into_inner());
+        status.last = Some(line);
+    }
+}
+
+/// How much of the installer's own line the panel's `pack` row keeps.
+///
+/// One row, one line, no wrapping into a paragraph: a progress line that pushes the rest
+/// of the row off the window is worse than a shortened one.
+const PROGRESS_CHARS: usize = 72;
+
+/// **The one line out of an installer's output that says how far along it is**, if the
+/// line is one - the installer's own progress wording, or pnpm's, and nothing else.
+///
+/// Measured need: an install prints nothing for minutes while npm resolves the
+/// harness's dependency graph, so "installing…" alone was indistinguishable from an app
+/// that had stopped. A pure function, so what counts as progress is a `cargo test` case
+/// rather than a guess made inside a reader thread.
+fn progress_line(line: &str) -> Option<String> {
+    let text = line.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let interesting = [
+        "- adding",
+        "- added",
+        "- removing",
+        "- removed",
+        "- skills:",
+        "Progress:",
+        "Packages:",
+    ]
+    .iter()
+    .any(|prefix| text.starts_with(prefix));
+    if !interesting {
+        return None;
+    }
+    Some(text.chars().take(PROGRESS_CHARS).collect())
 }
 
 /// The worker: spawn the entry point, stream both of its streams, record the exit.
@@ -298,9 +353,12 @@ fn run(
     let mut readers = Vec::new();
     for stream in [stdout.map(Stream::Out), stderr.map(Stream::Err)].into_iter().flatten() {
         let console = Arc::clone(&shell.console);
+        // The status is shared with the reader threads so the panel can show HOW FAR
+        // ALONG the install is, not merely that one started.
+        let watcher = Arc::clone(&shell);
         readers.push(thread::spawn(move || match stream {
-            Stream::Out(reader) => drain(console, reader, false),
-            Stream::Err(reader) => drain(console, reader, true),
+            Stream::Out(reader) => drain(console, Some(watcher), reader, false),
+            Stream::Err(reader) => drain(console, None, reader, true),
         }));
     }
 
@@ -313,6 +371,7 @@ fn run(
         running: false,
         exit,
         detail: None,
+        last: None,
     }
     .line());
     shell.finish(kind, exit);
@@ -323,9 +382,22 @@ enum Stream {
     Err(std::process::ChildStderr),
 }
 
-fn drain<R: std::io::Read>(console: Arc<Console>, reader: R, is_error: bool) {
+fn drain<R: std::io::Read>(
+    console: Arc<Console>,
+    watcher: Option<Arc<Setup>>,
+    reader: R,
+    is_error: bool,
+) {
     use std::io::{BufRead, BufReader};
     for line in BufReader::new(reader).lines().map_while(Result::ok) {
+        // The installer's own progress reaches the status as well as the log, so the
+        // pack row can say which bundle it is on. Only STDOUT: a warning on stderr is
+        // not progress, and the two streams interleave.
+        if let Some(watcher) = watcher.as_ref() {
+            if let Some(progress) = progress_line(&line) {
+                watcher.note(progress);
+            }
+        }
         // The installer's own errors are kept distinguishable in one transcript,
         // because "which stream said this" is the first question about a failure.
         if is_error {
@@ -518,17 +590,53 @@ mod tests {
     #[test]
     fn the_status_says_what_happened_in_words() {
         let running =
-            SetupStatus { kind: Some(SetupKind::Install), running: true, exit: None, detail: None };
+            SetupStatus { kind: Some(SetupKind::Install), running: true, exit: None, detail: None, last: None };
         assert!(running.line().contains("installing"), "{}", running.line());
         let done =
-            SetupStatus { kind: Some(SetupKind::Install), running: false, exit: Some(0), detail: None };
+            SetupStatus { kind: Some(SetupKind::Install), running: false, exit: Some(0), detail: None, last: None };
         assert!(done.succeeded());
         assert!(done.line().contains("finished successfully"), "{}", done.line());
         let failed =
-            SetupStatus { kind: Some(SetupKind::Uninstall), running: false, exit: Some(1), detail: None };
+            SetupStatus { kind: Some(SetupKind::Uninstall), running: false, exit: Some(1), detail: None, last: None };
         assert!(!failed.succeeded());
         assert!(failed.line().contains("FAILED (exit code 1)"), "{}", failed.line());
         assert!(SetupStatus::default().line().contains("has not been"));
+    }
+
+    #[test]
+    fn only_the_installers_own_progress_lines_become_the_row() {
+        // The installer's own wording, and pnpm's progress - the two things that say
+        // "this is still moving".
+        assert_eq!(
+            progress_line("  - adding dsh-editor 0.1.0-alpha.13 (first install) ..."),
+            Some("- adding dsh-editor 0.1.0-alpha.13 (first install) ...".to_string())
+        );
+        assert_eq!(
+            progress_line("Progress: resolved 1234, reused 0, downloaded 12"),
+            Some("Progress: resolved 1234, reused 0, downloaded 12".to_string())
+        );
+        assert!(progress_line("  - added dsh-editor").is_some());
+        // Everything else stays in the log, where a reader can read all of it.
+        assert_eq!(progress_line(""), None);
+        assert_eq!(progress_line("   "), None);
+        assert_eq!(progress_line("dsh: initialized profile web"), None);
+        assert_eq!(progress_line("npm warn deprecated inflight@1.0.6"), None);
+        // A line longer than the row is shortened rather than allowed to push the rest
+        // of the row out of the window.
+        let long = format!("- adding {}", "x".repeat(300));
+        assert_eq!(progress_line(&long).unwrap().chars().count(), PROGRESS_CHARS);
+    }
+
+    #[test]
+    fn the_runner_remembers_the_last_line_it_was_told() {
+        let console = Arc::new(Console::new());
+        let setup = Setup::new(console);
+        assert_eq!(setup.status().last, None);
+        setup.note("- adding dsh-pdf 0.1.0-alpha.8".to_string());
+        assert_eq!(
+            setup.status().last.as_deref(),
+            Some("- adding dsh-pdf 0.1.0-alpha.8")
+        );
     }
 
     #[test]

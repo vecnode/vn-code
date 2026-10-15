@@ -130,6 +130,19 @@ pub fn home_is_untouched_by_a_person(home: &Path) -> bool {
         && !credentials_have_content(&home.join(CREDENTIALS))
 }
 
+/// Whether the credentials document would actually be brought across: the source has one
+/// with CONTENT and the target's is absent or empty.
+///
+/// Public because two places must agree about it and neither may guess: the offer itself
+/// ([`target_has_room_for`]) and the first-run card's own facts, which used to advertise
+/// "your key, if you tick it" beside a red sentence saying there was nothing left to
+/// bring - measured on a machine where the key sat in both homes. A file SIZE on both
+/// sides, and never a read, so the presence-only rule stands.
+pub fn credentials_can_be_brought(source: &Path, target: &Path) -> bool {
+    credentials_have_content(&source.join(CREDENTIALS))
+        && !credentials_have_content(&target.join(CREDENTIALS))
+}
+
 /// Whether there is anything left to bring across - the rule that decides whether the
 /// panel offers Adopt at all.
 ///
@@ -149,8 +162,7 @@ pub fn target_has_room_for(source: &Path, target: &Path) -> bool {
     DURABLE.iter().any(|(name, _)| {
         let from = source.join(name);
         from.exists() && !has_content(&target.join(name))
-    }) || (credentials_have_content(&source.join(CREDENTIALS))
-        && !credentials_have_content(&target.join(CREDENTIALS)))
+    }) || credentials_can_be_brought(source, target)
 }
 
 /// Whether the source can be read at all. A source that cannot is not adopted

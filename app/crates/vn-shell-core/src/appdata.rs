@@ -6,11 +6,22 @@
 //! ```text
 //! $VNCODE_HOME                     the app's root: furniture the app owns
 //!   ├── window.json                the geometry record
+//!   ├── prefs.json                 the browser and the home this person chose
 //!   ├── npm-cache/                 the npx fallback's cache
 //!   └── home/                      DSH_HOME by default: everything that matters
 //!       ├── profiles/  sessions/  storages/  attachments/  skills/
 //!       └── .credentials.yaml
 //! ```
+//!
+//! ## One root, and the portable one
+//!
+//! Everything the app owns lives under ONE root - the geometry, `prefs.json`, the npm
+//! cache and the home - so a folder can be picked up and moved, and so a root the app
+//! could not write (a confined run, a read-only mount) never splits the app's memory
+//! in two. `<tree>/.vncode` is that root when the folder is a **portable
+//! installation**: it carries the marker, or it already holds a home (see
+//! [`portable_root`]). A folder that is neither uses the platform's own data root,
+//! and the app's own home inside it.
 //!
 //! The furniture sits outside the home because the app must not write its own
 //! records into a home it did not create, and because `-DshHome` may point at a
@@ -109,6 +120,13 @@ pub fn root_in(data_root: &std::path::Path) -> PathBuf {
 /// The app's root, first match winning: `VNCODE_HOME`, then the platform's own
 /// per-user data root.
 ///
+/// This is ONE CANDIDATE, not the decision: `home::root_candidates` walks the whole
+/// ladder (`VNCODE_HOME`, a portable folder's own root, this, then the folder beside
+/// the tree) and probes each rung by writing. What this function is still the answer
+/// to is "where is the record that outlives every root" - the platform copy of
+/// `prefs.json` is read as a fallback when the ladder's own root has none, and that is
+/// the only reason it is asked before the ladder runs.
+///
 /// `None` means neither is available. `home.rs` answers that with the tree-adjacent
 /// candidate and then a named failure - never with a guess.
 pub fn app_root_with(named: Option<&str>, data_root: Option<&std::path::Path>) -> Option<PathBuf> {
@@ -138,6 +156,58 @@ pub fn tree_root(tree: &std::path::Path) -> PathBuf {
 /// The harness home inside a root: `<root>/home`.
 pub fn owned_home(app_root: &std::path::Path) -> PathBuf {
     app_root.join("home")
+}
+
+/// The marker a person (or this app's own button) leaves to say **keep everything
+/// in this folder**: `<tree>/.vncode/PORTABLE`.
+///
+/// It is a FILE, not the folder, because the folder is created by anything that
+/// falls back to it - including a confined run, which is exactly the case where a
+/// last-resort root must not quietly become a policy. The marker is a decision.
+pub const PORTABLE_MARKER: &str = "PORTABLE";
+
+/// The portable marker inside a tree's own root: `<tree>/.vncode/PORTABLE`.
+pub fn portable_marker(tree: &std::path::Path) -> PathBuf {
+    tree_root(tree).join(PORTABLE_MARKER)
+}
+
+/// **The tree's own root, when this folder is a portable installation.**
+///
+/// Two facts make it one, and the first is what makes a folder "remembered next
+/// time" without anybody pressing anything:
+///
+/// * the marker is there (`<tree>/.vncode/PORTABLE`) - the explicit choice, written by
+///   the panel's own button; or
+/// * the folder already holds a home (`<tree>/.vncode/home`) - the app has ALREADY put
+///   this person's sessions, skills and profile there, so preferring the platform's
+///   data directory now would silently start a second installation beside it. That is
+///   the measured state of a machine whose app root fell through to the tree under a
+///   confinement: the next ordinary double-click must use that home, not a new one.
+///
+/// Read only: nothing here creates the folder or the marker. `mark_portable` does
+/// that, and only on a click.
+pub fn portable_root(tree: &std::path::Path) -> Option<PathBuf> {
+    let root = tree_root(tree);
+    if portable_marker(tree).is_file() || owned_home(&root).is_dir() {
+        Some(root)
+    } else {
+        None
+    }
+}
+
+/// Make this folder a portable installation: create its root and write the marker.
+///
+/// Returns the root that the NEXT start will use. The running app cannot move its own
+/// root (the home, the geometry and the preferences all live in it), which is why the
+/// panel says "restart" rather than pretending the click took effect now.
+pub fn mark_portable(tree: &std::path::Path) -> Result<PathBuf, String> {
+    let root = tree_root(tree);
+    std::fs::create_dir_all(&root)
+        .map_err(|error| format!("could not create {}: {error}", root.display()))?;
+    let marker = portable_marker(tree);
+    std::fs::write(&marker, b"portable\n")
+        .map_err(|error| format!("could not write {}: {error}", marker.display()))?;
+    Ok(root)
 }
 
 /// A scratch directory this application owns, under its own root: `<root>/tmp`.
@@ -406,6 +476,43 @@ mod tests {
             tree_root(std::path::Path::new("/repo")),
             PathBuf::from("/repo").join(".vncode")
         );
+    }
+
+    #[test]
+    fn a_folder_is_portable_by_the_marker_or_by_the_home_it_already_holds() {
+        let tree = scratch("portable");
+        std::fs::create_dir_all(&tree).unwrap();
+        // A fresh checkout is NOT portable: nothing has chosen the folder yet.
+        assert_eq!(portable_root(&tree), None);
+        // ...the marker is the explicit choice.
+        let root = mark_portable(&tree).unwrap();
+        assert_eq!(root, tree.join(".vncode"));
+        assert!(portable_marker(&tree).is_file());
+        assert_eq!(portable_root(&tree), Some(root.clone()));
+
+        // ...and a home already inside the root is the same answer without a marker,
+        // because the app has already put this person's state there.
+        let other = scratch("portable-home-only");
+        std::fs::create_dir_all(owned_home(&tree_root(&other))).unwrap();
+        assert_eq!(portable_root(&other), Some(tree_root(&other)));
+        assert!(!portable_marker(&other).exists(), "reading must not write the marker");
+
+        let _ = std::fs::remove_dir_all(&tree);
+        let _ = std::fs::remove_dir_all(&other);
+    }
+
+    #[test]
+    fn marking_a_folder_portable_creates_the_root_and_reports_a_refusal() {
+        let tree = scratch("mark");
+        std::fs::create_dir_all(&tree).unwrap();
+        assert!(mark_portable(&tree).is_ok());
+        // A tree that cannot hold a folder - its own path is a FILE - is refused with
+        // the path in the sentence rather than silently doing nothing.
+        let blocker = tree.join("a-file");
+        std::fs::write(&blocker, b"x").unwrap();
+        let error = mark_portable(&blocker).unwrap_err();
+        assert!(error.contains("could not create"), "{error}");
+        let _ = std::fs::remove_dir_all(&tree);
     }
 
     #[test]

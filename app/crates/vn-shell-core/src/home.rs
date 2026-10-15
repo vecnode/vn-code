@@ -12,18 +12,26 @@
 //!
 //! Since M0 the app owns a root, and the harness home is a directory inside it:
 //!
-//! * **the app root** (`$VNCODE_HOME`): `VNCODE_HOME` in the environment, else
-//!   `<OS data root>/vncode`, else `<tree>/.vncode`, else a named failure. It holds
-//!   the furniture - the window record, the preferences, the npm cache - and the home.
+//! * **the app root** (`$VNCODE_HOME`): `VNCODE_HOME` in the environment, else a
+//!   **portable** folder's own root (`<tree>/.vncode`, when it carries the marker or
+//!   already holds a home), else `<OS data root>/vncode`, else `<tree>/.vncode`, else a
+//!   named failure. It holds the furniture - the window record, the preferences, the
+//!   npm cache - and the home. Every one of those lives under the ONE root the ladder
+//!   chose, so a root that cannot be written never splits the app's memory in two.
 //! * **the harness home**: `-DshHome` (strict: a refusal ends the run, because an
 //!   explicit instruction is never silently ignored), else the home this person chose
 //!   in the panel (remembered in the app root), else an inherited `DSH_HOME` that is
 //!   writable, else `<app root>/home`.
 //!
-//! The harness's own `~/.dsh` default is deliberately NOT a candidate: it belongs to
-//! whichever harness used it first (`scripts\run-web.bat`, `npx dsh web`, another
-//! installation entirely). It is an *input* - the panel offers to USE it or to ADOPT
-//! a copy of it, and both are one click - but the app never walks to it on its own.
+//! **Nothing outside the app's own root is ever the home it runs against.** The
+//! harness's own `~/.dsh` default was once a courtesy rung here - "the installation
+//! already on this machine", used while the app's own home was still empty - and it is
+//! now gone: a folder that carries everything it needs must not reach into a person's
+//! profile to start, and this app already answers the two things that rung existed for
+//! (a home with no pack, and a home with no key) on its own: Start installs the pack into
+//! the home in use, and the key row asks for the key. `~/.dsh` survives as an *input* to
+//! the copy offer alone - a one-way import of a person's own sessions, read and never run
+//! against.
 //!
 //! ## Every candidate is a cleaned-up path
 //!
@@ -61,14 +69,14 @@ pub enum Origin {
     Remembered,
     /// `DSH_HOME` was inherited from this shell's own environment.
     Inherited,
-    /// **The installation already on this machine**: the harness's own default home
-    /// when it holds a real installation, a child can write in it, and the app's own
-    /// home still holds nothing of the person's.
-    Found,
     /// This app's own home, inside the root.
     Owned,
     /// `VNCODE_HOME` named the app's root.
     NamedRoot,
+    /// **This folder is a portable installation**: it carries the marker, or it
+    /// already holds a home, so `<tree>/.vncode` is the root rather than the
+    /// platform's data directory. See `appdata::portable_root`.
+    PortableRoot,
     /// The platform's own per-user data root, plus `vncode`.
     PlatformRoot,
     /// The folder beside the checkout: `<tree>/.vncode`.
@@ -81,9 +89,9 @@ impl Origin {
             Origin::Flag => "from -DshHome",
             Origin::Remembered => "the home you chose in this panel",
             Origin::Inherited => "from the inherited DSH_HOME",
-            Origin::Found => "the installation already on this machine",
             Origin::Owned => "this app's own home (the default)",
             Origin::NamedRoot => "from VNCODE_HOME",
+            Origin::PortableRoot => "this folder, because it is a portable installation",
             Origin::PlatformRoot => "this app's root in the platform's data directory",
             Origin::TreeRoot => "beside the checkout, because nothing else could be written",
         }
@@ -244,13 +252,14 @@ pub struct Inputs<'a> {
     pub remembered: Option<&'a Path>,
     /// `DSH_HOME` inherited from whatever started this app.
     pub inherited: Option<&'a str>,
-    /// The installation already on this machine, when the caller decided it should be
-    /// used (see [`found_installation`]).
-    pub found: Option<&'a Path>,
     /// The platform's own per-user data root.
     pub data_root: Option<&'a Path>,
     /// Where `.dsh-version.json` was found.
     pub tree_root: Option<&'a Path>,
+    /// The tree's own root, when this folder is a portable installation
+    /// (`appdata::portable_root`). Read before the ladder runs and passed in, so the
+    /// ladder itself stays a pure decision over paths.
+    pub portable: Option<&'a Path>,
     /// The directory the app was started in: what a relative path resolves against.
     pub cwd: Option<&'a Path>,
     /// The user's home, for a leading `~`.
@@ -285,10 +294,24 @@ fn candidate(
 /// The first rung that passes the probe wins; there is no strict rung, because
 /// nothing on this ladder was named by a person in a way that outranks a working
 /// alternative - the point is that SOMETHING writable is found rather than nothing.
+///
+/// `VNCODE_HOME` first, then **this folder when it is a portable installation**, then
+/// the platform's data root, then the folder beside the tree as the last resort. The
+/// portable rung sits above the platform one because the alternative - a folder that
+/// already holds this person's sessions, and a fresh root somewhere else - is two
+/// installations where the person made one.
 pub fn root_candidates(inputs: &Inputs<'_>) -> Vec<Candidate> {
     let mut candidates = Vec::new();
     if let Some(named) = inputs.named_root {
         candidates.extend(candidate(named, Origin::NamedRoot, false, inputs));
+    }
+    if let Some(portable) = inputs.portable {
+        candidates.push(Candidate {
+            path: portable.to_path_buf(),
+            origin: Origin::PortableRoot,
+            strict: false,
+            problem: None,
+        });
     }
     if let Some(data_root) = inputs.data_root {
         candidates.push(Candidate {
@@ -299,12 +322,18 @@ pub fn root_candidates(inputs: &Inputs<'_>) -> Vec<Candidate> {
         });
     }
     if let Some(tree_root) = inputs.tree_root {
-        candidates.push(Candidate {
-            path: crate::appdata::tree_root(tree_root),
-            origin: Origin::TreeRoot,
-            strict: false,
-            problem: None,
-        });
+        let path = crate::appdata::tree_root(tree_root);
+        // The last resort - unless the portable rung already IS this path, which is
+        // what `appdata::portable_root` always hands over: a rung that repeats the one
+        // above it can only produce a second, identical refusal line.
+        if inputs.portable != Some(path.as_path()) {
+            candidates.push(Candidate {
+                path,
+                origin: Origin::TreeRoot,
+                strict: false,
+                problem: None,
+            });
+        }
     }
     candidates
 }
@@ -331,20 +360,10 @@ pub fn home_candidates(inputs: &Inputs<'_>, app_root: Option<&Path>) -> Vec<Cand
     if let Some(inherited) = inputs.inherited {
         candidates.extend(candidate(inherited, Origin::Inherited, false, inputs));
     }
-    // THE INSTALLATION ALREADY ON THIS MACHINE. Not a default and never a guess: it is
-    // a rung only when the caller has established - by probing - that this is a harness
-    // home a child can write in, and that the app's own home still holds nothing of the
-    // person's. Measured: without this rung the app came up on a fresh, bare harness
-    // beside a complete installation (`pack + key`) at `~/.dsh`, and the person's word
-    // for that was "still does not run normally".
-    if let Some(found) = inputs.found {
-        candidates.push(Candidate {
-            path: found.to_path_buf(),
-            origin: Origin::Found,
-            strict: false,
-            problem: None,
-        });
-    }
+    // THIS APP'S OWN HOME, INSIDE ITS OWN ROOT - and nothing else. The rung that used to
+    // sit here ("the installation already on this machine", `~/.dsh`) is gone: see this
+    // module's header. A home outside the root is an input to the COPY offer and never a
+    // home this app runs against.
     if let Some(root) = app_root {
         candidates.push(Candidate {
             path: crate::appdata::owned_home(root),
@@ -436,66 +455,96 @@ pub fn resolve_with(
     }
 }
 
+/// The inputs both resolvers are built from, so the root ladder alone and the whole
+/// resolution see one environment.
+fn inputs_from_env<'a>(
+    named_root: Option<&'a str>,
+    flag: Option<&'a str>,
+    remembered: Option<&'a Path>,
+    inherited: Option<&'a str>,
+    data_root: Option<&'a Path>,
+    tree: Option<&'a Path>,
+    portable: Option<&'a Path>,
+    cwd: Option<&'a Path>,
+    user_home: Option<&'a Path>,
+) -> Inputs<'a> {
+    Inputs {
+        named_root,
+        flag,
+        remembered,
+        inherited,
+        data_root,
+        tree_root: tree,
+        portable,
+        cwd,
+        user_home,
+    }
+}
+
 /// Resolve against this process's own environment and this machine's real
 /// filesystem - the probe WRITES, which is the only proof this app accepts.
 ///
 /// `remembered` is the home the person chose in the panel, read from the app root by
-/// the caller (so this function reads no preferences of its own); `found` is the
-/// installation already on the machine, decided by [`found_installation`].
-pub fn from_env(
-    flag: Option<&str>,
-    remembered: Option<&Path>,
-    found: Option<&Path>,
-) -> Resolution {
+/// the caller (so this function reads no preferences of its own).
+pub fn from_env(flag: Option<&str>, remembered: Option<&Path>) -> Resolution {
     let named_root = std::env::var("VNCODE_HOME").ok();
     let inherited = std::env::var("DSH_HOME").ok();
     let data_root = crate::appdata::data_root();
     let tree = crate::launch::repo_root();
     let cwd = std::env::current_dir().ok();
     let user_home = home_dir();
-    let inputs = Inputs {
-        named_root: named_root.as_deref(),
+    // The portable decision is made HERE and passed in as a fact, so the ladder below
+    // stays pure: it is a path the caller has already established, not a probe.
+    let portable = tree.as_deref().and_then(crate::appdata::portable_root);
+    let inputs = inputs_from_env(
+        named_root.as_deref(),
         flag,
         remembered,
-        inherited: inherited.as_deref(),
-        found,
-        data_root: data_root.as_deref(),
-        tree_root: tree.as_deref(),
-        cwd: cwd.as_deref(),
-        user_home: user_home.as_deref(),
-    };
+        inherited.as_deref(),
+        data_root.as_deref(),
+        tree.as_deref(),
+        portable.as_deref(),
+        cwd.as_deref(),
+        user_home.as_deref(),
+    );
     resolve_with(&inputs, &mut crate::appdata::probe)
 }
 
-/// **The installation already on this machine**, when it should be used.
+/// **The app root alone**, resolved against this process's environment.
 ///
-/// Three conditions, and all three are required:
+/// The ladder is decided by paths only - `VNCODE_HOME`, a portable folder, the platform's
+/// data root, the folder beside the tree - so this needs neither a flag nor a remembered
+/// home, and it is what lets a caller ask "where does THIS app's own home live" BEFORE it
+/// decides whether an installation already on the machine should be used.
 ///
-/// 1. the harness's own default home (`~/.dsh`) exists and has the SHAPE of a harness
-///    home - a profile, sessions, storages or a credentials file;
-/// 2. a child can **write** there, because the harness composes its profile into the
-///    home on every boot (`appdata::harness_home_is_writable` - a real write probe);
-/// 3. the app's own home still holds **nothing of the person's**
-///    (`adopt::home_is_untouched_by_a_person`): no skills, no sessions, no credentials
-///    with content. The harness's own first-boot furniture - a composed `profiles/`, an
-///    empty `.credentials.yaml`, a `storages/` - is not the person's.
+/// That order is load-bearing rather than tidy: the courtesy rung is guarded by "this
+/// app's own home still holds nothing of yours", and asking that of the PLATFORM home
+/// while the ladder had chosen a portable folder's home would let an ordinary `~/.dsh`
+/// override the home tucked inside the folder - the exact split this app must not have.
 ///
-/// The first two are why this is not a default: a home the app did not create is one it
-/// cannot promise, and it says so by only using it when it can be written. The third is
-/// what makes it a ONE-TIME courtesy rather than a policy - the moment somebody's own
-/// home has a session or a key in it, the app stops second-guessing and uses that.
-pub fn found_installation(default: Option<&Path>, own_home: Option<&Path>) -> Option<PathBuf> {
-    let found = default?;
-    if !looks_like_a_harness_home(found) {
-        return None;
-    }
-    if !crate::appdata::harness_home_is_writable(found) {
-        return None;
-    }
-    match own_home {
-        Some(own) if !crate::adopt::home_is_untouched_by_a_person(own) => None,
-        _ => Some(found.to_path_buf()),
-    }
+/// A root the ladder refuses is simply absent here: the caller falls back to
+/// [`crate::appdata::app_root`], which is the platform candidate by construction.
+pub fn root_from_env() -> Option<PathBuf> {
+    let named_root = std::env::var("VNCODE_HOME").ok();
+    let data_root = crate::appdata::data_root();
+    let tree = crate::launch::repo_root();
+    let cwd = std::env::current_dir().ok();
+    let user_home = home_dir();
+    let portable = tree.as_deref().and_then(crate::appdata::portable_root);
+    let inputs = inputs_from_env(
+        named_root.as_deref(),
+        None,
+        None,
+        None,
+        data_root.as_deref(),
+        tree.as_deref(),
+        portable.as_deref(),
+        cwd.as_deref(),
+        user_home.as_deref(),
+    );
+    select(&root_candidates(&inputs), &mut crate::appdata::probe)
+        .ok()
+        .map(|selection| selection.chosen)
 }
 
 /// Whether a directory has the shape of a harness home.
@@ -585,68 +634,39 @@ mod tests {
     }
 
     #[test]
-    fn the_installation_already_on_the_machine_is_used_when_the_apps_home_is_fresh() {
-        // The measured failure this rung answers: a machine with a complete
-        // installation at `~/.dsh` (pack + key), and an app that came up on a fresh,
-        // bare harness of its own beside it.
-        let mut probe = prober(&["/data/vncode", "/home/someone/.dsh"]);
-        let resolved = resolve_with(
-            &Inputs { found: Some(Path::new("/home/someone/.dsh")), ..inputs() },
-            &mut probe,
-        );
-        assert_eq!(resolved.home_path(), Some(Path::new("/home/someone/.dsh")));
-        assert_eq!(resolved.home.as_ref().unwrap().origin, Origin::Found);
-        assert!(
-            resolved.row().1.contains("already on this machine"),
-            "{}",
-            resolved.row().1
-        );
-
-        // ...and the app's OWN home is still the rung that wins when nothing was found.
-        let mut probe = prober(&["/data/vncode", "/data/vncode/home"]);
-        let resolved = resolve_with(&inputs(), &mut probe);
-        assert_eq!(resolved.home_path(), Some(Path::new("/data/vncode/home")));
-        assert_eq!(resolved.home.as_ref().unwrap().origin, Origin::Owned);
-    }
-
-    #[test]
-    fn a_typed_home_and_an_inherited_one_both_beat_the_found_installation() {
-        let mut probe = prober(&["/data/vncode", "/flag/.dsh", "/home/someone/.dsh"]);
-        let resolved = resolve_with(
-            &Inputs {
-                flag: Some("/flag/.dsh"),
-                found: Some(Path::new("/home/someone/.dsh")),
-                ..inputs()
-            },
-            &mut probe,
-        );
+    fn a_typed_home_and_an_inherited_one_are_the_only_homes_outside_the_root() {
+        let mut probe = prober(&["/data/vncode", "/flag/.dsh"]);
+        let resolved = resolve_with(&Inputs { flag: Some("/flag/.dsh"), ..inputs() }, &mut probe);
         assert_eq!(resolved.home_path(), Some(Path::new("/flag/.dsh")));
 
-        let mut probe = prober(&["/data/vncode", "/parent/.dsh", "/home/someone/.dsh"]);
-        let resolved = resolve_with(
-            &Inputs {
-                inherited: Some("/parent/.dsh"),
-                found: Some(Path::new("/home/someone/.dsh")),
-                ..inputs()
-            },
-            &mut probe,
-        );
+        let mut probe = prober(&["/data/vncode", "/parent/.dsh"]);
+        let resolved =
+            resolve_with(&Inputs { inherited: Some("/parent/.dsh"), ..inputs() }, &mut probe);
         assert_eq!(resolved.home_path(), Some(Path::new("/parent/.dsh")));
         assert_eq!(resolved.home.as_ref().unwrap().origin, Origin::Inherited);
     }
 
     #[test]
-    fn a_found_installation_that_cannot_be_written_falls_through_with_a_line() {
-        // The app may only USE a home a child can write in; when it cannot, the rung is
-        // refused like any other and the app's own home is used instead.
-        let mut probe = prober(&["/data/vncode", "/data/vncode/home"]);
-        let resolved = resolve_with(
-            &Inputs { found: Some(Path::new("/locked/.dsh")), ..inputs() },
-            &mut probe,
+    fn the_harness_default_home_is_never_a_rung_the_app_walks_to() {
+        // THE REMOVED COURTESY, PINNED AS ABSENT. `~/.dsh` used to be a rung here - used
+        // while this app's own home was still empty - and a folder that carries
+        // everything it needs must not reach into a person's profile to start. The
+        // ladder is offered the path and must not take it: the app's own home wins.
+        let candidates = home_candidates(
+            &Inputs { user_home: Some(Path::new("/home/someone")), ..inputs() },
+            Some(Path::new("/data/vncode")),
         );
-        assert_eq!(resolved.home_path(), Some(Path::new("/data/vncode/home")));
-        assert_eq!(resolved.refused.len(), 1);
-        assert!(resolved.refused[0].line().contains("/locked/.dsh"));
+        let paths: Vec<PathBuf> =
+            candidates.iter().map(|candidate| candidate.path.clone()).collect();
+        assert!(
+            !paths.iter().any(|path| path.ends_with(".dsh")),
+            "a home outside the root is still a rung: {paths:?}"
+        );
+
+        // The default home still NAMES that folder for the copy offer - it is an input
+        // to an explicit one-way import, which is a different thing from running there.
+        assert!(existing_default_home().is_some() || home_dir().is_none());
+        assert_eq!(default_dsh_home(Path::new("/home/someone")), Path::new("/home/someone/.dsh"));
     }
 
     #[test]
@@ -822,6 +842,88 @@ mod tests {
         assert_eq!(resolved.app_root_path(), Some(Path::new("/repo/.vncode")));
         assert_eq!(resolved.home_path(), Some(Path::new("/repo/.vncode/home")));
         assert_eq!(resolved.refused.len(), 1, "{:?}", resolved.refused);
+    }
+
+    #[test]
+    fn a_portable_folder_uses_its_own_root_before_the_platform_one() {
+        // THE POINT OF THE RUNG. A folder that already holds a home - or that carries
+        // the marker - must be the root the next launch uses, even though the
+        // platform's data directory is perfectly writable. Otherwise the person's
+        // sessions and profile sit in one folder while every new run starts a second
+        // installation beside them. Both rungs are offered; the portable one is first.
+        let mut probe = prober(&["/repo/.vncode", "/repo/.vncode/home", "/data/vncode"]);
+        let resolved = resolve_with(
+            &Inputs { portable: Some(Path::new("/repo/.vncode")), ..inputs() },
+            &mut probe,
+        );
+        assert_eq!(resolved.app_root_path(), Some(Path::new("/repo/.vncode")));
+        assert_eq!(resolved.app_root_origin, Some(Origin::PortableRoot));
+        assert_eq!(resolved.home_path(), Some(Path::new("/repo/.vncode/home")));
+        assert_eq!(
+            resolved.app_root_origin_label(),
+            "this folder, because it is a portable installation"
+        );
+        // The platform root was never tried: nothing was refused on the way.
+        assert!(resolved.refused.is_empty(), "{:?}", resolved.refused);
+    }
+
+    #[test]
+    fn a_named_root_still_beats_the_portable_one_and_a_locked_portable_root_falls_through() {
+        // An explicit VNCODE_HOME outranks the folder's own claim...
+        let mut probe = prober(&["/named", "/named/home", "/repo/.vncode"]);
+        let resolved = resolve_with(
+            &Inputs {
+                named_root: Some("/named"),
+                portable: Some(Path::new("/repo/.vncode")),
+                ..inputs()
+            },
+            &mut probe,
+        );
+        assert_eq!(resolved.app_root_path(), Some(Path::new("/named")));
+        assert_eq!(resolved.app_root_origin, Some(Origin::NamedRoot));
+
+        // ...and a portable folder this account cannot write is refused like any other
+        // rung, with its reason, and the platform root is used instead.
+        let mut probe = prober(&["/data/vncode", "/data/vncode/home"]);
+        let resolved = resolve_with(
+            &Inputs { portable: Some(Path::new("/repo/.vncode")), ..inputs() },
+            &mut probe,
+        );
+        assert_eq!(resolved.app_root_path(), Some(Path::new("/data/vncode")));
+        assert_eq!(resolved.app_root_origin, Some(Origin::PlatformRoot));
+        assert_eq!(resolved.refused.len(), 1, "{:?}", resolved.refused);
+        assert!(resolved.refused[0].line().contains(".vncode"), "{:?}", resolved.refused);
+    }
+
+    #[test]
+    fn the_root_ladder_is_named_root_then_portable_then_platform_then_tree() {
+        // A portable root that is NOT the tree's own - the API allows any path - keeps
+        // all four rungs in order.
+        let candidates = root_candidates(&Inputs {
+            named_root: Some("/named"),
+            portable: Some(Path::new("/elsewhere/.vncode")),
+            ..inputs()
+        });
+        let origins: Vec<Origin> = candidates.iter().map(|candidate| candidate.origin).collect();
+        assert_eq!(
+            origins,
+            vec![Origin::NamedRoot, Origin::PortableRoot, Origin::PlatformRoot, Origin::TreeRoot],
+            "{origins:?}"
+        );
+        assert!(!candidates.iter().any(|candidate| candidate.strict), "no root rung is strict");
+
+        // ...and when the portable root IS the tree's own, the last resort is not
+        // repeated: two rungs naming one path can only refuse it twice.
+        let candidates = root_candidates(&Inputs {
+            portable: Some(Path::new("/repo/.vncode")),
+            ..inputs()
+        });
+        let origins: Vec<Origin> = candidates.iter().map(|candidate| candidate.origin).collect();
+        assert_eq!(
+            origins,
+            vec![Origin::PortableRoot, Origin::PlatformRoot],
+            "{origins:?}"
+        );
     }
 
     #[test]

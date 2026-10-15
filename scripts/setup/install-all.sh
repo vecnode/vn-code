@@ -45,6 +45,9 @@ usage() {
     '                                  [-DshVersion <version>] [-Target web|cli]' \
     '' \
     '  -Force               re-add bundles the profile already lists' \
+    '  -Resume              add what is missing and skip what is current (the' \
+    '                       panel presses this; it is what install.sh does NOT' \
+    '                       do when it implies -Force for a plain run)' \
     '  -Plugin <substring>  only install bundles whose package name matches' \
     '  -DshHome <dir>       override DSH_HOME (default: $DSH_HOME, else ~/.dsh)' \
     '  -ProfileName <name>  override the profile name (default: web)' \
@@ -57,6 +60,9 @@ usage() {
 while [ $# -gt 0 ]; do
   case "$1" in
     -Force|--force|-f) force=1 ;;
+    # -Resume is the DEFAULT and is accepted so the panel's flag is a real one; with
+    # both flags given, -Force wins (it is read first and never cleared).
+    -Resume|--resume) ;;
     -Plugin|--plugin) shift; plugin_arg=${1:-} ;;
     -Plugin=*|--plugin=*) plugin_arg=${1#*=} ;;
     -DshHome|--dsh-home) shift; dsh_home_arg=${1:-} ;;
@@ -419,6 +425,13 @@ step "pnpm: $pnpm_bin_dir (store major $store_major)"
 
 installed_names=$(installed_bundles "$profile_dir")
 
+# The folders and names the single `plugin add` below will carry, one per line, and how
+# many there are - counted here rather than derived from the text, so the sentence the
+# reader sees cannot disagree with what is handed to pnpm.
+add_folders=''
+add_names=''
+add_count=0
+
 # Retired bundles: this pack used to ship the panel as 'dsh-focus' (row id
 # 'focus', renamed to 'dsh-files' in alpha.10) and then as 'dsh-files', which the
 # GUI now ships natively - the right Sidebar has its own Files tab. A profile
@@ -456,18 +469,58 @@ while IFS="$tab" read -r name version folder; do
         continue
       fi
     else
-      printf "  - adding %s %s (-Force) ...\n" "$name" "$version"
+      printf "  - selected %s %s (-Force)\n" "$name" "$version"
     fi
   elif [ "$force" -eq 0 ]; then
-    printf "  - adding %s %s (first install) ...\n" "$name" "$version"
+    printf "  - selected %s %s (first install)\n" "$name" "$version"
   else
-    printf "  - adding %s %s (-Force) ...\n" "$name" "$version"
+    printf "  - selected %s %s (-Force)\n" "$name" "$version"
   fi
-  invoke_dsh plugin --profile "$profile_name" add "$folder" || fail "dsh could not add $name"
-  printf "  - added %s\n" "$name"
+  add_folders="${add_folders}${folder}
+"
+  add_names="${add_names}${name}
+"
+  add_count=$((add_count + 1))
 done <<EOF
 $bundles
 EOF
+
+# ONE `plugin add` FOR EVERYTHING THAT IS MISSING, not one per bundle - and this is
+# the difference between an install measured in minutes and one measured in quarters
+# of an hour. `dsh plugin` is a thin pnpm forwarder (it runs `pnpm <args>` in the
+# profile directory and reconciles the bundle list), so a single invocation adds every
+# selected folder in one pnpm run. The per-bundle loop this replaces spent a whole
+# `npm exec @deepseek-ai/dsh@<pin>` per bundle, and npm re-resolves the harness's
+# entire dependency graph on each of those. Measured from a real run's own npm log:
+# ~1500 lines of resolution for one `plugin add`, twenty-four of them in a row, with
+# the profile still listing the bare harness when the window was closed.
+if [ -n "$add_folders" ]; then
+  # POSIX sh has no arrays: the folders are carried one per LINE, which is the one
+  # separator a path cannot contain, and handed over as separate argv elements.
+  set --
+  while IFS= read -r folder; do
+    [ -n "$folder" ] || continue
+    set -- "$@" "$folder"
+  done <<EOF
+$add_folders
+EOF
+  # SAY WHAT IS ABOUT TO HAPPEN, AND HOW LONG THE SILENCE LASTS. `npm exec` resolves the
+  # harness's whole dependency graph before pnpm is reached and prints NOTHING while it
+  # does - measured on a real machine: the panel's progress line stayed on the last
+  # "adding ..." line for a minute, which read as a hang, and the window was killed 60
+  # seconds in with nothing yet written to the profile. Printed BEFORE the wait, because
+  # after it there is nobody left to tell. The lines above say "selected" rather than
+  # "adding": nothing is being added yet, one pnpm run adds all of them.
+  printf "  - adding %s bundle(s) in ONE pnpm run\n" "$add_count"
+  printf "    npm resolves the harness first and prints NOTHING while it does (about a minute on a cold cache, seconds when it is warm) - that silence is normal, not a stall\n"
+  invoke_dsh plugin --profile "$profile_name" add "$@" || fail "dsh could not add the selected bundles"
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    printf "  - added %s\n" "$name"
+  done <<EOF
+$add_names
+EOF
+fi
 
 # The bundled skills land in <DshHome>/skills, where the harness' own
 # filesystem skill provider reads them (see install_skills).
