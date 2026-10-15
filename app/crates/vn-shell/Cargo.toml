@@ -13,6 +13,14 @@ rust-version.workspace = true
 name = "vncode"
 path = "src/main.rs"
 
+[features]
+default = []
+# The pane, forwarded from the panel: `cargo build --release --features pane` is how
+# somebody sees the harness inside this window before the default is flipped. OFF by
+# default so a plain `cargo build --release` - which is exactly what
+# `scripts\run-desktop.bat` runs - produces the binary it produced before the pane existed.
+pane = ["vn-shell-egui/pane"]
+
 [dependencies]
 vn-shell-core.workspace = true
 vn-shell-runtime.workspace = true
@@ -20,11 +28,3 @@ vn-shell-egui.workspace = true
 vn-shell-paths.workspace = true
 eframe.workspace = true
 url.workspace = true
-
-# There is deliberately NO `pane` feature here yet. The panel reaches a pane
-# through `vn_shell_egui::Pane`, and no implementation of it exists - the
-# child-window work it needs is M3 of docs/PLAN-egui-shell.md and has not been
-# measured on a real desktop. A feature flag that switches on nothing would let
-# `-Mode embed` promise an embedded window and show an empty rectangle, so this
-# build says plainly that it has no pane and uses the browser instead. The day the
-# pane crate lands, `has_pane` becomes `pane.is_some()` and nothing else moves.

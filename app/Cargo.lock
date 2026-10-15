@@ -4159,6 +4159,7 @@ dependencies = [
  "eframe",
  "egui",
  "vn-shell-core",
+ "vn-shell-pane",
  "vn-shell-paths",
  "vn-shell-runtime",
 ]

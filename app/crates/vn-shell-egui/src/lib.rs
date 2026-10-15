@@ -208,6 +208,13 @@ pub struct Shell {
     /// Which browser the launch actually used, and whether it worked: the panel says
     /// so rather than leaving the reader to guess whether the tab opened.
     surface: Option<String>,
+    /// **The harness page, and the engine behind it.**
+    ///
+    /// Compiled only with the `pane` feature. With the feature off this field does not
+    /// exist and the browser hand-off is the surface, exactly as before - which is what
+    /// keeps the default build's behaviour and its checks unchanged.
+    #[cfg(feature = "pane")]
+    pane: vn_shell_pane::PanePage,
     /// The home question, surveyed ONCE.
     ///
     /// Surveyed rather than computed per frame, because a survey PROBES - it writes a
@@ -279,6 +286,8 @@ impl Shell {
             adopt_key: false,
             adopt_note: None,
             surface: None,
+            #[cfg(feature = "pane")]
+            pane: vn_shell_pane::PanePage::new(),
             hand_off: None,
             close_refused: false,
             setup_started: None,
@@ -1102,6 +1111,10 @@ impl eframe::App for Shell {
         let status = self.status();
         if status.phase == Phase::Running && self.opened_for != status.pid {
             self.opened_for = status.pid;
+            // With an engine compiled in, the harness is shown in THIS window and the
+            // automatic hand-off is not started at all: `Open in my browser` on the pane's
+            // own bar is the way to a browser, and it is a click rather than a surprise.
+            #[cfg(not(feature = "pane"))]
             self.start_hand_off();
         }
 
@@ -1109,7 +1122,7 @@ impl eframe::App for Shell {
         ctx.request_repaint_after(POLL);
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         // THE CHOICE COMES FIRST, and while it is unmade it IS the window: no header,
         // no log, no rows - one question and the cards that answer it.
         if self.needs_setup() {
@@ -1118,6 +1131,28 @@ impl eframe::App for Shell {
         }
         let status = self.status();
         self.header(ui, &status);
+
+        // **The harness page, when this build has an engine.**
+        //
+        // It owns everything below the header, and that is the whole reason it can be a
+        // child view at all: a child web view paints ABOVE the surface this panel draws on
+        // and cannot be clipped, so nothing of ours may go inside its rectangle. The page
+        // is drawn INSTEAD of the rows, never over them.
+        #[cfg(feature = "pane")]
+        {
+            let data_dir = self.context.plan.app_root().map(|root| root.join("webview"));
+            match self.pane.show(ui, frame, &status, data_dir, false) {
+                // The floor under the pane, one click away rather than taken away: the
+                // hand-off in `browser.rs`, with the token in ONE argv element.
+                vn_shell_pane::PageAction::OpenInBrowser => self.start_hand_off(),
+                vn_shell_pane::PageAction::Stop => self.stop(),
+                vn_shell_pane::PageAction::None => {}
+            }
+            if self.pane.owns_the_area() {
+                return;
+            }
+        }
+
         self.log_panel(ui);
         self.body(ui, &status);
     }
