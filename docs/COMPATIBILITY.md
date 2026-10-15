@@ -7,9 +7,9 @@ not a second edition - it installs nothing and writes no profile file). It is a
 Rust/**egui** control panel that opens idle, starts the harness when you press
 Start and ends the whole instance when you press Stop; the harness UI itself is
 the same page a browser tab shows, opened in the browser the app found on the
-machine (Chrome first, every other browser reachable, the OS opener as the floor -
-this app draws no web view of its own, by
-[decision](PLAN-egui-shell.md#4-the-surface-one-url-and-the-browser-this-machine-has)).
+machine (Chrome first, every other browser reachable, the OS opener as the floor) -
+or, in a build made with `--features pane`, inside the app's own window, which is
+[M5 of the plan](PLAN-egui-shell.md) and opt-in.
 
 ## Current pin
 

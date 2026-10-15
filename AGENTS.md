@@ -106,10 +106,12 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   the pack's bundles, so one press reaches a real interface — and ends it on **Stop** (a
   launcher, not a desktop edition). It
   composes every child's environment rather than inheriting one, cleans every path before
-  it uses one, and **draws no web view**: the interface opens in a browser it found
-  (`browser.rs`), so there is no `embed`, no `Pane` and no engine vendored. `app/README.md`
-  explains it and `docs/PLAN-egui-shell.md` is the plan it was built from. `check-shell.mjs`
-  is what proves it, and it drives the real binary.
+  it uses one, and **draws the shipped interface only when it is built to**: the default
+  build compiles no engine and opens the harness in a browser it found (`browser.rs`), while
+  `--features pane` shows it inside this window instead - one OPTIONAL dependency on `wry`,
+  nothing vendored, and the default not flipped until Linux and macOS are measured.
+  `app/README.md` explains it and `docs/PLAN-egui-shell.md` is the plan it was built from.
+  `check-shell.mjs` and `check-pane.mjs` are what prove it, and they drive the real binary.
 - `docs/` — install, build, deploy, release, paths, compatibility, and the shell's
   plan. There is no distributer and no ship list any more: the distribution is this
   repository, and the app installs the pack itself.
@@ -140,6 +142,11 @@ Run the check that owns the area, and say which ones you ran:
   confined on `VNCODE_HOME`, `DSH_HOME` and `USERPROFILE`/`HOME`), and that `app/src-tauri` is
   gone (it also runs `cargo test --workspace`; it skips loudly with no cargo and no built
   binary);
+- `check-pane.mjs` — the pane's contract, and it is a contract about **two builds**: the
+  default build compiles no engine and refuses `-Mode embed` by name, the pane build accepts
+  it and says so in its usage, and the pane crate's own tests pass with the feature on. It
+  skips loudly on a host that cannot build the pane at all, and FAILS on a build error that
+  is not one of those host reasons, so a compile error cannot hide behind the skip;
 - `check-audio-browser.mjs` — the check that drives a
   real browser (with none installed it skips loudly);
 - `check-skill-examples.mjs`, `check-media-examples.mjs` — every fenced example in

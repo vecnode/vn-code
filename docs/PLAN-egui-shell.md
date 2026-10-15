@@ -28,13 +28,14 @@ file is patched, and there is still exactly one install target.
 | **M0 — the father's home** | **done.** `$VNCODE_HOME` is the root the app creates and proves, `<root>/home` is the default `DSH_HOME`, both ladders are data in `home.rs`, one composer builds every child's environment, the installer is given `-DshHome <chosen>`, the geometry moved to the root, the panel draws the root, the home with its refusals and the composed environment, Adopt copies the durable things, and `check-shell.mjs` drives all of it |
 | **M1 — supervisor parity** | **done.** The pure halves moved with their tests, the crates exist, and the ready line, the refusals, Stop and the port assertion are driven by `scripts/checks/check-shell.mjs` |
 | **M2 — the control panel** | **done.** It opens idle with no child process, shows the status, the install state, the location map and the log, starts on Start, stops the whole tree on Stop, and installs or removes the pack from its two buttons. **Revised after a real run**: the home is now a *first screen* rather than a row, and the panel behind it is four rows (home, pack, key, browser) with every diagnostic behind one collapsed `Details` |
-| **M3 — the surface** | **done.** No embedded web view (the owner's decision, section 4): the app finds the browser on the machine with `browser.rs` - Chrome first, every other Chromium, Firefox, and the OS opener as the floor - remembers the choice in its own root, opens the loopback URL as ONE argv element, and says which browser it used. `-Mode embed` is refused by name |
+| **M3 — the surface** | **done.** No embedded web view *at the time* (the owner's decision, section 4): the app finds the browser on the machine with `browser.rs` - Chrome first, every other Chromium, Firefox, and the OS opener as the floor - remembers the choice in its own root, opens the loopback URL as ONE argv element, and says which browser it used. `-Mode embed` is refused by name **in a build without the pane** |
 | **M4 — distribution** | **done, differently.** `src-tauri` is deleted and `check-shell.mjs` is the contract. There is no distributer on purpose: the distribution is this app beside the pack it installs, and the panel's **Install pack** / **Uninstall pack** run `scripts/setup/install.*` / `uninstall.*`, the entry points a person clicks |
-| **Later** | the Ollama provider (appendix) and a second runtime variant: unscheduled, and not dependencies of anything. **An embedded web view is not on this list**: the owner's decision is that this app shows the interface in a browser, and `docs/PLAN-egui-shell.md` no longer plans a pane |
+| **M5 — the pane** | **done, behind an opt-in feature.** The §4 decision was reversed by a measurement, not a preference: a launched `chrome.exe` exits `0x80000003` where this app runs - reproduced from an Explorer double-click, so no agent session was involved - while the OS web engine drew the harness inside a rectangle of this window and ran its script, in the same process that watched Chrome die. `vn-shell-pane` owns the engine and the page, `vn_shell_core::pane` owns the visibility and DPI rules (tested), the security seams answer for themselves in the engine, `-Mode embed` is real, and `scripts/checks/check-pane.mjs` proves the two builds disagree. **The default is NOT flipped**: `cargo build --release` compiles no engine until Linux and macOS are measured on their own machines |
+| **Later** | the Ollama provider (appendix), a second runtime variant, and flipping the pane's default: unscheduled, and not dependencies of anything. **The pane itself is no longer on this list — it is M5** |
 
-The phase numbers changed in this revision: **M0 is now the father's home**, and the pane
-that used to be M3 is **gone** — this app shows the interface in a browser, by the owner's
-decision, and there is no web view to build (section 4). The comments and panel strings that
+The phase numbers changed in this revision: **M0 is now the father's home**, the pane that
+used to be M3 was removed from this plan and has since come back as **M5** - opt-in, and
+measured this time (sections 4 and 6). The comments and panel strings that
 called the pane "M0 of docs/PLAN-egui-shell.md" (`vn-shell/src/main.rs`,
 `vn-shell-egui/src/lib.rs`, `vn-shell/Cargo.toml`, `app/README.md`) were corrected with it,
 because a plan and the code that cites it disagreeing about which phase is which is how a
@@ -233,12 +234,23 @@ home the app named, and `VNCODE_HOME` and `VNCODE_CONSOLE` must be `(unset)`.
 
 ## 4. The surface: one URL, and the browser this machine has
 
-**There is no embedded web view, and there is not going to be one.** That is the owner's
-decision, and it simplifies the plan rather than narrowing it: this app draws no part of the
-shipped interface, so it has no renderer to keep in step with, no DPI/focus/keyboard seam to
-get wrong, and no second event loop. The interface is a web application; the process that
-draws it is a browser on this machine; and what this app owns is **which** browser, how it
-is started, and what it says when it cannot be.
+**The pane exists, behind an opt-in feature, and the paragraph that used to stand here was
+reversed by a measurement.** It used to read *"There is no embedded web view, and there is not
+going to be one"*, and the argument behind it was sound: two renderers, a DPI/focus seam, and
+no capability a browser did not already have. What changed is not a preference but a fact about
+the machine this was written on: **the browser hand-off cannot start a browser there.** A
+launched `chrome.exe` exits `0x80000003` — reproduced from an Explorer double-click, with no
+agent session involved — while the OS web engine drew the harness inside a rectangle of this
+very window, loaded the page and ran its script, in the same process that watched Chrome die
+(the P0 spike: `WEBVIEW-UP` + `PAGE-LOADED` + `JS-RAN`). So the pane is not a nicer surface; it
+is the only surface that works there.
+
+It is **opt-in**, and that is deliberate rather than cautious: `cargo build --release` compiles
+no engine, `scripts\run-desktop.bat` and every existing check behave exactly as they did, and
+the default is not flipped until Linux (where `build_as_child` is X11-only) and macOS are
+measured on their own machines. What this app owns is unchanged in kind — **which** engine, how
+it is started, what it may load, and what it says when it cannot be — and what it owns in
+addition is a rectangle it must keep clear, which is `vn_shell_core::pane`'s only subject.
 
 `browser.rs` is a table, Chrome first, and the last rung is the platform's own opener — so
 *"all other browsers work"* is structural rather than hopeful: a browser this table has never
@@ -305,7 +317,7 @@ painter for Rust widgets; it has no DOM and it will not get one.
 |---|---|---|---|
 | **Native rewrite** | everything: chat, tools, editor, PDF, video | they are discarded; the product forks | a multi-year track that throws the pack's value away. Not this plan |
 | **egui panel + the machine's browser** | the panel, the status, the switches | they keep working, unchanged, in a tab | **this plan** |
-| **egui panel + an embedded web view** | the panel, plus a rectangle holding a second browser engine | they keep working, inside that rectangle | **rejected by the owner**: two event loops, two renderers, one rectangle, and a renderer to keep in step for no capability the browser does not already have |
+| **egui panel + an embedded web view** | the panel, plus a rectangle holding the engine the OS already has | they keep working, inside that rectangle | **built, opt-in (M5)**. The rejection that stood here was reversed by measurement, not by preference: the browser hand-off could not start a browser where this app runs, and the engine could. The costs it named are real and are paid: a child view paints *above* the surface, so nothing may be drawn over it (`vn_shell_core::pane` owns that rule and is tested), the engine's own profile becomes the app's business, and the shipped default still compiles no engine until Linux and macOS are measured |
 
 So egui owns the process, the machine and the files; the browser owns the shipped interface;
 and the boundary between them is one loopback URL that this app opens, names and can hand to
@@ -517,8 +529,9 @@ all the OS's business now, and Linux is not the platform where the plan is thinn
 
 Two deliberate refusals, unchanged: **no `tokio`** (the supervisor is blocking
 `std::process` plus threads, and it is the part that must not change behaviour) and **no
-second browser stack** — and since M3 that refusal is stronger rather than weaker: there is no
-CEF, no Servo, no chromium download, and now no embedded web view at all.
+second browser stack** — and the pane does not change that: there is no CEF, no Servo, no
+chromium download, and no engine vendored. `wry` is ONE optional dependency that drives the
+engine the OS already has, and the default build compiles none of it.
 
 ## 12. The checks
 
@@ -635,10 +648,11 @@ stops the plan rather than the phase.
 
 - It does not add a second install target, a desktop **edition**, or a `-Target desktop`:
   `app/` stays a launcher of the same pinned `dsh web`.
-- **It does not draw the shipped interface, and it does not plan to.** No embedded web view,
-  no WebView2/WKWebView/WebKitGTK dependency, no `Pane` trait, no `-Mode embed`. The interface
-  is shown by a browser the app found, and that is the owner's decision, not a pending
-  milestone.
+- **It draws the shipped interface only when it is built to.** The default build has no engine
+  and no `-Mode embed`: the interface is shown by a browser the app found, and `-Mode embed` is
+  refused by name. `--features pane` adds the pane (M5) — one optional dependency on `wry`,
+  nothing vendored — and `-Mode embed` becomes real. Flipping that default is what is left, and
+  it waits on Linux and macOS.
 - It does not rewrite, port or retire a single plugin bundle.
 - It does not touch the DeepSeek path, the credential files or the credential layers — and
   it does not copy `.credentials.yaml` unless a person clicks for it.
@@ -674,10 +688,12 @@ and `~/.dsh` is never a default. What remains:
    when the chosen home has none, so one press reaches a working interface; and the screen
    offers **the copy and the folder** — every card ending inside this project. What remains
    open is only how loud the panel should be about which home it is on.
-2. **A web view** — **decided, and not planned.** The owner's decision is that this app shows
-   the interface in a browser it found: no `embed`, no `Pane`, no engine vendored. If that
-   ever changes it is a new plan, not an unfinished phase, and the argument to beat is section
-   6's row against it.
+2. **A web view** — **decided, REVERSED, and shipped behind a feature (M5).** The original
+   decision was no `embed`, no pane, no engine vendored, and it was changed by a measurement
+   rather than by a preference: a launched Chrome dies where this app runs and the OS web
+   engine does not (section 4). What remains open is the DEFAULT — flipping it needs Linux and
+   macOS measured on their own machines, and `scripts/checks/check-pane.mjs` is what proves the
+   two builds still disagree in the meantime.
 3. **`<tree>/.vncode` (the last root candidate)** — **decided, and shipped as the portable
    root**: the folder is not merely the last resort a workspace-scoped confinement grants
    (this repository's own checks run inside one); it is where a folder that already holds a

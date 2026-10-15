@@ -108,13 +108,13 @@ note, a log or a record into a home it refused** — the one write it makes outs
 root is the probe file, created and deleted at the root of a home it is considering, because
 "a child can write here" is not knowable any other way.
 
-**Using an installation that is already on the machine is not an exception to that**, and it
-is deliberately narrow: `~/.dsh` is used in place only when it has the shape of a harness home,
-a child can write in it, **and** this app's own home still holds nothing of the person's — no
-skills, no sessions, no credentials file with content (`adopt::home_is_untouched_by_a_person`).
-The alternative was measured and it was worse: a fresh, bare harness with no pack and no key
-beside a complete installation. The moment that home holds something of yours, the app stops
-looking, and **Use my own home** in the panel makes its own root an explicit, remembered choice.
+**Nothing outside this app's own root is ever the home it runs against.** The harness's own
+default, `~/.dsh`, is not a candidate: a folder that carries everything it needs must not reach
+into a person's profile to START. It survives as the SOURCE of a one-way **copy** — read, never
+written, never run against — offered while it can be read and there is something left to bring,
+and the copy's own credentials file is a byte copy behind a second click that this process never
+parses. Start installs the pack into the home in use, and the key row asks for the key, which is
+what that rung used to exist for.
 
 Four hardening rules travel with those paths, and each is a `cargo test` case:
 
@@ -174,6 +174,44 @@ is removed, a leak that was measured while this was written and is now read back
 the child by `check-shell.mjs` — and `TMP`/`TEMP`/`TMPDIR` point at `<app root>/tmp` when
 the machine's own temp refuses a child, which is the case a real log measured (the
 harness's spill store died on `mkdtemp`).
+
+## The pane, when the build has one
+
+`cargo build --release -p vn-shell --features pane` compiles **one** optional dependency —
+`wry`, which drives the engine the operating system already has (WebView2, WKWebView,
+WebKitGTK) — and shows the harness inside this window instead of in a browser tab. The default
+build compiles none of it, so none of this is in the shipped default yet. Six rules travel with
+it, and the first is what the rest rest on:
+
+1. **The launch token never leaves the process.** There is no argv and no second program: the
+   token goes to an engine in this very process, which is strictly *less* exposure than the
+   hand-off's "one argv element of a program this app found". It is still never drawn, never
+   logged and never written — the pane's bar shows `Status::public_url`, whose query is stripped
+   by construction.
+2. **Only the harness's own loopback address is ever loaded**, checked at the last function
+   before a navigation *and* in the navigation handler — and the handler **refuses** a
+   navigation rather than following it, because a page that can move this window to another
+   origin is a page that can take the token with it.
+3. **No window is ever opened from inside the pane**, **no download is ever accepted**, and
+   **permissions are answered by the app rather than by the engine**: the clipboard is granted,
+   because a chat interface's copy buttons and its composer need it, and camera, microphone,
+   screen capture, geolocation, notifications, MIDI and sensors are denied by name rather than
+   left to the engine's own default flow. (`with_permission_handler` is why this workspace pins
+   `wry` at 0.57: measured, 0.55's macOS delegate GRANTS media capture itself, and its Windows
+   backend allows clipboard reads and lets every other kind through to the engine.)
+4. **No channel into the app.** There is no IPC handler and no injected script, so a page the
+   harness serves has no way to reach this process. The pane is a viewer, and the only direction
+   that exists is the one URL above.
+5. **Its own profile, inside the app's root** — `<app root>/webview`, and never the directory
+   the Chrome rung uses, because an engine profile and a browser profile in one directory is a
+   way to lose both. The engine is **destroyed** on Stop rather than hidden: a hidden page is
+   still a live page, and a live page holding a token that has stopped meaning anything is a
+   credential nobody is watching.
+6. **The rectangle is the app's to keep clear.** A child web view paints *above* the surface
+   egui draws on and cannot be clipped or drawn over, so it is shown only while its own page is
+   in front, the harness is ready, nothing overlays it and the rectangle has an extent — and the
+   panel draws its rows *instead of* it, never under it. That rule is `vn_shell_core::pane`, and
+   it is `cargo test` cases rather than something anybody checks by looking at a window.
 
 ## Lock it down
 

@@ -3,10 +3,11 @@
 A small native application that owns the instance: it opens on a **control panel**,
 decides where the harness home is and creates it, installs this pack with one button,
 starts the pinned `dsh web` harness when you press **Start**, shows it in the browser it
-found on your machine, and ends the whole instance again on **Stop**. It draws no part of
-the shipped interface - there is no embedded web view, on purpose - so the browser is the
-only renderer in the picture, and the panel's job is to say which one, and to make changing
-your mind one click.
+found on your machine, and ends the whole instance again on **Stop**. It draws the shipped
+interface only when it is built to: the default build compiles no engine and shows the harness
+in a browser it found, and `cargo build --release -p vn-shell --features pane` shows it inside
+this window instead - one optional dependency on `wry`, nothing vendored. Either way the panel's
+job is to say which surface is in use, and to make changing your mind one click.
 
 It is a **launcher, not a desktop edition**: it starts the same pinned harness on a
 free loopback port that `scripts\run-web.bat` / `./scripts/run-web.sh` start, and the
@@ -503,6 +504,7 @@ frames are not two different applications.
 | `crates/vn-shell-core` | the **pure** halves, each driven by `cargo test`: `readyline` (the ready line, its refusals and the token redaction), `windowstate` (the geometry record and its trust rules), `keystate` (the four key layers, presence only), `appdata` (the app's root, the home inside it, the write probe and the npm cache), `userpath` (what a person typed, turned into a path a child may be given), `browser` (the per-OS browser table, the argv rule, and the settle-window verdict that makes a spawned process not a page), `appprefs` (the browser id and the chosen home), `adopt` (what may be copied out of a home this app did not create), plus `options`, `home` (the two ladders), `ports`, `launch`, `log`, `prefs`, `status` and `urlpolicy` |
 | `crates/vn-shell-runtime` | the supervisor: one thread owns one child, resolves the plan, spawns, drains both streams, watches the ready line, takes Stop, kills the tree and checks the port. Also `env` (the one composer every child's environment comes from), `console` (the one transcript), `setup` (the installer runner behind the panel's buttons) and `adopt` (the copy runner behind its own) |
 | `crates/vn-shell-paths` | the location map as data, with the per-OS roots and a bounded size walk |
+| `crates/vn-shell-pane` | the pane: the ONE crate that depends on a web engine (`wry`, optional, behind the `pane` feature) plus the page that draws it - tab strip, bar, rectangle, placeholder. It owns no policy: visibility, the DPI arithmetic and the loopback re-check are `vn_shell_core::pane` and `cargo test` cases |
 | `crates/vn-shell-egui` | the panel, the palette, the pages and the status grid |
 | `crates/vn-shell` | the binary (`vncode`): flags, wiring, and the mode that opens no window |
 
@@ -516,13 +518,15 @@ real machine.
 `-Mode panel` opens idle and starts nothing; `-Mode headless` opens **no window** and takes
 `stop`, `quit`, `install [args]` and `uninstall [args]` on stdin - it is the mode a server
 wants, and the one `scripts/checks/check-shell.mjs` drives against a stub. The default is
-**`-Mode chrome`**, which is the only surface this build has: the harness UI in a browser the
-app found.
+**`-Mode chrome`**: the harness UI, in a browser the app found - or, in a build with the pane,
+inside this window.
 
-**There is no `embed`.** This app draws no web view and does not plan to: the interface is a
-web application, the process that draws it is a browser, and `browser.rs` is the table that
-finds one. `-Mode embed` is refused **by name**, with that reason, rather than quietly opening
-a browser - a flag that silently means something else is a flag nobody can trust.
+**`-Mode embed` is a mode only a build WITH the pane has.** Without it the flag is refused **by
+name**, with the reason, rather than quietly opening a browser - a flag that silently means
+something else is a flag nobody can trust. With `--features pane` it is real: it opens with the
+harness page already in front. `scripts/checks/check-pane.mjs` is what proves the two builds
+disagree, because "the pane exists" and "the pane is reachable" are different claims and only the
+second one is worth anything.
 
 `-Mode headless` with `-DshVersion` set is a complete supervisor for a machine
 with no display:

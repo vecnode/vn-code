@@ -9,7 +9,8 @@ home lives in — `$VNCODE_HOME`, with the harness's `DSH_HOME` at `<root>/home`
 `-DshHome` or a writable inherited `DSH_HOME` says otherwise — starts the same pinned
 `dsh web` on a free loopback port when you press Start, shows that URL in the browser it
 found on the machine — Chrome first, everything else reachable, the OS opener as the floor;
-it draws no web view of its own — and ends the whole instance when you press Stop. The one
+it draws the shipped interface only when it is built to — in the browser it found, or with
+`--features pane` inside its own window — and ends the whole instance when you press Stop. The one
 thing it installs is this pack, into the home it chose, by running the same installer a person
 would click.)
 

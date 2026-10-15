@@ -873,7 +873,17 @@ impl Shell {
         if self.context.plan.temp.is_none() {
             return String::new();
         }
-        " This app is running inside a session that confines what it starts - its own probe of the machine's temp directory was refused - so a browser it starts may not be able to write its own profile even in this folder. Start vncode by double-clicking scripts\\run-desktop.bat, outside that session, and the tab opens.".to_string()
+        // MEASURED, and what used to end here was WRONG. The old sentence said "Start vncode
+        // by double-clicking scripts\run-desktop.bat, outside that session, and the tab
+        // opens." The run that disproved it was launched from Explorer - outside every
+        // session - and a launched Chrome still exited `0x80000003` there, while the OS web
+        // engine drew the same page inside this window. Both facts came from ONE process (P0),
+        // so this no longer promises that starting somewhere else helps.
+        if pane_available() {
+            " A browser this app starts is refused on this machine (measured: Chrome exits 0x80000003 here AND when the app is launched from Explorer, so starting it somewhere else is not the answer). Use the `harness` tab above: it draws the harness in this window and starts no browser.".to_string()
+        } else {
+            " A browser this app starts is refused on this machine (measured: Chrome exits 0x80000003 here AND when the app is launched from Explorer, so starting it somewhere else is not the answer). This build has no pane - it is an opt-in feature - so there is no surface left on this machine that can show the page.".to_string()
+        }
     }
 
     /// Remember a browser, and say so if the preferences file could not be written.
