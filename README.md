@@ -1,4 +1,4 @@
-# 💻 vncode
+# 💻 vn-code
 
 ![Language: JavaScript](https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black)
 ![Language: Rust](https://img.shields.io/badge/language-Rust-000000?logo=rust&logoColor=white)    
