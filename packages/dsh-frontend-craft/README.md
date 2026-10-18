@@ -17,7 +17,7 @@ so, below).
 | | |
 |---|---|
 | **skill** | `frontend-craft`: 24 commands (`init`, `document`, `critique`, `audit`, `polish`, `bolder`, `quieter`, `distill`, `harden`, `onboard`, `animate`, `colorize`, `typeset`, `layout`, `delight`, `overdrive`, `clarify`, `adapt`, `optimize`, `shape`, `extract`, `craft`, `live`, `generate`), the craft floor, the four visitor modes, and the iOS/Android platform references - 41 reference files copied from the pin |
-| **tools** | `fe_context` (product truth, design system, surface briefs, config, directives), `fe_detect` (the 61 source rules over a file or folder), `fe_direction` (a deterministic hand from the directions the agent authored), `fe_render` (the page rendered in a throwaway headless browser, measured), `fe_artifact` (read/write + shape-validate `PRODUCT.md`, `DESIGN.md`, a surface brief) |
+| **tools** | `fe_context` (product truth, design system, surface briefs, config, directives), `fe_detect` (the 61 source rules over a file or folder), `fe_direction` (a deterministic hand from the directions the agent authored, plus one challenger from the local deck), `fe_render` (the page rendered in a throwaway headless browser, measured), `fe_artifact` (read/write + shape-validate `PRODUCT.md`, `DESIGN.md`, a surface brief) |
 | **tab** | **Frontend**: Findings (by file and rule, filters, re-scan), Artifacts (`PRODUCT.md`, `DESIGN.md`, the briefs, with their shape verdict), Directions (the dealt hand, the pick) and Preview (the rendered picture at each viewport, with the measured findings) |
 | **routes** | `GET /api/dsh-frontend-craft/state`, `POST .../scan`, `GET .../artifacts`, `GET .../rules`, `GET`/`POST .../direction`, `GET .../render-image` |
 
@@ -93,14 +93,16 @@ Everything else is upstream's words.
 
 ## What this adaptation does NOT have, in plain words
 
-- **The roll has no catalog.** Impeccable's `concept-seed` deals challenger
-  worlds from a catalog served by its own API, which is not in the open-source
-  repository. `fe_direction` keeps the procedure and drops the deck: it takes the
+- **The roll has no catalog, but it has a deck.** Impeccable's `concept-seed` deals
+  challenger worlds from a catalog served by its own API, which is not in the
+  open-source repository. `fe_direction` keeps the procedure: it takes the
   directions the agent authored (3-12), hashes a seed into a deterministic order,
-  assigns the lead and deals three, then records the person's pick. That is a real
-  assignment discipline - the roll is not the agent's favourite, and it re-runs to
-  the same hand - but the outside view a catalog gives is gone, and the skill says
-  so: never call it a catalog roll.
+  assigns the lead and deals three - and adds **one challenger from this package's
+  own deck** of eighteen visual worlds (`lib/deck.json`), a world the agent did not
+  write. It is judged on audience identification and product clarity, and a
+  declined challenger still donates one discipline to the assigned direction.
+  That is the outside view, restored from our own editorial content; there are
+  still no comps, no imagery and no catalog.
 
 - **No comp-led builds.** They need image generation; the harness has none, so
   every surface is code-led, which is the path upstream documents for exactly
@@ -121,7 +123,7 @@ also registers the skill at run time, so a profile without the copy still sees
 it). Zero npm dependencies; Node 22+.
 
 ```sh
-node checks/check-frontend-craft.mjs   # 13 checks, +1 render smoke where a browser exists
+node checks/check-frontend-craft.mjs   # 15 checks, including a render smoke where a browser exists
 ```
 
 The check proves: the vendored bytes match `VERSION.json`; the pin is 4.6.0 and

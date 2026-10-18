@@ -1790,6 +1790,7 @@ try {
     { agent: { session: { id: 'session-frontend' } } },
   )
   check('frontend: a deal names an assigned card', fcDealt.view.ok === true && fcDealt.view.deal.assigned.length > 0, true)
+  check('frontend: a deal carries one deck challenger', typeof fcDealt.view.deal.challenger === 'string' && fcDealt.view.deal.cards.some((card) => card.source === 'deck'), true)
   const fcDirectionGet = await (
     await fcCall('/api/dsh-frontend-craft/direction', new Request('http://x/api/dsh-frontend-craft/direction?session=session-frontend'))
   ).json()

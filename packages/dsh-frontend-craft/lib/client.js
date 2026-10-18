@@ -270,6 +270,7 @@ window.__ModuleLoader__.load({
                 'div',
                 { className: 'dfc-cardHead' },
                 h('span', { className: 'dfc-cardName' }, card.name),
+                card.source === 'deck' ? h('span', { className: 'dfc-kicker' }, 'challenger') : null,
                 card.name === deal.assigned ? h('span', { className: 'dfc-kicker' }, 'the roll') : null,
                 pick === card.name ? h('span', { className: 'dfc-kicker' }, 'chosen') : null,
               ),

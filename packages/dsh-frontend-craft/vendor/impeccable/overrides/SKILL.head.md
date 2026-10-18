@@ -68,11 +68,14 @@ UNAVAILABLE here, and why:
 `concept-seed` deals challenger worlds from a catalog served by its own API. That catalog
 is not in the open-source repository and cannot travel with this plugin. `fe_direction`
 therefore keeps the *procedure* and drops the *deck*: it deals from the directions you
-authored in the step before, with a seed, so the assignment is deterministic, is not your
-favourite, and is re-rollable. What you lose is the outside view - a challenger built from
-a world you would not have thought of. What you keep is the discipline: seven grounded
-directions, a dealt lead, an assigned direction you must build or argue with, and a
-standing exit. Never describe the result as a catalog roll.
+authored, with a seed, so the assignment is deterministic, is not your favourite, and is
+re-rollable - and it adds **one challenger from this package's own local deck** of eighteen
+visual worlds, a world you did not write. Judge that challenger on audience identification
+and product clarity before any borrowing; a declined challenger still donates one
+discipline to the assigned direction. What you lose is the full catalog. What you keep is
+the discipline: seven grounded directions, a dealt lead, an assigned direction you must
+build or argue with, an outside view, and a standing exit. Never describe the result as a
+catalog roll.
 
 ## Setup
 

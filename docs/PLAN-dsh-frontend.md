@@ -93,11 +93,12 @@ The design decisions worth keeping:
 | B | **`fe_render`** | **shipped**: the machine's own headless Chrome/Edge, argv-only, throwaway profile, every name NOTFOUND but loopback; one launch per call; seven measured rules (`render-contrast`, `render-tap-target`, `render-overflow`, `render-line-length`, `render-small-type`, `render-heading-skip`, `render-missing-alt`); the PNG and its report under `$DSH_HOME/dsh-frontend-craft/renders/<id>/`, drawn in the tab's Preview. Measured: 489 ms and 10 findings on a deliberately bad page at 800×600 |
 | C | **Live mode** (`live`, `generate`) | not built, and a separate product: variants written back through a dev server. `fe_render` measures one render; it never edits. |
 | D | **Upstream re-sync policy** | one review per quarter: bump `PIN` in `vendor/impeccable/build.mjs`, run the corpus and engine builds, read the diff, run the two checks |
-| E | **Direction deck** | optional: author a small local deck of direction archetypes (our own editorial content) so the roll can deal challengers the agent did not write |
+| E | **Direction deck** | **shipped**: eighteen visual worlds in `lib/deck.json` (print, transport, science, civic, archive), mode-filtered and dealt deterministically as the hand's ONE challenger - the outside view the private catalog used to provide, built from our own editorial content |
 
-What is left is C and the optional E. The line this branch will not cross is the
-one that makes the plugin stop being a plugin: no install, no download, no socket,
-no command string, and no second product smuggled in under "live".
+What is left is C, and it is a decision rather than a gap: the plugin as it
+stands measures, detects, records and deals. The line this branch will not cross
+is the one that makes the plugin stop being a plugin: no install, no download, no
+socket, no command string, and no second product smuggled in under "live".
 
 ## The rules the plan would not trade
 

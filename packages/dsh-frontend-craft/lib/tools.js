@@ -15,6 +15,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import path from 'node:path'
 
 import { DEFAULT_VIEWPORTS, MAX_VIEWPORTS, renderSummary, renderTarget, targetToUrl } from './render.js'
+import { challengerFor } from './deck.js'
 
 import { MAX_ARTIFACT_BYTES, directivesFor, readContext, validateDesign, validateProduct, validateSurface, PRODUCT_FILE, DESIGN_FILE, SURFACES_DIR } from './context.js'
 import { FrontendError, MAX_TOTAL_BYTES, collectSources, readSource, resolveTarget, sessionRoot } from './paths.js'
@@ -269,13 +270,28 @@ export function dealDirections(input = {}) {
   const seed = typeof input.seed === 'string' && input.seed.trim() !== '' ? input.seed.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32) : randomBytes(8).toString('hex')
   if (seed === '') return { ok: false, message: '`seed` must contain letters or digits.' }
   const order = orderFor(seed, directions)
-  const cards = order.slice(0, Math.min(3, order.length)).map((card, index) => ({ ...card, position: index + 1 }))
+  const cards = order.slice(0, Math.min(3, order.length)).map((card, index) => ({ ...card, position: index + 1, source: 'authored' }))
+  const mode = typeof input.mode === 'string' && MODES.includes(input.mode) ? input.mode : 'persuade'
+  // The one thing the agent did not write: a world from the local deck, chosen by
+  // the same hash, so the hand always contains an outside view it has to judge.
+  const challenger = input.includeDeck === false ? null : challengerFor(seed, mode, directions)
+  if (challenger !== null) {
+    cards.push({
+      position: cards.length + 1,
+      name: challenger.name,
+      thesis: challenger.thesis,
+      risk: challenger.risk,
+      source: 'deck',
+      family: challenger.family ?? null,
+    })
+  }
   const deal = {
     seed,
-    mode: typeof input.mode === 'string' && MODES.includes(input.mode) ? input.mode : 'persuade',
+    mode,
     scope: input.scope === 'surface' ? 'surface' : 'direction',
     assigned: order[0].name,
     cards,
+    challenger: challenger === null ? null : challenger.name,
     at: Date.now(),
   }
   return { ok: true, deal }
@@ -309,9 +325,15 @@ function dealText(deal) {
   lines.push('')
   lines.push('dealt, in presentation order:')
   for (const card of deal.cards) {
-    lines.push('  ' + card.position + '. ' + card.name + (card.name === deal.assigned ? '   ← ASSIGNED (lead)' : ''))
+    lines.push('  ' + card.position + '. ' + card.name + (card.source === 'deck' ? '   (challenger, local deck)' : '') + (card.name === deal.assigned ? '   ← ASSIGNED (lead)' : ''))
     if (card.thesis) lines.push('     thesis: ' + card.thesis)
     if (card.risk) lines.push('     risk: ' + card.risk)
+  }
+  if (deal.challenger) {
+    lines.push('')
+    lines.push('THE CHALLENGER IS THE OUTSIDE VIEW: `' + deal.challenger + '` is from the local deck, not from your list.')
+    lines.push('- Judge it on exactly two axes, before any borrowing: audience identification and product clarity. Verdict: wins (beats the assigned on both), competitive (holds one), or declined (loses both).')
+    lines.push('- Declined is not spent: name the ONE discipline of its world the assigned direction lacks, and raise the assigned direction to match before presenting it. Its clothes are not a raise.')
   }
   lines.push('')
   lines.push('PRESENTATION')
@@ -516,7 +538,7 @@ export function buildTools(deps) {  const contextTool = {
     description: [
       'The direction round, without a catalog: deal the directions YOU authored, deterministically, and record the person’s pick. This is the adaptation of `impeccable concept-seed` and `serve-question`.',
       '`action: "deal"` takes `directions` (3 to 12 authored directions, each with a name and optionally a thesis and an honest risk), a `seed`, a `mode` and a `scope`, and prints a PRESENTATION block: which direction is ASSIGNED to build, and which three to put in front of the person. The order is a hash of the seed, so the same roll re-runs to the same hand and the assignment is not your favourite. `action: "ask"` returns the last hand as an option list for the harness question tool; `action: "pick"` records the answer; `action: "status"` reports the last roll.',
-      'There is no catalog and no comp image pipeline in this build: the challengers are the directions you authored plus the standing exit (the category standard). Say so; never present this as a catalog roll.',
+      'There is no catalog and no comp image pipeline in this build: the challengers are the directions you authored, plus ONE from this package’s local deck of eighteen visual worlds (the outside view you did not write), plus the standing exit. Say so; never present this as a catalog roll.',
     ].join('\n'),
     parameters: {
       type: 'object',
@@ -542,6 +564,7 @@ export function buildTools(deps) {  const contextTool = {
         scope: { type: 'string', enum: ['direction', 'surface'], description: '`direction` for a new or replacement visual world, `surface` for a whole surface inside an established world. Default direction.' },
         seed: { type: 'string', description: 'Optional seed: keep it to re-deal the same hand or to continue a round. Omit for a fresh 16-hex seed, which the answer prints.' },
         pick: { type: 'string', description: 'For `pick`: the chosen name, or "reroll" / "canon".' },
+        includeDeck: { type: 'boolean', description: 'Deal one challenger from the local direction deck (default true). The deck is this package’s own eighteen visual worlds; there is still no catalog and no comp.' },
       },
     },
     output: {

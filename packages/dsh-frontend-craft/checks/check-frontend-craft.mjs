@@ -33,7 +33,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { verify } from '../vendor/impeccable/build.mjs'
 import { detectHtml, detectText, inlineStylesheets, RULES, RULE_COUNT, VERSION, PACKAGE_VERSION } from '../lib/vendor.js'
-import { buildTools, orderFor } from '../lib/tools.js'
+import { buildTools, orderFor, dealDirections, pickDirection, normalizeDirections } from '../lib/tools.js'
+import { DECK, challengerFor } from '../lib/deck.js'
 import { validateDesign, validateProduct, validateSurface } from '../lib/context.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -235,6 +236,31 @@ check('a dealt hand is reproducible from its seed and is a permutation', () => {
   assert.deepEqual(first, again, 'the same seed produced two different hands')
   assert.deepEqual(first.slice().sort(), directions.slice().sort(), 'the deal is not a permutation of the authored directions')
   assert.notDeepEqual(first, other, 'two seeds produced the same hand (the hash is not doing anything)')
+})
+
+check('the local deck is complete, and a hand always carries one challenger', () => {
+  assert.ok(DECK.length >= 18, 'the deck is ' + DECK.length + ' entries')
+  const ids = new Set()
+  for (const entry of DECK) {
+    assert.ok(entry.id && !ids.has(entry.id), 'deck id missing or duplicated: ' + entry.id)
+    ids.add(entry.id)
+    assert.ok(typeof entry.name === 'string' && entry.name.length > 2, entry.id + ' has no name')
+    assert.ok(typeof entry.thesis === 'string' && entry.thesis.length > 20, entry.id + ' has no thesis')
+    assert.ok(typeof entry.risk === 'string' && entry.risk.length > 10, entry.id + ' has no risk')
+    assert.ok(Array.isArray(entry.modes) && entry.modes.every((mode) => ['persuade', 'operate', 'read', 'experience'].includes(mode)), entry.id + ' names an unknown mode')
+  }
+  const authored = [{ name: 'Swiss rail timetable' }, { name: 'Risograph zine' }, { name: 'Marine chart' }]
+  const dealt = dealDirections({ directions: authored, seed: 'deck-seed', mode: 'operate' })
+  assert.equal(dealt.ok, true, dealt.message)
+  const challenger = dealt.deal.cards.find((card) => card.source === 'deck')
+  assert.ok(challenger, 'the hand carries no challenger')
+  assert.ok(!authored.some((entry) => entry.name === challenger.name), 'the challenger repeated an authored direction')
+  assert.equal(challengerFor(dealt.deal.seed, 'operate', authored).name, challenger.name, 'the challenger is not deterministic from the seed')
+  const without = dealDirections({ directions: authored, seed: 'deck-seed', mode: 'operate', includeDeck: false })
+  assert.equal(without.deal.cards.filter((card) => card.source === 'deck').length, 0)
+  assert.ok(normalizeDirections(authored).length === 3)
+  assert.equal(pickDirection(dealt.deal, 'reroll').ok, true)
+  assert.equal(pickDirection(dealt.deal, 'not a card').ok, false)
 })
 
 // ---- 7. the renderer, where this host has a browser -------------------------
