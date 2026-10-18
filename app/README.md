@@ -49,6 +49,15 @@ The app never starts node, never binds a port, and never touches the launch toke
 layer may relaunch the run into a Windows Terminal window this process would not wait for,
 and the app would report an instant, silent success.
 
+**The port is the app's own.** `-Port <n>` when a person names one, otherwise a free
+loopback port - **never the shared 3080**, which is what every `dsh web` on the machine
+reaches for. That is a measured rule, not a preference: the first real run of this binary
+asked for 3080 on a machine whose harness was already answering there and died with
+`EADDRINUSE`; on a machine where 3080 is free, the same request would share an origin with
+a process whose launch token this run does not have. A free port costs nothing because the
+launcher opens the tab itself with the token in it. `-Port 3080` is how to ask for the
+shared origin on purpose.
+
 ## The crates
 
 | crate | what it is |

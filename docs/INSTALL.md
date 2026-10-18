@@ -46,6 +46,9 @@ vncode key            ask for the DeepSeek key and write it into <home>/.env (06
 
 Flags: `-Port <n>`, `-DshHome <dir>`, `-DshVersion <ver>`, `-Help`, `-Version`. The key is
 asked for only when there is none and only at a terminal; a piped run never blocks on it.
+`start` gives the launcher a free loopback port **of its own** - never the shared `3080`,
+which is what every `dsh web` on the machine reaches for - and `-Port 3080` is how to ask
+for the shared origin on purpose.
 
 **The app owns a root** (`$VNCODE_HOME`, default the platform's per-user data directory
 plus `vncode`) and the harness home is `<root>/home` inside it. A folder that carries
@@ -113,6 +116,7 @@ pack added; both installers prune the retired names `dsh-files` and `dsh-focus` 
 | Symptom | What it means |
 |---|---|
 | the run launcher says the port is in use | 3080 is taken; use that instance or pass `-Port 3099` |
+| the harness dies with `EADDRINUSE 127.0.0.1:3080` | something already answers on 3080 - usually the harness this very session is open in. `vncode` picks a free port of its own, so this only happens when `-Port 3080` was asked for on purpose: drop the flag, or pass another port |
 | `scripts\run-web.bat` flashes and closes, or no browser opens | run it from the repo root (the worker reads `.dsh-version.json` there) with `node`/`npx` on `PATH`; the URL is in the app's own output |
 | `vncode` says the web launcher is missing | it starts `scripts/run-web.*`, so it must run from its folder: the git archive, or a folder that carries `scripts/` and `.dsh-version.json` beside the binary |
 | the app came up in a home you did not expect | that is the ladder in [PATHS.md](PATHS.md): a `-DshHome` you typed is used or refused by name, a writable inherited `DSH_HOME` is joined, and otherwise the app creates `$VNCODE_HOME/home`. `vncode status` names the path, the reason, and every candidate it refused |
