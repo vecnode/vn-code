@@ -23,7 +23,7 @@ import os from 'node:os'
 
 import { FrontendError, resolveTarget, sessionRoot } from './paths.js'
 import { directivesFor, readContext } from './context.js'
-import { buildTools, scanTarget } from './tools.js'
+import { buildTools, pickDirection, scanTarget } from './tools.js'
 import { PACKAGE_VERSION, RULE_COUNT, VERSION, detector, RULES } from './vendor.js'
 
 export const name = 'dsh-frontend-craft'
@@ -38,6 +38,7 @@ export const STATE_ROUTE = API_ROOT + '/state'
 export const SCAN_ROUTE = API_ROOT + '/scan'
 export const ARTIFACTS_ROUTE = API_ROOT + '/artifacts'
 export const RULES_ROUTE = API_ROOT + '/rules'
+export const DIRECTION_ROUTE = API_ROOT + '/direction'
 
 /** The bundled skill this row registers. */
 export const SKILLS = [{ name: 'frontend-craft', file: '../skills/frontend-craft/SKILL.md' }]
@@ -192,7 +193,7 @@ export function registerRoutes(deps) {
       // A tab opened outside a session still gets the corpus facts.
       root = null
     }
-    return json(200, { ...state, root, platform, directives, artifacts, lastScan: deps.lastScanOf(session) })
+    return json(200, { ...state, root, platform, directives, artifacts, lastScan: deps.lastScanOf(session), direction: { deal: deps.dealOf(session), pick: deps.pickOf(session) } })
   })
 
   register(SCAN_ROUTE, ['POST'], async (request) => {
@@ -232,6 +233,29 @@ export function registerRoutes(deps) {
   })
 
   register(RULES_ROUTE, ['GET', 'HEAD'], async () => json(200, { ok: true, rules: RULES }))
+
+  // The direction round's two halves: what was dealt, and the pick. The deal is
+  // made by `fe_direction` (the agent authors the directions); the tab can only
+  // RECORD a choice, which is the one thing a person owns in that round.
+  register(DIRECTION_ROUTE, ['GET', 'HEAD'], async (request) => {
+    const session = new URL(request.url).searchParams.get('session') ?? ''
+    if (request.method === 'HEAD') return new Response(null, { status: 200 })
+    return json(200, { ok: true, deal: deps.dealOf(session), pick: deps.pickOf(session) })
+  })
+
+  register(DIRECTION_ROUTE, ['POST'], async (request) => {
+    let body
+    try {
+      body = await request.json()
+    } catch (err) {
+      return json(400, { ok: false, code: 'BAD_BODY', message: 'A direction request is JSON: { session, pick }.' })
+    }
+    const session = typeof body?.session === 'string' ? body.session : ''
+    const verdict = pickDirection(deps.dealOf(session), body?.pick)
+    if (!verdict.ok) return json(409, { ok: false, code: 'NO_DEAL', message: verdict.message })
+    deps.rememberPick(session, verdict.choice)
+    return json(200, { ok: true, pick: verdict.choice, deal: deps.dealOf(session) })
+  })
 
   return () => {
     for (const off of offs) {

@@ -245,6 +245,57 @@ export function normalizeDirections(input) {
     }))
 }
 
+/**
+ * Deal one hand from the authored directions.
+ *
+ * The seed is the whole mechanism: a hash of it decides the order, so the same
+ * roll re-runs to the same hand, a re-roll is a new seed rather than a new mood,
+ * and the assignment cannot be the agent quietly picking its favourite. Shared by
+ * the tool and the tab's route, so both tell the same story.
+ *
+ * @returns `{ ok: true, deal }` or `{ ok: false, message }`.
+ */
+export function dealDirections(input = {}) {
+  const directions = normalizeDirections(input.directions)
+  if (directions.length < 3) {
+    return {
+      ok: false,
+      message:
+        'A roll needs at least 3 authored directions (upstream asks for 7); got ' + directions.length + '. Author them first — concrete worlds, artifacts, places or graphic traditions the audience knows by heart, each with a one-line thesis and an honest risk. Do not name colours or adjectives.',
+    }
+  }
+  const seed = typeof input.seed === 'string' && input.seed.trim() !== '' ? input.seed.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32) : randomBytes(8).toString('hex')
+  if (seed === '') return { ok: false, message: '`seed` must contain letters or digits.' }
+  const order = orderFor(seed, directions)
+  const cards = order.slice(0, Math.min(3, order.length)).map((card, index) => ({ ...card, position: index + 1 }))
+  const deal = {
+    seed,
+    mode: typeof input.mode === 'string' && MODES.includes(input.mode) ? input.mode : 'persuade',
+    scope: input.scope === 'surface' ? 'surface' : 'direction',
+    assigned: order[0].name,
+    cards,
+    at: Date.now(),
+  }
+  return { ok: true, deal }
+}
+
+/** Validate a pick against its hand. `reroll` and `canon` are always legal. */
+export function pickDirection(deal, raw) {
+  if (deal === null || typeof deal !== 'object') return { ok: false, message: 'Deal a hand first (`action: "deal"`).' }
+  const choice = typeof raw === 'string' ? raw.trim() : ''
+  if (choice === '') return { ok: false, message: 'A pick needs the chosen name, or "reroll" / "canon".' }
+  const known = (deal.cards ?? []).some((card) => card.name === choice) || choice === 'reroll' || choice === 'canon'
+  if (!known) return { ok: false, message: 'That is not one of this hand’s cards: ' + (deal.cards ?? []).map((card) => card.name).join(', ') + ' (or reroll / canon).' }
+  return { ok: true, choice }
+}
+
+/** What a recorded pick commits the run to, in one sentence. */
+export function pickConsequence(choice) {
+  if (choice === 'reroll') return 'Deal a fresh hand with a new seed. Do not re-deal the same one.'
+  if (choice === 'canon') return 'The standing exit is the commitment: execute the category standard at full fidelity, no irony, no smuggled quirk.'
+  return 'Build this one. Record it in the brief’s FORM line with the deal’s seed, and write the direction contract before touching code.'
+}
+
 /** The cards one deal produced, as a payload the agent can put in front of a person. */
 function dealText(deal) {
   const lines = []
@@ -445,7 +496,9 @@ export function buildTools(deps) {  const contextTool = {
       if (action === 'status') {
         const deal = deps.dealOf(session)
         if (deal === null) return { text: 'No direction round has been dealt in this session.', view: { kind: 'frontend-direction', ok: false } }
-        return { text: dealText(deal), view: { kind: 'frontend-direction', ok: true, deal } }
+        const pick = deps.pickOf(session)
+        const tail = pick === null ? '\n\nno pick recorded yet' : '\n\npick recorded: ' + pick + '\n' + pickConsequence(pick)
+        return { text: dealText(deal) + tail, view: { kind: 'frontend-direction', ok: true, deal, pick } }
       }
       if (action === 'ask') {
         const deal = deps.dealOf(session)
@@ -463,36 +516,16 @@ export function buildTools(deps) {  const contextTool = {
       }
       if (action === 'pick') {
         const deal = deps.dealOf(session)
-        if (deal === null) return { text: 'Deal a hand first (`action: "deal"`).', view: { kind: 'frontend-direction', ok: false } }
-        const choice = typeof args.pick === 'string' ? args.pick.trim() : ''
-        if (choice === '') return { text: '`pick` needs the chosen name, or "reroll" / "canon".', view: { kind: 'frontend-direction', ok: false } }
-        const known = deal.cards.some((card) => card.name === choice) || choice === 'reroll' || choice === 'canon'
-        if (!known) return { text: 'That is not one of this hand’s cards: ' + deal.cards.map((card) => card.name).join(', ') + ' (or reroll / canon).', view: { kind: 'frontend-direction', ok: false } }
-        deps.rememberPick(session, choice)
-        const consequence =
-          choice === 'reroll'
-            ? 'Deal a fresh hand with a new seed. Do not re-deal the same one.'
-            : choice === 'canon'
-              ? 'The standing exit is the commitment: execute the category standard at full fidelity, no irony, no smuggled quirk.'
-              : 'Build this one. Record it in the brief’s FORM line with the deal’s seed, and write the direction contract before touching code.'
-        return { text: 'recorded: ' + choice + '\n' + consequence, view: { kind: 'frontend-direction', ok: true, picked: choice, deal } }
+        const verdict = pickDirection(deal, args && args.pick)
+        if (!verdict.ok) return { text: verdict.message, view: { kind: 'frontend-direction', ok: false } }
+        deps.rememberPick(session, verdict.choice)
+        return { text: 'recorded: ' + verdict.choice + '\n' + pickConsequence(verdict.choice), view: { kind: 'frontend-direction', ok: true, picked: verdict.choice, deal } }
       }
       if (action !== 'deal') return { text: '`action` is deal, ask, pick or status.', view: { kind: 'frontend-direction', ok: false } }
-      const directions = normalizeDirections(args && args.directions)
-      if (directions.length < 3) {
-        return {
-          text:
-            'A roll needs at least 3 authored directions (upstream asks for 7); got ' + directions.length + '. Author them first — concrete worlds, artifacts, places or graphic traditions the audience knows by heart, each with a one-line thesis and an honest risk. Do not name colours or adjectives.',
-          view: { kind: 'frontend-direction', ok: false },
-        }
-      }
-      const seed = typeof args.seed === 'string' && args.seed.trim() !== '' ? args.seed.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32) : randomBytes(8).toString('hex')
-      if (seed === '') return { text: '`seed` must contain letters or digits.', view: { kind: 'frontend-direction', ok: false } }
-      const order = orderFor(seed, directions)
-      const cards = order.slice(0, Math.min(3, order.length)).map((card, index) => ({ ...card, position: index + 1 }))
-      const deal = { seed, mode: typeof args.mode === 'string' && MODES.includes(args.mode) ? args.mode : 'persuade', scope: args.scope === 'surface' ? 'surface' : 'direction', assigned: order[0].name, cards, at: Date.now() }
-      deps.rememberDeal(session, deal)
-      return { text: dealText(deal), view: { kind: 'frontend-direction', ok: true, deal } }
+      const dealt = dealDirections(args ?? {})
+      if (!dealt.ok) return { text: dealt.message, view: { kind: 'frontend-direction', ok: false } }
+      deps.rememberDeal(session, dealt.deal)
+      return { text: dealText(dealt.deal), view: { kind: 'frontend-direction', ok: true, deal: dealt.deal } }
     },
   }
 

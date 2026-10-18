@@ -1735,12 +1735,12 @@ try {
 {
   const fcModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-frontend-craft/lib/index.js')).href)
   const fcTools = []
-  const fcRoutes = new Map()
+  const fcRoutes = []
   const fcWorkspace = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-frontend-routes-'))
   await fsp.writeFile(path.join(fcWorkspace, 'card.css'), '.card{border-left:4px solid #6366f1;border-radius:12px}\n')
   const fcCtx = {
     get: (name) => {
-      if (name === 'connection') return { fetch: { register: (route) => (fcRoutes.set(route.path, route), () => {}) } }
+      if (name === 'connection') return { fetch: { register: (route) => (fcRoutes.push(route), () => {}) } }
       if (name === 'sessions') return { get: (id) => (id === 'session-frontend' ? { header: { cwd: fcWorkspace } } : undefined) }
       return undefined
     },
@@ -1752,12 +1752,12 @@ try {
   check('frontend: four tools, all fe_*', fcTools.map((tool) => tool.name).sort().join(','), 'fe_artifact,fe_context,fe_detect,fe_direction')
   check(
     'frontend: four routes',
-    [...fcRoutes.keys()].sort().join(','),
-    ['/api/dsh-frontend-craft/artifacts', '/api/dsh-frontend-craft/rules', '/api/dsh-frontend-craft/scan', '/api/dsh-frontend-craft/state'].join(','),
+    [...new Set(fcRoutes.map((route) => route.path))].sort().join(','),
+    ['/api/dsh-frontend-craft/artifacts', '/api/dsh-frontend-craft/direction', '/api/dsh-frontend-craft/rules', '/api/dsh-frontend-craft/scan', '/api/dsh-frontend-craft/state'].join(','),
   )
   check(
     'frontend: methods stay inside the registry vocabulary',
-    [...fcRoutes.values()].every((route) => route.methods.every((method) => ['GET', 'HEAD', 'POST'].includes(method))),
+    fcRoutes.every((route) => route.methods.every((method) => ['GET', 'HEAD', 'POST'].includes(method))),
     true,
   )
   check(
@@ -1765,7 +1765,12 @@ try {
     fcTools.every((tool) => tool.parameters.type === 'object' && tool.parameters.additionalProperties === false && tool.output && typeof tool.output.render === 'function' && typeof tool.execute === 'function'),
     true,
   )
-  const fcCall = (routePath, request) => fcRoutes.get(routePath).fetch(request)
+  // A path can carry two registrations (GET and POST); the call picks by method.
+  const fcCall = (routePath, request) => {
+    const route = fcRoutes.find((entry) => entry.path === routePath && entry.methods.includes(request.method))
+    if (!route) throw new Error('no route registered for ' + request.method + ' ' + routePath)
+    return route.fetch(request)
+  }
   const fcState = await fcCall('/api/dsh-frontend-craft/state', new Request('http://x/api/dsh-frontend-craft/state?session='))
   const fcStateBody = await fcState.json()
   check('frontend: the state route answers without a session', fcState.status === 200 && fcStateBody.ok === true && fcStateBody.rules === 61, true)
@@ -1777,6 +1782,39 @@ try {
   check('frontend: a scan carries the corpus it used', fcScan.text.includes('61 rules') && fcScan.text.includes('Impeccable 4.6.0'), true)
   const fcBoot = await fcTools.find((tool) => tool.name === 'fe_context').execute({}, { agent: { session: { id: 'session-frontend' } } })
   check('frontend: a project with no PRODUCT.md is routed to init', fcBoot.view.directives.some((directive) => directive.id === 'ROUTE_INIT'), true)
+
+  // The direction round: dealt by the tool, read and picked through the route.
+  const fcDirection = fcTools.find((tool) => tool.name === 'fe_direction')
+  const fcDealt = await fcDirection.execute(
+    { action: 'deal', seed: 'seed-1', mode: 'operate', directions: [{ name: 'Swiss rail timetable' }, { name: 'Risograph zine' }, { name: 'Marine chart' }] },
+    { agent: { session: { id: 'session-frontend' } } },
+  )
+  check('frontend: a deal names an assigned card', fcDealt.view.ok === true && fcDealt.view.deal.assigned.length > 0, true)
+  const fcDirectionGet = await (
+    await fcCall('/api/dsh-frontend-craft/direction', new Request('http://x/api/dsh-frontend-craft/direction?session=session-frontend'))
+  ).json()
+  check('frontend: the direction route reads the dealt hand', fcDirectionGet.ok === true && fcDirectionGet.deal.seed === 'seed1' && fcDirectionGet.pick === null, true)
+  const fcDirectionPick = await fcCall(
+    '/api/dsh-frontend-craft/direction',
+    new Request('http://x/api/dsh-frontend-craft/direction', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: 'session-frontend', pick: 'Marine chart' }),
+    }),
+  )
+  const fcPicked = await fcDirectionPick.json()
+  check('frontend: the direction route records the pick', fcDirectionPick.status === 200 && fcPicked.pick === 'Marine chart', true)
+  const fcRejected = await fcCall(
+    '/api/dsh-frontend-craft/direction',
+    new Request('http://x/api/dsh-frontend-craft/direction', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: 'session-frontend', pick: 'Not a card' }),
+    }),
+  )
+  check('frontend: the direction route refuses a card that was not dealt', fcRejected.status === 409, true)
+  const fcStatus = await fcDirection.execute({ action: 'status' }, { agent: { session: { id: 'session-frontend' } } })
+  check('frontend: the tool sees the pick the tab recorded', fcStatus.view.pick === 'Marine chart', true)
   await fsp.rm(fcWorkspace, { recursive: true, force: true })
 }
 

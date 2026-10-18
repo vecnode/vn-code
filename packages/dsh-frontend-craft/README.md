@@ -17,8 +17,8 @@ so, below).
 |---|---|
 | **skill** | `frontend-craft`: 24 commands (`init`, `document`, `critique`, `audit`, `polish`, `bolder`, `quieter`, `distill`, `harden`, `onboard`, `animate`, `colorize`, `typeset`, `layout`, `delight`, `overdrive`, `clarify`, `adapt`, `optimize`, `shape`, `extract`, `craft`, `live`, `generate`), the craft floor, the four visitor modes, and the iOS/Android platform references - 41 reference files copied from the pin |
 | **tools** | `fe_context` (product truth, design system, surface briefs, config, directives), `fe_detect` (the 61 rules over a file or folder), `fe_direction` (deal a direction hand from the directions the agent authored, deterministically; record the pick), `fe_artifact` (read/write + shape-validate `PRODUCT.md`, `DESIGN.md`, a surface brief) |
-| **tab** | **Frontend**: the findings by file and rule with the rule's own sentence, filters by category, a re-scan, and the three artifacts with their validation verdict |
-| **routes** | `GET /api/dsh-frontend-craft/state`, `POST .../scan`, `GET .../artifacts`, `GET .../rules` |
+| **tab** | **Frontend**: Findings (by file and rule, filters, re-scan), Artifacts (`PRODUCT.md`, `DESIGN.md`, the briefs, with their shape verdict) and Directions (the dealt hand, the assigned card, the pick recorded from the tab) |
+| **routes** | `GET /api/dsh-frontend-craft/state`, `POST .../scan`, `GET .../artifacts`, `GET .../rules`, `GET`/`POST .../direction` |
 
 The 61 rules split 31 `slop` / 30 `quality`: side-tab borders, gradient text,
 purple-blue palettes, cream palettes, nested cards, uniform spacing, bounce

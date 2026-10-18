@@ -3065,6 +3065,24 @@ check(
   check('frontend title seat renders', renderToStaticMarkup(h(fcTitle)).includes('Frontend'))
   const fcMarkup = renderToStaticMarkup(h(fcSeats['sidebar.right.pane.tab#dsh-frontend-craft'].component, { sessionId: '' }))
   check('frontend body renders its frame', fcMarkup.includes('class="dfc-root"') && fcMarkup.includes('>Frontend<'))
+  check('frontend body offers the three views', ['Findings', 'Artifacts', 'Directions'].every((label) => fcMarkup.includes('>' + label + '<')))
+  const fcDirections = fc.exports.__internals.Directions
+  const fcNoDeal = renderToStaticMarkup(h(fcDirections, { deal: null, pick: null, busy: false, onPick: () => {} }))
+  check('frontend directions view explains the empty round', fcNoDeal.includes('No direction round yet.') && fcNoDeal.includes('fe_direction'))
+  const fcDeal = {
+    seed: 'abc123',
+    mode: 'persuade',
+    scope: 'direction',
+    assigned: 'Swiss rail timetable',
+    cards: [
+      { position: 1, name: 'Swiss rail timetable', thesis: 'Precision as the brand.' },
+      { position: 2, name: 'Risograph zine', thesis: 'Ink and overprint.' },
+    ],
+  }
+  const fcHand = renderToStaticMarkup(h(fcDirections, { deal: fcDeal, pick: null, busy: false, onPick: () => {} }))
+  check('frontend directions view marks the assigned card', fcHand.includes('the roll') && fcHand.includes('Build this') && fcHand.includes('Re-roll') && fcHand.includes('The category standard'))
+  const fcPicked = renderToStaticMarkup(h(fcDirections, { deal: fcDeal, pick: 'Risograph zine', busy: false, onPick: () => {} }))
+  check('frontend directions view shows the recorded pick', fcPicked.includes('chosen') && fcPicked.includes('picked: Risograph zine'))
   check('frontend body opens on the empty state', fcMarkup.includes('Nothing scanned yet.'))
   check('frontend body names the missing workspace', fcMarkup.includes('no workspace bound to this tab'))
 }

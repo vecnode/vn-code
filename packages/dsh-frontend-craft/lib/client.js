@@ -34,6 +34,7 @@ window.__ModuleLoader__.load({
     const STATE_ROUTE = API_ROOT + '/state'
     const SCAN_ROUTE = API_ROOT + '/scan'
     const ARTIFACTS_ROUTE = API_ROOT + '/artifacts'
+    const DIRECTION_ROUTE = API_ROOT + '/direction'
 
     const css = `
 .dfc-root{display:flex;flex-direction:column;height:100%;min-height:0;font:12px/18px var(--dsw-font-ui,ui-sans-serif,system-ui,sans-serif);color:var(--dsw-alias-label-secondary,#b8b8b8)}
@@ -69,6 +70,15 @@ window.__ModuleLoader__.load({
 .dfc-ok{color:#5aa469}
 .dfc-bad{color:#d46a5f}
 .dfc-pre{margin:4px 0 0;padding:6px 8px;background:var(--dsw-alias-bg-secondary,rgba(128,128,128,.10));border-radius:5px;font-family:var(--dsw-font-mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:11px;line-height:16px;white-space:pre-wrap;word-break:break-word;max-height:280px;overflow:auto}
+.dfc-cards{display:flex;flex-direction:column;gap:6px;padding:6px 10px}
+.dfc-card{border:.5px solid var(--dsw-alias-border-secondary,rgba(128,128,128,.28));border-radius:7px;padding:7px 9px}
+.dfc-card[data-assigned="true"]{border-color:var(--dsw-alias-brand-primary,#4f8cff)}
+.dfc-card[data-chosen="true"]{background:var(--dsw-alias-bg-secondary,rgba(128,128,128,.10))}
+.dfc-cardHead{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.dfc-cardName{font-weight:600;color:var(--dsw-alias-label-primary,#d8d8d8)}
+.dfc-kicker{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dsw-alias-brand-primary,#4f8cff)}
+.dfc-line{margin-top:2px;color:var(--dsw-alias-label-tertiary,#8f8f8f);line-height:17px}
+.dfc-actions{display:flex;gap:6px;padding:4px 10px 8px;flex-wrap:wrap}
 `
 
     const CSS_TAG = 'dsh-frontend-craft/tab.css'
@@ -218,17 +228,112 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /**
+     * The direction round: the last hand `fe_direction` dealt, with the assigned
+     * card marked and one action per card. The tab RECORDS the pick; it cannot
+     * author a direction, because that is the agent's work and the point of the
+     * roll. A `reroll` and the standing exit are always offered.
+     */
+    function Directions(props) {
+      const deal = props.deal
+      const pick = props.pick
+      if (!deal) {
+        return h(
+          'div',
+          { className: 'dfc-empty' },
+          'No direction round yet.\n\n' +
+            'The agent deals a hand with `fe_direction` action `deal`: the directions it authored, hashed through a seed, one ASSIGNED and three put to you. This panel then shows that hand, and records which one you choose.\n\n' +
+            'There is no catalog behind this roll - the challengers are the directions the agent wrote, plus the standing exit.',
+        )
+      }
+      return h(
+        'div',
+        null,
+        h('div', { className: 'dfc-note' }, 'seed ' + deal.seed + ' · ' + deal.mode + ' · ' + deal.scope + (pick ? ' · picked: ' + pick : ' · not picked yet')),
+        h(
+          'div',
+          { className: 'dfc-cards' },
+          ...(deal.cards || []).map((card) =>
+            h(
+              'div',
+              {
+                key: String(card.position) + card.name,
+                className: 'dfc-card',
+                'data-assigned': card.name === deal.assigned ? 'true' : undefined,
+                'data-chosen': pick === card.name ? 'true' : undefined,
+              },
+              h(
+                'div',
+                { className: 'dfc-cardHead' },
+                h('span', { className: 'dfc-cardName' }, card.name),
+                card.name === deal.assigned ? h('span', { className: 'dfc-kicker' }, 'the roll') : null,
+                pick === card.name ? h('span', { className: 'dfc-kicker' }, 'chosen') : null,
+              ),
+              card.thesis ? h('div', { className: 'dfc-line' }, card.thesis) : null,
+              card.risk ? h('div', { className: 'dfc-line' }, 'risk: ' + card.risk) : null,
+              h(
+                'div',
+                { className: 'dfc-actions' },
+                h('button', { type: 'button', className: 'dfc-btn', disabled: props.busy, onClick: () => props.onPick(card.name) }, card.name === deal.assigned ? 'Build this' : 'Choose this'),
+              ),
+            ),
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dfc-actions' },
+          h('button', { type: 'button', className: 'dfc-btn', disabled: props.busy, onClick: () => props.onPick('canon') }, 'The category standard'),
+          h('button', { type: 'button', className: 'dfc-btn', disabled: props.busy, onClick: () => props.onPick('reroll') }, 'Re-roll'),
+        ),
+      )
+    }
+
     /** The tab itself. */
     function FrontendCraft(props) {
       const sessionId = props && props.sessionId ? props.sessionId : ''
       const [state, setState] = React.useState(null)
       const [report, setReport] = React.useState(null)
       const [artifacts, setArtifacts] = React.useState(null)
+      const [direction, setDirection] = React.useState(null)
       const [view, setView] = React.useState('findings')
       const [filter, setFilter] = React.useState('all')
       const [target, setTarget] = React.useState('')
       const [busy, setBusy] = React.useState(false)
+      const [pickBusy, setPickBusy] = React.useState(false)
       const [error, setError] = React.useState('')
+
+      const loadDirection = React.useCallback(async () => {
+        if (sessionId === '') {
+          setDirection({ deal: null, pick: null })
+          return
+        }
+        const answer = await api(DIRECTION_ROUTE + '?session=' + encodeURIComponent(sessionId))
+        if (answer.ok && answer.body && answer.body.ok === true) setDirection({ deal: answer.body.deal ?? null, pick: answer.body.pick ?? null })
+        else setDirection({ deal: null, pick: null })
+      }, [sessionId])
+
+      const pick = React.useCallback(
+        async (choice) => {
+          if (sessionId === '') {
+            setError('This tab is not bound to a conversation, so it cannot record a choice.')
+            return
+          }
+          setPickBusy(true)
+          setError('')
+          const answer = await api(DIRECTION_ROUTE, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ session: sessionId, pick: choice }),
+          })
+          setPickBusy(false)
+          if (!answer.ok || !answer.body || answer.body.ok !== true) {
+            setError(String((answer.body && (answer.body.message || answer.body.code)) || 'the direction route refused that'))
+            return
+          }
+          await loadDirection()
+        },
+        [sessionId, loadDirection],
+      )
 
       const loadArtifacts = React.useCallback(async () => {
         if (sessionId === '') {
@@ -250,10 +355,11 @@ window.__ModuleLoader__.load({
         }
         read()
         loadArtifacts()
+        loadDirection()
         return () => {
           stopped = true
         }
-      }, [sessionId, loadArtifacts])
+      }, [sessionId, loadArtifacts, loadDirection])
 
       const scan = React.useCallback(async () => {
         if (sessionId === '') {
@@ -312,13 +418,16 @@ window.__ModuleLoader__.load({
             : null,
           view === 'findings'
             ? button(busy ? 'Scanning…' : 'Scan', scan, { disabled: busy, 'data-toolbar': 'scan' })
-            : button('Reload', () => loadArtifacts(), { 'data-toolbar': 'reload' }),
+            : view === 'artifacts'
+              ? button('Reload', () => loadArtifacts(), { 'data-toolbar': 'reload' })
+              : button('Reload', () => loadDirection(), { 'data-toolbar': 'reload-direction' }),
         ),
         h(
           'div',
           { className: 'dfc-tabs' },
           button('Findings', () => setView('findings'), { 'data-active': view === 'findings' ? 'true' : undefined, 'data-view': 'findings' }),
           button('Artifacts', () => setView('artifacts'), { 'data-active': view === 'artifacts' ? 'true' : undefined, 'data-view': 'artifacts' }),
+          button('Directions', () => setView('directions'), { 'data-active': view === 'directions' ? 'true' : undefined, 'data-view': 'directions' }),
         ),
         h(
           'div',
@@ -327,7 +436,9 @@ window.__ModuleLoader__.load({
           detector && detector.ok !== true ? h('div', { className: 'dfc-empty' }, 'The vendored detector could not load: ' + detector.message) : null,
           view === 'findings'
             ? h(Findings, { report, filter, onFilter: setFilter })
-            : h(Artifacts, { artifacts, onReload: loadArtifacts }),
+            : view === 'artifacts'
+              ? h(Artifacts, { artifacts, onReload: loadArtifacts })
+              : h(Directions, { deal: direction ? direction.deal : null, pick: direction ? direction.pick : null, busy: pickBusy, onPick: pick }),
         ),
         h('div', { className: 'dfc-note' }, state && state.root ? 'workspace: ' + state.root : 'no workspace bound to this tab'),
       )
@@ -353,7 +464,7 @@ window.__ModuleLoader__.load({
             id: TYPE_ID + '/findings',
             order: 58,
             title: () => 'Frontend craft',
-            description: () => 'The 61 design rules over this workspace, and its PRODUCT / DESIGN artifacts.',
+            description: () => 'The 61 design rules over this workspace, its PRODUCT / DESIGN artifacts, and the current direction round.',
           },
         ],
       }
@@ -378,7 +489,7 @@ window.__ModuleLoader__.load({
     exports.name = 'dsh-frontend-craft'
     exports.inject = inject
     exports.apply = apply
-    exports.__internals = { definition, api, FrontendCraft, TYPE_ID, KIND, STATE_ROUTE, SCAN_ROUTE, ARTIFACTS_ROUTE }
+    exports.__internals = { definition, api, FrontendCraft, Directions, TYPE_ID, KIND, STATE_ROUTE, SCAN_ROUTE, ARTIFACTS_ROUTE, DIRECTION_ROUTE }
 
     return module.exports
   },
