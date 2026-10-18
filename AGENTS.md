@@ -77,7 +77,12 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   (the only owner of ffmpeg), `dsh-supercollider` (SuperCollider: ten `sc_*` tools
   over a warm `sclang` session and a hand-written OSC client, the `.schelp`
   reference indexed, five skills whose every example a check compiles, one small
-  console tab — host half plus UI, no bundled binary), `dsh-diagrams`, `dsh-pdf`,
+  console tab — host half plus UI, no bundled binary), `dsh-diagrams`,
+  `dsh-frontend-craft` (front-end design: Impeccable's Apache-2.0 corpus vendored
+  at a pinned commit plus its 61-rule detector built to WebAssembly inside the
+  package, five `fe_*` tools including a headless-browser render that measures
+  contrast/tap targets/overflow, one Frontend tab — no network, no install, no
+  engine download), `dsh-pdf`,
   `dsh-research` (a run is a folder with a `passport.json` recording the user's own
   words; nine `rs_*` tools over an append-only claim and source ledger, a claim's
   numbers recorded as a validated `statistic` rather than left in the prose, a

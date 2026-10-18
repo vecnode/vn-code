@@ -1,0 +1,68 @@
+{
+  "gradient-text-one-colour.html": [
+    {
+      "antipattern": "gradient-text",
+      "line": 0,
+      "snippet": "background-clip: text + gradient"
+    },
+    {
+      "antipattern": "ai-color-palette",
+      "line": 0,
+      "snippet": "Purple/violet accent colors detected"
+    },
+    {
+      "antipattern": "gradient-text",
+      "line": 0,
+      "snippet": "background-clip: text + gradient"
+    }
+  ],
+  "linked-stylesheet.html": [
+    {
+      "antipattern": "side-tab",
+      "line": 0,
+      "snippet": "border-left: 4px + border-radius: 12px"
+    },
+    {
+      "antipattern": "border-accent-on-rounded",
+      "line": 0,
+      "snippet": "border-top: 3px + border-radius: 12px"
+    }
+  ],
+  "nested-cards-controls.html": [],
+  "overused-font-spellings.html": [
+    {
+      "antipattern": "overused-font",
+      "line": 0,
+      "snippet": "Primary font: geist sans"
+    }
+  ],
+  "sample.tsx": [
+    {
+      "antipattern": "side-tab",
+      "line": 5,
+      "snippet": "borderLeft: '4px solid"
+    }
+  ],
+  "side-tab-far-corners.html": [
+    {
+      "antipattern": "side-tab",
+      "line": 0,
+      "snippet": "border-left: 2px + border-radius: 12px"
+    },
+    {
+      "antipattern": "side-tab",
+      "line": 0,
+      "snippet": "border-right: 2px + border-radius: 12px"
+    },
+    {
+      "antipattern": "side-tab",
+      "line": 0,
+      "snippet": "border-left: 2px + border-radius: 6px"
+    },
+    {
+      "antipattern": "side-tab",
+      "line": 0,
+      "snippet": "border-left: 4px"
+    }
+  ]
+}

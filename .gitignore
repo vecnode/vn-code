@@ -108,6 +108,13 @@ docs/diagrams/
 # build or run time - so it stays local, per-machine.
 packages/dsh-diagrams/vendor/design/.cache/
 
+# The dsh-frontend-craft vendoring caches, the same shape: `build.mjs` fetches
+# the pinned Impeccable commit once into `.cache/<sha>.tar.gz`, and
+# `build-engine.mjs` stages the wasm-bindgen output in `.cache/wasm-out`. Both
+# are INPUTS; the bytes they produce are committed under `lib/vendor/impeccable/`
+# and hashed by its VERSION.json.
+packages/dsh-frontend-craft/vendor/impeccable/.cache/
+
 # Editors / OS
 .DS_Store
 Thumbs.db

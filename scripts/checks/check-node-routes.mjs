@@ -1690,10 +1690,11 @@ try {
 }
 
 // ------------------------------------------- every runtime skill registration
-// Six rows register a skill into the harness's own registry at activation
+// Seven rows register a skill into the harness's own registry at activation
 // (dsh-media's two, dsh-diagrams' two, dsh-pdf's one, dsh-supercollider's five,
-// dsh-proto-lab's three and dsh-research's one), and each of them must name the
-// FILE it read and its SOURCE BUCKET. The source is not cosmetic:
+// dsh-proto-lab's three, dsh-research's one and dsh-frontend-craft's one), and
+// each of them must name the FILE it read and its SOURCE BUCKET. The source is
+// not cosmetic:
 // `ctx.skills.get()` - what the `skill` tool calls to LOAD a skill, as opposed to
 // listing it - validates the definition it gets back and requires a STRING
 // `source`, so a runtime registration without one is unloadable wherever it is
@@ -1709,7 +1710,7 @@ try {
 // whose registration nothing pinned. It is here now.
 {
   const registrations = []
-  for (const packageName of ['dsh-media', 'dsh-diagrams', 'dsh-pdf', 'dsh-supercollider', 'dsh-proto-lab', 'dsh-research']) {
+  for (const packageName of ['dsh-media', 'dsh-diagrams', 'dsh-pdf', 'dsh-supercollider', 'dsh-proto-lab', 'dsh-research', 'dsh-frontend-craft']) {
     registrations.push({
       packageName,
       source: await fsp.readFile(path.join(repo, 'packages', packageName, 'lib', 'index.js'), 'utf8'),
@@ -1719,8 +1720,117 @@ try {
   check(
     'every bundled-skill registration names its file and source bucket',
     named.map((entry) => entry.packageName).join(','),
-    'dsh-media,dsh-diagrams,dsh-pdf,dsh-supercollider,dsh-proto-lab,dsh-research',
+    'dsh-media,dsh-diagrams,dsh-pdf,dsh-supercollider,dsh-proto-lab,dsh-research,dsh-frontend-craft',
   )
+}
+
+// ------------------------------------------------------- dsh-frontend-craft
+// The front-end row is the pack's only vendored RULE ENGINE: 61 Impeccable
+// rules compiled to WebAssembly and loaded in-process, with no download and no
+// child process. Pinned here is the wiring (four tools, four routes, closed
+// schemas) and the two answers nothing else drives: the state route with no
+// session, and a scan of a temp workspace that must name the side-tab border.
+// The corpus and the detector's parity with the upstream CLI are covered by
+// packages/dsh-frontend-craft/checks/check-frontend-craft.mjs.
+{
+  const fcModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-frontend-craft/lib/index.js')).href)
+  const fcTools = []
+  const fcRoutes = []
+  const fcWorkspace = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-frontend-routes-'))
+  await fsp.writeFile(path.join(fcWorkspace, 'card.css'), '.card{border-left:4px solid #6366f1;border-radius:12px}\n')
+  const fcCtx = {
+    get: (name) => {
+      if (name === 'connection') return { fetch: { register: (route) => (fcRoutes.push(route), () => {}) } }
+      if (name === 'sessions') return { get: (id) => (id === 'session-frontend' ? { header: { cwd: fcWorkspace } } : undefined) }
+      return undefined
+    },
+    tools: { register: (tool) => (fcTools.push(tool), () => {}) },
+    effect: (fn) => fn(),
+    logger: { debug() {}, info() {}, warn() {} },
+  }
+  fcModule.apply(fcCtx)
+  check('frontend: five tools, all fe_*', fcTools.map((tool) => tool.name).sort().join(','), 'fe_artifact,fe_context,fe_detect,fe_direction,fe_render')
+  check(
+    'frontend: six routes',
+    [...new Set(fcRoutes.map((route) => route.path))].sort().join(','),
+    ['/api/dsh-frontend-craft/artifacts', '/api/dsh-frontend-craft/direction', '/api/dsh-frontend-craft/render-image', '/api/dsh-frontend-craft/rules', '/api/dsh-frontend-craft/scan', '/api/dsh-frontend-craft/state'].join(','),
+  )
+  check(
+    'frontend: methods stay inside the registry vocabulary',
+    fcRoutes.every((route) => route.methods.every((method) => ['GET', 'HEAD', 'POST'].includes(method))),
+    true,
+  )
+  check(
+    'frontend: every tool declares a closed JSON-schema surface',
+    fcTools.every((tool) => tool.parameters.type === 'object' && tool.parameters.additionalProperties === false && tool.output && typeof tool.output.render === 'function' && typeof tool.execute === 'function'),
+    true,
+  )
+  // A path can carry two registrations (GET and POST); the call picks by method.
+  const fcCall = (routePath, request) => {
+    const route = fcRoutes.find((entry) => entry.path === routePath && entry.methods.includes(request.method))
+    if (!route) throw new Error('no route registered for ' + request.method + ' ' + routePath)
+    return route.fetch(request)
+  }
+  const fcState = await fcCall('/api/dsh-frontend-craft/state', new Request('http://x/api/dsh-frontend-craft/state?session='))
+  const fcStateBody = await fcState.json()
+  check('frontend: the state route answers without a session', fcState.status === 200 && fcStateBody.ok === true && fcStateBody.rules === 61, true)
+  const fcRules = await (await fcCall('/api/dsh-frontend-craft/rules', new Request('http://x/api/dsh-frontend-craft/rules'))).json()
+  check('frontend: the registry is 61 rows in at least two categories', fcRules.rules.length === 61 && new Set(fcRules.rules.map((rule) => rule.category)).size >= 2, true)
+  const fcDetect = fcTools.find((tool) => tool.name === 'fe_detect')
+  const fcScan = await fcDetect.execute({ target: 'card.css' }, { agent: { session: { id: 'session-frontend' } } })
+  check('frontend: a scan names the side-tab border', fcScan.view.findings.some((finding) => finding.antipattern === 'side-tab'), true)
+  check('frontend: a scan carries the corpus it used', fcScan.text.includes('61 rules') && fcScan.text.includes('Impeccable 4.6.0'), true)
+  const fcBoot = await fcTools.find((tool) => tool.name === 'fe_context').execute({}, { agent: { session: { id: 'session-frontend' } } })
+  check('frontend: a project with no PRODUCT.md is routed to init', fcBoot.view.directives.some((directive) => directive.id === 'ROUTE_INIT'), true)
+
+  // The direction round: dealt by the tool, read and picked through the route.
+  const fcDirection = fcTools.find((tool) => tool.name === 'fe_direction')
+  const fcDealt = await fcDirection.execute(
+    { action: 'deal', seed: 'seed-1', mode: 'operate', directions: [{ name: 'Swiss rail timetable' }, { name: 'Risograph zine' }, { name: 'Marine chart' }] },
+    { agent: { session: { id: 'session-frontend' } } },
+  )
+  check('frontend: a deal names an assigned card', fcDealt.view.ok === true && fcDealt.view.deal.assigned.length > 0, true)
+  check('frontend: a deal carries one deck challenger', typeof fcDealt.view.deal.challenger === 'string' && fcDealt.view.deal.cards.some((card) => card.source === 'deck'), true)
+  const fcDirectionGet = await (
+    await fcCall('/api/dsh-frontend-craft/direction', new Request('http://x/api/dsh-frontend-craft/direction?session=session-frontend'))
+  ).json()
+  check('frontend: the direction route reads the dealt hand', fcDirectionGet.ok === true && fcDirectionGet.deal.seed === 'seed1' && fcDirectionGet.pick === null, true)
+  const fcDirectionPick = await fcCall(
+    '/api/dsh-frontend-craft/direction',
+    new Request('http://x/api/dsh-frontend-craft/direction', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: 'session-frontend', pick: 'Marine chart' }),
+    }),
+  )
+  const fcPicked = await fcDirectionPick.json()
+  check('frontend: the direction route records the pick', fcDirectionPick.status === 200 && fcPicked.pick === 'Marine chart', true)
+  const fcRejected = await fcCall(
+    '/api/dsh-frontend-craft/direction',
+    new Request('http://x/api/dsh-frontend-craft/direction', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: 'session-frontend', pick: 'Not a card' }),
+    }),
+  )
+  check('frontend: the direction route refuses a card that was not dealt', fcRejected.status === 409, true)
+  const fcStatus = await fcDirection.execute({ action: 'status' }, { agent: { session: { id: 'session-frontend' } } })
+  check('frontend: the tool sees the pick the tab recorded', fcStatus.view.pick === 'Marine chart', true)
+
+  // The renderer's policy, without needing a browser: what it will and will not
+  // load is a decision made before a process exists.
+  const fcRender = await import(pathToFileURL(path.join(repo, 'packages/dsh-frontend-craft/lib/render.js')).href)
+  check('frontend: a public url is refused by the renderer', fcRender.targetToUrl('https://example.com/', fcWorkspace).ok === false, true)
+  check('frontend: a loopback url is accepted', fcRender.targetToUrl('http://127.0.0.1:5173/', fcWorkspace).ok === true, true)
+  check('frontend: a non-html workspace file is refused', fcRender.targetToUrl('card.css', fcWorkspace).ok === false, true)
+  const fcPage = path.join(fcWorkspace, 'index.html')
+  await fsp.writeFile(fcPage, '<!doctype html><title>t</title><h1>t</h1>')
+  check('frontend: a workspace html file is accepted', fcRender.targetToUrl('index.html', fcWorkspace).ok === true, true)
+  const fcBadImage = await fcCall('/api/dsh-frontend-craft/render-image', new Request('http://x/api/dsh-frontend-craft/render-image?id=not-hex&w=800'))
+  check('frontend: the image route refuses a crafted id', fcBadImage.status, 400)
+  const fcMissingImage = await fcCall('/api/dsh-frontend-craft/render-image', new Request('http://x/api/dsh-frontend-craft/render-image?id=0123456789abcdef&w=800'))
+  check('frontend: the image route 404s a render that does not exist', fcMissingImage.status, 404)
+  await fsp.rm(fcWorkspace, { recursive: true, force: true })
 }
 
 // ------------------------------------------------------------------- dsh-ocr

@@ -1,0 +1,146 @@
+[
+  {
+    "id": "swiss-rail",
+    "name": "Swiss rail timetable",
+    "thesis": "A public timetable's discipline: a strict grid, tabular numerals, arrows and no decoration. Trust comes from legibility under time pressure.",
+    "risk": "Reads cold; warmth has to come from type and photography, never ornament.",
+    "modes": ["operate", "read"],
+    "family": "transport"
+  },
+  {
+    "id": "risograph",
+    "name": "Risograph zine",
+    "thesis": "Two spot inks, visible halftone and deliberate misregistration make a small budget look like a scene.",
+    "risk": "Misregistration eats small text; body copy stays on one ink.",
+    "modes": ["persuade", "experience"],
+    "family": "print"
+  },
+  {
+    "id": "marine-chart",
+    "name": "Admiralty chart",
+    "thesis": "Depth contours, sounding numbers and magenta corrections turn dense data into a navigable surface.",
+    "risk": "Dense notation intimidates; it needs one clear legend and a scale it never betrays.",
+    "modes": ["operate", "read"],
+    "family": "science"
+  },
+  {
+    "id": "card-catalogue",
+    "name": "Library card catalogue",
+    "thesis": "Index cards, typewriter type and ruled lines: an interface that explains itself by looking like its own record.",
+    "risk": "Nostalgia without function; every card must carry real data.",
+    "modes": ["read", "operate"],
+    "family": "archive"
+  },
+  {
+    "id": "safety-card",
+    "name": "Aeroplane safety card",
+    "thesis": "Flat pictograms in sequence, no words needed: the most compressed instruction set in the world.",
+    "risk": "Reduction can drop nuance the task actually needs.",
+    "modes": ["operate", "persuade"],
+    "family": "transport"
+  },
+  {
+    "id": "museum-label",
+    "name": "Museum wall label",
+    "thesis": "Small caps, a generous margin and one object per field of view; the interface gets out of the work's way.",
+    "risk": "Too quiet for a page that has to sell something.",
+    "modes": ["read", "experience"],
+    "family": "civic"
+  },
+  {
+    "id": "seed-catalogue",
+    "name": "Seed catalogue",
+    "thesis": "Engraved illustration, a sturdy serif and dense captions: commerce that reads like a reference book.",
+    "risk": "Illustration is the cost; a weak one sinks the whole page.",
+    "modes": ["persuade", "read"],
+    "family": "print"
+  },
+  {
+    "id": "departure-board",
+    "name": "Departure board",
+    "thesis": "Flip-board rows, one fact per column, numerals that align: scanning beats reading.",
+    "risk": "A grid of rows flattens hierarchy if every row looks alike.",
+    "modes": ["operate"],
+    "family": "transport"
+  },
+  {
+    "id": "field-book",
+    "name": "Surveyor's field book",
+    "thesis": "Pencil rules, marginal notes and coordinates: the look of evidence that work was actually done.",
+    "risk": "Hand-made marks become decoration when nothing is measured.",
+    "modes": ["read", "operate"],
+    "family": "science"
+  },
+  {
+    "id": "banknote",
+    "name": "Banknote engraving",
+    "thesis": "Guilloche patterns, a portrait and a restrained palette: authority built from craft rather than colour.",
+    "risk": "Ornament without a reason is pastiche.",
+    "modes": ["persuade", "experience"],
+    "family": "print"
+  },
+  {
+    "id": "lab-notebook",
+    "name": "Lab notebook",
+    "thesis": "Graph paper, ink entries and a stamped date: a record that expects to be checked.",
+    "risk": "Dense rules fight long prose.",
+    "modes": ["read", "operate"],
+    "family": "science"
+  },
+  {
+    "id": "playbill",
+    "name": "Theatre playbill",
+    "thesis": "Wood type stacked to fill the sheet, names in rank order: hierarchy you can read across a street.",
+    "risk": "Loud everywhere is loud nowhere.",
+    "modes": ["persuade", "experience"],
+    "family": "print"
+  },
+  {
+    "id": "transit-map",
+    "name": "Transit map",
+    "thesis": "Colour-coded lines at 45 degrees and stations as ticks: topology over geography.",
+    "risk": "A diagram can hide the distances users actually care about.",
+    "modes": ["operate", "read"],
+    "family": "transport"
+  },
+  {
+    "id": "trade-catalogue",
+    "name": "Trade catalogue",
+    "thesis": "A product grid, spec tables and a hard price column: utility as the aesthetic.",
+    "risk": "Tables full of filler read as filler.",
+    "modes": ["operate", "read"],
+    "family": "archive"
+  },
+  {
+    "id": "almanac",
+    "name": "Observatory almanac",
+    "thesis": "Tables, star charts and a sober serif: prediction presented as a public service.",
+    "risk": "Table-heavy pages break on small screens unless the table is designed to move.",
+    "modes": ["read", "operate"],
+    "family": "science"
+  },
+  {
+    "id": "repair-manual",
+    "name": "Repair manual",
+    "thesis": "Exploded diagrams with numbered callouts and short imperative sentences.",
+    "risk": "Callouts without a real diagram are lies.",
+    "modes": ["operate", "read"],
+    "family": "archive"
+  },
+  {
+    "id": "ticket-roll",
+    "name": "Ticket roll",
+    "thesis": "A narrow column of monospaced lines, perforated edges and a total at the bottom: every row is a transaction.",
+    "risk": "Monotony makes the one exceptional row invisible.",
+    "modes": ["operate"],
+    "family": "civic"
+  },
+  {
+    "id": "botanical-plate",
+    "name": "Botanical plate",
+    "thesis": "Fine line work, Latin labels and one specimen per sheet: precision as the visual language.",
+    "risk": "Fine line disappears on low-density screens.",
+    "modes": ["read", "experience"],
+    "family": "science"
+  }
+]
