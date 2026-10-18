@@ -25,8 +25,10 @@
 //      exactly as the app clears them, and must print the worker's usage and exit
 //      0. That is the whole path the panel's buttons take: locate, spawn through
 //      the console layer, and read an exit code - and `-Help` installs nothing.
-//   4. NO CI. `.github/workflows/` must not exist; Actions was removed on purpose
-//      and a deleted CI must not quietly return on a push.
+//   4. THE TWO WORKFLOWS. `.github/workflows/` must exist, and must do the one job CI is
+//      for here: `ci.yml` callable, `release.yml` building the Rust app on Windows, Linux
+//      and macOS and publishing the node/JS half as its own artefact. CI was deleted once
+//      on purpose; it is back for the release, and this is what keeps it honest.
 //
 //  Run:  node scripts/checks/check-scripts.mjs
 //  POSIX entry points are checked for shape only; driving them needs a POSIX host,
@@ -239,13 +241,43 @@ function checkWindowsEntryPoints() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. No CI
+// 4. The two workflows, and what they promise
 // ---------------------------------------------------------------------------
-function checkNoCi() {
-  if (fs.existsSync(path.join(repo, '.github', 'workflows'))) {
-    fail('.github/workflows exists - the deleted CI came back (see docs/RELEASE.md)')
+// CI was once deleted on purpose ("the checks are run by hand"). It is back for ONE job:
+// building the Rust app on the three operating systems and attaching the artefacts to a
+// tag. The assertion is inverted rather than dropped, because "CI exists" and "CI builds
+// what we ship" are different claims and only the second is worth having.
+function checkCi() {
+  const workflows = path.join(repo, '.github', 'workflows')
+  if (!fs.existsSync(workflows)) {
+    fail('.github/workflows is missing - the release builds the app for three OSes (docs/RELEASE.md)')
+    return
   }
-  console.log('check-scripts: no .github/workflows - CI stays deleted')
+  const ci = path.join(workflows, 'ci.yml')
+  const release = path.join(workflows, 'release.yml')
+  for (const [file, label] of [[ci, 'ci.yml'], [release, 'release.yml']]) {
+    if (!fs.existsSync(file)) fail(`.github/workflows/${label} is missing`)
+  }
+  if (fs.existsSync(ci)) {
+    const text = fs.readFileSync(ci, 'utf8')
+    if (!text.includes('workflow_call')) {
+      fail('ci.yml is not callable - release.yml must run the same checks rather than a copy')
+    }
+  }
+  if (fs.existsSync(release)) {
+    const text = fs.readFileSync(release, 'utf8')
+    // The three operating systems, by name: this is what "the release is built on three
+    // platforms" means, and a matrix that quietly lost one is a release that does not run.
+    for (const os of ['windows-latest', 'ubuntu-22.04', 'macos-latest']) {
+      if (!text.includes(os)) fail(`release.yml does not build on ${os}`)
+    }
+    // The node/JS half is a SEPARATE artefact, built once: it is the same bytes on every
+    // platform, and `scripts/run-web.*` must keep working without the app.
+    if (!text.includes('vncode-web')) {
+      fail('release.yml does not publish the node/JS half as its own artefact')
+    }
+  }
+  console.log('check-scripts: ci.yml and release.yml exist, and release.yml names three OSes')
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +285,7 @@ checkLayout()
 checkConsoleContract()
 checkPortableRootRule()
 checkWindowsEntryPoints()
-checkNoCi()
+checkCi()
 
 console.log('check-scripts: the scripts tree, its console contract, and its entry points')
 for (const note of notes) console.log(`  - ${note}`)

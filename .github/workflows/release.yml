@@ -1,0 +1,232 @@
+name: Release
+
+# Publishing a tag is what publishes a release. A tag cannot exist without its binaries,
+# because the build is what attaches them.
+#
+# TWO ARTIFACTS, ON PURPOSE, and they are separate things:
+#
+#   vncode-<ver>-<os>-<arch>   the Rust app: one small binary per platform. This is the
+#                              only per-OS artefact anywhere in the project.
+#   vncode-web-<ver>           the node/JS half: the pack and the launcher scripts, the
+#                              SAME bytes on every platform, built once. It runs on its
+#                              own - scripts/run-web.* needs no vncode binary at all -
+#                              and the app above is a front door that calls it.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and attach binaries to'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  STEM: vncode
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  # A tag is a promise that the commit it names was checked on three platforms. The gate
+  # calls the same workflow a pull request runs rather than a copy of it, so the two cannot
+  # drift: a red check stops the release here, before a draft exists to be published.
+  gate:
+    name: Gate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  # Create the release once, as a draft. It becomes visible only after every archive and
+  # SHA256SUMS.txt are attached, so a half-finished release cannot be installed.
+  prepare:
+    name: Prepare release
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create the draft release if it does not exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --draft --title "${STEM} ${TAG}" --generate-notes
+
+  # ---- the Rust app: one binary per OS -------------------------------------
+  build:
+    name: ${{ matrix.target }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # A STATIC CRT, so the Windows binary needs no redistributable: this app is one
+          # file somebody drops in a folder, and "install the VC++ runtime first" is the
+          # kind of requirement that makes a small app not worth installing.
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            os_name: windows
+            arch: x86_64
+            ext: zip
+            rustflags: '-C target-feature=+crt-static'
+          # 22.04 rather than `latest`, for the glibc floor: a binary built on 24.04 does
+          # not run on a distribution released before it.
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            os_name: linux
+            arch: x86_64
+            ext: tar.gz
+            rustflags: ''
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            os_name: macos
+            arch: aarch64
+            ext: tar.gz
+            rustflags: ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app -> target
+          key: release-${{ matrix.target }}
+          cache-on-failure: true
+
+      # No GUI toolkit and no web engine to link, which is why this workflow has no
+      # `apt-get` step: the app draws nothing.
+      - name: Build
+        working-directory: app
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        run: cargo build --release --locked -p vn-shell --target ${{ matrix.target }}
+
+      - name: Package
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          NAME="${STEM}-${VERSION}-${{ matrix.os_name }}-${{ matrix.arch }}"
+          ROOT="${STEM}-${VERSION}"
+          BIN="app/target/${{ matrix.target }}/release/vncode"
+          mkdir -p "dist/${ROOT}"
+          if [ "${{ matrix.os_name }}" = "windows" ]; then
+            cp "${BIN}.exe" "dist/${ROOT}/"
+            cp README.md LICENSE "dist/${ROOT}/"
+            cp "app/README.md" "dist/${ROOT}/APP-README.md"
+            # bsdtar writes forward-slash entries; the GNU tar in Git Bash does not make a
+            # zip at all, so the Windows bsdtar is called explicitly.
+            "/c/Windows/System32/tar.exe" -a -c -f "dist/${NAME}.zip" -C dist "${ROOT}"
+          else
+            cp "${BIN}" "dist/${ROOT}/"
+            cp README.md LICENSE "dist/${ROOT}/"
+            cp "app/README.md" "dist/${ROOT}/APP-README.md"
+            chmod +x "dist/${ROOT}/vncode"
+            (cd dist && tar -czf "${NAME}.tar.gz" "${ROOT}")
+          fi
+          cp "dist/${NAME}.${{ matrix.ext }}" .
+          echo "ASSET=${NAME}.${{ matrix.ext }}" >> "$GITHUB_ENV"
+
+      - name: Upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          gh release upload "$TAG" "$ASSET" --clobber
+
+  # ---- the node/JS half: built once, because it is the same bytes everywhere ----
+  web:
+    name: Web half (node/JS)
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The web half must work WITHOUT the app, so it is proved that way: the launcher
+      # answers its own -Help, the installer answers its own -Help, and neither touches a
+      # profile while doing it.
+      - name: It runs on its own
+        shell: bash
+        run: |
+          sh scripts/run-web.sh -Help > /dev/null
+          echo "run-web.sh -Help: ok"
+
+      - name: Package
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          NAME="${STEM}-web-${VERSION}"
+          ROOT="${STEM}-web"
+          mkdir -p "dist/${ROOT}"
+
+          # The pack, the launchers and the pin: everything the browser half needs on a
+          # machine that has Node.js. The Rust app is NOT in here.
+          cp -R packages scripts "dist/${ROOT}/"
+          cp .dsh-version.json package.json README.md LICENSE SECURITY.md ARCHITECTURE.md \
+             "dist/${ROOT}/"
+          cp -R docs "dist/${ROOT}/"
+
+          # Build output that a checkout may be carrying is not content.
+          rm -rf "dist/${ROOT}/scripts/checks/.tmp"
+          find "dist/${ROOT}" -name '*.log' -delete
+
+          (cd dist && tar -czf "${NAME}.tar.gz" "${ROOT}")
+          cp "dist/${NAME}.tar.gz" .
+          echo "ASSET=${NAME}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          gh release upload "$TAG" "$ASSET" --clobber
+
+  checksums:
+    name: SHA256SUMS.txt
+    needs: [build, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # A checksum file computed before the last upload is a lie, so this job waits for
+      # every artefact and re-downloads what was actually published.
+      - name: Collect and publish SHA256SUMS.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          mkdir -p assets
+          gh release download "$TAG" --pattern '*' --dir assets
+          rm -f assets/SHA256SUMS.txt
+          (cd assets && sha256sum ./* > SHA256SUMS.txt)
+          gh release upload "$TAG" assets/SHA256SUMS.txt --clobber
+
+  publish:
+    name: Publish
+    needs: checksums
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          gh release edit "$TAG" --draft=false
