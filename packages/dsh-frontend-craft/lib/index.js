@@ -3,7 +3,7 @@
  *
  * One row ("frontend-craft") owns the package's whole surface:
  *
- *   - the four tools (`fe_context`, `fe_detect`, `fe_direction`,
+ *   - the five tools (`fe_context`, `fe_detect`, `fe_direction`, `fe_render`,
  *     `fe_artifact`), which are the runtime the vendored skill corpus calls;
  *   - the four routes the Frontend tab reads;
  *   - the bundled `frontend-craft` skill, registered from this package's own

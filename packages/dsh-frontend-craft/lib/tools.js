@@ -10,7 +10,7 @@
  * category, the rules that fired, the findings with file:line, and the one
  * sentence that keeps a clean scan from being mistaken for a good page.
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createHash, randomBytes } from 'node:crypto'
 import path from 'node:path'
 
@@ -368,7 +368,8 @@ export function parseViewports(input) {
 /** Persist one render under `$DSH_HOME/dsh-frontend-craft/renders/<id>/`. */
 export function saveRender(deps, report) {
   const id = randomBytes(8).toString('hex')
-  const dir = path.join(deps.root, 'renders', id)
+  const rendersRoot = path.join(deps.root, 'renders')
+  const dir = path.join(rendersRoot, id)
   mkdirSync(dir, { recursive: true })
   for (const entry of report.viewports) {
     writeFileSync(path.join(dir, 'page-' + String(entry.viewport.width) + '.png'), entry.png)
@@ -400,7 +401,40 @@ export function saveRender(deps, report) {
     })),
   }
   writeFileSync(path.join(dir, 'report.json'), JSON.stringify(summary, null, 2), 'utf8')
+  pruneRenders(rendersRoot)
   return summary
+}
+
+/**
+ * Keep the newest 20 renders. A render is a picture and a report; a session that
+ * measures a page fifty times should not leave all fifty on disk forever, and the
+ * tab only ever shows the last one.
+ */
+export function pruneRenders(rendersRoot, keep = 20) {
+  let names
+  try {
+    names = readdirSync(rendersRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+  } catch (err) {
+    return
+  }
+  if (names.length <= keep) return
+  const byTime = names
+    .map((name) => {
+      try {
+        return { name, at: statSync(path.join(rendersRoot, name)).mtimeMs }
+      } catch (err) {
+        return null
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.at - a.at)
+  for (const entry of byTime.slice(keep)) {
+    try {
+      rmSync(path.join(rendersRoot, entry.name), { recursive: true, force: true })
+    } catch (err) {
+      /* the next call tries again */
+    }
+  }
 }
 
 /** The tools: context, detect, direction, render, artifact. */
@@ -430,9 +464,12 @@ export function buildTools(deps) {  const contextTool = {
       try {
         const root = await sessionRoot(deps.ctx, session)
         const target = args && typeof args.target === 'string' && args.target.trim() !== '' ? await resolveTarget(deps.ctx, { session, target: args.target }) : null
-        const snapshot = readContext(target !== null && !target.isDirectory ? path.dirname(target.real) : target !== null ? target.real : root)
-        // A named folder that is not the workspace root is a sub-project: read it
-        // there, but still report the workspace for the record.
+        // Product truth and the design system live at the WORKSPACE ROOT by
+        // definition; `target` names the surface this request is about, and a
+        // file's own folder is not where PRODUCT.md is. Reading the target's
+        // directory here made a `src/` request look like a project with no
+        // context, which would route a real project back to init.
+        const snapshot = readContext(root)
         const directives = directivesFor(snapshot)
         const text = contextText(snapshot, directives)
         return {
@@ -707,6 +744,7 @@ export function buildTools(deps) {  const contextTool = {
         if (action !== 'write') return { text: '`action` is read or write.', view: { kind: 'frontend-artifact', ok: false } }
         const body = typeof args.body === 'string' ? args.body : ''
         if (body.trim() === '') return { text: 'A write needs `body`: the complete markdown.', view: { kind: 'frontend-artifact', ok: false, action, artifact: kind } }
+        if (body.length > MAX_ARTIFACT_BYTES) return { text: 'Refused: the body is ' + body.length + ' characters, past the ' + MAX_ARTIFACT_BYTES + '-character cap for one durable artifact. Split the surface into its own briefs rather than writing a document nothing reads.', view: { kind: 'frontend-artifact', ok: false, action, artifact: kind } }
         const validation = kind === 'product' ? validateProduct(body) : kind === 'design' ? validateDesign(body) : validateSurface(body)
         if (!validation.ok) {
           return {

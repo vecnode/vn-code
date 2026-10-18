@@ -20,7 +20,7 @@
  *     afterwards, and the process is killed by pid - never by name.
  */
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -190,9 +190,10 @@ export function targetToUrl(target, workspace) {
     }
     return { ok: true, url: url.toString(), kind: 'url' }
   }
+  const root = realpathSync(workspace)
   const file = path.resolve(workspace, value)
-  const inside = file === workspace || file.startsWith(workspace + path.sep)
-  if (!inside) return { ok: false, message: 'That path is outside the conversation workspace: ' + value }
+  const inside = path.relative(root, file)
+  if (inside.startsWith('..') || path.isAbsolute(inside)) return { ok: false, message: 'That path is outside the conversation workspace: ' + value }
   if (!existsSync(file)) return { ok: false, message: 'No such file: ' + value }
   if (!/\.x?html?$/i.test(file)) return { ok: false, message: 'A render takes an HTML file (.html / .htm). For a framework app, run its dev server and pass the loopback URL.' }
   return { ok: true, url: pathToFileURL(file).toString(), kind: 'file' }
@@ -491,7 +492,17 @@ export async function renderTarget(options) {
   } catch (err) {
     return { ok: false, code: 'RENDER_FAILED', message: 'The render failed: ' + String(err && err.message ? err.message : err), engine: { file: engine.file, kind: engine.kind, source: engine.source }, target, viewports: results, errors, timingMs: Date.now() - started }
   } finally {
-    if (client !== null) client.close()
+    // Ask the browser to exit over CDP FIRST. On Windows the process we spawned
+    // re-executes into the real browser and exits, so killing OUR pid can miss
+    // it; `Browser.close` is the only reliable stop, and killTree is the belt.
+    if (client !== null) {
+      try {
+        await client.send('Browser.close', {}, undefined, 3000)
+      } catch (err) {
+        // already gone
+      }
+      client.close()
+    }
     killTree(child.pid)
     await fsp.rm(profileDir, { recursive: true, force: true }).catch(() => {})
   }

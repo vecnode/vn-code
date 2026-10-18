@@ -26,14 +26,14 @@
  * `node checks/check-frontend-craft.mjs` from anywhere.
  */
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { verify } from '../vendor/impeccable/build.mjs'
 import { detectHtml, detectText, inlineStylesheets, RULES, RULE_COUNT, VERSION, PACKAGE_VERSION } from '../lib/vendor.js'
-import { buildTools, orderFor, dealDirections, pickDirection, normalizeDirections } from '../lib/tools.js'
+import { buildTools, orderFor, dealDirections, pickDirection, normalizeDirections, pruneRenders } from '../lib/tools.js'
 import { DECK, challengerFor } from '../lib/deck.js'
 import { validateDesign, validateProduct, validateSurface } from '../lib/context.js'
 
@@ -46,6 +46,18 @@ function check(name, fn) {
   checked += 1
   try {
     fn()
+    console.log('ok   ' + name)
+  } catch (err) {
+    failures.push(name + ': ' + String(err && err.message ? err.message : err))
+    console.error('FAIL ' + name + ': ' + String(err && err.message ? err.message : err))
+  }
+}
+
+/** The same contract for a check that has to wait (a tool's own execute). */
+async function acheck(name, fn) {
+  checked += 1
+  try {
+    await fn()
     console.log('ok   ' + name)
   } catch (err) {
     failures.push(name + ': ' + String(err && err.message ? err.message : err))
@@ -263,7 +275,46 @@ check('the local deck is complete, and a hand always carries one challenger', ()
   assert.equal(pickDirection(dealt.deal, 'not a card').ok, false)
 })
 
-// ---- 7. the renderer, where this host has a browser -------------------------
+// ---- 7. the boot reads the workspace, not the target's folder -----------------
+await acheck('product truth is read from the workspace root whatever the target names', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dfc-check-context-'))
+  mkdirSync(path.join(dir, 'src'), { recursive: true })
+  writeFileSync(path.join(dir, 'src/App.tsx'), 'export const A = () => null\n')
+  writeFileSync(
+    path.join(dir, 'PRODUCT.md'),
+    '# Product\n\n<!-- frontend-craft:product-schema 1 -->\n\n## Platform\n\nweb\n\n## Users\n\nDesigners.\n\n## Product Purpose\n\nShip pages.\n',
+  )
+  const deps = {
+    ctx: { get: (name) => (name === 'sessions' ? { get: () => ({ header: { cwd: dir } }) } : undefined) },
+    root: path.join(dir, '.state'),
+    dealOf: () => null,
+    pickOf: () => null,
+    rememberDeal() {},
+    rememberPick() {},
+    remember() {},
+    rememberRender() {},
+  }
+  const context = buildTools(deps).find((tool) => tool.name === 'fe_context')
+  const answer = await context.execute({ target: 'src/App.tsx' }, { agent: { session: { id: 's' } } })
+  assert.ok(answer.view.product, 'the boot lost PRODUCT.md when the target named a file')
+  assert.equal(answer.view.product.ok, true)
+  assert.equal(answer.view.directives.some((directive) => directive.id === 'ROUTE_INIT'), false, 'a project with product truth was routed back to init')
+  rmSync(dir, { recursive: true, force: true })
+})
+
+check('renders are pruned to the newest twenty', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dfc-check-prune-'))
+  for (let index = 0; index < 23; index += 1) {
+    const entry = path.join(dir, 'r' + String(index).padStart(2, '0'))
+    mkdirSync(entry)
+    writeFileSync(path.join(entry, 'page-800.png'), 'x')
+  }
+  pruneRenders(dir, 20)
+  assert.equal(readdirSync(dir).length, 20, 'prune left ' + readdirSync(dir).length + ' directories')
+  rmSync(dir, { recursive: true, force: true })
+})
+
+// ---- 8. the renderer, where this host has a browser -------------------------
 // A render needs a real Chromium; with none, this check says so and exits 0
 // rather than pretending. With one, it renders a page built to fail and asserts
 // the measured rules actually fire.
