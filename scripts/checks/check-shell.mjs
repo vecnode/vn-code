@@ -233,6 +233,22 @@ function bridge() {
     if (!runweb.includes('VNCODE_CONSOLE=[]')) {
       fail(`the console marker leaked into the launcher: ${runweb}`)
     }
+    // THE PORT IS THIS APP'S OWN. Asking the launcher for its default 3080 is the measured
+    // bug this assertion exists for: on a machine whose harness already answers on 3080 the
+    // child dies with `EADDRINUSE` (or, worse, shares an origin with a process whose launch
+    // token this run does not have).
+    const givenPort = /-Port\s+(\d+)/.exec(runweb)
+    if (!givenPort) {
+      fail(`the launcher was not handed a port of this app's own: ${runweb}`)
+    } else {
+      const port = Number(givenPort[1])
+      if (port === 3080) {
+        fail('the app asked for the shared 3080 instead of a free port of its own')
+      }
+      if (port < 1 || port > 65535) {
+        fail(`the port handed to the launcher makes no sense: ${port}`)
+      }
+    }
   }
 
   // --- the key is not asked for at a pipe, and nothing is written ---------

@@ -29,7 +29,7 @@ use std::process::{Command as Process, Stdio};
 
 use vn_shell_core::keystate::{self, KeyState};
 use vn_shell_core::options::{self, Command, Options};
-use vn_shell_core::{launch, profile};
+use vn_shell_core::{launch, ports, profile};
 use vn_shell_runtime as runtime;
 use vn_shell_runtime::setup::{self, SetupKind};
 use vn_shell_runtime::Plan;
@@ -129,6 +129,12 @@ fn status(plan: &Plan) {
         Ok(entry) => println!("[vncode] launcher: {}", entry.display()),
         Err(message) => println!("[vncode] launcher: {message}"),
     }
+    match plan.port_hint {
+        Some(port) => {
+            println!("[vncode] port: {port} (free now; start chooses again, -Port overrides)")
+        }
+        None => println!("[vncode] port: none free right now"),
+    }
     match plan.root.as_deref() {
         Some(root) => println!("[vncode] root: {}", root.display()),
         None => println!("[vncode] root: none found above this binary"),
@@ -170,13 +176,27 @@ fn start(
 
     // 3. THE LAUNCHER. The same file a person double-clicks, in the foreground: it runs
     // the harness, watches for the URL line, opens the tab and takes Ctrl+C.
+    //
+    // **THE PORT IS THIS APP'S OWN, NEVER THE SHARED 3080**, and that is a measured rule
+    // rather than a preference: 3080 is what every `dsh web` on the machine reaches for,
+    // so a run that asks for it either collides (`EADDRINUSE` - measured by the first real
+    // run of this binary, on a machine whose harness was already answering there) or, worse,
+    // shares it with a process whose launch token this run does not have. A free port costs
+    // nothing because this app opens the tab itself with the token in it: nobody types an
+    // address and nothing is remembered per origin. `-Port 3080` is how to ask for the
+    // shared origin on purpose.
+    let port = match options.port {
+        0 => ports::free_port().ok_or_else(|| {
+            "this machine would not hand out a free loopback port - pass -Port <n>".to_string()
+        })?,
+        asked => asked,
+    };
     let entry = launcher(plan)?;
     let mut command = launcher_command(&entry);
     command.args(home_arguments);
-    if options.port > 0 {
-        command.arg("-Port").arg(options.port.to_string());
-    }
+    command.arg("-Port").arg(port.to_string());
     environment.apply(&mut command);
+    println!("[vncode] port: {port} (chosen by this app, never the shared 3080)");
     println!("[vncode] running {}", entry.display());
     println!("[vncode] keep this window open - the harness runs in it. Ctrl+C stops it.");
     println!();
