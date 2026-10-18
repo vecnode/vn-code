@@ -88,19 +88,28 @@ jobs:
             ext: tar.gz
             rustflags: ''
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+      # No third-party actions anywhere in this workflow: the repository's Actions policy
+      # is `local_only`, so a marketplace action is refused at startup. git, rustc/cargo
+      # and gh are already on the runner image.
+      - name: Checkout
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ github.event.inputs.tag || github.ref }}
+        run: |
+          git init -q .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth 1 origin "$REF"
+          git checkout -q FETCH_HEAD
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: app -> target
-          key: release-${{ matrix.target }}
-          cache-on-failure: true
+      - name: Toolchain
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          rustc --version
+          # A no-op when the target is the runner's own, which it is for all three legs.
+          rustup target add "$TARGET"
 
       # No GUI toolkit and no web engine to link, which is why this workflow has no
       # `apt-get` step: the app draws nothing.
@@ -151,13 +160,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+      - name: Checkout
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ github.event.inputs.tag || github.ref }}
+        run: |
+          git init -q .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth 1 origin "$REF"
+          git checkout -q FETCH_HEAD
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      # No node setup step: this job only PACKAGES the JS, and the one thing it runs
+      # (`run-web.sh -Help`) needs no interpreter at all.
 
       # The web half must work WITHOUT the app, so it is proved that way: the launcher
       # answers its own -Help, the installer answers its own -Help, and neither touches a

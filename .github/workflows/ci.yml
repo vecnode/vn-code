@@ -11,6 +11,12 @@ name: CI
 # This workflow builds the RUST app only. The node/JS half needs no build: it is the same
 # files on every platform, it is packaged by release.yml as its own archive, and
 # `scripts/run-web.*` works without this app at all.
+#
+# NO THIRD-PARTY ACTIONS, and that is a constraint rather than a taste: this repository's
+# Actions policy is `local_only`, so `actions/checkout` is refused at STARTUP (measured: a
+# pull request produced a `startup_failure` in 0 s). Every step below is a shell command
+# against a tool the runner image already carries - git, rustc, cargo, node, gh - so the
+# workflow runs under the policy instead of asking for the policy to be relaxed.
 on:
   push:
     branches: [main]
@@ -71,19 +77,30 @@ jobs:
       matrix:
         os: ${{ fromJSON(needs.plan.outputs.os) }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+      # The checkout step, without an action. `pull_request` checks the merge commit GitHub
+      # already built (refs/pull/N/merge); everything else checks the sha.
+      - name: Checkout
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ref="$GITHUB_SHA"
+          if [ -n "$PR_NUMBER" ]; then ref="refs/pull/$PR_NUMBER/merge"; fi
+          git init -q .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth 1 origin "$ref"
+          git checkout -q FETCH_HEAD
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: app -> target
-          shared-key: vncode-ci
-          cache-on-failure: true
+      # The runner image carries the Rust toolchain and the clippy component. `rust-version`
+      # in app/Cargo.toml is the floor the code is written to; a toolchain below it fails
+      # here by name rather than somewhere inside a build.
+      - name: Toolchain
+        shell: bash
+        run: |
+          rustc --version
+          cargo --version
+          cargo clippy --version
 
       # Warnings denied, so a dependency that arrives with a warning is a failure rather
       # than a line nobody reads. The workspace has no GUI toolkit and no web engine to
@@ -153,13 +170,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Checkout (full history - the check reads what a push would stage)
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ref="$GITHUB_SHA"
+          if [ -n "$PR_NUMBER" ]; then ref="refs/pull/$PR_NUMBER/merge"; fi
+          git init -q .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q origin "$ref"
+          git checkout -q FETCH_HEAD
       # The one check that is about the repository rather than a platform, and the one
-      # whose failure can never be undone by a later commit.
+      # whose failure can never be undone by a later commit. `node` is on the runner image.
       - name: check-no-secrets
         run: node scripts/checks/check-no-secrets.mjs
