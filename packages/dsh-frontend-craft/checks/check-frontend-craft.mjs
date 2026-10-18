@@ -17,15 +17,19 @@
  *      the whole point is that this box does no installation and no egress;
  *   6. the detector agrees, finding for finding, with the upstream CLI on six
  *      committed fixtures - including the linked-stylesheet case the raw wasm
- *      export cannot do alone, which the host closes by inlining local CSS.
+ *      export cannot do alone, which the host closes by inlining local CSS;
+ *   7. where this host has Chrome or Edge, a page built to fail really is
+ *      rendered and the measured `render-*` rules fire (without a browser the
+ *      check says so and exits 0, never silently passing).
  *
  * It writes nothing. Run it with `npm run check` in this folder, or as
  * `node checks/check-frontend-craft.mjs` from anywhere.
  */
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { verify } from '../vendor/impeccable/build.mjs'
 import { detectHtml, detectText, inlineStylesheets, RULES, RULE_COUNT, VERSION, PACKAGE_VERSION } from '../lib/vendor.js'
@@ -232,6 +236,37 @@ check('a dealt hand is reproducible from its seed and is a permutation', () => {
   assert.deepEqual(first.slice().sort(), directions.slice().sort(), 'the deal is not a permutation of the authored directions')
   assert.notDeepEqual(first, other, 'two seeds produced the same hand (the hash is not doing anything)')
 })
+
+// ---- 7. the renderer, where this host has a browser -------------------------
+// A render needs a real Chromium; with none, this check says so and exits 0
+// rather than pretending. With one, it renders a page built to fail and asserts
+// the measured rules actually fire.
+const renderer = await import('../lib/render.js')
+if (renderer.resolveEngine() === null) {
+  console.log('skip render smoke (no Chrome/Edge on this host)')
+} else {
+  checked += 1
+  try {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'dfc-check-render-'))
+    const page = path.join(dir, 'page.html')
+    writeFileSync(page, '<!doctype html><title>t</title><style>body{background:#fff;color:#9aa0a6;margin:0;padding:20px;font:16px system-ui}p{width:900px}</style><h1>t</h1><h3>skip</h3><p>low contrast text that is deliberately wider than the viewport</p><img src="x.png" width="10" height="10">')
+    const report = await renderer.renderTarget({
+      target: { url: pathToFileURL(page).toString(), kind: 'file' },
+      viewports: [{ width: 600, height: 400, label: 'smoke' }],
+    })
+    assert.equal(report.ok, true, report.message)
+    const entry = report.viewports[0]
+    assert.ok(entry.png.length > 1000, 'the png is suspiciously small')
+    assert.ok(entry.size && entry.size.width === 600, 'the png is not the viewport width')
+    const rules = new Set(entry.findings.map((finding) => finding.antipattern))
+    for (const expected of ['render-contrast', 'render-overflow', 'render-heading-skip', 'render-missing-alt']) assert.ok(rules.has(expected), 'the render missed ' + expected)
+    console.log('ok   render smoke: ' + entry.png.length + ' byte png, ' + rules.size + ' measured rules')
+    rmSync(dir, { recursive: true, force: true })
+  } catch (err) {
+    failures.push('render smoke: ' + String(err && err.message ? err.message : err))
+    console.error('FAIL render smoke: ' + String(err && err.message ? err.message : err))
+  }
+}
 
 if (failures.length > 0) {
   console.error('\ncheck-frontend-craft: ' + failures.length + ' of ' + checked + ' checks failed')

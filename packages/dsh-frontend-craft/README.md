@@ -121,7 +121,7 @@ also registers the skill at run time, so a profile without the copy still sees
 it). Zero npm dependencies; Node 22+.
 
 ```sh
-node checks/check-frontend-craft.mjs   # 13 checks, no network, no browser
+node checks/check-frontend-craft.mjs   # 13 checks, +1 render smoke where a browser exists
 ```
 
 The check proves: the vendored bytes match `VERSION.json`; the pin is 4.6.0 and
