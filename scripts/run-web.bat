@@ -47,14 +47,20 @@ call "%~dp0console\adapt.cmd" "%~f0" "vncode"
 if errorlevel 10 exit /b 0
 if errorlevel 2 goto :nopowershell
 
-rem -h and /? are the two spellings PowerShell cannot bind; see install.bat for
-rem why only the first argument is inspected.
+rem -h, /?, --help and -Help as the FIRST argument. Only the first is inspected - see
+rem install.bat - so a -DshHome path that contains "-h" or "-Help" cannot turn a run
+rem into a help request.
+rem
+rem `-Help` is in this list because it is the spelling this file's own header documents
+rem and the spelling `vncode` forwards. It was missing, and the measured cost was exact:
+rem `run-web.bat -Help` fell through the whole file and started a real harness.
 set "VN_HELPREQ="
 set "VN_FIRST="
 for /f "tokens=1 delims= " %%A in ("%VNCODE_ARGV%") do set "VN_FIRST=%%A"
 if /I "%VN_FIRST%"=="-h" set "VN_HELPREQ=-Help"
 if /I "%VN_FIRST%"=="/?" set "VN_HELPREQ=-Help"
 if /I "%VN_FIRST%"=="--help" set "VN_HELPREQ=-Help"
+if /I "%VN_FIRST%"=="-help" set "VN_HELPREQ=-Help"
 
 rem If one of those was found, forward -Help and NOTHING else: the spelling that
 rem was there cannot be bound by PowerShell, and a help request has no use for the

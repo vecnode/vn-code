@@ -7,6 +7,15 @@
 #  idle, starts the pinned harness when you press Start, shows it in
 #  your browser, and ends the whole instance when you press Stop.
 #
+#  THE PANE IS OPT-IN HERE. On Windows the launcher builds the shell WITH
+#  the pane, so the window has two tabs ("control panel" and "harness");
+#  on this host that build compiles (given libwebkit2gtk) but wry's child
+#  view still needs a GTK loop pumped beside winit's, which is not
+#  written yet - so the default is the panel-only build and `-Pane` asks
+#  for the other one. A plain `cargo build --release` in app/ still
+#  builds no engine at all; the feature is chosen by THIS script, not by
+#  the crate's default.
+#
 #  WHERE IT RUNS FROM, AND WHY THAT IS CHECKED FIRST
 #  ------------------------------------------------
 #  A DISTRIBUTION has the built shell in the folder ABOVE this one, so
@@ -24,7 +33,7 @@
 #
 #  Usage:
 #    ./scripts/run-desktop.sh [-Port <n>] [-DshHome <dir>] [-DshVersion <version>]
-#                             [-Mode <panel|chrome|headless>] [-NoBuild]
+#                             [-Mode <panel|chrome|headless>] [-NoBuild] [-Pane]
 # ============================================================
 set -u
 
@@ -46,32 +55,56 @@ repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 case " $* " in *" -NoPause "*) VNCODE_PAUSE=0 ;; esac
 
 no_build=0
-for argument in "$@"; do
+pane=0
+# THE LAUNCHER'S OWN FLAGS ARE REMOVED HERE, not merely read: this script execs the
+# shell with its arguments, and the shell refuses a flag it does not know by name.
+# The loop rotates the list - shift one off the front, append it at the back unless
+# it is ours - so a flag's value (-Port 3099) stays beside it and a path with a
+# space survives untouched.
+count=$#
+index=0
+while [ "$index" -lt "$count" ]; do
+  argument=$1
+  shift
   case "$argument" in
     -NoBuild|--no-build) no_build=1 ;;
+    # -NoPause was READ above, to set VNCODE_PAUSE for the console layer; it is
+    # dropped here so it cannot reach the shell, which refuses flags it does not know.
+    -NoPause) ;;
+    *) set -- "$@" "$argument" ;;
   esac
+  index=$((index + 1))
 done
 
 usage() {
   printf '%s\n' \
-    'Usage: sh scripts/run-desktop.sh [-Port <n>] [-DshHome <dir>] [-DshVersion <version>]' \
-    '                                [-Mode <panel|chrome|headless>] [-NoBuild]' \
+    'Usage: sh scripts/run-desktop.sh [command] [-Port <n>] [-DshHome <dir>] [-DshVersion <v>]' \
+    '                                [-NoBuild]' \
     '' \
-    '  -Port <n>          listen on this port instead of a free one' \
+    '  start              install the pack if this home lacks it, ask for the key if' \
+    '                     there is none, then start the harness and open it (the' \
+    '                     default when no command is given)' \
+    '  install            run scripts/setup/install.sh against the home in use' \
+    '  uninstall          run scripts/setup/uninstall.sh against it' \
+    '  status             print the pin, the home, the pack, the key and the launcher' \
+    '  key                ask for the DeepSeek key and write it into <home>/.env' \
+    '' \
+    '  -Port <n>          hand this port to the web launcher' \
     '  -DshHome <dir>     use this harness home (default: the one the app chose;' \
     '                     a leading ~ is expanded here)' \
     '  -DshVersion <ver>  override the pinned dsh version from .dsh-version.json' \
-    '  -Mode <mode>       chrome (the harness UI in a browser - the default),' \
-    '                     panel (open idle and start nothing) or headless (no' \
-    '                     window; stop/quit/install/uninstall on stdin)' \
     '  -NoBuild           never run cargo; use the binary already built' \
     '  -NoPause           never hold this window open' \
     '  -Help / -h / --help   print this help' \
+    '  -Version           print the version' \
     '' \
-    'Opens on a control panel: nothing is started until Start, and Stop ends the' \
-    'instance and frees its port. It draws no web view: the harness UI opens in a' \
-    'browser the app found (Chrome first). Install and Uninstall there run' \
-    'scripts/setup/install.sh and scripts/setup/uninstall.sh.' \
+    'vncode is a front door, not a second harness: it decides the root, the key and' \
+    'the pack, and then runs scripts/run-web.sh - the same file you would run by' \
+    'hand - in this console. There is no window and no embedded web view: the' \
+    'interface is a web application and it opens in the browser the launcher found.' \
+    '' \
+    'Launching only the web needs none of this: scripts/run-web.sh works on its own,' \
+    'and so does every script under scripts/setup.' \
     ''
 }
 
@@ -101,7 +134,7 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 
 echo "[vncode] Building app/ (cargo does nothing when it is current)..."
-if ! (cd "$repo_root/app" && cargo build --release); then
+if ! (cd "$repo_root/app" && cargo build --release -p vn-shell); then
   echo "[vncode] cargo build failed - see the errors above." >&2
   # THE SHELL IT IS REPLACING MAY STILL BE RUNNING. Unix lets a build replace a
   # running program's file, so this cannot fail the way Windows does - but a

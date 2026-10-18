@@ -137,7 +137,7 @@ pub fn command_for(
 }
 
 /// What a setup run is doing.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SetupStatus {
     pub kind: Option<SetupKind>,
     pub running: bool,
@@ -153,12 +153,6 @@ pub struct SetupStatus {
     /// stopped. The line is the installer's own - `- adding dsh-editor 0.1.0-alpha.13
     /// (first install)` - trimmed and bounded, never composed here.
     pub last: Option<String>,
-}
-
-impl Default for SetupStatus {
-    fn default() -> Self {
-        SetupStatus { kind: None, running: false, exit: None, detail: None, last: None }
-    }
 }
 
 impl SetupStatus {

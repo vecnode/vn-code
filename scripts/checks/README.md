@@ -9,14 +9,13 @@ you claim a fix.
 node scripts/checks/check-no-secrets.mjs        # before anything is pushed
 node scripts/checks/check-client-bundles.mjs    # every browser bundle, loaded and driven
 node scripts/checks/check-node-routes.mjs       # every Node route, tool, the manifest, the pack-wide patches
-node scripts/checks/check-scripts.mjs          # the scripts tree, the console contract, no CI
+node scripts/checks/check-scripts.mjs          # the scripts tree, the console contract, the two workflows
 node scripts/checks/check-media-node.mjs        # dsh-media: tools, routes, the ffmpeg pin
 node scripts/checks/check-pdf-node.mjs          # dsh-pdf: the five tools and the routes
 node scripts/checks/check-skill-examples.mjs    # every fenced example in the shipped skills
 node scripts/checks/check-media-examples.mjs    # every media/PDF example, shaped and really RUN
 node scripts/checks/check-browser-node.mjs      # dsh-browser: the host renderer and its policy
-node scripts/checks/check-shell.mjs            # the native shell, DRIVEN: ready line, token, stop
-node scripts/checks/check-pane.mjs             # the pane: the default build promises none, the pane build has one
+node scripts/checks/check-shell.mjs            # the app, DRIVEN: verbs, the bridge, the child env
 DSH_CHECK_LAUNCH=1 node scripts/checks/check-node-routes.mjs   # also opens a real directory picker
 ```
 
@@ -29,13 +28,13 @@ Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-r
 | `check-no-secrets.mjs` | nothing credential-shaped would be staged by `git add -A`; the `.gitignore` credential rules are present; the scanner fires on a synthetic key, hides the value and stays quiet on clean text |
 | `check-client-bundles.mjs` | every browser half loads through the real module table (`window.__ModuleLoader__.load`), activates against a stub cordis context, and is rendered/driven with a **real React runtime**; the exported `__internals` pure halves are driven directly (e.g. the audio/image byte decode in every shape a carrier could use) |
 | `check-node-routes.mjs` | every Node route and tool of every host half, the git routes against a real repository, the skills registry, the manifest ⇄ `package.json` agreement, and the master's pack-wide row patches |
-| `check-scripts.mjs` | the `scripts/` layout (`run-web.*` and `run-desktop.*` at the top, everything else in `console/`, `setup/`, `tools/`, `checks/`), the console contract every Windows entry point must hold, **`setup/install.bat -Help` and `setup/uninstall.bat -Help` really run** with the console variables cleared the way the app clears them (they must print their usage, exit 0, and change nothing), and that `.github/workflows` stays absent |
+| `check-scripts.mjs` | the `scripts/` layout (`run-web.*` and `run-desktop.*` at the top, everything else in `console/`, `setup/`, `tools/`, `checks/`), the console contract every Windows entry point must hold, **`setup/install.bat -Help` and `setup/uninstall.bat -Help` really run** with the console variables cleared the way the app clears them (they must print their usage, exit 0, and change nothing), and that the two release workflows exist and name three OSes + a separate `vncode-web` artefact |
 | `check-media-node.mjs` | `dsh-media`'s pin against a **synthetic archive** built and served over loopback (download, hash verification, mismatch refusal, atomic install, resolution order), plus the ffmpeg-dependent half, which skips loudly without ffmpeg |
 | `check-pdf-node.mjs` | the five `pdf_*` tools and the PDF routes against documents the check builds itself, including the engine's buffer semantics |
 | `check-skill-examples.mjs` | every fenced example in the shipped skills parses or compiles (Mermaid, TikZ) |
 | `check-media-examples.mjs` | every media/PDF example is a well-formed tool call and, where this host can run one, actually runs |
 | `check-browser-node.mjs` | `dsh-browser`'s host half: the disposable sandboxed renderer and the fetch policy in front of it |
-| `check-shell.mjs` | the native shell, **driven rather than read**: `vncode -Mode headless` is started against a stub CLI that binds a real port, spawns a grandchild of its own and prints a ready line carrying a recognisable token — with the app's own root (`VNCODE_HOME`), the harness home, **the person's home (`USERPROFILE`/`HOME`)** and **the platform data root (`LOCALAPPDATA`/`XDG_DATA_HOME`, from which `prefs.json` is read as a fallback)** all pointed into scratch, so the check can never write into — or drive a harness against — a real `~/.dsh`. The check asserts a foreign ready line is refused, that the token reaches neither stream nor any file the run created (in BOTH roots), that `stop` frees the port and kills the grandchild, that the flags and their refusals behave — including a `-Mode` this build does not have (`embed`) being refused BY NAME, so no build can promise a web view it does not draw — **the home ladder** (an unwritable inherited `DSH_HOME` falls through to `<app root>/home` and is read back out of the CHILD's own environment, an impossible `-DshHome` refuses by name, a writable inherited one is joined and no second home is created, **an installation already on the machine is NOT used as the home in either state**, and **a home remembered in `prefs.json` is read from the root the ladder chose and used, with no second home created**), that a child whose `%TEMP%` is unwritable is handed `<app root>/tmp` instead (read back out of the child, with the reason in the log), that `install -Help` and `uninstall -Help` run through the SAME runner the panel's buttons use (the installer's own usage must reach the shell's log, and the profile must not change), that `app/src-tauri` is gone and the old distributer has not come back, and it runs `cargo test --workspace` with a scratch root it controls. It starts no browser: the hand-off is unit-tested instead — the argv (including the profile flag a Chromium may be given, with the URL still exactly one argument), the loopback refusal, the rung order (the person's browser, then the same browser with a profile inside this app's own root, then the platform's opener), and the settle-window verdict that reads an exited program (`Handed` on zero, `Died` on a failure status, `Running` while it lives, and `Unverified` for an opener whose zero proves nothing) — which is what stops a spawn, or a `rundll32` exit code, from being reported as a tab that opened. Needs the Rust toolchain; skips loudly without it |
+| `check-shell.mjs` | the app, **driven rather than read**: `-Version` and `-Help` answer; `-Mode embed` - the flag the deleted web view used to answer - is refused BY NAME; the binary is kept under a size ceiling a GUI stack cannot sneak past; and `start` is run against a **throwaway tree with stub scripts**, so the whole bridge is exercised without starting node: a home with no pack makes it run `scripts/setup/install.*` first, the launcher is handed `-DshHome` and, on Windows, `-NoTerminal`, both children's own environments are read back to prove `DSH_HOME` was composed and that the app's root and the console markers were REMOVED, no key file is written when there is no terminal to ask at, and `status` names the same home. It also proves `scripts/run-web.* -Help` answers with nothing but the web half present. Fixtures live under `.scratch/`, never in a temp directory the host may deny, and it runs `cargo test --workspace` with a scratch root it controls |
 
 ## The checks that live inside a package
 
@@ -62,21 +61,6 @@ browser is not evidence — read the output.
 |---|---|
 | `check-audio-browser.mjs` | the audio console's device/routing/tone claims against the real browser APIs |
 
-## The checks that need a build this host may not be able to make
-
-`check-pane.mjs` builds the shell **twice** — once with the opt-in `pane` feature and once
-without — and asserts that the two **disagree**, because that disagreement is the whole
-contract: the default build compiles no engine and refuses `-Mode embed` by name, and the
-pane build accepts it and says so in its usage. It runs the pane crate's own tests (the
-rectangle, the visibility table, the loopback re-check, the permission answer) with the
-feature on, and it leaves the DEFAULT binary behind.
-
-It skips loudly when the host cannot build the pane at all — no `cargo`, no route to
-crates.io for `wry`, or no system WebKitGTK on Linux. A build failure that is **not** one of
-those host reasons is a failure, not a skip, so a compile error can never hide behind it.
-It starts no window: `-Mode embed -Help` parses the flag and prints the usage, which is the
-observable that proves the mode is real.
-
 ## The standard a check follows
 
 1. **Drive behaviour, don't grep a call shape.** A source-text assertion is only
@@ -90,6 +74,9 @@ observable that proves the mode is real.
 4. **Never weaken a check to make a change fit.** Fix the code, or change the
    check deliberately and say why in the commit.
 
-There is **no CI on purpose**: these are run by hand. Wiring them into Actions
-would re-add a workflow the maintainer deleted, and `check-scripts.mjs`
-asserts that it has not come back.
+**CI does not run these.** They are run by hand, because most of them need a browser, a
+SuperCollider, ffmpeg or TeX that a runner does not have. `.github/workflows/ci.yml` runs
+what a runner *can* own - clippy with warnings denied, the workspace tests, a release build
+and the size budget - and `release.yml` calls that same workflow as its gate, so a tag is
+checked on all three OSes before anything is published. `check-scripts.mjs` asserts both
+workflows exist, so a deleted release pipeline cannot come back silently either.

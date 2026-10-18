@@ -1,0 +1,194 @@
+name: CI
+
+# Three operating systems, but not on every commit.
+#
+# A push to main runs one job, on the platform a Windows development machine cannot check
+# for itself. The full matrix runs on a pull request, on the Monday schedule, when asked,
+# and - through `workflow_call` - as the gate a release passes before it publishes
+# anything. That is the whole policy: the check that must never be skipped is the one at
+# the cut, and it is the cut that now pays for it.
+#
+# This workflow builds the RUST app only. The node/JS half needs no build: it is the same
+# files on every platform, it is packaged by release.yml as its own archive, and
+# `scripts/run-web.*` works without this app at all.
+#
+# NO THIRD-PARTY ACTIONS, and that is a constraint rather than a taste: this repository's
+# Actions policy is `local_only`, so `actions/checkout` is refused at STARTUP (measured: a
+# pull request produced a `startup_failure` in 0 s). Every step below is a shell command
+# against a tool the runner image already carries - git, rustc, cargo, node, gh - so the
+# workflow runs under the policy instead of asking for the policy to be relaxed.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'assets/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'assets/**'
+  schedule:
+    # Monday, 04:17 UTC. Early enough in the week that a platform-only break has six days
+    # to be found before the next one, and off the hour so it does not join the queue of
+    # every other project's nightly.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+  workflow_call:
+
+# A superseded push has nothing to say. Cancel it and let the cache serve the next one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  # The matrix is chosen by the event rather than written twice, so the caller and the
+  # push cannot disagree about what "checked" means.
+  plan:
+    name: Choose the matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      os: ${{ steps.pick.outputs.os }}
+    steps:
+      - id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo 'os=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'os=["ubuntu-latest","windows-latest","macos-latest"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  check:
+    name: ${{ matrix.os }}
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
+    steps:
+      # The checkout step, without an action. `pull_request` checks the merge commit GitHub
+      # already built (refs/pull/N/merge); everything else checks the sha.
+      - name: Checkout
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ref="$GITHUB_SHA"
+          if [ -n "$PR_NUMBER" ]; then ref="refs/pull/$PR_NUMBER/merge"; fi
+          git init -q .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth 1 origin "$ref"
+          git checkout -q FETCH_HEAD
+
+      # The runner image carries the Rust toolchain and the clippy component. `rust-version`
+      # in app/Cargo.toml is the floor the code is written to; a toolchain below it fails
+      # here by name rather than somewhere inside a build.
+      - name: Toolchain
+        shell: bash
+        run: |
+          rustc --version
+          cargo --version
+          cargo clippy --version
+
+      # Warnings denied, so a dependency that arrives with a warning is a failure rather
+      # than a line nobody reads. The workspace has no GUI toolkit and no web engine to
+      # link, so this needs no `apt-get install` on the Linux runner - which is one of the
+      # things the cut bought.
+      - name: Clippy
+        working-directory: app
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # `VNCODE_TEST_DIR` keeps the tests' scratch files inside the checkout. They are
+      # writable in a CI temp directory, but a test that writes where a confined host
+      # denies it is how this suite reported failures about the HOST rather than the code.
+      - name: Test
+        working-directory: app
+        shell: bash
+        env:
+          VNCODE_TEST_DIR: ${{ github.workspace }}/.test-tmp
+        run: |
+          mkdir -p "$VNCODE_TEST_DIR"
+          cargo test --workspace --locked
+
+      - name: Build (release)
+        working-directory: app
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            export RUSTFLAGS='-C target-feature=+crt-static'
+          fi
+          cargo build --release --locked -p vn-shell
+
+      # The budget is a test, not a hope. A dependency that quietly pulls a GUI stack or a
+      # web engine changes this number, and that is the change this project exists to
+      # prevent - so it fails here by name.
+      - name: Size budget
+        working-directory: app
+        shell: bash
+        run: |
+          BIN="target/release/vncode"
+          [ "$RUNNER_OS" = "Windows" ] && BIN="$BIN.exe"
+          BYTES=$(wc -c < "$BIN")
+          MB=$((BYTES / 1048576))
+          echo "vncode: $BYTES bytes (${MB} MB)"
+          if [ "$BYTES" -gt $((6 * 1048576)) ]; then
+            echo "::error::$BIN is ${MB} MB, over the 6 MB budget - a dependency that draws a window or a web view is the usual cause"
+            exit 1
+          fi
+
+      - name: Smoke
+        working-directory: app
+        shell: bash
+        run: |
+          BIN="target/release/vncode"
+          [ "$RUNNER_OS" = "Windows" ] && BIN="$BIN.exe"
+          "$BIN" --version
+          "$BIN" -Help > /dev/null
+          # `-Mode embed` is the flag the deleted web view used to answer. It must fail by
+          # name, not be silently ignored - that is what "no web view" means.
+          #
+          # Captured first, then matched. These steps run with `-o pipefail`, where
+          # `vncode ... | grep -q` reports the BINARY's exit 1 and turns a correct refusal
+          # into a failed pipeline - measured on the first run of this workflow.
+          OUT=$("$BIN" -Mode embed 2>&1 || true)
+          case "$OUT" in
+            *"unknown flag"*) echo "the deleted mode is refused by name" ;;
+            *)
+              echo "::error::-Mode embed was accepted, or refused without naming it"
+              exit 1
+              ;;
+          esac
+
+  secrets:
+    name: No secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history - the check reads what a push would stage)
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ref="$GITHUB_SHA"
+          if [ -n "$PR_NUMBER" ]; then ref="refs/pull/$PR_NUMBER/merge"; fi
+          git init -q .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q origin "$ref"
+          git checkout -q FETCH_HEAD
+      # The one check that is about the repository rather than a platform, and the one
+      # whose failure can never be undone by a later commit. `node` is on the runner image.
+      - name: check-no-secrets
+        run: node scripts/checks/check-no-secrets.mjs

@@ -11,15 +11,14 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 ## Hard rules — do not break these
 
 1. **One install target.** The web profile only. No desktop edition, no
-   `-Target desktop`, no desktop detection. `app/` plus `scripts/run-desktop.*` is a
-   **launcher** of the same pinned `dsh web` on a free loopback port — it patches no
-   core file and adds no second server. It installs exactly one thing, and only when
-   asked: its panel's Install button runs this pack's own installer
-   (`scripts/setup/install.*`), which adds these bundles to the `web` profile and
-   nothing else — and it is given `-DshHome <the home the app chose>`, so the pack
-   lands in the profile the app will actually run. Uninstall runs the matching pair.
-   Both are disabled while a harness is running, and neither touches a row or a core
-   file.
+   `-Target desktop`, no desktop detection, **no window and no web view**. `app/` is a
+   **front door** to the same pinned `dsh web`: it decides the root and the home, writes
+   the key, runs this pack's own installer (`scripts/setup/install.*`, given `-DshHome
+   <the home it chose>`) when that profile lacks the bundles, and then runs
+   `scripts/run-web.*` — the same launcher a person double-clicks — in the foreground.
+   It starts no node, binds no port, opens no tab and draws nothing: **the launcher owns
+   the harness, the ready line and the browser tab.** Launching only the web must keep
+   working on a machine with no `vncode` at all.
 2. **Nothing patches core.** A row change is a new bundle layer.
    `dsh-vn-master` is the pack's final layer (it installs last), so pack-wide row
    patches belong there, and a package that *replaces* a row carries that row's
@@ -32,7 +31,8 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 4. **Launchers.** Every entry point lives in `scripts/`, one per action per host
    (`run-web.*`, `run-desktop.*`), and there are **no forwarders**. The install and
    uninstall pairs live one level down in `scripts/setup/`, beside the workers they
-   call, and the app's own buttons run those same entry points. Nothing else sits at
+   call, and the app's `install` / `uninstall` verbs run those same entry points. Nothing
+   else sits at
    the top level: `console/` is the shared console layer, `tools/` is
    maintainer-only, `checks/` is the contract, and `check-scripts.mjs` fails on a
    stray file. On Windows the entry point calls the PowerShell worker beside it (or
@@ -50,7 +50,8 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 5. **The launch token is a live credential.** It is read in memory, never written
    to a file, echoed, or handed to a shell, and a URL that is not loopback is
    refused rather than opened. It appears only in `scripts/run-web.ps1` /
-   `scripts/run-web.sh`.
+   `scripts/run-web.sh` — **never in `app/`**, which starts the launcher and reads its
+   exit code.
 6. **No secrets, ever.** Run `node scripts/checks/check-no-secrets.mjs` before
    pushing. A vendored bundle can ship its author's own credentials: redact them
    in the **build** (a patch under that engine's `vendor/<name>/patches/`, read
@@ -58,8 +59,14 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 7. **Zero npm dependencies** in shipped packages, and no network egress a plugin
    starts on its own. Engines are vendored under `lib/vendor/` or resolved from
    the harness already on disk.
-8. **No CI, on purpose.** The checks in `scripts/checks/` are run by hand; they
-   are the contract, and `scripts/checks/README.md` lists them.
+8. **CI builds the app; the checks prove it.** `.github/workflows/ci.yml` runs clippy
+   with warnings denied, the workspace tests, a release build, a **6 MB size ceiling**
+   and a smoke run - on one OS for a push to `main`, on all three for a pull request,
+   the Monday schedule, and `release.yml`, which calls it as its gate. A release
+   publishes **two** artefacts: one `vncode` per OS, and one `vncode-web` for the
+   node/JS half, which is the same bytes everywhere. The checks in `scripts/checks/`
+   are still run by hand; they are the contract, and `scripts/checks/README.md` lists
+   them.
 
 ## Layout
 
@@ -89,32 +96,25 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   makes them useful outside this repository) and they are ADDITIONAL to
   `scripts/checks/`, never a replacement for it: `dsh-supercollider` ships three,
   and the pack-wide checks still own the routes, the bundle and the manifest.
-- `scripts/` — the launchers (`run-web.*`, `run-desktop.*`), and three folders:
+- `scripts/` — the launchers (`run-web.*`, `run-desktop.*`), and four folders:
   `console/` (the shared console layer), `setup/` (install and uninstall, which the
-  app's buttons run), `tools/` (maintainer-only) and `checks/`.
-- `app/` — the Rust/**egui** shell: a cargo workspace whose binary is `vncode`, a
-  control panel that opens on **the home question** when nobody has named a home — one screen,
-  the cards that answer it (copy the machine's home here / make a fresh one in this folder),
-  decided in `vn_shell_core::firstrun` and remembered
-  only by a click — and then four rows (home, pack, key, browser) with every diagnostic behind
-  one collapsed `Details`. It resolves and creates the root its harness home lives
-  in (`$VNCODE_HOME`, with `DSH_HOME` at `<root>/home` unless `-DshHome`, a home chosen
-  on that screen, or a writable inherited `DSH_HOME` says otherwise — **nothing outside its
-  own root is ever the home it runs against**, so `~/.dsh` is the source of the copy offer
-  and nothing else), starts the pinned
-  harness on **Start** — installing the pack into that home first when its profile lists none of
-  the pack's bundles, so one press reaches a real interface — and ends it on **Stop** (a
-  launcher, not a desktop edition). It
-  composes every child's environment rather than inheriting one, cleans every path before
-  it uses one, and **draws the shipped interface only when it is built to**: the default
-  build compiles no engine and opens the harness in a browser it found (`browser.rs`), while
-  `--features pane` shows it inside this window instead - one OPTIONAL dependency on `wry`,
-  nothing vendored, and the default not flipped until Linux and macOS are measured.
-  `app/README.md` explains it and `docs/PLAN-egui-shell.md` is the plan it was built from.
-  `check-shell.mjs` and `check-pane.mjs` are what prove it, and they drive the real binary.
-- `docs/` — install, build, deploy, release, paths, compatibility, and the shell's
-  plan. There is no distributer and no ship list any more: the distribution is this
-  repository, and the app installs the pack itself.
+  app's verbs run), `tools/` (maintainer-only: the fork re-sync for the client bundles
+  this pack vendors) and `checks/`.
+- `app/` — the Rust **front door**: a cargo workspace of three crates whose binary is
+  `vncode`, about 0.5 MB, with **no window and no web view**. It decides the root its
+  harness home lives in (`$VNCODE_HOME`, with `DSH_HOME` at `<root>/home` unless a
+  `-DshHome` or a writable inherited `DSH_HOME` says otherwise — **nothing outside its
+  own root is ever the home it runs against**), composes every child's environment
+  rather than inheriting one, cleans every path before it uses one, writes the DeepSeek
+  key into `<home>/.env` when asked, runs `scripts/setup/install.*` when the profile
+  lacks the pack, and then runs `scripts/run-web.*` in the foreground. Its verbs are
+  `start` (default), `install`, `uninstall`, `status` and `key`; `-Mode embed` is
+  refused **by name**, because there is no embedded browser to select.
+  `app/README.md` explains it and `docs/PLAN-controller.md` is the plan it was cut
+  from. `check-shell.mjs` is what proves it, and it drives the real binary.
+- `docs/` — install, build, deploy, release, paths, compatibility, and the plan the app
+  was cut from. There is no distributer and no ship list: the distribution is this
+  repository plus the binary, and the app installs the pack itself.
 - `.dsh-version.json` — the pinned harness line and the pack manifest
   (its versions must match every `package.json`; `check-node-routes.mjs` enforces
   that).
@@ -131,22 +131,14 @@ Run the check that owns the area, and say which ones you ran:
 - `check-media-node.mjs`, `check-pdf-node.mjs`,
   `check-browser-node.mjs` — the tool
   and host halves;
-- `check-shell.mjs` — the native shell, **driven**: the ready line and its
-  refusals, the launch token in no stream and no file (in both roots a run writes),
-  Stop freeing the port and killing the tree, the flags (including a `-Mode` this build
-  does not have being refused BY NAME, so no build can promise a web view it does not
-  draw), the panel's install/uninstall path, the home ladder (an unwritable inherited
-  `DSH_HOME` falls through, an impossible `-DshHome` refuses by name, a writable inherited
-  one is joined, **an installation at `~/.dsh` is neither used nor offered as a home** in
-  either state, and `VNCODE_HOME` reaches no child — every run
-  confined on `VNCODE_HOME`, `DSH_HOME` and `USERPROFILE`/`HOME`), and that `app/src-tauri` is
-  gone (it also runs `cargo test --workspace`; it skips loudly with no cargo and no built
-  binary);
-- `check-pane.mjs` — the pane's contract, and it is a contract about **two builds**: the
-  default build compiles no engine and refuses `-Mode embed` by name, the pane build accepts
-  it and says so in its usage, and the pane crate's own tests pass with the feature on. It
-  skips loudly on a host that cannot build the pane at all, and FAILS on a build error that
-  is not one of those host reasons, so a compile error cannot hide behind the skip;
+- `check-shell.mjs` — the app, **driven**: the verbs and `-Help`; `-Mode embed` refused
+  BY NAME (the flag the deleted web view used to answer); a size ceiling a GUI stack
+  cannot pass; and `start` run against **stub scripts** in a throwaway tree — the
+  installer is run because that home lacks the pack, the launcher is handed `-DshHome`
+  and `-NoTerminal` and a **composed** environment, the app's own root and the console
+  markers are absent from both children, no key file is written with no terminal to ask
+  at, and `status` names the same home. It also proves `scripts/run-web.* -Help` answers
+  with no binary involved, and it skips loudly with no cargo and no built binary;
 - `check-audio-browser.mjs` — the check that drives a
   real browser (with none installed it skips loudly);
 - `check-skill-examples.mjs`, `check-media-examples.mjs` — every fenced example in

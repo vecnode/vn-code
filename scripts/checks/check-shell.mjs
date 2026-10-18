@@ -1,731 +1,311 @@
 #!/usr/bin/env node
-//  scripts/checks/check-shell.mjs - the native shell, DRIVEN rather than read.
+// check-shell.mjs - the native app, DRIVEN.
 //
-//  What this proves, and why each one is here rather than in a `cargo test`:
+// What this proves, and why each one is here:
 //
-//   1. the ready-line refusals. A stub CLI prints a ready line naming a host that
-//      is NOT loopback, and the shell must not open it and must say so. That rule
-//      is unit-tested in Rust too, but the unit test cannot prove the WIRING: that
-//      the URL the harness really printed is the one that reaches the policy.
-//   2. the launch token never leaves memory. The same stub prints a ready line
-//      carrying a recognisable token. The check then reads every byte the shell
-//      wrote: stdout, stderr, every file under the home it was given, and the log
-//      the panel draws. The token must appear in NONE of them. The shell has to
-//      hold it (the pane and the browser hand-off need it), so "not written down"
-//      is a claim that can only be tested by running it.
-//   3. Stop really stops. The stub BINDS the port it is told to use and spawns a
-//      grandchild of its own. After `stop` on stdin the check asserts the port is
-//      refused again, the grandchild's pid is gone, and the shell SAID so - the
-//      `free=yes` line is the shell's own measurement, not this check's.
-//   4. the flags. `-Help` prints the set the launchers share, an unknown flag is
-//      refused BY NAME, and a `-Mode` this build cannot honour is refused rather
-//      than silently downgraded.
-//   5. the move off Tauri is complete: `app/src-tauri` is gone, the shell's source
-//      is a cargo workspace under `app/`, and the ship list carries it.
-//   6. M0's claim: the home is one the app CREATED and proved, and the child's
-//      environment is composed rather than inherited. An unwritable inherited
-//      `DSH_HOME` falls through to `<app root>/home`; the same path as `-DshHome`
-//      refuses by name; a writable inherited one is joined. The stub prints the
-//      environment it was handed, so this is read back out of the CHILD.
+//   1. IT BUILDS, and it is small. `cargo build --release` in `app/` (skipped, loudly,
+//      when there is no cargo and no binary on this host), then a size ceiling a
+//      dependency that draws a window or a web view cannot sneak past.
+//   2. IT ANSWERS. `-Version`, `-Help`, and the flag the deleted web view used to answer:
+//      `-Mode embed` must FAIL BY NAME. A flag that quietly means something else is the
+//      bug this whole revision exists to remove.
+//   3. THE BRIDGE. `vncode start` is run against a THROWAWAY TREE: a `.dsh-version.json`,
+//      a copied binary, a home, and STUB scripts - `scripts/setup/install.*` and
+//      `scripts/run-web.*` that record what they were given and exit 0. So the app is
+//      driven end to end - install-when-missing, the key prompt declined at a pipe, the
+//      launcher handed the right flags - WITHOUT starting node, binding a port or
+//      opening a tab.
+//   4. THE ENVIRONMENT IS COMPOSED, NOT INHERITED. Each stub reads `DSH_HOME`,
+//      `VNCODE_HOME` and the console markers out of its OWN environment and says what it
+//      saw, so an inherited home or a leaked `VNCODE_CONSOLE` is a failure here rather
+//      than a mystery on somebody's machine. That leak is not hypothetical: the old app's
+//      first Install button ran a full install while being asked for `-Help`.
+//   5. NO KEY IS WRITTEN when there is no terminal to ask at, and no launch token reaches
+//      the console.
+//   6. THE WEB HALF STANDS ALONE. `scripts/run-web.* -Help` answers with no app involved.
 //
-//  Every run is confined to a scratch app root (`VNCODE_HOME`) and a scratch harness
-//  home, so this check never writes into a person's own `~/.dsh` or `%LOCALAPPDATA%`.
+// Every fixture lives under `.scratch/` inside the repository. A check must not depend on
+// a temp directory the host may deny - that is how a real bug once looked like a failure
+// of the host - and `VNCODE_TEST_DIR` points the Rust tests at the same place.
 //
-//  Run:  node scripts/checks/check-shell.mjs
-//        VNCODE_SHELL=/path/to/vncode  to test an already-built binary
-//
-//  A host with no Rust toolchain and no built binary SKIPS LOUDLY (exit 0). That
-//  is not a pass: read the output.
+// Run:  node scripts/checks/check-shell.mjs
 
-import { spawn, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import net from 'node:net'
 import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.resolve(here, '..', '..')
 const app = path.join(repo, 'app')
-const scratch = path.join(repo, '.scratch', 'check-shell')
+const scratch = path.join(repo, '.scratch')
+const isWindows = process.platform === 'win32'
+
 const failures = []
 const notes = []
-
 const fail = (message) => failures.push(message)
-const skip = (message) => {
-  console.log(`check-shell: SKIP - ${message}`)
-  process.exit(0)
-}
+const note = (message) => notes.push(message)
 
-/** A token recognisable in a haystack, assembled so this file holds no literal. */
-const TOKEN = ['check', 'shell', '1234567890abcdef'].join('-')
-const EVIL_HOST = 'not-loopback.example'
+const built = path.join(app, 'target', 'release', 'vncode' + (isWindows ? '.exe' : ''))
 
 // ---------------------------------------------------------------------------
-// The binary
+// 1. It builds, and it is small
 // ---------------------------------------------------------------------------
-const exeName = process.platform === 'win32' ? 'vncode.exe' : 'vncode'
-
-function builtBinary() {
-  // DEBUG FIRST, because that is the profile this check builds (`cargo build`). A
-  // release binary left over from an earlier build would otherwise be tested
-  // instead - measured: this check reported an "unknown command" for a headless
-  // command that existed, because it was driving a release build from before the
-  // change.
-  for (const profile of ['debug', 'release']) {
-    const candidate = path.join(app, 'target', profile, exeName)
-    if (fs.existsSync(candidate)) return candidate
-  }
-  return null
-}
-
-function findBinary() {
-  if (process.env.VNCODE_SHELL) {
-    const given = process.env.VNCODE_SHELL
-    if (!fs.existsSync(given)) skip(`VNCODE_SHELL names ${given}, which does not exist`)
-    return given
-  }
-  const cargo = spawnSync('cargo', ['--version'], { encoding: 'utf8', shell: false })
-  if (cargo.error || cargo.status !== 0) {
-    const existing = builtBinary()
-    if (existing) {
-      notes.push('cargo is missing, so the binary on disk was tested AS IS - it may be stale')
-      return existing
+function build() {
+  if (!fs.existsSync(built)) {
+    const cargo = spawnSync('cargo', ['build', '--release', '--locked', '-p', 'vn-shell'], {
+      cwd: app,
+      encoding: 'utf8',
+    })
+    if (cargo.error) {
+      note(`cargo could not run (${cargo.error.message}) - the binary checks are SKIPPED`)
+      return false
     }
-    skip('no cargo on PATH and no built vncode binary - build it with `cargo build` in app/')
+    if (cargo.status !== 0) {
+      fail(`cargo build failed:\n${cargo.stdout}\n${cargo.stderr}`)
+      return false
+    }
   }
-  // Built EVERY run, not only when one is missing: cargo is a no-op while the
-  // sources are current, and a check that tested a stale binary would report OK
-  // about code nobody has.
-  console.log('check-shell: building the shell (cargo build -p vn-shell)...')
-  const build = spawnSync('cargo', ['build', '-p', 'vn-shell'], {
-    cwd: app,
+  const size = fs.statSync(built).size
+  note(`the binary is ${(size / 1024 / 1024).toFixed(2)} MB`)
+  // The release budget is 6 MB and CI owns it; this is the ceiling that catches the
+  // regression by SHAPE - a GUI stack or a web engine arriving as a dependency.
+  if (size > 12 * 1024 * 1024) {
+    fail(`the binary is ${(size / 1024 / 1024).toFixed(1)} MB - something with a GUI in it came back`)
+  }
+  return true
+}
+
+// ---------------------------------------------------------------------------
+// 2. It answers, and refuses what it no longer has
+// ---------------------------------------------------------------------------
+function runBinary(args, options = {}) {
+  const result = spawnSync(built, args, {
     encoding: 'utf8',
-    shell: false,
+    cwd: options.cwd ?? repo,
+    env: options.env ?? process.env,
+    timeout: 120_000,
   })
-  if (build.status !== 0) {
-    fail(`cargo build failed:\n${build.stdout ?? ''}${build.stderr ?? ''}`)
-    report()
+  return {
+    status: result.status,
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
+    error: result.error,
   }
-  const built = builtBinary()
-  if (!built) fail('cargo reported success but no vncode binary was produced')
-  return built
 }
 
-// ---------------------------------------------------------------------------
-// The stub CLI
-// ---------------------------------------------------------------------------
-const stubPath = path.join(scratch, 'stub-cli.mjs')
-
-/**
- * A stand-in for `dsh web`: it takes the SAME argv the real CLI takes, binds the
- * port it was given, prints a ready line, and stays alive until it is killed.
- *
- * `VNCODE_STUB_MODE=evil` swaps the ready line for one naming a foreign host.
- *
- * It also prints the environment it was GIVEN. That is not decoration: M0's whole
- * claim is that the child's environment is composed rather than inherited, and the
- * only proof of a composed environment is the child reading it back.
- */
-function writeStub() {
-  fs.mkdirSync(scratch, { recursive: true })
-  fs.writeFileSync(
-    stubPath,
-    `import net from 'node:net'
-import { spawn } from 'node:child_process'
-import fs from 'node:fs'
-
-const argv = process.argv.slice(2)
-const at = argv.indexOf('--port')
-const port = Number(argv[at + 1])
-const mode = process.env.VNCODE_STUB_MODE ?? 'good'
-const token = process.env.VNCODE_STUB_TOKEN
-const evilHost = process.env.VNCODE_STUB_HOST ?? 'example.invalid'
-const grandchildPidFile = process.env.VNCODE_STUB_PID_FILE
-
-// What this child was GIVEN, which is what the shell says it composed.
-process.stdout.write('[stub] DSH_HOME=' + (process.env.DSH_HOME ?? '(unset)') + '\\n')
-process.stdout.write('[stub] VNCODE_HOME=' + (process.env.VNCODE_HOME ?? '(unset)') + '\\n')
-process.stdout.write('[stub] npm_config_cache=' + (process.env.npm_config_cache ?? '(unset)') + '\\n')
-process.stdout.write('[stub] VNCODE_CONSOLE=' + (process.env.VNCODE_CONSOLE ?? '(unset)') + '\\n')
-process.stdout.write('[stub] TEMP=' + (process.env.TEMP ?? '(unset)') + '\\n')
-
-// A grandchild of our own: the process TREE is what Stop must take down, and a
-// supervisor that only killed its direct child would leave this one alive.
-if (grandchildPidFile) {
-  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-    stdio: 'ignore',
-    detached: false,
-  })
-  fs.writeFileSync(grandchildPidFile, String(child.pid))
-}
-
-// The ready line the real CLI prints, against a host the shell must refuse. The
-// port is NOT bound in this mode: there is no instance to reach.
-if (mode === 'evil') {
-  process.stdout.write('dsh web: http://' + evilHost + ':' + port + '/?token=' + token + '\\n')
-  setInterval(() => {}, 1000)
-} else {
-  // The port is really HELD, so "the port came free" is a measurement.
-  const server = net.createServer(() => {})
-  server.listen(port, '127.0.0.1', () => {
-    process.stdout.write('dsh web: http://127.0.0.1:' + port + '/?token=' + token + '\\n')
-  })
-  setInterval(() => {}, 1000)
-}
-`,
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Running the shell
-// ---------------------------------------------------------------------------
-const isFree = (port) =>
-  new Promise((resolve) => {
-    const socket = net.connect({ host: '127.0.0.1', port })
-    socket.on('connect', () => {
-      socket.destroy()
-      resolve(false)
-    })
-    socket.on('error', () => resolve(true))
-    socket.setTimeout(1500, () => {
-      socket.destroy()
-      resolve(true)
-    })
-  })
-
-/**
- * Start `vncode -Mode headless` against the stub and collect everything it says.
- *
- * Every run is confined to a scratch APP ROOT (`VNCODE_HOME`), a scratch harness home,
- * AND a scratch USER HOME (`USERPROFILE`/`HOME`), so a check can never write into the
- * machine's own `~/.dsh` or into the `%LOCALAPPDATA%\vncode` a person's real app uses.
- * That last one is not decoration: the app USES an installation it finds on the machine
- * (`~/.dsh`), so a check that left `USERPROFILE` alone would drive the harness against a
- * person's real home. `env` overrides any of them, which is how the confined, joined and
- * found-installation cases are built.
- */
-function startShell({ mode = 'good', label, env = {}, dshHome, userHome, seed } = {}) {
-  const home = dshHome === undefined ? path.join(scratch, `home-${label}`) : dshHome
-  const appRoot = path.join(scratch, `app-${label}`)
-  const person = userHome === undefined ? path.join(scratch, `user-${label}`) : userHome
-  if (dshHome === undefined) {
-    fs.rmSync(home, { recursive: true, force: true })
-    fs.mkdirSync(home, { recursive: true })
-  }
-  fs.rmSync(appRoot, { recursive: true, force: true })
-  fs.mkdirSync(appRoot, { recursive: true })
-  fs.mkdirSync(person, { recursive: true })
-  // A case may seed the app's own root - which is how "this home already holds
-  // something of the person's" is built.
-  if (seed) seed(appRoot)
-  const pidFile = path.join(scratch, `grandchild-${label}.pid`)
-  fs.rmSync(pidFile, { force: true })
-  const args = ['-Mode', 'headless', '-DshVersion', '0.0.0-check']
-  // The flag is only passed when a home was named: `-DshHome` is the STRICT rung of
-  // the ladder, so an inherited-home case must not carry one.
-  if (dshHome !== undefined && dshHome !== null) args.push('-DshHome', dshHome)
-  let base = { ...process.env }
-  // THIS check's environment is not the app's. The machine running the check may well
-  // have a DSH_HOME of its own exported (the harness that started this shell does), and
-  // the app's ladder would rightly join it - so it is REMOVED here and every case that
-  // wants an inherited home passes one explicitly. Same for the app's own root.
-  delete base.DSH_HOME
-  delete base.VNCODE_HOME
-  const child = spawn(binary, args, {
-    cwd: repo,
-    env: {
-      ...base,
-      // The seam: the shell runs THIS instead of the pinned harness, through the
-      // same argv and the same ready-line watch as the real thing.
-      VNCODE_STUB_CLI: process.execPath,
-      VNCODE_STUB_ARGS: JSON.stringify([stubPath]),
-      VNCODE_STUB_MODE: mode,
-      VNCODE_STUB_HOST: EVIL_HOST,
-      VNCODE_STUB_TOKEN: TOKEN,
-      VNCODE_STUB_PID_FILE: pidFile,
-      // The app's own root, the home the run starts from, and the person's home - all
-      // in scratch. The caller's overrides win, which is how a refused, a joined or a
-      // found home is built.
-      VNCODE_HOME: appRoot,
-      USERPROFILE: person,
-      HOME: person,
-      // THE PLATFORM DATA ROOT TOO, and this one is not decoration: `prefs.json` is
-      // read from the root the ladder chose with the platform root as a read-only
-      // FALLBACK (the migration from an older build that wrote it there), so a check
-      // that left `%LOCALAPPDATA%` alone could pick up a real person's remembered home
-      // and drive the harness against it. `data_root()` reads LOCALAPPDATA on Windows,
-      // XDG_DATA_HOME else ~/.local/share on Linux, and HOME on macOS - the first two
-      // are named here; HOME is already scratch above.
-      LOCALAPPDATA: path.join(scratch, 'localappdata'),
-      XDG_DATA_HOME: path.join(scratch, 'localappdata'),
-      ...env,
-    },
-    stdio: ['pipe', 'pipe', 'pipe'],
-  })
-  const state = { child, home, appRoot, pidFile, out: '', err: '', exit: null }
-  child.stdout.on('data', (chunk) => (state.out += chunk))
-  child.stderr.on('data', (chunk) => (state.err += chunk))
-  child.on('exit', (code) => (state.exit = code))
-  return state
-}
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-async function waitFor(state, predicate, timeoutMs, what) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (predicate()) return true
-    await sleep(100)
-  }
-  fail(`timed out after ${timeoutMs}ms waiting for ${what}\n--- stdout ---\n${state.out}\n--- stderr ---\n${state.err}`)
-  return false
-}
-
-const runningPort = (state) => {
-  const match = state.out.match(/running on http:\/\/127\.0\.0\.1:(\d+)\//)
-  return match ? Number(match[1]) : null
-}
-
-/** Every file under a directory, for the "no secret on disk" scan. */
-function filesUnder(directory) {
-  const found = []
-  const walk = (current) => {
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name)
-      if (entry.isDirectory()) walk(full)
-      else found.push(full)
-    }
-  }
-  if (fs.existsSync(directory)) walk(directory)
-  return found
-}
-
-// ---------------------------------------------------------------------------
-// The checks
-// ---------------------------------------------------------------------------
-async function checkRefusal() {
-  const state = startShell({ mode: 'evil', label: 'evil' })
-  await waitFor(state, () => /does not name a loopback address/.test(state.out + state.err), 15000, 'the refusal of a foreign ready line')
-  // The shell must NOT have reached "running": it refused the URL, so there is
-  // nothing to show.
-  if (/running on http/.test(state.out)) {
-    fail('the shell reported a running instance after refusing a non-loopback ready line')
-  }
-  if (state.out.includes(TOKEN) || state.err.includes(TOKEN)) {
-    fail('the refusal path echoed the launch token')
-  }
-  state.child.stdin.end('quit\n')
-  await waitFor(state, () => state.exit !== null, 15000, 'the refusal run to exit')
-  console.log('check-shell: a ready line naming a foreign host is refused, and the token is not echoed')
-}
-
-async function checkLifetime() {
-  const state = startShell({ mode: 'good', label: 'good' })
-  if (!(await waitFor(state, () => runningPort(state) !== null, 20000, 'the ready line'))) return
-  const port = runningPort(state)
-
-  if (await isFree(port)) {
-    // Sanity: if the stub never held the port, the "free again" assertion below
-    // would pass for the wrong reason.
-    fail(`the stub was expected to hold port ${port}, but nothing is listening on it`)
+function answers() {
+  const version = runBinary(['-Version'])
+  if (version.status !== 0 || !/\d+\.\d+\.\d+/.test(version.stdout)) {
+    fail(`-Version did not answer with a version: ${JSON.stringify(version.stdout)}`)
   }
 
-  // 1. The token was never echoed, on either stream.
-  if (state.out.includes(TOKEN)) fail('the launch token reached stdout')
-  if (state.err.includes(TOKEN)) fail('the launch token reached stderr')
-  // ...and the safe line is still useful: it names the address.
-  if (!/http:\/\/127\.0\.0\.1:\d+\//.test(state.out)) {
-    fail('the running line does not name the loopback address at all')
-  }
-
-  // 2. Stop, and the shell's OWN measurement of the port.
-  state.child.stdin.write('stop\n')
-  if (!(await waitFor(state, () => /\[vncode\] stopped port=\d+ free=yes/.test(state.out), 20000, 'the free=yes line'))) {
-    return
-  }
-  if (!(await isFree(port))) {
-    fail(`the shell said the port was free, but something still holds ${port}`)
-  }
-
-  // 3. The grandchild: a supervisor that killed only its direct child would leave
-  //    a path holding the port.
-  if (fs.existsSync(state.pidFile)) {
-    const pid = Number(fs.readFileSync(state.pidFile, 'utf8').trim())
-    let alive = true
-    try {
-      process.kill(pid, 0)
-    } catch {
-      alive = false
-    }
-    if (alive) {
-      fail(`the harness's grandchild (pid ${pid}) survived Stop`)
-      try {
-        process.kill(pid, 'SIGKILL')
-      } catch {
-        /* it is already gone */
-      }
-    }
-  } else {
-    notes.push('the stub recorded no grandchild pid, so the tree kill was not observed')
-  }
-
-  await waitFor(state, () => state.exit !== null, 15000, 'the shell to exit after Stop')
-
-  // 4. Nothing on disk carries the token: every file the run created, plus the
-  //    log the panel would draw. BOTH roots are scanned, because M0 changed where
-  //    files land: the home is the harness's, the app root is this app's.
-  for (const directory of [state.home, state.appRoot]) {
-    for (const file of filesUnder(directory)) {
-      const text = fs.readFileSync(file, 'utf8')
-      if (text.includes(TOKEN)) fail(`${path.relative(repo, file)} contains the launch token`)
-    }
-  }
-  const created = filesUnder(state.home).length + filesUnder(state.appRoot).length
-  console.log(
-    `check-shell: start, ready line, stop - port freed, tree killed, ${created} file(s) created by the run, none carrying the token`,
-  )
-}
-
-/**
- * M0: the child's environment is COMPOSED, and the home is one this app can write.
- *
- * Three cases, and each one is the behaviour the revision exists for:
- *
- *   1. an inherited `DSH_HOME` that cannot be written FALLS THROUGH to
- *      `<app root>/home` - the app comes up, where the old build refused with a
- *      sentence asking the person to start it differently;
- *   2. the same impossible path given as `-DshHome` still REFUSES, naming the flag -
- *      an explicit instruction is never silently ignored;
- *   3. a writable inherited `DSH_HOME` is JOINED, and the app's own `home/` is never
- *      created, so an app started from inside a harness session shares that session's
- *      home rather than making a second one.
- *
- * The stub prints the environment it was given, so every claim here is read back out
- * of the CHILD rather than out of the shell's own log line.
- */
-async function checkConfinedHome() {
-  // A directory that cannot exist: its parent is a FILE, which no platform allows.
-  const blocker = path.join(scratch, 'confined-home-blocker')
-  fs.mkdirSync(scratch, { recursive: true })
-  fs.writeFileSync(blocker, 'a file, not a directory')
-  const impossible = path.join(blocker, 'home')
-
-  // 1. inherited and unwritable: fall through to the app's own home. The MACHINE's
-  //    temp is made unwritable in the same run, because that is the pair measured on a
-  //    real machine: `%TEMP%` refused the child while the app's own root worked, and
-  //    the harness's spill store died on `mkdtemp` because of it.
-  const confined = startShell({
-    label: 'confined',
-    env: { DSH_HOME: impossible, TEMP: impossible, TMP: impossible, TMPDIR: impossible },
-  })
-  if (!(await waitFor(confined, () => runningPort(confined) !== null, 20000, 'a ready line with an unwritable inherited home'))) {
-    return
-  }
-  const expected = path.join(fs.realpathSync(confined.appRoot), 'home')
-  if (!confined.out.includes(`[stub] DSH_HOME=${expected}`)) {
-    fail(`the child was not given <app root>/home\nexpected: ${expected}\n--- stdout ---\n${confined.out}`)
-  }
-  // ...and the temp it was given must be one it can write in, which the machine's was
-  // not: the app's own `<app root>/tmp`.
-  const expectedTemp = path.join(fs.realpathSync(confined.appRoot), 'tmp')
-  if (!confined.out.toLowerCase().includes(`[stub] temp=${expectedTemp.toLowerCase()}`)) {
-    fail(`the child was not given a writable temp\nexpected: ${expectedTemp}\n--- stdout ---\n${confined.out}`)
-  }
-  if (!confined.out.includes('for temp instead')) {
-    fail(`moving the child's temp was not explained\n--- stdout ---\n${confined.out}`)
-  }
-  if (!confined.out.includes('was refused')) {
-    fail(`the refused inherited home was not named\n--- stdout ---\n${confined.out}`)
-  }
-  if (!confined.out.includes('[stub] VNCODE_HOME=(unset)')) {
-    fail('VNCODE_HOME reached the child: the harness knows DSH_HOME and nothing else')
-  }
-  if (!confined.out.includes('[stub] VNCODE_CONSOLE=(unset)')) {
-    fail('a console marker reached the harness - the panel inherits them from the launcher')
-  }
-  confined.child.stdin.write('stop\n')
-  await waitFor(confined, () => confined.exit !== null, 20000, 'the confined run to stop')
-
-  // 2. the same path as -DshHome: a refusal, by name, before anything is spawned.
-  const strict = startShell({ label: 'strict', dshHome: impossible })
-  if (!(await waitFor(strict, () => strict.exit !== null, 20000, 'the refusal of an impossible -DshHome'))) {
-    return
-  }
-  if (strict.exit !== 1) fail(`an impossible -DshHome exited ${strict.exit}, expected 1`)
-  if (!/-DshHome names/.test(strict.err + strict.out)) {
-    fail(`the refusal did not name the flag\n--- stderr ---\n${strict.err}`)
-  }
-  if (runningPort(strict) !== null) {
-    fail('a harness was started despite an impossible -DshHome')
-  }
-
-  // 3. a writable inherited DSH_HOME is joined, and no second home is made.
-  const shared = path.join(scratch, 'shared-home')
-  fs.rmSync(shared, { recursive: true, force: true })
-  fs.mkdirSync(shared, { recursive: true })
-  const joined = startShell({ label: 'joined', dshHome: null, env: { DSH_HOME: shared } })
-  if (!(await waitFor(joined, () => runningPort(joined) !== null, 20000, 'a ready line on a joined home'))) {
-    return
-  }
-  if (!joined.out.includes(`[stub] DSH_HOME=${shared}`)) {
-    fail(`a writable inherited home was not joined\n--- stdout ---\n${joined.out}`)
-  }
-  if (!joined.out.includes('from the inherited DSH_HOME')) {
-    fail(`the panel does not say the home was inherited\n--- stdout ---\n${joined.out}`)
-  }
-  if (fs.existsSync(path.join(joined.appRoot, 'home'))) {
-    fail('the app created its own home as well as joining the inherited one')
-  }
-  joined.child.stdin.write('stop\n')
-  await waitFor(joined, () => joined.exit !== null, 20000, 'the joined run to stop')
-
-  // 4. AN INSTALLATION AT `~/.dsh` IS NEVER THE HOME THE APP RUNS AGAINST. It used to
-  //    be: a courtesy rung that ran the harness against `~/.dsh` while the app's own home
-  //    was still empty, and the person's word for the world without it was "still does
-  //    not run normally". A folder that carries everything it needs must not reach into a
-  //    person's profile to START - so the app's own home is used whether or not that
-  //    directory is a complete installation, and whether or not it holds a session. The
-  //    person's home here is scratch, so the rule is proved without going near a real one.
-  const person = path.join(scratch, 'person-found')
-  const installed = path.join(person, '.dsh')
-  fs.rmSync(person, { recursive: true, force: true })
-  fs.mkdirSync(path.join(installed, 'profiles', 'web'), { recursive: true })
-  fs.mkdirSync(path.join(installed, 'sessions'), { recursive: true })
-  fs.writeFileSync(path.join(installed, 'sessions', 'c1.json'), '{}')
-  fs.writeFileSync(path.join(installed, '.credentials.yaml'), 'deepseek: {apiKey: x}\n')
-  const found = startShell({ label: 'found', dshHome: null, userHome: person })
-  if (!(await waitFor(found, () => runningPort(found) !== null, 20000, 'a ready line on the app\'s own home'))) {
-    return
-  }
-  const ownHome = path.join(found.appRoot, 'home')
-  if (!found.out.includes(`[stub] DSH_HOME=${ownHome}`)) {
-    fail(`an installation at ~/.dsh was used as the home\n--- stdout ---\n${found.out}`)
-  }
-  if (found.out.includes(`[stub] DSH_HOME=${installed}`)) {
-    fail('the harness was run against ~/.dsh')
-  }
-  if (!found.out.includes('this app\'s own home')) {
-    fail(`the panel does not say which home it is using\n--- stdout ---\n${found.out}`)
-  }
-  found.child.stdin.write('stop\n')
-  await waitFor(found, () => found.exit !== null, 20000, 'the own-home run to stop')
-
-  // 5. ...and the SAME answer once the app's own home already holds a session of the
-  //    person's: the rung is gone, so there is no state in which `~/.dsh` wins.
-  const theirs = startShell({
-    label: 'theirs',
-    dshHome: null,
-    userHome: person,
-    seed: (appRoot) => {
-      fs.mkdirSync(path.join(appRoot, 'home', 'sessions'), { recursive: true })
-      fs.writeFileSync(path.join(appRoot, 'home', 'sessions', 'mine.json'), '{}')
-    },
-  })
-  if (!(await waitFor(theirs, () => runningPort(theirs) !== null, 20000, 'a ready line on the app\'s own home'))) {
-    return
-  }
-  if (!theirs.out.includes(`[stub] DSH_HOME=${theirs.appRoot}${path.sep}home`)) {
-    fail(`a home holding a session of its own was overridden\n--- stdout ---\n${theirs.out}`)
-  }
-  theirs.child.stdin.write('stop\n')
-  await waitFor(theirs, () => theirs.exit !== null, 20000, 'the own-home run to stop')
-
-  // 6. THE HOME THE PANEL REMEMBERED IS READ FROM THE ROOT THE LADDER CHOSE. This is
-  //    the one-root rule, driven: `prefs.json` used to be written into the platform's
-  //    data directory while the window record went into the ladder's root, so on a
-  //    machine whose ladder fell through to `<tree>/.vncode` the answer could never be
-  //    read back and the first-run question returned on every launch. The record is
-  //    seeded into the APP ROOT - the scratch root this run's ladder chooses - and the
-  //    child must be given the home it names, with no flag and no screen in between.
-  const remembered = path.join(scratch, 'remembered-home')
-  fs.rmSync(remembered, { recursive: true, force: true })
-  fs.mkdirSync(remembered, { recursive: true })
-  const chosen = startShell({
-    label: 'remembered',
-    dshHome: null,
-    seed: (appRoot) => {
-      fs.writeFileSync(
-        path.join(appRoot, 'prefs.json'),
-        JSON.stringify({ version: 1, browser: null, home: remembered }),
-      )
-    },
-  })
-  if (!(await waitFor(chosen, () => runningPort(chosen) !== null, 20000, 'a ready line on the remembered home'))) {
-    return
-  }
-  if (!chosen.out.includes(`[stub] DSH_HOME=${remembered}`)) {
-    fail(`the remembered home was not used\n--- stdout ---\n${chosen.out}`)
-  }
-  if (!chosen.out.includes('the home you chose in this panel')) {
-    fail('the panel does not say the home was the one somebody chose')
-  }
-  if (fs.existsSync(path.join(chosen.appRoot, 'home'))) {
-    fail('the app created its own home as well as using the remembered one')
-  }
-  chosen.child.stdin.write('stop\n')
-  await waitFor(chosen, () => chosen.exit !== null, 20000, 'the remembered-home run to stop')
-
-  console.log(
-    'check-shell: an unwritable inherited home falls through, an impossible -DshHome refuses by name, a writable one is joined, an installation at ~/.dsh is never the home in use, and the remembered home is read from the root the ladder chose',
-  )
-}
-
-async function checkSetupButtons() {
-  // The panel's Install and Uninstall buttons run `scripts/setup/install.*` with
-  // `-NoTerminal -NoPause` and stream its output into the log. This drives the
-  // SAME path through the shell's own headless commands, with `-Help` as the one
-  // invocation that installs nothing - so the plumbing (locate, spawn through the
-  // console layer, stream, read an exit code) is proved without changing a
-  // profile.
-  const state = startShell({ mode: 'good', label: 'setup' })
-  if (!(await waitFor(state, () => runningPort(state) !== null, 20000, 'the ready line'))) return
-
-  state.child.stdin.write('install -Help\n')
-  if (!(await waitFor(state, () => /\[vncode\] install finished successfully/.test(state.out), 90000, 'the installer to answer -Help'))) {
-    return
-  }
-  if (!/Usage: scripts\\setup\\install\.bat/.test(state.out)) {
-    fail("the installer's own usage never reached the shell's log")
-  }
-  if (/(adding|removing) dsh-/.test(state.out)) {
-    fail('install -Help changed the profile - the console layer dropped the flag')
-  }
-  // The uninstaller goes through the same runner, so one run of each is what
-  // proves both buttons rather than one button and a copy of its code.
-  state.child.stdin.write('uninstall -Help\n')
-  if (!(await waitFor(state, () => /\[vncode\] uninstall finished successfully/.test(state.out), 90000, 'the uninstaller to answer -Help'))) {
-    return
-  }
-  if (!/Usage: scripts\\setup\\uninstall\.bat/.test(state.out)) {
-    fail("the uninstaller's own usage never reached the shell's log")
-  }
-
-  state.child.stdin.write('stop\n')
-  await waitFor(state, () => state.exit !== null, 20000, 'the shell to exit')
-  console.log('check-shell: install and uninstall run through the panel path, and -Help changes nothing')
-}
-
-function checkFlags() {
-  const help = spawnSync(binary, ['-Help'], { encoding: 'utf8', shell: false })
+  const help = runBinary(['-Help'])
   if (help.status !== 0) fail(`-Help exited ${help.status}`)
-  for (const flag of ['-Port', '-DshHome', '-DshVersion', '-Mode', '-Help']) {
-    if (!help.stdout.includes(flag)) fail(`-Help never mentions ${flag}`)
+  for (const word of ['install', 'uninstall', 'status', 'key', '-DshHome', '-Port']) {
+    if (!help.stdout.includes(word)) fail(`-Help never mentions ${word}`)
   }
-  const unknown = spawnSync(binary, ['-NotAFlag'], { encoding: 'utf8', shell: false })
-  if (unknown.status !== 1) fail(`an unknown flag exited ${unknown.status}, expected 1`)
-  if (!/unknown flag/.test(unknown.stderr ?? '')) fail('an unknown flag was not named as such')
-  if (!/-notaflag/i.test(unknown.stderr ?? '')) fail('an unknown flag was refused without naming it')
+  if (help.stdout.includes('embed')) {
+    fail('-Help advertises an embedded web view this build does not have')
+  }
 
-  const badMode = spawnSync(binary, ['-Mode', 'sideways'], { encoding: 'utf8', shell: false })
-  if (badMode.status !== 1) fail(`-Mode sideways exited ${badMode.status}, expected 1`)
-  if (!/panel, chrome, headless or embed/.test(badMode.stderr ?? '')) {
-    fail('-Mode sideways was refused without listing what it accepts')
+  // The pane's mode. It must be a refusal that NAMES the flag: "we removed it" and "it
+  // silently does nothing now" are different promises.
+  const embed = runBinary(['-Mode', 'embed'])
+  if (embed.status === 0) fail('-Mode embed was accepted by a build with no web view')
+  if (!/unknown flag/i.test(embed.stderr)) {
+    fail(`-Mode embed was refused without naming the flag: ${JSON.stringify(embed.stderr)}`)
   }
-  // `embed` is a mode THIS build does not have - it was compiled without the pane, so it
-  // draws no web view - and the flag is refused BY NAME rather than quietly opening a
-  // browser instead. A test that only checked the accepted spellings would let this build
-  // promise a pane. The build that DOES have one is `check-pane.mjs`, and the two must
-  // DISAGREE about this flag: that disagreement is the whole contract.
-  const noPane = spawnSync(binary, ['-Mode', 'embed'], { encoding: 'utf8', shell: false })
-  if (noPane.status !== 1) fail(`-Mode embed exited ${noPane.status}, expected 1`)
-  if (!/draws no web view/.test(noPane.stderr ?? '')) {
-    fail('-Mode embed was refused without saying that this app has no web view')
-  }
-  if (!/chrome/.test(noPane.stderr ?? '')) {
-    fail('-Mode embed was refused without naming the mode that does work')
-  }
-  console.log('check-shell: the flag set, both refusals, and this build promises no pane')
-}
-
-function checkTauriIsGone() {
-  // The move is a claim about the SOURCE TREE, and a half-finished move is worse
-  // than either end of it: two supervisors in one folder is how a "fix" lands in
-  // the one nobody runs.
-  if (fs.existsSync(path.join(app, 'src-tauri'))) {
-    fail('app/src-tauri still exists - the Tauri launcher was not removed')
-  }
-  if (!fs.existsSync(path.join(app, 'Cargo.toml'))) {
-    fail('app/Cargo.toml is missing - the shell is no longer a cargo workspace')
-  }
-  for (const crate of ['vn-shell-core', 'vn-shell-runtime', 'vn-shell-egui', 'vn-shell']) {
-    if (!fs.existsSync(path.join(app, 'crates', crate, 'Cargo.toml'))) {
-      fail(`app/crates/${crate} is missing`)
-    }
-  }
-  if (fs.existsSync(path.join(app, 'ui'))) {
-    fail('app/ui still exists - the HTML splash has no place in the egui shell')
-  }
-  // The old distribution machinery is gone, deliberately: the distribution is now
-  // this app beside the pack the panel installs.
-  for (const gone of ['dist.ps1', 'dist.sh', 'run-dist.bat', 'run-dist.ps1', 'dist-manifest.txt']) {
-    if (fs.existsSync(path.join(repo, 'scripts', gone))) {
-      fail(`scripts/${gone} is back - the old distribution machinery was erased on purpose`)
-    }
-  }
-  for (const needed of ['setup/install.bat', 'setup/install.sh', 'console/adapt.cmd']) {
-    if (!fs.existsSync(path.join(repo, 'scripts', needed))) {
-      fail(`scripts/${needed} is missing - the panel's Install button runs it`)
-    }
-  }
-  console.log('check-shell: the Tauri launcher is gone and the workspace is in its place')
-}
-
-function checkCargoTests() {
-  const cargo = spawnSync('cargo', ['--version'], { encoding: 'utf8', shell: false })
-  if (cargo.error || cargo.status !== 0) {
-    notes.push('cargo is missing, so the shell\'s own tests were not run')
-    return
-  }
-  // VNCODE_TEST_DIR is how the tests get a scratch root on a host that denies the
-  // system temp directory - which is exactly the host the pack's checks run on.
-  // VNCODE_HOME and DSH_HOME are pointed into the same scratch tree for the same
-  // reason M0 added them: a unit test must never create, join or probe a person's
-  // own harness home.
-  const test = spawnSync('cargo', ['test', '--workspace', '--quiet'], {
-    cwd: app,
-    encoding: 'utf8',
-    shell: false,
-    env: {
-      ...process.env,
-      VNCODE_TEST_DIR: path.join(scratch, 'cargo-test'),
-      VNCODE_HOME: path.join(scratch, 'cargo-test', 'app-root'),
-      DSH_HOME: path.join(scratch, 'cargo-test', 'dsh-home'),
-    },
-  })
-  const output = `${test.stdout ?? ''}${test.stderr ?? ''}`
-  if (test.status !== 0) {
-    fail(`cargo test --workspace failed:\n${output.split('\n').slice(-40).join('\n')}`)
-    return
-  }
-  const passed = [...output.matchAll(/test result: ok\. (\d+) passed/g)].reduce(
-    (total, match) => total + Number(match[1]),
-    0,
-  )
-  if (passed === 0) fail('cargo test reported success but ran no tests')
-  console.log(`check-shell: ${passed} unit test(s) in the workspace pass`)
 }
 
 // ---------------------------------------------------------------------------
-function report() {
-  console.log('check-shell: the native shell')
-  for (const note of notes) console.log(`  - ${note}`)
-  if (failures.length) {
-    console.log(`\ncheck-shell: ${failures.length} problem(s).`)
-    for (const message of failures) console.log(`  - ${message}`)
-    process.exit(1)
+// 3-5. The bridge, against stubs
+// ---------------------------------------------------------------------------
+/** A stub script: records what it was given, then exits 0. `up` walks to the tree root. */
+function stubScript(recordName, up) {
+  // `up` is `..` from `scripts/` and `../..` from `scripts/setup/`: the two stubs live at
+  // different depths, and a record written one level too high is a check that fails for
+  // its own bug rather than the app's.
+  if (isWindows) {
+    const parents = up.replace(/\//g, '\\')
+    return [
+      '@echo off',
+      `echo args=%* > "%~dp0${parents}\\${recordName}"`,
+      `echo DSH_HOME=%DSH_HOME% >> "%~dp0${parents}\\${recordName}"`,
+      `echo VNCODE_HOME=[%VNCODE_HOME%] >> "%~dp0${parents}\\${recordName}"`,
+      `echo VNCODE_CONSOLE=[%VNCODE_CONSOLE%] >> "%~dp0${parents}\\${recordName}"`,
+      `echo TMP=[%TMP%] >> "%~dp0${parents}\\${recordName}"`,
+      'exit /b 0',
+      '',
+    ].join('\r\n')
   }
-  console.log('\ncheck-shell: OK')
-  process.exit(0)
+  return [
+    '#!/bin/sh',
+    `record="$(dirname "$0")/${up}/${recordName}"`,
+    '{',
+    '  echo "args=$*"',
+    '  echo "DSH_HOME=$DSH_HOME"',
+    '  echo "VNCODE_HOME=[$VNCODE_HOME]"',
+    '  echo "VNCODE_CONSOLE=[$VNCODE_CONSOLE]"',
+    '  echo "TMP=[$TMPDIR]"',
+    '} > "$record"',
+    'exit 0',
+    '',
+  ].join('\n')
 }
 
-const binary = findBinary()
-if (failures.length) report()
-writeStub()
-checkTauriIsGone()
-checkFlags()
-await checkRefusal()
-await checkLifetime()
-await checkConfinedHome()
-await checkSetupButtons()
-checkCargoTests()
-report()
+function bridge() {
+  const root = path.join(scratch, `shell-bridge-${process.pid}`)
+  fs.rmSync(root, { recursive: true, force: true })
+  fs.mkdirSync(path.join(root, 'bin'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'scripts', 'setup'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'data'), { recursive: true })
+
+  // The pin is what makes the tree a tree: `repo_root()` walks up from the binary for it.
+  fs.writeFileSync(path.join(root, '.dsh-version.json'), JSON.stringify({ dsh: '9.9.9' }))
+  fs.copyFileSync(built, path.join(root, 'bin', path.basename(built)))
+
+  const setup = path.join(root, 'scripts', 'setup')
+  const ext = isWindows ? '.bat' : '.sh'
+  fs.writeFileSync(path.join(setup, 'install' + ext), stubScript('install-record.txt', '../..'))
+  fs.writeFileSync(path.join(setup, 'uninstall' + ext), stubScript('uninstall-record.txt', '../..'))
+  fs.writeFileSync(
+    path.join(root, 'scripts', 'run-web' + ext),
+    stubScript('runweb-record.txt', '..'),
+  )
+
+  const home = path.join(root, 'data', 'home')
+  const binary = path.join(root, 'bin', path.basename(built))
+  // The seed of every "it printed the wrong thing" report: an inherited home and an
+  // inherited console marker. Neither may reach a child, and neither may be believed.
+  const env = { ...process.env, VNCODE_HOME: path.join(root, 'data'), VNCODE_CONSOLE: '1' }
+  env.VNCODE_ARGV = 'do-not-leak'
+  delete env.DSH_HOME
+  delete env.DEEPSEEK_API_KEY
+
+  const run = (args) =>
+    spawnSync(binary, args, { encoding: 'utf8', cwd: root, env, timeout: 180_000 })
+
+  // --- start, with nothing installed -------------------------------------
+  const start = run(['start'])
+  if (start.error) {
+    fail(`start could not run: ${start.error.message}`)
+    return
+  }
+  if (start.status !== 0) {
+    fail(`vncode start exited ${start.status}\n${start.stdout}\n${start.stderr}`)
+  }
+  const printed = `${start.stdout}\n${start.stderr}`
+  if (/token=/i.test(printed)) fail('a launch token reached the console')
+
+  const install = readRecord(root, 'install-record.txt')
+  if (!install) {
+    fail('vncode start did not run the installer for a home with no pack in it')
+  } else {
+    if (!install.includes('-DshHome')) fail(`the installer was not told the home: ${install}`)
+    if (!install.includes(home)) fail(`the installer was not told THIS home (${home}): ${install}`)
+    if (!install.includes('VNCODE_HOME=[]')) {
+      fail(`the app's own root leaked into the installer: ${install}`)
+    }
+    if (!install.includes('DSH_HOME=' + home)) {
+      fail(`the installer's DSH_HOME is not the chosen home: ${install}`)
+    }
+    if (!install.includes('VNCODE_CONSOLE=[]')) {
+      fail(`the launcher's console marker leaked into the installer: ${install}`)
+    }
+  }
+
+  const runweb = readRecord(root, 'runweb-record.txt')
+  if (!runweb) {
+    fail('vncode start never ran the web launcher - the bridge is the whole point')
+  } else {
+    if (!runweb.includes('-DshHome')) fail(`the launcher was not told the home: ${runweb}`)
+    if (!runweb.includes(home)) fail(`the launcher was not told THIS home (${home}): ${runweb}`)
+    if (isWindows && !runweb.includes('-NoTerminal')) {
+      fail(`the launcher was not told -NoTerminal, so a relaunch would look like an instant exit: ${runweb}`)
+    }
+    if (!runweb.includes('DSH_HOME=' + home)) {
+      fail(`the launcher's DSH_HOME is not the chosen home: ${runweb}`)
+    }
+    if (!runweb.includes('VNCODE_HOME=[]')) {
+      fail(`the app's own root leaked into the launcher: ${runweb}`)
+    }
+    if (!runweb.includes('VNCODE_CONSOLE=[]')) {
+      fail(`the console marker leaked into the launcher: ${runweb}`)
+    }
+  }
+
+  // --- the key is not asked for at a pipe, and nothing is written ---------
+  const envFile = path.join(home, '.env')
+  if (fs.existsSync(envFile)) {
+    fail(`a key file was written with no terminal to ask at: ${envFile}`)
+  }
+  if (!/not a terminal/.test(printed)) {
+    fail(`start did not say why it skipped the key prompt: ${printed}`)
+  }
+
+  // --- status reports the same home, and starts nothing ------------------
+  const status = run(['status'])
+  if (status.status !== 0) fail(`status exited ${status.status}`)
+  if (!status.stdout.includes(home)) {
+    fail(`status does not name the home in use (${home}):\n${status.stdout}`)
+  }
+  if (!/launcher:/.test(status.stdout)) fail('status does not name the launcher')
+
+  fs.rmSync(root, { recursive: true, force: true })
+  note('start, the installer and the launcher were driven against stub scripts')
+}
+
+function readRecord(root, name) {
+  const file = path.join(root, name)
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
+}
+
+// ---------------------------------------------------------------------------
+// 6. The web half stands alone
+// ---------------------------------------------------------------------------
+function webHalf() {
+  const script = path.join(repo, 'scripts', 'run-web' + (isWindows ? '.bat' : '.sh'))
+  if (!fs.existsSync(script)) {
+    fail(`${script} is missing - launching only the web is a supported thing to do`)
+    return
+  }
+  // THE CONSOLE MARKERS ARE CLEARED, and that is the whole point of running it here.
+  // `adapt.cmd` marks a run it has set up with `VNCODE_CONSOLE`, and an entry point that
+  // sees the marker takes its arguments from the relaunched shell instead of `%*` - so a
+  // check that inherited the marker would test a path no double-click ever takes. It was
+  // measured: with the marker inherited, `run-web.bat -Help` started a real harness.
+  const env = {}
+  for (const [name, value] of Object.entries(process.env)) {
+    if (!name.startsWith('VNCODE_')) env[name] = value
+  }
+  const result = isWindows
+    ? spawnSync('cmd', ['/c', script, '-Help'], { encoding: 'utf8', cwd: repo, env })
+    : spawnSync('sh', [script, '-Help'], { encoding: 'utf8', cwd: repo, env })
+  if (result.status !== 0) {
+    fail(`run-web -Help exited ${result.status}: ${result.stdout}${result.stderr}`)
+    return
+  }
+  if (!/Usage/i.test(`${result.stdout}${result.stderr}`)) {
+    fail('run-web -Help printed no usage')
+  }
+  note('scripts/run-web.* answers on its own, with no vncode binary involved')
+}
+
+// ---------------------------------------------------------------------------
+fs.mkdirSync(scratch, { recursive: true })
+
+if (build()) {
+  answers()
+  bridge()
+  webHalf()
+}
+
+console.log('check-shell: the native app, driven')
+for (const line of notes) console.log(`  - ${line}`)
+if (failures.length) {
+  console.log(`\ncheck-shell: ${failures.length} problem(s).`)
+  for (const message of failures) console.log(`  - ${message}`)
+  process.exit(1)
+}
+console.log('\ncheck-shell: OK')
