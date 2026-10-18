@@ -3065,7 +3065,22 @@ check(
   check('frontend title seat renders', renderToStaticMarkup(h(fcTitle)).includes('Frontend'))
   const fcMarkup = renderToStaticMarkup(h(fcSeats['sidebar.right.pane.tab#dsh-frontend-craft'].component, { sessionId: '' }))
   check('frontend body renders its frame', fcMarkup.includes('class="dfc-root"') && fcMarkup.includes('>Frontend<'))
-  check('frontend body offers the three views', ['Findings', 'Artifacts', 'Directions'].every((label) => fcMarkup.includes('>' + label + '<')))
+  check('frontend body offers the four views', ['Findings', 'Artifacts', 'Directions', 'Preview'].every((label) => fcMarkup.includes('>' + label + '<')))
+  const fcPreview = fc.exports.__internals.Preview
+  const fcNoRender = renderToStaticMarkup(h(fcPreview, { render: null }))
+  check('frontend preview explains the empty render', fcNoRender.includes('No render yet.') && fcNoRender.includes('fe_render'))
+  const fcRenderView = {
+    id: '0123456789abcdef',
+    url: 'file:///tmp/page.html',
+    viewports: [
+      { width: 1440, height: 900, label: 'desktop', size: { width: 1440, height: 900 }, findings: [] },
+      { width: 390, height: 844, label: 'phone', size: { width: 390, height: 844 }, findings: [{ antipattern: 'render-contrast', name: 'Text below WCAG AA contrast', description: 'x', file: 'file:///tmp/page.html', line: 0, snippet: 'p 2.6:1', measured: true }] },
+    ],
+    errors: [],
+  }
+  const fcRendered = renderToStaticMarkup(h(fcPreview, { render: fcRenderView }))
+  check('frontend preview draws the picture from its own route', fcRendered.includes('/api/dsh-frontend-craft/render-image?id=0123456789abcdef&amp;w=1440'))
+  check('frontend preview switches viewport', fcRendered.includes('>phone 390<') && fcRendered.includes('>desktop 1440<'))
   const fcDirections = fc.exports.__internals.Directions
   const fcNoDeal = renderToStaticMarkup(h(fcDirections, { deal: null, pick: null, busy: false, onPick: () => {} }))
   check('frontend directions view explains the empty round', fcNoDeal.includes('No direction round yet.') && fcNoDeal.includes('fe_direction'))

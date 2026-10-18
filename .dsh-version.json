@@ -180,7 +180,7 @@
         "frontend-craft"
       ],
       "rowOverrides": [],
-      "role": "Frontend craft: Impeccable's Apache-2.0 corpus vendored at a pinned commit - the 24 commands, 41 references, the craft floor, the modes and the native platform references - plus its 61-rule detector built to a WebAssembly module that ships inside the package. Four tools (`fe_context`, `fe_detect`, `fe_direction`, `fe_artifact`), four routes, the bundled `frontend-craft` skill, and a Frontend tab that lists the findings by file and rule. No network, no install, no engine download, no child process. See packages/dsh-frontend-craft/README.md.",
+      "role": "Frontend craft: Impeccable's Apache-2.0 corpus vendored at a pinned commit - the 24 commands, 41 references, the craft floor, the modes and the native platform references - plus its 61-rule detector built to a WebAssembly module that ships inside the package. Five tools (`fe_context`, `fe_detect`, `fe_direction`, `fe_render`, `fe_artifact`), six routes, the bundled `frontend-craft` skill, and a Frontend tab with findings, artifacts, the direction round and a rendered preview. `fe_render` is the one process it starts: the machine's own headless Chrome/Edge, argv-only, throwaway profile, no network but loopback, for the measured `render-*` rules. No install, no engine download. See packages/dsh-frontend-craft/README.md.",
       "uses": [
         "@deepseek-ai/dsh-client-ui-tool (the tool cards, resolved lazily)",
         "dsh-rightbar (the tab registry and the keyed pane seats)",

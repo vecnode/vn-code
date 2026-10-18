@@ -16,7 +16,7 @@
  * committed under lib/vendor/impeccable/; the corpus is markdown committed under
  * skills/. "Installing Impeccable" is not a step this package has, by design.
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import os from 'node:os'
@@ -39,6 +39,7 @@ export const SCAN_ROUTE = API_ROOT + '/scan'
 export const ARTIFACTS_ROUTE = API_ROOT + '/artifacts'
 export const RULES_ROUTE = API_ROOT + '/rules'
 export const DIRECTION_ROUTE = API_ROOT + '/direction'
+export const RENDER_IMAGE_ROUTE = API_ROOT + '/render-image'
 
 /** The bundled skill this row registers. */
 export const SKILLS = [{ name: 'frontend-craft', file: '../skills/frontend-craft/SKILL.md' }]
@@ -56,10 +57,11 @@ export function createDeps(ctx, options = {}) {
     warn: (message) => ctx.logger?.warn?.('[dsh-frontend-craft] ' + message),
     debug: (message) => ctx.logger?.debug?.('[dsh-frontend-craft] ' + message),
   }
-  /** The last scan and the last direction round per session. Memory only. */
+  /** The last scan, direction round and render per session. Memory only. */
   const lastScan = new Map()
   const deals = new Map()
   const picks = new Map()
+  const renders = new Map()
   return {
     ctx,
     env,
@@ -93,6 +95,13 @@ export function createDeps(ctx, options = {}) {
     },
     pickOf(session) {
       return picks.get(session) ?? null
+    },
+    rememberRender(session, summary) {
+      if (typeof session !== 'string' || session === '') return
+      renders.set(session, summary)
+    },
+    renderOf(session) {
+      return renders.get(session) ?? null
     },
     state() {
       const handle = detector()
@@ -193,7 +202,7 @@ export function registerRoutes(deps) {
       // A tab opened outside a session still gets the corpus facts.
       root = null
     }
-    return json(200, { ...state, root, platform, directives, artifacts, lastScan: deps.lastScanOf(session), direction: { deal: deps.dealOf(session), pick: deps.pickOf(session) } })
+    return json(200, { ...state, root, platform, directives, artifacts, lastScan: deps.lastScanOf(session), direction: { deal: deps.dealOf(session), pick: deps.pickOf(session) }, render: deps.renderOf(session) })
   })
 
   register(SCAN_ROUTE, ['POST'], async (request) => {
@@ -255,6 +264,26 @@ export function registerRoutes(deps) {
     if (!verdict.ok) return json(409, { ok: false, code: 'NO_DEAL', message: verdict.message })
     deps.rememberPick(session, verdict.choice)
     return json(200, { ok: true, pick: verdict.choice, deal: deps.dealOf(session) })
+  })
+
+  // One rendered viewport's PNG. The id and width name a directory this plugin
+  // created; both are validated and the resolved path is checked again, so a
+  // crafted id can never walk out of the renders root.
+  register(RENDER_IMAGE_ROUTE, ['GET', 'HEAD'], async (request) => {
+    const url = new URL(request.url)
+    const id = String(url.searchParams.get('id') ?? '')
+    const width = String(url.searchParams.get('w') ?? '')
+    if (!/^[0-9a-f]{16}$/.test(id) || !/^[0-9]{3,5}$/.test(width)) {
+      return json(400, { ok: false, code: 'BAD_ID', message: 'A render id is 16 hex characters and a width is a number; both come from a fe_render result.' })
+    }
+    const rendersRoot = path.resolve(path.join(deps.root, 'renders'))
+    const file = path.resolve(path.join(rendersRoot, id, 'page-' + width + '.png'))
+    if (!file.startsWith(rendersRoot + path.sep) || !existsSync(file)) {
+      return json(404, { ok: false, code: 'NOT_FOUND', message: 'No render ' + id + ' at ' + width + 'px. Render the page again to produce one.' })
+    }
+    const headers = { 'content-type': 'image/png', 'cache-control': 'no-store' }
+    if (request.method === 'HEAD') return new Response(null, { status: 200, headers })
+    return new Response(readFileSync(file), { status: 200, headers })
   })
 
   return () => {

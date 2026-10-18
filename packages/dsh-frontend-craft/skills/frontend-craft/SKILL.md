@@ -37,6 +37,18 @@ table allows, and say which part you could not run.
 | `impeccable doctor` | `fe_context` - it reports the same drift, read-only |
 | `impeccable <any other verb>` | **UNAVAILABLE** - say so in one line and continue with the reference's intent |
 
+Two tools are this build's own and no reference names them:
+
+- **`fe_render`** - render the page (an HTML file in the workspace, or a loopback
+  dev-server URL) in a throwaway headless browser and measure it. Use it wherever a
+  reference says to verify the rendered result, look at the sizes it ships at, or
+  check contrast/tap targets/overflow; its findings are the `render-*` MEASURED
+  rules, separate from the source rules `fe_detect` reports. It needs Chrome or
+  Edge on the machine; with neither, say the render could not run and audit from
+  the code.
+- **`fe_direction`** - the local roll (the table above), and the only way a
+  direction round happens here.
+
 UNAVAILABLE here, and why:
 
 - `live`, `live-*`, `generate-image`, `generate`, `comp-*`, `font-match`, `visualize`'s comp
@@ -94,10 +106,14 @@ Two things, in this order, and neither replaces the other:
    evidence, not proof: a clean run says nothing about whether the page is good, and it
    never sees the rendered experience. Run it on the files you touched before you call work
    finished.
-2. **A look at the rendered result** at the sizes it ships at. If this harness has a render
-   tool in the conversation (for example dsh-browser's `browser_render` when that row is
-   enabled), use it; otherwise ask for a screenshot or read the layout from the code with
-   the numbers spelled out. Say which one you did.
+2. **The rendered result, measured.** Call `fe_render` on the page at the sizes it
+   ships at (a phone width and a desktop width is the floor). It returns the picture
+   and the `render-*` findings: contrast pairs, touch targets under 24px, horizontal
+   overflow, line length, body text under 12px, skipped headings, images with no alt.
+   Look at the picture as well as the numbers: the numbers catch defects, the picture
+   catches a page that is technically fine and still wrong. If the host has no
+   browser, or the page only exists behind a build, say so plainly and audit from the
+   source instead - never imply you looked at a render you did not make.
 
 A finding is not automatically a defect: the brief is the reference. When a rule fires on
 something the brief pinned on purpose, waive it inline with the marker the engine itself

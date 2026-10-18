@@ -35,6 +35,7 @@ window.__ModuleLoader__.load({
     const SCAN_ROUTE = API_ROOT + '/scan'
     const ARTIFACTS_ROUTE = API_ROOT + '/artifacts'
     const DIRECTION_ROUTE = API_ROOT + '/direction'
+    const RENDER_IMAGE_ROUTE = API_ROOT + '/render-image'
 
     const css = `
 .dfc-root{display:flex;flex-direction:column;height:100%;min-height:0;font:12px/18px var(--dsw-font-ui,ui-sans-serif,system-ui,sans-serif);color:var(--dsw-alias-label-secondary,#b8b8b8)}
@@ -79,6 +80,9 @@ window.__ModuleLoader__.load({
 .dfc-kicker{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dsw-alias-brand-primary,#4f8cff)}
 .dfc-line{margin-top:2px;color:var(--dsw-alias-label-tertiary,#8f8f8f);line-height:17px}
 .dfc-actions{display:flex;gap:6px;padding:4px 10px 8px;flex-wrap:wrap}
+.dfc-shotWrap{padding:8px 10px}
+.dfc-shot{display:block;width:100%;height:auto;border-radius:6px;border:.5px solid var(--dsw-alias-border-secondary,rgba(128,128,128,.28));background:#fff}
+.dfc-facts{display:flex;gap:8px;flex-wrap:wrap;padding:2px 10px 6px;color:var(--dsw-alias-label-tertiary,#8f8f8f);font-variant-numeric:tabular-nums}
 `
 
     const CSS_TAG = 'dsh-frontend-craft/tab.css'
@@ -288,6 +292,53 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /**
+     * The render: the picture the host actually produced, at one viewport, plus
+     * the MEASURED findings (`render-*`). A render is a host artifact, so the
+     * image comes from this plugin's own route, not from a data URL.
+     */
+    function Preview(props) {
+      const render = props.render
+      const [width, setWidth] = React.useState(null)
+      if (!render || !Array.isArray(render.viewports) || render.viewports.length === 0) {
+        return h(
+          'div',
+          { className: 'dfc-empty' },
+          'No render yet.\n\n' +
+            '`fe_render` renders an HTML file in the workspace, or a loopback dev-server URL, in a throwaway headless browser and measures what only pixels show: contrast, touch targets, overflow, line length, type size, heading order, missing alt.\n\n' +
+            'It needs Chrome or Edge on this machine; the 61 source rules run without one.',
+        )
+      }
+      const active = render.viewports.find((entry) => entry.width === width) ?? render.viewports[0]
+      const findings = Array.isArray(active.findings) ? active.findings : []
+      return h(
+        'div',
+        null,
+        h(
+          'div',
+          { className: 'dfc-facts' },
+          h('span', {}, active.label + ' ' + active.width + '×' + active.height),
+          h('span', {}, findings.length + ' measured'),
+          active.size ? h('span', {}, active.size.width + '×' + active.size.height + ' px') : null,
+          h('span', {}, String(render.url)),
+        ),
+        render.viewports.length > 1
+          ? h(
+              'div',
+              { className: 'dfc-actions' },
+              ...render.viewports.map((entry) =>
+                h('button', { key: entry.width, type: 'button', className: 'dfc-btn', 'data-active': entry.width === active.width ? 'true' : undefined, onClick: () => setWidth(entry.width) }, entry.label + ' ' + entry.width),
+              ),
+            )
+          : null,
+        h('div', { className: 'dfc-shotWrap' }, h('img', { className: 'dfc-shot', alt: 'Rendered ' + String(render.url), src: RENDER_IMAGE_ROUTE + '?id=' + encodeURIComponent(render.id) + '&w=' + String(active.width) })),
+        findings.length === 0
+          ? h('div', { className: 'dfc-note' }, 'Nothing measured at this size. That is evidence, not proof: look at the picture.')
+          : h('div', null, ...findings.map((finding, index) => h(Finding, { key: 'render-' + index, finding }))),
+        render.errors && render.errors.length > 0 ? h('div', { className: 'dfc-note' }, 'Could not read: ' + render.errors.join('; ')) : null,
+      )
+    }
+
     /** The tab itself. */
     function FrontendCraft(props) {
       const sessionId = props && props.sessionId ? props.sessionId : ''
@@ -345,13 +396,17 @@ window.__ModuleLoader__.load({
         else setArtifacts({ product: null, design: null, briefs: [] })
       }, [sessionId])
 
+      const loadState = React.useCallback(async () => {
+        const answer = await api(STATE_ROUTE + '?session=' + encodeURIComponent(sessionId))
+        if (answer.ok && answer.body) setState(answer.body)
+        else setError('the state route did not answer')
+      }, [sessionId])
+
       React.useEffect(() => {
         let stopped = false
         const read = async () => {
-          const answer = await api(STATE_ROUTE + '?session=' + encodeURIComponent(sessionId))
           if (stopped) return
-          if (answer.ok && answer.body) setState(answer.body)
-          else setError('the state route did not answer')
+          await loadState()
         }
         read()
         loadArtifacts()
@@ -359,7 +414,7 @@ window.__ModuleLoader__.load({
         return () => {
           stopped = true
         }
-      }, [sessionId, loadArtifacts, loadDirection])
+      }, [sessionId, loadState, loadArtifacts, loadDirection])
 
       const scan = React.useCallback(async () => {
         if (sessionId === '') {
@@ -420,7 +475,9 @@ window.__ModuleLoader__.load({
             ? button(busy ? 'Scanning…' : 'Scan', scan, { disabled: busy, 'data-toolbar': 'scan' })
             : view === 'artifacts'
               ? button('Reload', () => loadArtifacts(), { 'data-toolbar': 'reload' })
-              : button('Reload', () => loadDirection(), { 'data-toolbar': 'reload-direction' }),
+              : view === 'directions'
+                ? button('Reload', () => loadDirection(), { 'data-toolbar': 'reload-direction' })
+                : button('Reload', loadState, { 'data-toolbar': 'reload-render' }),
         ),
         h(
           'div',
@@ -428,6 +485,7 @@ window.__ModuleLoader__.load({
           button('Findings', () => setView('findings'), { 'data-active': view === 'findings' ? 'true' : undefined, 'data-view': 'findings' }),
           button('Artifacts', () => setView('artifacts'), { 'data-active': view === 'artifacts' ? 'true' : undefined, 'data-view': 'artifacts' }),
           button('Directions', () => setView('directions'), { 'data-active': view === 'directions' ? 'true' : undefined, 'data-view': 'directions' }),
+          button('Preview', () => setView('preview'), { 'data-active': view === 'preview' ? 'true' : undefined, 'data-view': 'preview' }),
         ),
         h(
           'div',
@@ -438,7 +496,9 @@ window.__ModuleLoader__.load({
             ? h(Findings, { report, filter, onFilter: setFilter })
             : view === 'artifacts'
               ? h(Artifacts, { artifacts, onReload: loadArtifacts })
-              : h(Directions, { deal: direction ? direction.deal : null, pick: direction ? direction.pick : null, busy: pickBusy, onPick: pick }),
+              : view === 'directions'
+                ? h(Directions, { deal: direction ? direction.deal : null, pick: direction ? direction.pick : null, busy: pickBusy, onPick: pick })
+                : h(Preview, { render: state ? state.render : null }),
         ),
         h('div', { className: 'dfc-note' }, state && state.root ? 'workspace: ' + state.root : 'no workspace bound to this tab'),
       )
@@ -489,7 +549,7 @@ window.__ModuleLoader__.load({
     exports.name = 'dsh-frontend-craft'
     exports.inject = inject
     exports.apply = apply
-    exports.__internals = { definition, api, FrontendCraft, Directions, TYPE_ID, KIND, STATE_ROUTE, SCAN_ROUTE, ARTIFACTS_ROUTE, DIRECTION_ROUTE }
+    exports.__internals = { definition, api, FrontendCraft, Directions, Preview, TYPE_ID, KIND, STATE_ROUTE, SCAN_ROUTE, ARTIFACTS_ROUTE, DIRECTION_ROUTE, RENDER_IMAGE_ROUTE }
 
     return module.exports
   },

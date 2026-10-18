@@ -1749,11 +1749,11 @@ try {
     logger: { debug() {}, info() {}, warn() {} },
   }
   fcModule.apply(fcCtx)
-  check('frontend: four tools, all fe_*', fcTools.map((tool) => tool.name).sort().join(','), 'fe_artifact,fe_context,fe_detect,fe_direction')
+  check('frontend: five tools, all fe_*', fcTools.map((tool) => tool.name).sort().join(','), 'fe_artifact,fe_context,fe_detect,fe_direction,fe_render')
   check(
-    'frontend: four routes',
+    'frontend: six routes',
     [...new Set(fcRoutes.map((route) => route.path))].sort().join(','),
-    ['/api/dsh-frontend-craft/artifacts', '/api/dsh-frontend-craft/direction', '/api/dsh-frontend-craft/rules', '/api/dsh-frontend-craft/scan', '/api/dsh-frontend-craft/state'].join(','),
+    ['/api/dsh-frontend-craft/artifacts', '/api/dsh-frontend-craft/direction', '/api/dsh-frontend-craft/render-image', '/api/dsh-frontend-craft/rules', '/api/dsh-frontend-craft/scan', '/api/dsh-frontend-craft/state'].join(','),
   )
   check(
     'frontend: methods stay inside the registry vocabulary',
@@ -1815,6 +1815,20 @@ try {
   check('frontend: the direction route refuses a card that was not dealt', fcRejected.status === 409, true)
   const fcStatus = await fcDirection.execute({ action: 'status' }, { agent: { session: { id: 'session-frontend' } } })
   check('frontend: the tool sees the pick the tab recorded', fcStatus.view.pick === 'Marine chart', true)
+
+  // The renderer's policy, without needing a browser: what it will and will not
+  // load is a decision made before a process exists.
+  const fcRender = await import(pathToFileURL(path.join(repo, 'packages/dsh-frontend-craft/lib/render.js')).href)
+  check('frontend: a public url is refused by the renderer', fcRender.targetToUrl('https://example.com/', fcWorkspace).ok === false, true)
+  check('frontend: a loopback url is accepted', fcRender.targetToUrl('http://127.0.0.1:5173/', fcWorkspace).ok === true, true)
+  check('frontend: a non-html workspace file is refused', fcRender.targetToUrl('card.css', fcWorkspace).ok === false, true)
+  const fcPage = path.join(fcWorkspace, 'index.html')
+  await fsp.writeFile(fcPage, '<!doctype html><title>t</title><h1>t</h1>')
+  check('frontend: a workspace html file is accepted', fcRender.targetToUrl('index.html', fcWorkspace).ok === true, true)
+  const fcBadImage = await fcCall('/api/dsh-frontend-craft/render-image', new Request('http://x/api/dsh-frontend-craft/render-image?id=not-hex&w=800'))
+  check('frontend: the image route refuses a crafted id', fcBadImage.status, 400)
+  const fcMissingImage = await fcCall('/api/dsh-frontend-craft/render-image', new Request('http://x/api/dsh-frontend-craft/render-image?id=0123456789abcdef&w=800'))
+  check('frontend: the image route 404s a render that does not exist', fcMissingImage.status, 404)
   await fsp.rm(fcWorkspace, { recursive: true, force: true })
 }
 

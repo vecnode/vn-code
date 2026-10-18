@@ -137,20 +137,36 @@ check('the Apache licence and third-party notices travel with the corpus', () =>
 })
 
 // ---- 4. this plugin's own code ---------------------------------------------
-check('the plugin itself spawns no process, opens no socket and calls no API', () => {
-  const own = ['index.js', 'tools.js', 'context.js', 'paths.js', 'vendor.js', 'client.js'].map((name) => path.join(pkgRoot, 'lib', name))
-  const forbidden = [/child_process/, /\bspawnSync\b/, /\bexecSync\b/, /\bexecFile/, /https?:\/\//, /XMLHttpRequest/]
-  for (const file of own) {
+check('the scan path spawns nothing and no host file reaches a non-loopback URL', () => {
+  const quiet = ['index.js', 'tools.js', 'context.js', 'paths.js', 'vendor.js', 'client.js'].map((name) => path.join(pkgRoot, 'lib', name))
+  // A non-loopback URL anywhere in the host half would be egress. A loopback
+  // example in a description is the render's own contract, not a destination.
+  const remoteUrl = /https?:\/\/(?!127\.0\.0\.1[:/]|localhost[:/]|\[::1\][:/])/i
+  for (const file of [...quiet, path.join(pkgRoot, 'lib', 'render.js')]) {
     const text = readFileSync(file, 'utf8')
-    for (const pattern of forbidden) assert.ok(!pattern.test(text), path.basename(file) + ' matches ' + pattern)
+    assert.ok(!remoteUrl.test(text), path.basename(file) + ' names a non-loopback URL')
   }
+  for (const file of quiet) {
+    const text = readFileSync(file, 'utf8')
+    for (const pattern of [/child_process/, /\bspawn\b/, /\bspawnSync\b/, /\bexecSync\b/, /\bexecFile/, /XMLHttpRequest/]) {
+      assert.ok(!pattern.test(text), path.basename(file) + ' matches ' + pattern)
+    }
+  }
+  // The ONE child process this package starts is the machine's own browser, and
+  // it is started argv-only, headless, with a throwaway profile and no shell.
+  const render = readFileSync(path.join(pkgRoot, 'lib', 'render.js'), 'utf8')
+  assert.match(render, /spawn\(engine\.file, args, \{ stdio: 'ignore'/)
+  assert.ok(!/shell:\s*true/.test(render), 'the browser is never started through a shell')
+  assert.ok(!/\bexecSync\b/.test(render), 'nothing here builds a command string')
+  assert.match(render, /--remote-debugging-port=0/)
+  assert.match(render, /MAP \* ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127\.0\.0\.1/)
   // The client's one egress is same-origin fetch of THIS plugin's routes.
   const client = readFileSync(path.join(pkgRoot, 'lib', 'client.js'), 'utf8')
   for (const match of client.matchAll(/fetch\(([^,)]+)/g)) {
-    assert.match(match[1], /(STATE_ROUTE|SCAN_ROUTE|ARTIFACTS_ROUTE|path)/, 'a client fetch names something that is not one of this plugin’s routes: ' + match[1])
+    assert.match(match[1], /(STATE_ROUTE|SCAN_ROUTE|ARTIFACTS_ROUTE|DIRECTION_ROUTE|RENDER_IMAGE_ROUTE|path)/, 'a client fetch names something that is not one of this plugin’s routes: ' + match[1])
   }
   // No telemetry vocabulary anywhere in the package.
-  for (const file of own) assert.ok(!/telemetry|analytics|DO_NOT_TRACK/i.test(readFileSync(file, 'utf8')), 'telemetry vocabulary in ' + path.basename(file))
+  for (const file of [...quiet, path.join(pkgRoot, 'lib', 'render.js')]) assert.ok(!/telemetry|analytics|DO_NOT_TRACK/i.test(readFileSync(file, 'utf8')), 'telemetry vocabulary in ' + path.basename(file))
 })
 
 check('package.json, the row marker and the install target agree', () => {
@@ -198,7 +214,7 @@ check('artifact validation accepts what the skill asks for and refuses what it d
 
 check('the row registers exactly the tools the skill tells the agent to call', () => {
   const names = buildTools({}).map((tool) => tool.name)
-  assert.deepEqual(names, ['fe_context', 'fe_detect', 'fe_direction', 'fe_artifact'])
+  assert.deepEqual(names, ['fe_context', 'fe_detect', 'fe_direction', 'fe_render', 'fe_artifact'])
   for (const name of names) {
     assert.ok(skillText.includes('`' + name + '`'), 'SKILL.md never names ' + name)
   }

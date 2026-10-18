@@ -2,7 +2,8 @@
 
 **Front-end design with a floor under it.** Impeccable's craft corpus and its
 61-rule detector, shipped whole inside this plugin: no `npx impeccable`, no engine
-download, no network call, no child process.
+download, no network call. The only process it starts is the Chrome or Edge the
+machine already has, and only when `fe_render` measures a page.
 
 Impeccable is a design skill for AI coding agents by Paul Bakaus, Apache-2.0,
 <https://github.com/pbakaus/impeccable>. This package vendors it at a pinned
@@ -16,14 +17,37 @@ so, below).
 | | |
 |---|---|
 | **skill** | `frontend-craft`: 24 commands (`init`, `document`, `critique`, `audit`, `polish`, `bolder`, `quieter`, `distill`, `harden`, `onboard`, `animate`, `colorize`, `typeset`, `layout`, `delight`, `overdrive`, `clarify`, `adapt`, `optimize`, `shape`, `extract`, `craft`, `live`, `generate`), the craft floor, the four visitor modes, and the iOS/Android platform references - 41 reference files copied from the pin |
-| **tools** | `fe_context` (product truth, design system, surface briefs, config, directives), `fe_detect` (the 61 rules over a file or folder), `fe_direction` (deal a direction hand from the directions the agent authored, deterministically; record the pick), `fe_artifact` (read/write + shape-validate `PRODUCT.md`, `DESIGN.md`, a surface brief) |
-| **tab** | **Frontend**: Findings (by file and rule, filters, re-scan), Artifacts (`PRODUCT.md`, `DESIGN.md`, the briefs, with their shape verdict) and Directions (the dealt hand, the assigned card, the pick recorded from the tab) |
-| **routes** | `GET /api/dsh-frontend-craft/state`, `POST .../scan`, `GET .../artifacts`, `GET .../rules`, `GET`/`POST .../direction` |
+| **tools** | `fe_context` (product truth, design system, surface briefs, config, directives), `fe_detect` (the 61 source rules over a file or folder), `fe_direction` (a deterministic hand from the directions the agent authored), `fe_render` (the page rendered in a throwaway headless browser, measured), `fe_artifact` (read/write + shape-validate `PRODUCT.md`, `DESIGN.md`, a surface brief) |
+| **tab** | **Frontend**: Findings (by file and rule, filters, re-scan), Artifacts (`PRODUCT.md`, `DESIGN.md`, the briefs, with their shape verdict), Directions (the dealt hand, the pick) and Preview (the rendered picture at each viewport, with the measured findings) |
+| **routes** | `GET /api/dsh-frontend-craft/state`, `POST .../scan`, `GET .../artifacts`, `GET .../rules`, `GET`/`POST .../direction`, `GET .../render-image` |
 
 The 61 rules split 31 `slop` / 30 `quality`: side-tab borders, gradient text,
 purple-blue palettes, cream palettes, nested cards, uniform spacing, bounce
 easing, pulsing dots, blinking cursors, overused fonts, flat type hierarchy,
 line length, cramped padding, small touch targets, skipped headings and more.
+
+## The measured rules (`fe_render`)
+
+Those 61 rules read SOURCE. `fe_render` renders the page - a workspace HTML file,
+or a loopback dev-server URL - in the machine's own headless Chrome or Edge, and
+measures what only pixels show. One launch serves every viewport; the profile is
+fresh and deleted afterwards; the page cannot reach the network (every name
+resolves to NOTFOUND except loopback), so a remote font fails and the answer says
+so.
+
+| rule | what it measures |
+|---|---|
+| `render-contrast` | each text leaf's WCAG ratio against its effective background (4.5:1, or 3:1 at 24px / bold 18.66px) |
+| `render-tap-target` | interactive elements under 24×24 CSS px (WCAG 2.2 minimum) |
+| `render-overflow` | the document wider than the viewport, and the elements past the edge |
+| `render-line-length` | paragraphs and list items past ~95 characters per line |
+| `render-small-type` | body text under 12px |
+| `render-heading-skip` | a heading level jumped (h1 then h3) |
+| `render-missing-alt` | an `<img>` with no alt attribute |
+
+They are named `render-*` and carry `measured: true`, so nobody mistakes them for
+the source engine's findings. Chrome/Edge is required for this half; without it the
+tool says so and the 61 source rules still run.
 
 ## Provenance, and what "vendored" means here
 
@@ -83,8 +107,9 @@ Everything else is upstream's words.
   this case. The direction contract and the finish review carry the ambition.
 
 - **No live mode.** `live`, `generate`, `build-phase` and the comp verbs need a
-  browser-driving dev-server harness. `fe_detect` is the explicit check instead
-  of an edit hook (the harness has no hook surface).
+  browser-driving variant/accept pipeline, which is a second product. What
+  `fe_render` does is narrower and still measurable: it renders one page and reads
+  its geometry and colours. It does not write changes back into a dev server.
 
 - **No telemetry, by construction.** There is no code path that could send any:
   the detector is local, and the tab talks only to this plugin's own routes.
@@ -103,7 +128,8 @@ The check proves: the vendored bytes match `VERSION.json`; the pin is 4.6.0 and
 the registry 61 rules; the skill has our frontmatter and all 24 commands; every
 engine verb the references name is translated or declared unavailable; no
 `.impeccable/` path or placeholder survived; the Apache licence and notices
-travel; the plugin's own code spawns no process and opens no socket; the tools it
+travel; the scan path spawns no process and no host file names a non-loopback URL;
+the one browser launch is argv-only, headless and offline; the tools it
 registers are exactly the ones the skill names; a dealt hand is reproducible from
 its seed; and the detector agrees finding-for-finding with the upstream CLI on
 six committed fixtures - including the linked-stylesheet case, which the raw wasm

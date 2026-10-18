@@ -14,6 +14,8 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { createHash, randomBytes } from 'node:crypto'
 import path from 'node:path'
 
+import { DEFAULT_VIEWPORTS, MAX_VIEWPORTS, renderSummary, renderTarget, targetToUrl } from './render.js'
+
 import { MAX_ARTIFACT_BYTES, directivesFor, readContext, validateDesign, validateProduct, validateSurface, PRODUCT_FILE, DESIGN_FILE, SURFACES_DIR } from './context.js'
 import { FrontendError, MAX_TOTAL_BYTES, collectSources, readSource, resolveTarget, sessionRoot } from './paths.js'
 import { PACKAGE_VERSION, RULE_COUNT, RULES, VERSION, applyIgnores, detectHtml, detectText, inlineStylesheets, ruleOf } from './vendor.js'
@@ -320,7 +322,66 @@ function dealText(deal) {
   return lines.join('\n')
 }
 
-/** The three tools. */
+/** The viewports a call asked for: `'1440x900'` strings or `{ width, height }`. */
+export function parseViewports(input) {
+  const raw = Array.isArray(input) && input.length > 0 ? input : DEFAULT_VIEWPORTS
+  const out = []
+  for (const entry of raw.slice(0, MAX_VIEWPORTS)) {
+    if (typeof entry === 'string') {
+      const match = /^(\d{2,5})\s*[x×]\s*(\d{2,5})$/i.exec(entry.trim())
+      if (!match) continue
+      const width = Number(match[1])
+      const height = Number(match[2])
+      if (width < 200 || height < 200) continue
+      out.push({ width, height, label: width < 600 ? 'phone' : width < 1000 ? 'tablet' : 'desktop' })
+      continue
+    }
+    if (entry && Number.isFinite(entry.width) && Number.isFinite(entry.height) && entry.width >= 200 && entry.height >= 200) {
+      out.push({ width: Math.floor(entry.width), height: Math.floor(entry.height), label: typeof entry.label === 'string' ? entry.label : Math.floor(entry.width) + 'px' })
+    }
+  }
+  return out.length > 0 ? out : DEFAULT_VIEWPORTS
+}
+
+/** Persist one render under `$DSH_HOME/dsh-frontend-craft/renders/<id>/`. */
+export function saveRender(deps, report) {
+  const id = randomBytes(8).toString('hex')
+  const dir = path.join(deps.root, 'renders', id)
+  mkdirSync(dir, { recursive: true })
+  for (const entry of report.viewports) {
+    writeFileSync(path.join(dir, 'page-' + String(entry.viewport.width) + '.png'), entry.png)
+  }
+  const summary = {
+    id,
+    at: Date.now(),
+    url: report.target.url,
+    engine: report.engine,
+    timingMs: report.timingMs,
+    errors: report.errors,
+    viewports: report.viewports.map((entry) => ({
+      width: entry.viewport.width,
+      height: entry.viewport.height,
+      label: entry.viewport.label,
+      bytes: entry.png.length,
+      size: entry.size,
+      findings: entry.findings,
+      numbers: entry.measurements
+        ? {
+            viewport: entry.measurements.viewport,
+            document: entry.measurements.document,
+            targets: entry.measurements.targets.length,
+            smallTargets: entry.measurements.targets.filter((target) => target.w < 24 || target.h < 24).length,
+            contrastPairs: entry.measurements.colors.length,
+            headings: entry.measurements.headings.length,
+          }
+        : null,
+    })),
+  }
+  writeFileSync(path.join(dir, 'report.json'), JSON.stringify(summary, null, 2), 'utf8')
+  return summary
+}
+
+/** The tools: context, detect, direction, render, artifact. */
 export function buildTools(deps) {  const contextTool = {
     name: 'fe_context',
     description: [
@@ -529,6 +590,53 @@ export function buildTools(deps) {  const contextTool = {
     },
   }
 
+  const renderTool = {
+    name: 'fe_render',
+    description: [
+      'Render the page the workspace actually produces and MEASURE it, because the 61 source rules cannot see a rendered page: a local HTML file or a loopback dev-server URL is rendered in a throwaway headless Chrome/Edge at the sizes you ask for, and comes back with a PNG plus findings for the things only pixels show - WCAG contrast pairs, touch targets under 24px, horizontal overflow, line length, body text under 12px, a skipped heading level, an image with no alt.',
+      'The page cannot reach the network: every name resolves to NOTFOUND except loopback, so a remote font or CDN script fails and the answer says what could not be read. One browser launch serves every viewport; the profile is throwaway and the process is killed at the end.',
+      'The findings are the MEASURED rules (ids starting `render-`), separate from the vendored source rules `fe_detect` reports. Neither judges the design: look at the picture, at the sizes the thing ships at, and read the craft floor.',
+    ].join('\n'),
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['target'],
+      properties: {
+        target: { type: 'string', description: 'An HTML file inside the workspace (relative or absolute), or a LOOPBACK url such as http://127.0.0.1:5173/ for a dev server. Public URLs are refused.' },
+        viewports: { type: 'array', items: { type: 'string' }, description: "Sizes to render at, e.g. [\"390x844\",\"1440x900\"]. Default: 1440x900 and 390x844. At most 4." },
+        fullPage: { type: 'boolean', description: 'Capture the whole document instead of the first viewport (default false: the first viewport is what a visitor judges).' },
+      },
+    },
+    output: {
+      schema: { type: 'object', properties: { text: { type: 'string' }, view: { type: 'object', additionalProperties: true } }, required: ['text', 'view'] },
+      render: (_args, value) => [{ type: 'text', text: value.text }],
+      presentationMeta: (_args, value) => value.view,
+    },
+    presentCall: (args) => ({ card: 'generic', title: 'Render ' + String((args && args.target) ?? ''), kind: 'other' }),
+    presentResult: (_args, result) => ({ card: 'generic', title: 'Rendered and measured', content: result && result.text ? result.text : '' }),
+    async execute(args, exec) {
+      const session = sessionOf(exec)
+      try {
+        const root = await sessionRoot(deps.ctx, session)
+        const resolved = targetToUrl(args && args.target, root)
+        if (resolved.ok !== true) return { text: resolved.message, view: { kind: 'frontend-render', ok: false, code: 'BAD_TARGET', message: resolved.message } }
+        const report = await renderTarget({ target: resolved, viewports: parseViewports(args.viewports), fullPage: args.fullPage === true })
+        if (report.ok !== true) {
+          return {
+            text: report.code === 'NO_ENGINE' ? report.message : renderSummary(report),
+            view: { kind: 'frontend-render', ok: false, code: report.code ?? 'RENDER_FAILED', message: report.message, engine: report.engine ?? null, errors: report.errors ?? [] },
+          }
+        }
+        const summary = saveRender(deps, report)
+        deps.rememberRender(session, summary)
+        return { text: renderSummary(report), view: { kind: 'frontend-render', ok: true, ...summary } }
+      } catch (err) {
+        const message = err instanceof FrontendError || (err && err.message) ? String(err.message) : String(err)
+        return { text: message, view: { kind: 'frontend-render', ok: false, code: 'RENDER_FAILED', message } }
+      }
+    },
+  }
+
   const artifactTool = {
     name: 'fe_artifact',
     description: [
@@ -604,7 +712,7 @@ export function buildTools(deps) {  const contextTool = {
     },
   }
 
-  return [contextTool, detectTool, directionTool, artifactTool]
+  return [contextTool, detectTool, directionTool, renderTool, artifactTool]
 }
 
 function readBounded(file) {

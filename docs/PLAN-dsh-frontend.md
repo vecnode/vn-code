@@ -87,17 +87,17 @@ The design decisions worth keeping:
 
 ## What remains before this is "whole" and merges to main
 
-| # | gap | why it matters | shape |
-|---|---|---|---|
-| A | **Directions view in the tab** | `fe_direction` writes to a tool result; the person picks in chat today. Upstream's whole point is a decision page. | a third view: cards from the last deal, the pick recorded through `POST .../direction`, the harness question tool as the fallback |
-| B | **`fe_render`** | the detector cannot see the rendered page, which is the one thing upstream's live/CDP path measures. `audit` and `polish` are weaker without it. | loopback-only CDP engine (screenshot + computed styles + contrast/tap targets/overflow). `dsh-browser` is https-only **and currently disabled**, so this is either a small loopback twin of its `cdp.js`/`engine.js` or a generalisation of that package into a shared engine plus two surfaces - decide at the spike |
-| C | **Live mode** (`live`, `generate`) | variant iteration in the browser | only if B earns it; it needs the dev-server wrap/accept state machine, which is a second product |
-| D | **Upstream re-sync policy** | the pin moves (4.6.0 today) | one review per quarter: bump `PIN` in `vendor/impeccable/build.mjs`, run corpus + engine builds, read the diff, run the two checks |
-| E | **Direction deck** | the catalog's outside view is the real loss | optional: author a small local deck of direction archetypes (our own editorial content) and let `fe_direction` deal from it as challengers |
+| # | item | state |
+|---|---|---|
+| A | **Directions view in the tab** | **shipped**: `GET`/`POST .../direction`, cards with the assigned lead, the standing exit and the re-roll, and the pick is what `fe_direction status` reports |
+| B | **`fe_render`** | **shipped**: the machine's own headless Chrome/Edge, argv-only, throwaway profile, every name NOTFOUND but loopback; one launch per call; seven measured rules (`render-contrast`, `render-tap-target`, `render-overflow`, `render-line-length`, `render-small-type`, `render-heading-skip`, `render-missing-alt`); the PNG and its report under `$DSH_HOME/dsh-frontend-craft/renders/<id>/`, drawn in the tab's Preview. Measured: 489 ms and 10 findings on a deliberately bad page at 800×600 |
+| C | **Live mode** (`live`, `generate`) | not built, and a separate product: variants written back through a dev server. `fe_render` measures one render; it never edits. |
+| D | **Upstream re-sync policy** | one review per quarter: bump `PIN` in `vendor/impeccable/build.mjs`, run the corpus and engine builds, read the diff, run the two checks |
+| E | **Direction deck** | optional: author a small local deck of direction archetypes (our own editorial content) so the roll can deal challengers the agent did not write |
 
-Phase A and B are what make the tab and the audit credible; C is a separate
-product and can wait. Nothing here needs a network call or an install, which is
-the constraint the whole design is built around.
+What is left is C and the optional E. The line this branch will not cross is the
+one that makes the plugin stop being a plugin: no install, no download, no socket,
+no command string, and no second product smuggled in under "live".
 
 ## The rules the plan would not trade
 
