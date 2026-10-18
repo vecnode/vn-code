@@ -158,12 +158,18 @@ jobs:
           "$BIN" -Help > /dev/null
           # `-Mode embed` is the flag the deleted web view used to answer. It must fail by
           # name, not be silently ignored - that is what "no web view" means.
-          if "$BIN" -Mode embed 2>&1 | grep -q "unknown flag"; then
-            echo "the deleted mode is refused by name"
-          else
-            echo "::error::-Mode embed was accepted, or refused without naming it"
-            exit 1
-          fi
+          #
+          # Captured first, then matched. These steps run with `-o pipefail`, where
+          # `vncode ... | grep -q` reports the BINARY's exit 1 and turns a correct refusal
+          # into a failed pipeline - measured on the first run of this workflow.
+          OUT=$("$BIN" -Mode embed 2>&1 || true)
+          case "$OUT" in
+            *"unknown flag"*) echo "the deleted mode is refused by name" ;;
+            *)
+              echo "::error::-Mode embed was accepted, or refused without naming it"
+              exit 1
+              ;;
+          esac
 
   secrets:
     name: No secrets
