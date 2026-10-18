@@ -1,6 +1,6 @@
 [package]
 name = "vn-shell-core"
-description = "The vncode shell's pure half: the ready line, the window record, the key layers, the payload container, the launch decision."
+description = "The vncode shell's pure half: the home ladders, the key layers, the ready line, the pin and the flags."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,5 +9,3 @@ rust-version.workspace = true
 
 [dependencies]
 serde_json.workspace = true
-flate2.workspace = true
-url.workspace = true

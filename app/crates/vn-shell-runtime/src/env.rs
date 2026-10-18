@@ -115,6 +115,28 @@ impl ChildEnv {
         }
         parts.join(" · ")
     }
+
+    /// The same composition, as a console SENTENCE rather than an inspector row.
+    ///
+    /// `PATH` is left out on purpose: the inherited path on an ordinary machine is a
+    /// thousand characters of somebody else's installers, and printing it on every run
+    /// buries the four variables this app actually decided. `status` prints the whole line
+    /// for anyone who wants it.
+    pub fn summary(&self) -> String {
+        let mut parts: Vec<String> = self
+            .pairs
+            .iter()
+            .filter(|(name, _)| !name.eq_ignore_ascii_case("PATH"))
+            .map(|(name, value)| {
+                format!("{}={}", name.to_string_lossy(), value.to_string_lossy())
+            })
+            .collect();
+        if self.pairs.iter().any(|(name, _)| name.eq_ignore_ascii_case("PATH")) {
+            parts.push("PATH=composed".to_string());
+        }
+        parts.push(format!("{} console markers removed", self.removed.len()));
+        parts.join(" · ")
+    }
 }
 
 /// Everything the composer needs, as plain values - so the composition is a `cargo

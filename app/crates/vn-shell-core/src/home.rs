@@ -457,6 +457,11 @@ pub fn resolve_with(
 
 /// The inputs both resolvers are built from, so the root ladder alone and the whole
 /// resolution see one environment.
+///
+/// Nine of them and not a struct, because this is the ONE place the environment is read
+/// and grouping it would only move the same nine fields one call up. The count is the
+/// shape of the environment, not a design smell.
+#[allow(clippy::too_many_arguments)]
 fn inputs_from_env<'a>(
     named_root: Option<&'a str>,
     flag: Option<&'a str>,

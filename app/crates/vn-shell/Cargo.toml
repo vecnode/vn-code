@@ -1,30 +1,21 @@
 [package]
 name = "vn-shell"
-description = "The vncode shell binary: the control panel that starts, watches and stops the pinned harness."
+description = "The vncode binary: the front door that installs the pack, takes the key and runs the web launcher."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 rust-version.workspace = true
-# The distribution ships `vncode.exe`, `scripts/run-desktop.bat` looks for
-# `vncode.exe`, and the single-file build unpacks a folder whose START-HERE starts
-# `vncode`. ONE name, and it is not the crate's.
+# The distribution ships `vncode`, and every launcher and doc looks for that name.
+# ONE name, and it is not the crate's.
 [[bin]]
 name = "vncode"
 path = "src/main.rs"
 
 [features]
 default = []
-# The pane, forwarded from the panel: `cargo build --release --features pane` is how
-# somebody sees the harness inside this window before the default is flipped. OFF by
-# default so a plain `cargo build --release` - which is exactly what
-# `scripts\run-desktop.bat` runs - produces the binary it produced before the pane existed.
-pane = ["vn-shell-egui/pane"]
 
 [dependencies]
 vn-shell-core.workspace = true
 vn-shell-runtime.workspace = true
-vn-shell-egui.workspace = true
-vn-shell-paths.workspace = true
-eframe.workspace = true
-url.workspace = true
+rpassword.workspace = true

@@ -75,10 +75,8 @@ pub fn resolve(typed: &str, cwd: Option<&Path>, user_home: Option<&Path>) -> Res
 pub fn expand_home(typed: &str, user_home: Option<&Path>) -> Result<PathBuf, String> {
     let rest = if typed == "~" {
         Some("")
-    } else if let Some(rest) = typed.strip_prefix("~/").or_else(|| typed.strip_prefix("~\\")) {
-        Some(rest)
     } else {
-        None
+        typed.strip_prefix("~/").or_else(|| typed.strip_prefix("~\\"))
     };
     match rest {
         Some("") => user_home

@@ -34,6 +34,7 @@ rem  building inside a distribution would demand a Rust toolchain from
 rem  somebody who was only ever asked to click a file.
 rem
 rem  Flags (forwarded to the shell; the same set as scripts/run-web.bat):
+rem    <command>          start (the default), install, uninstall, status or key
 rem    -Port <n>          listen on this port instead of a free one
 rem    -DshHome <dir>     override DSH_HOME (default: $DSH_HOME, else ~/.dsh)
 rem    -DshVersion <ver>  override the pinned dsh version from .dsh-version.json
@@ -74,18 +75,18 @@ if /I "%VN_FIRST%"=="-h" goto :help
 if /I "%VN_FIRST%"=="/?" goto :help
 
 rem --- the launcher's own flags must not reach the shell ---------------------
-rem The Rust shell takes -Port/-DshHome/-DshVersion and nothing else: an unknown
-rem flag exits 1 with the flag named (deliberately, so a typo is never ignored).
-rem These three are ours, so they are removed before the hand-over.
+rem The Rust shell takes -Port/-DshHome/-DshVersion/-Mode and nothing else: an
+rem unknown flag exits 1 with the flag named (deliberately, so a typo is never
+rem ignored). These are ours, so they are removed before the hand-over.
 set "VN_SHELL_ARGS=%VNCODE_ARGS%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoPause=%"
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoTerminal=%"
 set "VN_NOBUILD="
 if not "%VNCODE_ARGS:-NoBuild=%"=="%VNCODE_ARGS%" set "VN_NOBUILD=1"
-if not defined VN_NOBUILD goto :haverbuild
+if not defined VN_NOBUILD goto :whichartefact
 set "VN_SHELL_ARGS=%VN_SHELL_ARGS:-NoBuild=%"
 
-:haverbuild
+:whichartefact
 rem --- which artefact runs ---------------------------------------------------
 set "VN_BUILT=%~dp0..\vncode.exe"
 if exist "%VN_BUILT%" goto :run
@@ -124,7 +125,7 @@ if errorlevel 1 (
 )
 
 echo [vncode] Building app in the folder above ^(cargo does nothing when it is current^)...
-cargo build --release --manifest-path "%VN_MANIFEST%"
+cargo build --release -p vn-shell --manifest-path "%VN_MANIFEST%"
 if errorlevel 1 goto :buildfailed
 
 :afterbuild
@@ -148,29 +149,40 @@ exit /b %VN_EXIT%
 
 :help
 echo.
-echo Usage: scripts\run-desktop.bat [flags]
+echo Usage: scripts\run-desktop.bat [command] [flags]
 echo.
-echo   -Port ^<n^>          listen on this port instead of a free one
+echo   start              install the pack if this home lacks it, ask for the key if
+echo                      there is none, then start the harness and open it (the
+echo                      default when no command is given)
+echo   install            run scripts\setup\install.* against the home in use
+echo   uninstall          run scripts\setup\uninstall.* against it
+echo   status             print the pin, the home, the pack, the key and the launcher
+echo   key                ask for the DeepSeek key and write it into ^<home^>\.env
+echo.
+echo   -Port ^<n^>          hand this port to the web launcher
 echo   -DshHome ^<dir^>     use this harness home (default: the one the app chose;
 echo                      a leading ~ is expanded here)
 echo   -DshVersion ^<ver^>  override the pinned dsh version from .dsh-version.json
-echo   -Mode ^<mode^>       chrome (the harness UI in a browser - the default),
-echo                      panel (open idle and start nothing) or headless (no window)
 echo   -NoBuild           never run cargo; use the binary already built
 echo   -NoPause           never hold this window open
 echo   -NoTerminal        stay in this console; do not relaunch
 echo   -Help              print this help
+echo   -Version           print the version
 echo.
-echo Runs the harness from the pinned dsh version in a native window instead of
-echo a Chrome tab - same pin, same profile and same flags as scripts\run-web.bat.
+echo vncode is a front door, not a second harness: it decides the root, the key and
+echo the pack, and then runs scripts\run-web.bat - the same file you would
+echo double-click - in this console, same pin, same profile, same flags. There is
+echo no window and no embedded web view: the interface is a web application and it
+echo opens in the browser the launcher found (Google Chrome first).
 echo.
-echo From a distribution folder it runs the vncode.exe in the folder above
-echo this one and needs nothing installed. From a source checkout it builds
-echo app there with cargo first, which needs the Rust toolchain and
-echo Node.js 22 or newer.
+echo Launching only the web needs none of this: scripts\run-web.bat works on its
+echo own, and so does every script under scripts\setup.
 echo.
-echo macOS and Linux: the same shell builds with "cargo build --release" in
-echo app and runs beside ./scripts/run-web.sh, the browser launcher.
+echo This launcher builds the shell when there is none. From a source checkout that
+echo needs the Rust toolchain (https://rustup.rs) and Node.js 22 or newer; from a
+echo folder that carries a built vncode.exe it needs nothing.
+echo.
+echo macOS and Linux use ./scripts/run-desktop.sh, which does the same thing.
 echo.
 if "%VNCODE_PAUSE%"=="1" pause
 exit /b 0

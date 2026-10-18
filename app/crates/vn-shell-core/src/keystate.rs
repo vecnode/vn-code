@@ -146,9 +146,7 @@ pub fn read(home: Option<&Path>) -> KeyState {
 pub fn console_line(state: &KeyState) -> String {
     match state.source() {
         Some(source) => format!("[vncode] DeepSeek key: loaded from {}", source.label()),
-        None => format!(
-            "[vncode] DeepSeek key: not found (checked the environment, the credentials file and .env) - add one in Settings > Models"
-        ),
+        None => "[vncode] DeepSeek key: not found (checked the environment, the credentials file and .env) - add one in Settings > Models".to_string(),
     }
 }
 

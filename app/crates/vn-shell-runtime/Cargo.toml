@@ -1,6 +1,6 @@
 [package]
 name = "vn-shell-runtime"
-description = "The vncode shell's supervisor: start the pinned harness, watch its ready line, stop the whole tree and prove the port came free."
+description = "The vncode shell's decided facts: the plan, the child environment and the runner behind the install and uninstall verbs."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,30 +9,4 @@ rust-version.workspace = true
 
 [dependencies]
 vn-shell-core.workspace = true
-# For the location map `view` builds: the rows the panel draws and the binary logs
-# follow the home, so the crate that owns the home choice owns their construction.
-vn-shell-paths.workspace = true
-url.workspace = true
 serde_json.workspace = true
-
-[target.'cfg(unix)'.dependencies]
-# ONE call: `kill(-pgid, …)`, so Stop can take down the whole process group the
-# child was given. Without it the POSIX half would have to shell out to `kill`,
-# which is not on every PATH, or leave the tree to leak - which is what the old
-# shell did.
-libc = "0.2"
-
-[target.'cfg(windows)'.dependencies]
-# Windows only, for ONE call: a Job Object with KILL_ON_JOB_CLOSE, so the harness
-# dies with this shell even when the shell is killed outright rather than closed.
-# Three features, each for a real reason: Win32_Security gates
-# `CreateJobObjectW` (it takes a SECURITY_ATTRIBUTES pointer),
-# Win32_System_JobObjects is the module itself, and Win32_System_Threading gates
-# `JOBOBJECT_EXTENDED_LIMIT_INFORMATION`, which embeds that module's
-# IO_COUNTERS.
-windows-sys = { version = "0.61", features = [
-    "Win32_Foundation",
-    "Win32_Security",
-    "Win32_System_JobObjects",
-    "Win32_System_Threading",
-] }

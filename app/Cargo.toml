@@ -3,17 +3,14 @@ resolver = "2"
 members = [
     "crates/vn-shell-core",
     "crates/vn-shell-runtime",
-    "crates/vn-shell-paths",
-    "crates/vn-shell-egui",
-    "crates/vn-shell-pane",
     "crates/vn-shell",
 ]
 
 # One pin per dependency, so the shell cannot end up with two of anything. The
-# binary is `vncode.exe` because that is the name the distribution ships, the
-# launcher looks for and the built shell is named: the distribution is this app.
+# binary is `vncode` because that is the name the distribution ships and the
+# launcher looks for.
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 publish = false
@@ -22,45 +19,26 @@ rust-version = "1.95"
 [workspace.dependencies]
 vn-shell-core = { path = "crates/vn-shell-core" }
 vn-shell-runtime = { path = "crates/vn-shell-runtime" }
-vn-shell-paths = { path = "crates/vn-shell-paths" }
-vn-shell-egui = { path = "crates/vn-shell-egui" }
-vn-shell-pane = { path = "crates/vn-shell-pane" }
 
 serde_json = "1"
-flate2 = "1"
-url = "2"
 
-# The ONE web engine in this workspace, and it is optional: only `vn-shell-pane`'s `pane`
-# feature turns it on, and the default build compiles none of it. Nothing is vendored -
-# `wry` drives the engine the OS already has (WebView2 / WKWebView / WebKitGTK), and it
-# takes any `HasWindowHandle`, so the window stays eframe's: `tao` is a dev-dependency of
-# wry's own examples, not a requirement.
-#
-# 0.57 rather than 0.55, and the reason is a SECURITY SEAM rather than a feature: the
-# permission handler exists only from 0.57. In the 0.55.1 source the string "permission"
-# appears twice - once in the Windows backend, where it ALLOWS clipboard reads and lets
-# every other kind fall through to the engine's own default, and once in the macOS
-# delegate, where it GRANTS media capture outright. A pane whose rule is "deny everything
-# the harness does not need" cannot be built on a version a page can ask for a camera
-# through.
-wry = "0.57"
+# The ONE dependency this app has that is not `std` plus JSON, and it is about a secret:
+# the DeepSeek key is typed at a terminal, so the terminal must not echo it. ~10 KB, three
+# platforms, no transitive tree.
+rpassword = "7"
 
-# The window and the panel. `0.36` is the line this shell is pinned to: Rust 1.95,
-# edition 2024, wgpu as the DEFAULT renderer (through 0.33 it was glow) and
-# accesskit as a default feature, so the panel is exposed to a screen reader on
-# all three platforms.
-eframe = { version = "0.36", default-features = false, features = [
-    "accesskit",
-    "default_fonts",
-    "wgpu",
-    "wayland",
-    "x11",
-] }
-egui = "0.36"
+# THERE IS NO WEB ENGINE IN THIS WORKSPACE, and no GUI toolkit either - as a rule rather
+# than a default. `wry` (WebView2 / WKWebView / WebKitGTK), `egui`, `eframe` and `wgpu`
+# left with the window they drew: they were 13 of this binary's 15 MB. The page is the
+# harness's, it is served on loopback, and the browser that shows it is started by
+# `scripts/run-web.*`.
 
 [profile.release]
-# What the shipped binary is built with. Symbols off and one codegen unit is the
-# ordinary release shape; `lto = "thin"` is the one that pays for itself in a
-# binary that links a GPU stack.
+# What the shipped binary is built with - and the settings are a size decision, measured.
+# `strip` removes what nothing reads; `lto = "thin"` pays for itself by removing duplicate
+# generic instantiations across crates; `panic = "abort"` drops the unwinding tables a
+# console app never uses. `codegen-units = 1` is what makes LTO able to see everything.
 lto = "thin"
 strip = "symbols"
+panic = "abort"
+codegen-units = 1
