@@ -1,8 +1,8 @@
 # Where vncode keeps things
 
-Two roots, and the second one lives inside the first - and **one** of the first: the
-window record, `prefs.json`, the npm cache and the home all live under the single root
-the ladder chose, so a root that cannot be written never splits the app's memory in two.
+Two roots, and the second one lives inside the first - and **one** of the first: the npm
+cache and the home both live under the single root the ladder chose, so a root that cannot
+be written never splits the app's memory in two.
 
 ## `$VNCODE_HOME` — the app's own root
 
@@ -13,30 +13,24 @@ controls:
 
 ```text
 $VNCODE_HOME                     portable: <tree>\.vncode
-  ├── window.json                default: %LOCALAPPDATA%\vncode
-  ├── prefs.json                 the browser id and the home you chose
   ├── npm-cache/                 the npx fallback's cache - and nothing else's
-  ├── browser/                   a Chromium THIS app starts, when its own profile is refused
-  ├── webview/                   the pane's engine profile, in a build that has the pane
   └── home/                      DSH_HOME by default: everything that matters
       ├── profiles/  sessions/  storages/  attachments/  skills/
       ├── .credentials.yaml      the model key
+      ├── .env                   DEEPSEEK_API_KEY, when `vncode key` wrote one
       └── dsh-pdf/  dsh-diagrams/  dsh-media/   the pack's caches
 ```
 
-`browser/` and `webview/` are the two directories the app writes for **programs it starts**,
-and they live under this root for the same reason the npm cache does: a session that refuses
-the machine's own data directory does not refuse this one, so a browser or an engine that
-cannot keep its profile where it normally would can keep it here. They are kept **apart** on
-purpose - a Chromium profile and a WebView2 profile in one directory is a way to lose both -
-and neither is a cache: deleting one costs the browser its history, not the app any state.
+The app writes **nothing else** here. It starts no browser and no engine, so there is no
+profile for either: the page opens in the person's own browser, under their own profile,
+exactly as `scripts\run-web.bat` does when it is run by hand.
 
 The root ladder, in order, each rung proved by writing:
 
 | # | candidate | when it is used |
 |---|---|---|
 | 1 | `VNCODE_HOME` | the environment named it |
-| 2 | **`<tree>/.vncode`** | this folder is a **portable installation**: it carries the marker (`PORTABLE`, written by `Keep everything in this folder` in the panel's `Details`), **or** it already holds a home - the app has put this person's sessions there, and preferring the platform directory now would start a second installation beside them |
+| 2 | **`<tree>/.vncode`** | this folder is a **portable installation**: it carries the marker (`PORTABLE` - an empty file, written by hand or by an older build's `Keep everything in this folder`), **or** it already holds a home - the app has put this person's sessions there, and preferring the platform directory now would start a second installation beside them |
 | 3 | platform data root + `vncode` | the default |
 | 4 | `<tree>/.vncode` | the last resort, where even the data root cannot be written (a workspace-scoped confinement, which is what this repository's own checks run inside). It is gitignored |
 
@@ -64,9 +58,9 @@ an npm cache that can hold registry credentials); a directory it merely JOINED i
 touched, which is why the write probe reports whether it created it.
 
 **Why the furniture is outside the home.** `-DshHome` may point the harness home at
-`~/.dsh`, or at a folder shared with `scripts\run-web.bat`, and this app's own records
+`~/.dsh`, or at a folder shared with `scripts\run-web.bat`, and this app's own npm cache
 must survive that - the argument [app/crates/vn-shell-core/src/appdata.rs](../app/crates/vn-shell-core/src/appdata.rs)
-records for the npm cache, applied to the window record too.
+records for the cache, and it is the only thing left beside the home.
 
 ## `$DSH_HOME` — the harness home
 
@@ -77,11 +71,11 @@ its own ladder decides which folder that is:
 | # | candidate | when it is used |
 |---|---|---|
 | 1 | `-DshHome <dir>` | the person named it. **A refusal here ends the run** — an explicit instruction is never silently ignored |
-| 2 | the home chosen in the panel (`prefs.json`) | a click outranks an environment variable; if it has moved or gone, the ladder continues and says so |
+| 2 | a home remembered by an older build (`prefs.json`) | it outranks an environment variable; if it has moved or gone, the ladder continues and says so. Nothing writes this file any more - the app has no chooser - so the rung exists to honour a choice somebody already made |
 | 3 | an inherited `DSH_HOME` | it is writable: the app JOINS the home of the session that started it, sharing its sessions and its key |
 | 4 | `<VNCODE_HOME>/home` | **the default**, created and proved by the app |
 A candidate is used only after a real write probe, and every refused candidate is
-named in the log and in the panel — see `docs/PLAN-egui-shell.md` §2.
+named in the log and by `vncode status`.
 
 **Nothing outside the app's own root is ever the home it runs against.** The harness's own
 default (`~/.dsh`) was once row 4 here — a one-time courtesy, used while the app's own home

@@ -1,15 +1,15 @@
 # Compatibility
 
 The pack targets the harness line DeepSeek ships to the raw web install
-(`npx @deepseek-ai/dsh web`). DSH Desktop is not supported: `app/` plus
-`scripts/run-desktop.bat` is a launcher of that same pinned `dsh web` (a launcher,
-not a second edition - it installs nothing and writes no profile file). It is a
-Rust/**egui** control panel that opens idle, starts the harness when you press
-Start and ends the whole instance when you press Stop; the harness UI itself is
-the same page a browser tab shows, opened in the browser the app found on the
-machine (Chrome first, every other browser reachable, the OS opener as the floor) -
-or, in a build made with `--features pane`, inside the app's own window, which is
-[M5 of the plan](PLAN-egui-shell.md) and opt-in.
+(`npx @deepseek-ai/dsh web`). DSH Desktop is not supported: `app/` is a **front door**
+to that same pinned `dsh web` (it installs nothing on its own and writes no profile
+file - it runs `scripts/run-web.*`, the launcher a person would run). It is a small
+Rust console program with no window and no web view: it decides the root and the
+harness home, takes the key, installs the pack with the same entry point a person
+clicks, and then hands over to the launcher, which owns the harness, the ready line
+and the browser tab (Chrome first, every other browser reachable, the OS opener as
+the floor). There is no embedded browser and therefore no per-OS web-engine
+requirement: `wry` and its three engines left with the window.
 
 ## Current pin
 
@@ -19,6 +19,7 @@ or, in a build made with `--features pane`, inside the app's own window, which i
 | Forked from | the same `0.2.0-rc.2` line (`.dsh-version.json`'s `vendoredFrom`) |
 | Install target | the web profile only (`$DSH_HOME/profiles/web`; `$DSH_HOME` defaults to `~/.dsh`) |
 | Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell plus Node.js 22+ with npm/npx - never PowerShell) |
+| The app | one Rust binary per OS, no system library, no runtime to install; CI builds and checks it on all three |
 | Plugin code | plain JavaScript and OS-neutral; the only per-OS code is a launcher choosing the host command |
 
 ## What the pack ships, per bundle

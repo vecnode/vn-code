@@ -22,36 +22,33 @@ Cross-platform IDE/ADE. Wraps core [DSH](https://www.deepseek.com/harness/en/) w
 
 | | Windows | macOS / Linux |
 |---|---|---|
-| **Native window** | `scripts\run-desktop.bat` | `cargo build --release` in `app` |
-| **Browser tab** | `scripts\run-web.bat` | `./scripts/run-web.sh` |
+| **The app** | `scripts\run-desktop.bat` | `./scripts/run-desktop.sh` |
+| **Browser tab only** | `scripts\run-web.bat` | `./scripts/run-web.sh` |
 
-Both start the pinned harness and hand the URL it prints to a surface: `run-web` opens
-it in Chrome, falling back to your default browser, and the native window does the same
-unless it was built **with the pane**, in which case it draws the harness inside its own
-window and starts no browser at all. The URL is opened only when it names a **loopback**
-address, and the launch token is never written to a file - both rules are in
-[SECURITY.md](SECURITY.md).
+`run-web` starts the pinned harness and opens the URL it prints in Chrome, falling back to
+your default browser. `run-desktop` builds `vncode` when there is none and runs it: it
+installs the pack if the home in use lacks it, asks for the DeepSeek key if there is none,
+and then runs that same `run-web` in the foreground.
 
-The native window is a Rust **egui** shell: a small control panel that opens first and
-starts nothing, shows where everything lives, starts the pinned harness on **Start** (the
-same launch path `run-web` uses), shows it in a browser it found or - with the pane - in a
-`harness` tab of its own window, and ends the whole instance again on **Stop**. The plan it
-was built from is [`docs/PLAN-egui-shell.md`](docs/PLAN-egui-shell.md), including the
-**egui 0.36.2** line the badge above pins.
-
-### Testing the compiled release, with the harness drawn inside the window
+`vncode` is a small Rust binary - about **0.5 MB per OS** - with **no window and no embedded
+browser**: the interface is the same web application, in the browser you already use. Its
+verbs are `start` (the default), `install`, `uninstall`, `status` and `key`; `-Help` lists
+the flags, and [`app/README.md`](app/README.md) is the whole app on one page.
 
 ```sh
 cd app
-cargo build --release -p vn-shell --features pane
-.\target\release\vncode.exe        # macOS / Linux: ./target/release/vncode
+cargo build --release --locked          # -> app/target/release/vncode (~0.5 MB)
+./target/release/vncode status          # the pin, the home, the pack, the key, the launcher
+./target/release/vncode                 # install if needed, key if needed, then run-web
+./target/release/vncode key             # write DEEPSEEK_API_KEY into <home>/.env
+./target/release/vncode -Help           # every verb and flag
 ```
 
-Press **Start**, then click the **harness** tab. The pane is **opt-in**: a plain
-`cargo build --release` compiles no engine at all - which is exactly what
-`scripts\run-desktop.bat` runs - and `scripts/checks/check-pane.mjs` is what proves the
-two builds disagree.
+`vncode` never runs node itself: it starts `scripts/run-web.*`, which does. Nothing it does
+needs a window, a port or a browser of its own.
 
+The URL is opened only when it names a **loopback** address, and the launch token is never
+written to a file - both rules are in [SECURITY.md](SECURITY.md).
 
 ## Plugins
 

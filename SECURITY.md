@@ -141,30 +141,22 @@ Four hardening rules travel with those paths, and each is a `cargo test` case:
    `rundll32.exe url.dll,FileProtocolHandler`, which is a program rather than a shell;
    `explorer.exe` was dropped because it silently did nothing from a child. The
    Chrome-first table's last rung is the platform's own opener, so "a browser this build
-   has never heard of" is still the OS's business rather than a refusal. **`Open tab` is
-   the one control that hands the token to a browser**, on demand and in memory: the
-   panel's address row draws the URL with its query stripped, and the log redacts
-   `token=` on the way in.
+   has never heard of" is still the OS's business rather than a refusal. **The launcher is
+   the only process that ever hands the token to a browser** — once, in memory, as one argv
+   element, after the ready line has been checked. The app never holds it: `vncode` starts
+   the launcher and waits for its exit code.
 
-**Adopt** is the one thing that reads such a home: it copies `skills/`, `sessions/`,
-`storages/` and `attachments/` into the home the app proved it can write, never the
-caches (`dsh-pdf` 512 MiB, `dsh-diagrams` 200 MiB, `dsh-media` up to 8 GiB — all
-reproducible), never the composed `profiles/`, never over a file that already exists,
-and never through a symlink it would have to follow. The credentials file is a
-**separate click** and a **byte-for-byte copy**: its value is never parsed, never held
-in a `KeyState`, never drawn — the presence-only rule above is exactly as it was, and the
-*offer* is decided by the file's SIZE (has the source's got content, is the target's
-absent or empty) rather than by reading it. **Use it** takes the other approach: it points
-the app at the existing home rather than copying it, which hands that home's keys to a
-process this app starts — the same trust the `scripts\run-web.bat` path already extends.
+**No home is ever read to borrow a key, and nothing is copied out of one.** The first-run
+COPY and the "use the existing home" rung left with the panel that offered them: a home
+outside this app's own root is now nothing more than the harness's own default that the
+launcher falls back to. What replaced them is one prompt.
 
-**A key never has to come from the machine at all.** The panel's key field asks for it
-instead: a fresh **portable** home (everything inside `<repo>\.vncode`) starts with no
-credentials document and no key, so the panel opens the field once, the person pastes, and
-`keystate::write_env_key` puts `DEEPSEEK_API_KEY=<value>` into `<home>/.env`. That is a
-layer the harness's own resolution reads, it needs no machine credentials, and it keeps
-the secret inside the folder — which is the point of a portable installation. Nothing is
-read on the way: the field is one-way, and the only thing the panel learns afterwards is
+**A key never has to come from the machine at all.** `vncode key` asks for it at the
+terminal — hidden input, no echo — and `keystate::write_env_key` puts
+`DEEPSEEK_API_KEY=<value>` into `<home>/.env` (`0600` on POSIX, atomic). That is a layer
+the harness's own resolution reads, it needs no machine credentials, and it keeps the
+secret inside the folder. Nothing is read on the way: the prompt is one-way, the value is
+not parsed back, not drawn and not logged, and the only thing the app learns afterwards is
 which layer a fresh `keystate::read` found a key in.
 
 Every child's environment is **composed rather than inherited**
@@ -175,54 +167,27 @@ the child by `check-shell.mjs` — and `TMP`/`TEMP`/`TMPDIR` point at `<app root
 the machine's own temp refuses a child, which is the case a real log measured (the
 harness's spill store died on `mkdtemp`).
 
-## The pane, when the build has one
+## There is no embedded engine
 
-`cargo build --release -p vn-shell --features pane` compiles **one** optional dependency —
-`wry`, which drives the engine the operating system already has (WebView2, WKWebView,
-WebKitGTK) — and shows the harness inside this window instead of in a browser tab. The default
-build compiles none of it, so none of this is in the shipped default yet. Six rules travel with
-it, and the first is what the rest rest on:
+The app draws no web view, and that is a security decision as much as a size one. `wry`,
+WebView2, WKWebView and WebKitGTK were all deleted with the pane, so:
 
-1. **The launch token never leaves the process.** There is no argv and no second program: the
-   token goes to an engine in this very process, which is strictly *less* exposure than the
-   hand-off's "one argv element of a program this app found". It is still never drawn, never
-   logged and never written — the pane's bar shows `Status::public_url`, whose query is stripped
-   by construction.
-2. **Only the harness's own loopback address is ever loaded**, checked at the last function
-   before a navigation *and* in the navigation handler — and the handler **refuses** a
-   navigation rather than following it, because a page that can move this window to another
-   origin is a page that can take the token with it.
-3. **No window is ever opened from inside the pane**, **no download is ever accepted**, and
-   **permissions are answered by the app rather than by the engine**: the clipboard is granted,
-   because a chat interface's copy buttons and its composer need it, and camera, microphone,
-   screen capture, geolocation, notifications, MIDI and sensors are denied by name rather than
-   left to the engine's own default flow. (`with_permission_handler` is why this workspace pins
-   `wry` at 0.57: measured, 0.55's macOS delegate GRANTS media capture itself, and its Windows
-   backend allows clipboard reads and lets every other kind through to the engine.)
-4. **No channel into the app.** There is no IPC handler and no injected script, so a page the
-   harness serves has no way to reach this process. The pane is a viewer, and the only direction
-   that exists is the one URL above.
-5. **Its own profile, inside the app's root** — `<app root>/webview`, and never the directory
-   the Chrome rung uses, because an engine profile and a browser profile in one directory is a
-   way to lose both. The engine is **destroyed** on Stop rather than hidden: a hidden page is
-   still a live page, and a live page holding a token that has stopped meaning anything is a
-   credential nobody is watching.
-6. **The rectangle is the app's to keep clear.** A child web view paints *above* the surface
-   egui draws on and cannot be clipped or drawn over, so it is shown only while its own page is
-   in front, the harness is ready, nothing overlays it and the rectangle has an extent — and the
-   panel draws its rows *instead of* it, never under it. That rule is `vn_shell_core::pane`, and
-   it is `cargo test` cases rather than something anybody checks by looking at a window.
+- the launch token reaches **one program**: the browser the person already runs, as one
+  argv element, from the launcher — not an engine inside this process;
+- there is no engine profile under the app's root to keep a browsing record, because there
+  is no engine. A browser keeps its own history, in its own profile, where the person can
+  see and manage it;
+- there is no IPC channel, no injected script, no download handler, no permission handler
+  and no navigation handler to audit, because there is no page in this process to attach
+  them to. The whole class of "the engine recorded the token" findings is gone rather than
+  mitigated: **measured**, after a single load of the harness a `wry` build had the full URL
+  — token and all — in `History`, `Favicons` and `Top Sites` inside its own profile;
+- the app's attack surface is the four things it does: write `.env`, run
+  `scripts/setup/install.*`, run `scripts/run-web.*`, and read the pin.
 
-7. **What the engine records about WHERE the pane went is taken away again.** A web engine keeps
-   a browsing record, and this one is no exception: **MEASURED**, after a single load of the
-   harness the full URL — token and all — was sitting in `History`, `Favicons` and `Top Sites`
-   inside the pane's own profile under `<app root>/webview`. No care in this app changes what an
-   engine does with a URL it is given, so the app removes those files: at **startup**, before any
-   view exists (the pass that cannot fail, because a delete while the engine is alive is a
-   sharing violation), and again best-effort when a view is given up. Anything left that still
-   carries the token is **named in the pane's own bar** rather than hidden, so an engine version
-   that invents another record file is visible instead of silent — which is also why rule 1 above
-   says the token never leaves the *process* and not that it never touches a disk the engine owns.
+The one rule that used to be about the pane survives, and now belongs to the launcher: only
+a **loopback** URL is ever opened, checked in the launcher immediately before the process
+starts.
 
 ## Lock it down
 
@@ -335,15 +300,15 @@ scanning and push protection as a second net.
 ## What the pack does not do
 
 - No API keys are read: `$DSH_HOME/.credentials.yaml` is touched for **presence**
-  only — a boolean, never a value. The app's **key field** is the same rule from the other
-  side: a value the person TYPES into the panel is written to `<home>/.env` as
+  only — a boolean, never a value. `vncode key` is the same rule from the other
+  side: a value the person TYPES at the prompt is written to `<home>/.env` as
   `DEEPSEEK_API_KEY`, which the harness's own credential resolution reads as a documented
   fallback layer (`@deepseek-ai/dsh-credentials-local`: the managed store first, then the
   invoking project's `.env`, then the home's). The managed document is **never written by
   this app** — it is a strict `CredentialRef`-to-string YAML the harness refuses to boot on
-  when it is malformed or readable beyond its owner. What the field guarantees, and what
-  `keystate::write_env_key` is: the value is masked in the window, held in memory only while
-  the field is open, never parsed back, never held in a `KeyState`, never drawn, never
+  when it is malformed or readable beyond its owner. What the prompt guarantees, and what
+  `keystate::write_env_key` is: the value is hidden as it is typed, held in memory only while
+  the prompt is open, never parsed back, never held in a `KeyState`, never drawn, never
   logged (the log line and the note name the FILE), written atomically with `0600` on Unix,
   and every other line of an existing `.env` is preserved. A value that cannot be carried
   unambiguously (a newline, a quote, a backslash) is refused by name, and the sentence
