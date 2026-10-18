@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>side-tab, a thin stripe on a card rounded only away from it</title>
+<!--
+  A side accent is the tell only on a rounded card, and the corners that
+  decide it are the two the stripe does not touch. A card rounded only on the
+  far side (border-radius: 0 12px 12px 0 under a left rule) computes to a
+  radius that leads with 0, and a 2px stripe on it was read as a stripe on a
+  square box, which needs 3px. The far corners are the radius.
+
+  A 3px or wider stripe reported before and keeps its wording.
+-->
+<style>
+  body { font-family: system-ui, sans-serif; font-size: 16px; color: #1a1a1a; background: #ffffff; margin: 24px; }
+  .col { display: inline-block; width: 480px; vertical-align: top; }
+  h2 { font-size: 20px; margin: 0 0 16px; }
+  .card { width: 400px; height: 120px; padding: 16px; margin: 0 0 24px; background: #fdfdfd; box-sizing: border-box; }
+  .flag-left-far-rounded { border-left: 2px solid #0d9488; border-radius: 0 12px 12px 0; }
+  .flag-right-far-rounded { border-right: 2px solid #0d9488; border-radius: 12px 0 0 12px; }
+  .flag-left-uneven-far { border-left: 2px solid #0d9488; border-radius: 0 12px 6px 0; }
+  .flag-left-wide-far-rounded { border-left: 4px solid #0d9488; border-radius: 0 12px 12px 0; }
+  .pass-thin-square { border-left: 2px solid #0d9488; border-radius: 0; }
+  .pass-thin-rounded-along-stripe { border-left: 2px solid #0d9488; border-radius: 12px 0 0 12px; }
+  .pass-thin-far-corner-square { border-left: 2px solid #0d9488; border-radius: 0 12px 2px 0; }
+  .pass-thin-far-elliptical-flat { border-left: 2px solid #0d9488; border-radius: 0 12px 12px 0 / 0; }
+</style>
+</head>
+<body>
+
+<div class="col" id="should-flag">
+  <h2>Should flag</h2>
+  <div class="card flag-left-far-rounded"><p>What you actually get: a 2px rule on the left, rounded on the right.</p></div>
+  <div class="card flag-right-far-rounded"><p>The mirror image: a 2px rule on the right, rounded on the left.</p></div>
+  <div class="card flag-left-uneven-far"><p>Far corners of 12px and 6px: the smaller one is the radius.</p></div>
+  <div class="card flag-left-wide-far-rounded"><p>A 4px rule reported before, as a stripe with no radius, and still does.</p></div>
+</div>
+
+<div class="col" id="should-pass">
+  <h2>Should pass</h2>
+  <div class="card pass-thin-square"><p>A 2px rule on a square box is the older callout convention.</p></div>
+  <div class="card pass-thin-rounded-along-stripe"><p>Rounded only along the stripe: the far side is square.</p></div>
+  <div class="card pass-thin-far-corner-square"><p>One far corner under 4px reads as square.</p></div>
+  <div class="card pass-thin-far-elliptical-flat"><p>Far corners with no vertical radius are square, whatever their horizontal one.</p></div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,259 @@
+{
+  "upstream": {
+    "repo": "https://github.com/pbakaus/impeccable",
+    "commit": "2f46b7a8b059af00d20dd13b64dbe165e7c6a742",
+    "skillVersion": "4.6.0",
+    "engineVersion": "0.1.15",
+    "payload": ".dsh/skills/impeccable"
+  },
+  "transform": {
+    "applied": [
+      "\\.dsh\\/skills\\/impeccable\\/scripts\\/impeccable -> impeccable",
+      "\\.dsh\\/skills\\/impeccable -> skills/frontend-craft",
+      "\\.impeccable\\/ -> .frontend-craft/",
+      "impeccable:product-schema -> frontend-craft:product-schema"
+    ],
+    "assembled": "SKILL.md = overrides/SKILL.head.md + upstream from \"## How to design\" (the three engine-only maintenance paragraphs dropped)",
+    "commandRows": [
+      "craft",
+      "shape",
+      "init",
+      "document",
+      "extract",
+      "critique",
+      "audit",
+      "polish",
+      "bolder",
+      "quieter",
+      "distill",
+      "harden",
+      "onboard",
+      "animate",
+      "colorize",
+      "typeset",
+      "layout",
+      "delight",
+      "overdrive",
+      "clarify",
+      "adapt",
+      "optimize",
+      "live",
+      "generate"
+    ]
+  },
+  "excluded": {
+    "scripts/": "the engine launcher, the in-page live JS and the font index: none is used here (the detector is the wasm build; live mode is unavailable)",
+    "agents/": "the provider sub-agent definitions: DSH has no such surface"
+  },
+  "engine": {
+    "build": "vendor/impeccable/build-engine.mjs",
+    "artifacts": {
+      "detect/detect.cjs": {
+        "bytes": 64902,
+        "sha256": "96bd47af4ff5db576bd808e43d920c41f68df0214cff1e1c974f05f067286ae0"
+      },
+      "detect/detect_bg.wasm": {
+        "bytes": 4558054,
+        "sha256": "f68eac72994e23e5015e2e8ff2b65446fb2411a313b412067cca0278136aa99d"
+      }
+    }
+  },
+  "files": {
+    "lib/vendor/impeccable/LICENSE": {
+      "bytes": 10766,
+      "sha256": "02bb8c3b4e70190e3986c0404ad2fd8d639b4f534252d82379cc1b502b6d1812"
+    },
+    "lib/vendor/impeccable/NOTICE.md": {
+      "bytes": 503,
+      "sha256": "c60a093c2845fd9fb82f9c6f742ece31f379f8190b535309d32d66c45ccffdcb"
+    },
+    "lib/vendor/impeccable/rules.json": {
+      "bytes": 22813,
+      "sha256": "099bb4877e3cd6d858ca1f89a3ad4f744a4b9434e9daff69314972bde49203e6"
+    },
+    "skills/frontend-craft/SKILL.md": {
+      "bytes": 14476,
+      "sha256": "6dc46f0b06ab3cb91fc9472721a1ab4b89065016473f6d8d65435c783cab7ce6"
+    },
+    "skills/frontend-craft/reference/adapt.md": {
+      "bytes": 11313,
+      "sha256": "5826bb4bca75d7b891bed17ff03bd3b685dff0e4f26d387fa6190d4ba3f065e4"
+    },
+    "skills/frontend-craft/reference/adapt.native.md": {
+      "bytes": 3910,
+      "sha256": "acbeecbcbf6558d438ed4aec6b85027d72587bf181b8ae12d4dfbe8dce62e9a5"
+    },
+    "skills/frontend-craft/reference/android.md": {
+      "bytes": 4093,
+      "sha256": "058f81f256134841875fd3183e06b37a023de0c877fd2b9eecd97011640791fe"
+    },
+    "skills/frontend-craft/reference/animate.md": {
+      "bytes": 5236,
+      "sha256": "94b4ce6299fea93d9f256b2d25705961a76bc5ea940c56db4145686ebc99df1b"
+    },
+    "skills/frontend-craft/reference/audit.md": {
+      "bytes": 9216,
+      "sha256": "43ef572ab52709d26b5621ea00ec22f829d7739a29a7bedea6e7db36b3459a24"
+    },
+    "skills/frontend-craft/reference/audit.native.md": {
+      "bytes": 8326,
+      "sha256": "33a4ac3906140cfd73f65cd35026867e261adf411da0fc6da95770d9b6edeb81"
+    },
+    "skills/frontend-craft/reference/bolder.md": {
+      "bytes": 3499,
+      "sha256": "7851254fd5728314310b9d4cff3bb6e714c78f37472ccf496b8cd78ca1f0b236"
+    },
+    "skills/frontend-craft/reference/clarify.md": {
+      "bytes": 4590,
+      "sha256": "6c382f8283756e8a693d832b750f7e4cbff1ca5bdcc3825b2b4ef4da9f21876a"
+    },
+    "skills/frontend-craft/reference/colorize.md": {
+      "bytes": 4537,
+      "sha256": "d1fbd55074abb2251bdaa03749d34acc42c38e46e47549f18f5848df57d43c42"
+    },
+    "skills/frontend-craft/reference/component-review.md": {
+      "bytes": 7743,
+      "sha256": "80d0a4ab38fa4a3163f5e3946016df1bab297016f3839812b5c7ecfd18f4be24"
+    },
+    "skills/frontend-craft/reference/craft-floor.md": {
+      "bytes": 4486,
+      "sha256": "f204158e35616d8d5f0dad8087ee3f1f91c0fe1337fde6e3cf616a51b496822a"
+    },
+    "skills/frontend-craft/reference/craft.md": {
+      "bytes": 555,
+      "sha256": "9205e222bc6565b37fb504ceec93233c2d2a456802b69d16e6b1c44723907c4c"
+    },
+    "skills/frontend-craft/reference/critique.md": {
+      "bytes": 45416,
+      "sha256": "98ba4d9f2bd123ca86c8e8a139ab73518ac90ea0ec08e2deafcc8d9142c11474"
+    },
+    "skills/frontend-craft/reference/degraded/asset-producer.md": {
+      "bytes": 8301,
+      "sha256": "e3bcc47d721232c872aaf793905043ff1f7fc8ae5e887c7a625ceb0d0d8868a5"
+    },
+    "skills/frontend-craft/reference/degraded/documenter.md": {
+      "bytes": 3325,
+      "sha256": "bcc05ea92faebb5c74037a9d4263a5ce9a56f5ab07c8ab3c59ee704d8cade745"
+    },
+    "skills/frontend-craft/reference/degraded/finish-reviewer.md": {
+      "bytes": 15847,
+      "sha256": "15b4a24281be02951c7d59ca8af420d43a94cbb7b595cb602e4faaf19d2240ff"
+    },
+    "skills/frontend-craft/reference/degraded/manual-edit-applier.md": {
+      "bytes": 7196,
+      "sha256": "5fae7f8a2fc3ddd49ad0a413446dc44daedef5b6b7de5eb935bd2fbfad646d58"
+    },
+    "skills/frontend-craft/reference/delight.md": {
+      "bytes": 3716,
+      "sha256": "56500b1f9d2fcec8324d7f448d813048b5831a46d3feeb1055bd3eb17ec3660f"
+    },
+    "skills/frontend-craft/reference/distill.md": {
+      "bytes": 5581,
+      "sha256": "c1e6d7fb4a4ca22523b3e1cd25ec0dbb130362e5b17489cd9352dc3a089f897d"
+    },
+    "skills/frontend-craft/reference/doctor.md": {
+      "bytes": 5515,
+      "sha256": "574e9ff161d20c40103fdfe9d77e31d9415308c3c1b3f6b4d9a22cc08af58ae4"
+    },
+    "skills/frontend-craft/reference/document.md": {
+      "bytes": 27480,
+      "sha256": "600ca4f1d14f27cfb4685db48017d4b022c0ae8a71741486967286ab67fa9f64"
+    },
+    "skills/frontend-craft/reference/extract.md": {
+      "bytes": 3339,
+      "sha256": "d0cc547025c6848e672f0376e28e8e85972a2edb8ba3a4f2c309088d1f848898"
+    },
+    "skills/frontend-craft/reference/generate.md": {
+      "bytes": 12954,
+      "sha256": "e1731d34c57deab23e35859bdd254b257956e38ad5b45ffd3890f86fe9d0fd79"
+    },
+    "skills/frontend-craft/reference/harden.md": {
+      "bytes": 9305,
+      "sha256": "035c4b02adc17df27b2b42142368052053bf19675b5e1639dab298dc45e4ebca"
+    },
+    "skills/frontend-craft/reference/hooks.md": {
+      "bytes": 13803,
+      "sha256": "a5de108b247466a9dc088c757677bf204e2e1020ed4d2221305bce04d64109c6"
+    },
+    "skills/frontend-craft/reference/init.md": {
+      "bytes": 11723,
+      "sha256": "8d102ce05fca803291ab79bd218239712bcd1adb0d070e367580bcc57f2ddaec"
+    },
+    "skills/frontend-craft/reference/ios.md": {
+      "bytes": 3812,
+      "sha256": "40c87038b5f75147a5952a96237acf312a327bf70c1bcd8e0a5f064625ae9668"
+    },
+    "skills/frontend-craft/reference/layout.md": {
+      "bytes": 5127,
+      "sha256": "8a9caaaf83569665cbf7de5666fd393612e8a7ee08506c02913043700e8216e8"
+    },
+    "skills/frontend-craft/reference/live-setup.md": {
+      "bytes": 8164,
+      "sha256": "8651e97624f9aed30e83a9325a8c73904feb96f586f27550462ec0a0e0ee84a5"
+    },
+    "skills/frontend-craft/reference/live.md": {
+      "bytes": 36087,
+      "sha256": "a10144e79fa035a8a5331909c204b423ecd04d1c4a7f600655d43c88c84a3bec"
+    },
+    "skills/frontend-craft/reference/mode-operate.md": {
+      "bytes": 4716,
+      "sha256": "7a52dd7a94ee75f6ae89542c86a1b6e1d306812b16e0d9dbf12d4acad44d148b"
+    },
+    "skills/frontend-craft/reference/mode-persuade.md": {
+      "bytes": 3638,
+      "sha256": "21e78c8a77badb3f83290cd4577ed3b24bd4dd3b57136d7da75733d4f3ee9ac0"
+    },
+    "skills/frontend-craft/reference/mode-read.md": {
+      "bytes": 4396,
+      "sha256": "a569989e6a3d6453b4c45e9474e162a15cc54e11732ac6baa7990a6e7cccc0b5"
+    },
+    "skills/frontend-craft/reference/new-work.md": {
+      "bytes": 61412,
+      "sha256": "07730af0ac3468d8731280119f9ed5f6e59f7caa8324da1f2c4ac9a066cd111f"
+    },
+    "skills/frontend-craft/reference/onboard.md": {
+      "bytes": 7688,
+      "sha256": "eb713f3d6686bac6431dd874f7b02358b4cf08e879e11bf747d75660dedd685a"
+    },
+    "skills/frontend-craft/reference/operate.md": {
+      "bytes": 4145,
+      "sha256": "a9d2203acd45ca33a13d5c68b02b23ed512425ac15f0e8438318ed124b43729d"
+    },
+    "skills/frontend-craft/reference/optimize.md": {
+      "bytes": 7594,
+      "sha256": "fb4014a4482231fbbbec71691d94aef854a1ea5380dbd7963074d14a0e579fdb"
+    },
+    "skills/frontend-craft/reference/overdrive.md": {
+      "bytes": 9012,
+      "sha256": "da05cfe7000e6dc9b653a501122ab5f8d6d2bf076348e7dc5ac8c11fb7497b3b"
+    },
+    "skills/frontend-craft/reference/polish.md": {
+      "bytes": 6578,
+      "sha256": "3ae5b30af7b1a24e78a4a023cf1f7f1fda25cf6ba2dfbd3101398213d5e821fa"
+    },
+    "skills/frontend-craft/reference/quieter.md": {
+      "bytes": 4953,
+      "sha256": "6d6e0ecbfbf1dcaa61343e4bccdc03487f763950762a8430a01226979a69177d"
+    },
+    "skills/frontend-craft/reference/region-map.md": {
+      "bytes": 3259,
+      "sha256": "390592d2090f1cc42d5b377861d811553e85a12b8cc9b526fc37b3211cb3ae3f"
+    },
+    "skills/frontend-craft/reference/routing.md": {
+      "bytes": 3268,
+      "sha256": "257ee618073eac25b1dbede186ca92950dc8713a374cb52de8ebd9f67d9c9a4f"
+    },
+    "skills/frontend-craft/reference/shape.md": {
+      "bytes": 3547,
+      "sha256": "a55f016c046cb6a27c55bd7f346375aeb506a755c4fbca19a5f92dbd42309c23"
+    },
+    "skills/frontend-craft/reference/typeset.md": {
+      "bytes": 6229,
+      "sha256": "1b456bcfd6b3e01b5f53327e82ce45a5b012e32e6618ececf8bf8e03dc5ab37e"
+    },
+    "skills/frontend-craft/reference/visualize.md": {
+      "bytes": 13900,
+      "sha256": "9aaeb1c19c5fd76ae7804d1f9b212b75d3e49e02ce0ce065fe0c1190e084e5e0"
+    }
+  }
+}

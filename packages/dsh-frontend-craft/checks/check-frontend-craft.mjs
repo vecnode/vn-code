@@ -1,0 +1,224 @@
+/**
+ * dsh-frontend-craft — the package's own contract.
+ *
+ * WHAT THIS PROVES, in order:
+ *
+ *   1. the vendored corpus and engine still hash to what VERSION.json recorded
+ *      (`vendor/impeccable/build.mjs --check`), so a hand edit is a failure;
+ *   2. the pin is Impeccable 4.6.0 and the registry is the 61 rules the skill
+ *      promises, split across both categories;
+ *   3. the skill has OUR frontmatter, all 24 command rows, and every engine verb
+ *      its references name is either a tool in the surface table, a command, or
+ *      explicitly listed as unavailable - a new upstream verb therefore fails
+ *      this check instead of confusing an agent at run time;
+ *   4. no vendored path still says `.impeccable/`, no placeholder token survived
+ *      the upstream build, and the Apache licence and notices travel;
+ *   5. the plugin's OWN code neither spawns a process nor reaches the network:
+ *      the whole point is that this box does no installation and no egress;
+ *   6. the detector agrees, finding for finding, with the upstream CLI on six
+ *      committed fixtures - including the linked-stylesheet case the raw wasm
+ *      export cannot do alone, which the host closes by inlining local CSS.
+ *
+ * It writes nothing. Run it with `npm run check` in this folder, or as
+ * `node checks/check-frontend-craft.mjs` from anywhere.
+ */
+import assert from 'node:assert/strict'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { verify } from '../vendor/impeccable/build.mjs'
+import { detectHtml, detectText, inlineStylesheets, RULES, RULE_COUNT, VERSION, PACKAGE_VERSION } from '../lib/vendor.js'
+import { buildTools, orderFor } from '../lib/tools.js'
+import { validateDesign, validateProduct, validateSurface } from '../lib/context.js'
+
+const here = path.dirname(fileURLToPath(import.meta.url))
+const pkgRoot = path.resolve(here, '..')
+const failures = []
+let checked = 0
+
+function check(name, fn) {
+  checked += 1
+  try {
+    fn()
+    console.log('ok   ' + name)
+  } catch (err) {
+    failures.push(name + ': ' + String(err && err.message ? err.message : err))
+    console.error('FAIL ' + name + ': ' + String(err && err.message ? err.message : err))
+  }
+}
+
+/** Sorted `rule|line|snippet` tuples, the shape a finding list compares in. */
+function tuples(findings) {
+  return findings.map((finding) => [finding.antipattern, finding.line, finding.snippet ?? ''].join('|')).sort()
+}
+
+// ---- 1. the vendored bytes --------------------------------------------------
+check('every vendored byte matches VERSION.json', () => {
+  const { problems, listed, version } = verify()
+  assert.deepEqual(problems, [], problems.join('\n'))
+  assert.ok(listed >= 50, 'only ' + listed + ' vendored files are listed')
+  assert.equal(version.upstream.repo, 'https://github.com/pbakaus/impeccable')
+})
+
+// ---- 2. the pin and the registry -------------------------------------------
+check('the pin is Impeccable 4.6.0, engine 0.1.15, 61 rules in two categories', () => {
+  assert.equal(VERSION.upstream.skillVersion, '4.6.0')
+  assert.equal(VERSION.upstream.engineVersion, '0.1.15')
+  assert.equal(RULE_COUNT, 61, 'the registry is ' + RULE_COUNT + ' rules, the skill promises 61')
+  const categories = new Set(RULES.map((rule) => rule.category))
+  assert.ok(categories.has('slop') && categories.has('quality'), 'categories: ' + [...categories].join(','))
+  assert.equal(new Set(RULES.map((rule) => rule.id)).size, 61, 'rule ids are not unique')
+})
+
+// ---- 3. the skill -----------------------------------------------------------
+const skillFile = path.join(pkgRoot, 'skills', 'frontend-craft', 'SKILL.md')
+const skillText = readFileSync(skillFile, 'utf8')
+const refDir = path.join(pkgRoot, 'skills', 'frontend-craft', 'reference')
+const refFiles = readdirSync(refDir, { recursive: true })
+  .map((name) => String(name))
+  .filter((name) => name.endsWith('.md'))
+const refText = refFiles.map((name) => readFileSync(path.join(refDir, name), 'utf8')).join('\n')
+
+check('the skill is ours: frontend-craft, with a trigger-rich description', () => {
+  assert.match(skillText, /^---\nname: frontend-craft\ndescription: "Use when[\s\S]*?"\n---\n/)
+  assert.ok(skillText.length > 8000, 'the skill is suspiciously short')
+})
+
+check('all 24 commands are still in the table', () => {
+  const commands = []
+  const commandsSection = skillText.slice(skillText.indexOf('## Commands'), skillText.indexOf('\n## ', skillText.indexOf('## Commands') + 5))
+  for (const line of commandsSection.split('\n')) {
+    const match = /^\|\s*`([a-z]+)[^`]*`\s*\|/.exec(line)
+    // The tool-surface table also has rows that begin with a backticked
+    // `impeccable <verb>`; those are translations, not commands.
+    if (match && match[1] !== 'impeccable') commands.push(match[1])
+  }
+  assert.equal(commands.length, 24, 'command rows: ' + commands.join(','))
+  for (const expected of ['init', 'document', 'critique', 'audit', 'polish', 'harden', 'onboard', 'animate', 'typeset', 'layout', 'clarify', 'adapt', 'optimize', 'live', 'generate']) {
+    assert.ok(commands.includes(expected), 'missing command: ' + expected)
+  }
+})
+
+check('every engine verb in the corpus is translated, a command, or declared unavailable', () => {
+  const COMMANDS = ['craft', 'shape', 'init', 'document', 'extract', 'critique', 'audit', 'polish', 'bolder', 'quieter', 'distill', 'harden', 'onboard', 'animate', 'colorize', 'typeset', 'layout', 'delight', 'overdrive', 'clarify', 'adapt', 'optimize', 'live', 'generate']
+  const TOOL_VERBS = ['context', 'detect', 'surface-brief', 'concept-seed', 'serve-question', 'doctor']
+  const UNAVAILABLE = [
+    'pin', 'unpin', 'hooks', 'hook', 'hook-before-edit', 'ignores', 'update', 'signals', 'build-phase',
+    'comp-diff', 'comp-spec', 'generate-image', 'live-accept', 'live-complete', 'live-generate', 'live-inject',
+    'live-insert', 'live-poll', 'live-resume', 'live-server', 'live-status', 'live-wrap', 'detect-csp',
+    'embed-prompt', 'font-match', 'critique-storage', 'component-review', 'design',
+  ]
+  const known = new Set([...COMMANDS, ...TOOL_VERBS, ...UNAVAILABLE, 'impeccable'])
+  const seen = new Set()
+  for (const match of (skillText + '\n' + refText).matchAll(/(?<![A-Za-z-])impeccable ([a-z][a-z-]*)/g)) seen.add(match[1])
+  // The live- and comp- families are engine-internal verbs the skill names in
+  // passing; every one of them is covered by the UNAVAILABLE paragraph by family.
+  const unknown = [...seen].filter((verb) => !known.has(verb) && !verb.startsWith('live-') && !verb.startsWith('comp-')).sort()
+  assert.deepEqual(unknown, [], 'verbs with no translation: ' + unknown.join(', '))
+  // The table really does name each tool verb, so an agent can follow it.
+  for (const verb of TOOL_VERBS) assert.ok(skillText.includes('`impeccable ' + verb) || skillText.includes('| `impeccable context`') || skillText.includes(verb), 'the surface table does not mention ' + verb)
+})
+
+check('no vendored path is still named .impeccable/, and no placeholder survived', () => {
+  const all = skillText + '\n' + refText
+  assert.ok(!all.includes('.impeccable/'), 'a reference still points at .impeccable/')
+  for (const token of ['{{model}}', '{{scripts_path}}', '{{command_prefix}}', '{{available_commands}}', '{{reference_path}}', '{{config_file}}', '{{ask_instruction}}']) {
+    assert.ok(!all.includes(token), 'placeholder survived: ' + token)
+  }
+  assert.ok(refFiles.length >= 40, 'only ' + refFiles.length + ' reference files')
+})
+
+check('the Apache licence and third-party notices travel with the corpus', () => {
+  const licence = readFileSync(path.join(pkgRoot, 'lib', 'vendor', 'impeccable', 'LICENSE'), 'utf8')
+  assert.match(licence, /Apache License/)
+  const notice = readFileSync(path.join(pkgRoot, 'lib', 'vendor', 'impeccable', 'NOTICE.md'), 'utf8')
+  assert.match(notice, /platform-design-skills/)
+})
+
+// ---- 4. this plugin's own code ---------------------------------------------
+check('the plugin itself spawns no process, opens no socket and calls no API', () => {
+  const own = ['index.js', 'tools.js', 'context.js', 'paths.js', 'vendor.js', 'client.js'].map((name) => path.join(pkgRoot, 'lib', name))
+  const forbidden = [/child_process/, /\bspawnSync\b/, /\bexecSync\b/, /\bexecFile/, /https?:\/\//, /XMLHttpRequest/]
+  for (const file of own) {
+    const text = readFileSync(file, 'utf8')
+    for (const pattern of forbidden) assert.ok(!pattern.test(text), path.basename(file) + ' matches ' + pattern)
+  }
+  // The client's one egress is same-origin fetch of THIS plugin's routes.
+  const client = readFileSync(path.join(pkgRoot, 'lib', 'client.js'), 'utf8')
+  for (const match of client.matchAll(/fetch\(([^,)]+)/g)) {
+    assert.match(match[1], /(STATE_ROUTE|SCAN_ROUTE|ARTIFACTS_ROUTE|path)/, 'a client fetch names something that is not one of this plugin’s routes: ' + match[1])
+  }
+  // No telemetry vocabulary anywhere in the package.
+  for (const file of own) assert.ok(!/telemetry|analytics|DO_NOT_TRACK/i.test(readFileSync(file, 'utf8')), 'telemetry vocabulary in ' + path.basename(file))
+})
+
+check('package.json, the row marker and the install target agree', () => {
+  const manifest = JSON.parse(readFileSync(path.join(pkgRoot, 'package.json'), 'utf8'))
+  assert.equal(manifest.name, 'dsh-frontend-craft')
+  assert.equal(manifest.version, PACKAGE_VERSION)
+  assert.ok(existsSync(path.join(pkgRoot, 'cordis.patch.yml')))
+  assert.ok(!manifest.dependencies || Object.keys(manifest.dependencies).length === 0, 'the package must have zero npm dependencies')
+  const patch = readFileSync(path.join(pkgRoot, 'cordis.patch.yml'), 'utf8')
+  assert.match(patch, /id: frontend-craft/)
+})
+
+// ---- 5. the detector agrees with the upstream CLI ---------------------------
+check('the detector reproduces the upstream CLI on the committed fixtures', () => {
+  const fixtures = path.join(here, 'fixtures')
+  const expected = JSON.parse(readFileSync(path.join(fixtures, 'expected.json'), 'utf8'))
+  let files = 0
+  for (const [name, findings] of Object.entries(expected)) {
+    const file = path.join(fixtures, name)
+    const text = readFileSync(file, 'utf8')
+    const answer = name.endsWith('.html') ? detectHtml(inlineStylesheets(text, file), name, {}) : detectText(text, name, {})
+    assert.equal(answer.ok, true, name + ': ' + answer.message)
+    assert.deepEqual(tuples(answer.findings), tuples(findings), name + ' diverges from the upstream CLI')
+    files += 1
+  }
+  assert.ok(files >= 6, 'only ' + files + ' fixtures ran')
+})
+
+// ---- 6. the shape validators ------------------------------------------------
+check('artifact validation accepts what the skill asks for and refuses what it does not', () => {
+  const product =
+    '# Product\n\n<!-- frontend-craft:product-schema 1 -->\n\n## Platform\n\nweb\n\n## Users\n\nDesigners.\n\n## Product Purpose\n\nShip pages.\n'
+  assert.equal(validateProduct(product).ok, true)
+  assert.equal(validateProduct('# Product\n').ok, false)
+  const design = '---\ncolors:\n  bg: "#ffffff"\n---\n\n# Design\n'
+  assert.equal(validateDesign(design).ok, true)
+  assert.equal(validateDesign('# Design\n').ok, false)
+  const surface = '## Direction contract\n\nTHESIS: x\nOWN-WORLD: y\nSTORY: z\nFIRST VIEWPORT: a\nFORM: b\n\nseed: none (unavailable)\n\nFINISH: unreviewed is unfinished\n'
+  assert.equal(validateSurface(surface).ok, true)
+  assert.equal(validateSurface('## Direction contract\n\nTHESIS: x\n').ok, false)
+  // A foreign (unstamped) PRODUCT.md is not "incomplete": it is stale, and the
+  // context says so once rather than asking the agent to rewrite the file.
+  assert.equal(validateProduct('# Product\n\n## Platform\n\nweb\n\n## Users\nu\n\n## Product Purpose\np\n').ok, true)
+})
+
+check('the row registers exactly the tools the skill tells the agent to call', () => {
+  const names = buildTools({}).map((tool) => tool.name)
+  assert.deepEqual(names, ['fe_context', 'fe_detect', 'fe_direction', 'fe_artifact'])
+  for (const name of names) {
+    assert.ok(skillText.includes('`' + name + '`'), 'SKILL.md never names ' + name)
+  }
+  // And the surface table maps the two engine verbs this build actually owns.
+  assert.match(skillText, /\| `impeccable context` \| `fe_context` \|/)
+  assert.match(skillText, /\| `impeccable detect <target>` \| `fe_detect`/)
+})
+
+check('a dealt hand is reproducible from its seed and is a permutation', () => {
+  const directions = ['Swiss rail timetable', 'risograph zine', 'marine chart', 'library card catalogue', 'aeroplane safety card']
+  const first = orderFor('abc123', directions)
+  const again = orderFor('abc123', directions)
+  const other = orderFor('def456', directions)
+  assert.deepEqual(first, again, 'the same seed produced two different hands')
+  assert.deepEqual(first.slice().sort(), directions.slice().sort(), 'the deal is not a permutation of the authored directions')
+  assert.notDeepEqual(first, other, 'two seeds produced the same hand (the hash is not doing anything)')
+})
+
+if (failures.length > 0) {
+  console.error('\ncheck-frontend-craft: ' + failures.length + ' of ' + checked + ' checks failed')
+  process.exit(1)
+}
+console.log('\ncheck-frontend-craft: ' + checked + ' checks OK · Impeccable ' + VERSION.upstream.skillVersion + ' @ ' + VERSION.upstream.commit.slice(0, 7) + ' · ' + RULE_COUNT + ' rules')

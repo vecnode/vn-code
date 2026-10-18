@@ -3022,6 +3022,53 @@ check(
   check('supercollider console renders its frame', scMarkup.includes('class="dsu-console"') && scMarkup.includes('sclang — Enter to send') && scMarkup.includes('>Stop<'))
 }
 
+// ------------------------------------------------------- dsh-frontend-craft
+// The Frontend tab: findings + artifacts over the host's own routes. What is
+// pinned here is what a person sees before any scan and what the Start page
+// evaluates: the guide capsule is CALLED (the bar draws it with `title()` and
+// `description?.()`), the tab claims no file address, and the first paint is the
+// empty state rather than a crash on a missing session.
+{
+  const fc = loadBundle('packages/dsh-frontend-craft/lib/client.js', {})
+  check('frontend bundle id', fc.id, 'dsh-frontend-craft')
+  check('frontend inject', JSON.stringify(fc.exports.inject), '["slots","sidebarRightTabs"]')
+  const fcCssTag = fc.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-frontend-craft/tab.css').pop()
+  const fcCss = fcCssTag ? fcCssTag.textContent : ''
+  check('frontend stylesheet injected', fcCss.includes('.dfc-root{') && fcCss.includes('.dfc-snip{'))
+  const fcTypes = []
+  const fcSeats = {}
+  fc.exports.apply({
+    slots: {
+      inject: (name, fn) => fn(),
+      register(spec, component) {
+        fcSeats[spec.name + (spec.key ? '#' + spec.key : '')] = { spec, component }
+        return () => {}
+      },
+    },
+    sidebarRightTabs: { register: (definition) => (fcTypes.push(definition), () => {}), entries: () => [] },
+    effect: (fn) => fn(),
+    logger: { debug() {}, warn() {} },
+  })
+  check('frontend type registered', fcTypes.length === 1 && fcTypes[0].id + '/' + fcTypes[0].kind, 'dsh-frontend-craft/frontend-craft')
+  check('frontend claims no file address', fcTypes[0].patterns === undefined && fcTypes[0].canOpen === undefined, true)
+  const fcCapsule = (fcTypes[0].guide ?? [])[0] ?? {}
+  check(
+    'frontend guide capsule answers the Start page',
+    typeof fcCapsule.title === 'function' && typeof fcCapsule.description === 'function' && fcCapsule.title() === 'Frontend craft' && fcCapsule.description().length > 0 && Number.isFinite(fcCapsule.order),
+  )
+  check(
+    'frontend seats',
+    Object.keys(fcSeats).sort().join(','),
+    'sidebar.right.pane.tab#dsh-frontend-craft,sidebar.right.pane.tab.title#dsh-frontend-craft',
+  )
+  const fcTitle = fcSeats['sidebar.right.pane.tab.title#dsh-frontend-craft'].component
+  check('frontend title seat renders', renderToStaticMarkup(h(fcTitle)).includes('Frontend'))
+  const fcMarkup = renderToStaticMarkup(h(fcSeats['sidebar.right.pane.tab#dsh-frontend-craft'].component, { sessionId: '' }))
+  check('frontend body renders its frame', fcMarkup.includes('class="dfc-root"') && fcMarkup.includes('>Frontend<'))
+  check('frontend body opens on the empty state', fcMarkup.includes('Nothing scanned yet.'))
+  check('frontend body names the missing workspace', fcMarkup.includes('no workspace bound to this tab'))
+}
+
 // ----------------------------------------------------------- dsh-proto-lab
 // The Lab tab: a frame with a run picker, over the host's own composed preview.
 //

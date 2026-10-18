@@ -1,0 +1,17 @@
+# dsh-frontend-craft bundle layer (alpha.1).
+#
+# One row ('frontend-craft') owns the whole package: the three fe_* tools, the
+# four routes the Frontend tab reads, the bundled frontend-craft skill, and the
+# vendored Impeccable corpus + detector under lib/vendor/impeccable/.
+#
+# Nothing shipped is patched and no core row is disabled, so there is no
+# `disabled: true` here and nothing for scripts/sync-vendored.ps1 to keep in
+# sync: this package forks no client bundle and replaces no shipped row.
+#
+# The row adds a TAB TYPE by registration, not by superseding: the bar's registry
+# has this type in the `builtin` band with a guide capsule and no file patterns,
+# so no existing address changes hands and a profile without this package simply
+# has no Frontend tab.
+- insert:
+    - id: frontend-craft
+      name: 'dsh-frontend-craft'

@@ -1,0 +1,40 @@
+{
+  "name": "dsh-frontend-craft",
+  "version": "0.1.0-alpha.1",
+  "description": "Front-end design craft for the agent: Impeccable's Apache-2.0 skill corpus (24 commands, the craft floor, the modes, the native references) vendored at a pinned commit, its 61-rule detector compiled to WebAssembly and shipped in the box, four fe_* tools, and a Frontend tab that shows the findings. No network, no install, no engine download.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-frontend-craft.mjs",
+    "vendor:build": "node vendor/impeccable/build.mjs",
+    "vendor:check": "node vendor/impeccable/build.mjs --check",
+    "vendor:engine": "node vendor/impeccable/build-engine.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-tool",
+        "dsh-rightbar"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}
