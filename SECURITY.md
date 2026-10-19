@@ -200,6 +200,7 @@ network.
 |---|---|---|
 | `dsh-supercollider`: the `sc_exec` / `sc_check` / `sc_load` tools and **`POST /api/dsh-supercollider/eval`** | **arbitrary `sclang`**, in the one long-lived interpreter the session shares — file I/O, `unixCmd`, `Pipe`, anything SuperCollider can reach | the harness session check only: loopback bind + the `dsh-auth-…` cookie + the Host/Origin fence. No path policy, no allowlist, no sandbox — by design, because it is the point of the plugin |
 | `dsh-supercollider`: `sc_exec` → `scsynth`, and `sc_capture` | a SuperCollider audio server, its `.schelp` tree, and a UDP/OSC socket on loopback | argv-only spawn (no shell), a deadline per call, loopback-only UDP |
+| `dsh-wsl`: `wsl_run` | **any program in a WSL distribution**, as your user - it is a shell without the shell syntax, which is the point (testing this pack's `sh` half on Windows) | argv only (a string command is refused), a deadline, a tree kill, 1 MB per stream, and the distribution named in every answer. Nothing narrows WHAT may run: that is the harness's permission layer, not this row's |
 | `dsh-diagrams` (a TeX engine), `dsh-proto-lab` (the user's `make` / projectGenerator), `dsh-frontend-craft` and `dsh-browser` (this machine's Chrome/Edge) | a compiler or a browser | argv-only, no shell, throwaway browser profile, `-no-shell-escape`, loopback-only page URLs, deadlines and output caps |
 
 **The `eval` route is the sharp edge.** `POST /api/dsh-supercollider/eval` exists so the

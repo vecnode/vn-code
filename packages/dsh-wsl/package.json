@@ -1,0 +1,28 @@
+{
+  "name": "dsh-wsl",
+  "version": "0.1.0-alpha.1",
+  "description": "WSL: three tools that let the agent test the POSIX half of this pack on a Windows machine - `wsl_status` (distributions, the default, and whether a distribution can run a check), `wsl_run` (one argv array in a distribution, with its exit code, a deadline and a tree kill) and `wsl_path` (`C:\\...` <-> `/mnt/c/...`). Host-only, argv-only, no shell string, no bridged port. Zero npm dependencies, no engine bundled, no network egress.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-wsl-node.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

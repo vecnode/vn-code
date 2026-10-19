@@ -83,6 +83,11 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   package, five `fe_*` tools including a headless-browser render that measures
   contrast/tap targets/overflow, one Frontend tab — no network, no install, no
   engine download), `dsh-pdf`,
+  `dsh-wsl` (the POSIX half testable on Windows: `wsl_status` / `wsl_run` /
+  `wsl_path` over the machine's own WSL — one argv array, no shell string, a
+  deadline with a tree kill, the launcher's UTF-16 table decoded, and the
+  distribution NAMED because a Docker Desktop machine defaults to
+  `docker-desktop-data`; host-only, inert and honest off Windows),
   `dsh-research` (a run is a folder with a `passport.json` recording the user's own
   words; nine `rs_*` tools over an append-only claim and source ledger, a claim's
   numbers recorded as a validated `statistic` rather than left in the prose, a

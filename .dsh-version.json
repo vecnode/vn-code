@@ -231,6 +231,26 @@
         "NOTHING is vendored, downloaded or bundled: the engines are the machine's own (resolved from PATH or from the OS install), and lib/win-ocr.ps1 is written here"
       ]
     },
+    "dsh-wsl": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "wsl"
+      ],
+      "rowOverrides": [],
+      "role": "WSL bridge: three tools over the machine's own Windows Subsystem for Linux - `wsl_status` (the launcher's table decoded from UTF-16, the default distribution marked, and with `probe` whether a distribution can actually run a check), `wsl_run` (ONE argv array in a distribution through `wsl.exe -d <distro> --cd <dir> -- <argv...>`, argv-only so there is no shell, with a deadline, a tree kill on timeout, a 1 MB cap per stream and the exit code in the answer) and `wsl_path` (`C:\\...` <-> `/mnt/c/...` in both directions). It exists so the pack's POSIX half - `scripts/run-web.sh`, `scripts/setup/install.sh` and the sh branches of the checks - can be tested on the Windows machine that writes it. Host-only: one row, no route, no browser half. Zero npm dependencies and no network egress; it runs Windows' own launcher and the user's own distribution. See packages/dsh-wsl/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the three tools are registered into)",
+        "wsl.exe on the machine (WSL 0.58+ for `--cd`)",
+        "at least one distribution the user installed"
+      ],
+      "requires": [
+        "Windows with WSL: install it from an elevated terminal with `wsl --install` (this row cannot install a distribution and says so)",
+        "a distribution that can run a program - on a machine with Docker Desktop the launcher's DEFAULT is `docker-desktop-data`, which cannot, so the tools name the distribution they used"
+      ],
+      "vendors": [
+        "NOTHING is vendored, downloaded or bundled: the launcher is Windows' own program and the distribution is the user's. The package ships the argv builder, the UTF-16 decoder and the parser for the launcher's table"
+      ]
+    },
     "dsh-cmdbar": {
       "version": "0.1.0-alpha.17",
       "rows": [

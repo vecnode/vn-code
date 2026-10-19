@@ -1,0 +1,20 @@
+# dsh-wsl bundle layer (alpha).
+#
+# One row ('wsl') owns the whole plugin: its Node half registers THREE tools that
+# let the agent run a program inside a Windows Subsystem for Linux distribution -
+# `wsl_status` (what exists, which one is the default, whether it can run a
+# check), `wsl_run` (one argv array, with its exit code) and `wsl_path` (the
+# `C:\...` <-> `/mnt/c/...` conversion). Host-only: an exit code and some text
+# are the answer, so there is no route to serve and no browser half to load - the
+# package declares no dsh.client, and the boot graph gains one row.
+#
+# Nothing shipped is patched and no core row is disabled: core DSH has no WSL
+# surface, and the `bash` / `pwsh` tools it does ship run on THIS side of the
+# boundary, which is the gap this row fills.
+#
+# Nothing for scripts/sync-vendored.ps1 either: no engine is vendored, forked or
+# downloaded. `wsl.exe` is Windows' own program, and the distribution is the
+# user's - this package ships the launcher's argv and the parser for its output.
+- insert:
+    - id: wsl
+      name: 'dsh-wsl'
