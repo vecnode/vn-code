@@ -483,6 +483,10 @@ check(
 )
 const modalSource = readFileSync(path.join(repo, 'packages/dsh-modal/lib/client.js'), 'utf8')
 check('...and that control settles the queue the way Cancel does', modalSource.includes('onClick: () => finish(request, null)'))
+// A rich dialog's mask stays inert unless the caller opts in: the body may hold
+// half-finished work, and the opt-in is the caller's statement that it does not.
+check('a rich dialog keeps its mask inert by default', modalSource.includes('...(request.dismissOnMask === true ? { onClick: () => finish(request, null) } : {})'))
+check('...and only a spec that asks for it turns the mask on', modalSource.includes('dismissOnMask: source.dismissOnMask === true'))
 check('rich dialog content can close it', typeof richHelpers.close === 'function')
 richHelpers.close('done')
 richClosedWith = await richPromise
@@ -531,6 +535,9 @@ check(
     skillsSource.includes('content: (helpers) => h(SkillsBrowser'),
 )
 check('a missing modal service is handled', skillsSource.includes('is not mounted in this profile'))
+// The browser holds no draft (the editor commits through the save route), so a
+// click outside it is allowed to close it - the one rich dialog that opts in.
+check('the browser closes on a click outside it', skillsSource.includes('dismissOnMask: true'))
 
 // The browser mounts and draws its first frame (a static render runs no effect,
 // so this is the loading state - the whole tree still has to survive building).
@@ -2002,8 +2009,22 @@ check(
   themesSource.includes('sidebar.querySelector(\'[aria-haspopup="dialog"]\')'),
 )
 check(
-  'Plugins and Media use the shell\'s own panel ids',
-  themesSource.includes("props.selectPanel('plugins')") && themesSource.includes("props.selectPanel('media')"),
+  'Plugins still selects the shell\'s own panel id',
+  themesSource.includes("props.selectPanel('plugins')"),
+)
+// Media is a MODAL button: it asks dsh-audio's `media` service for the dialog,
+// and only falls back to the panel id in a profile running an older audio row.
+// `selectPanel('media')` on its own is the page swap this button must not do.
+check(
+  'Media opens the dialog service instead of swapping the main column',
+  themesSource.includes('onSelect: props.openMedia') &&
+    themesSource.includes("clientService(ctx, 'media')") &&
+    themesSource.includes("typeof media.open === 'function'") &&
+    themesSource.includes("selectPanel('media')"),
+)
+check(
+  'the band hides the duplicate header Skills control',
+  themesSource.includes('html:has([data-dsh-themes-band]) [data-dsh-skills="button"]{display:none}'),
 )
 check('Media is drawn only when its panel is declared', themesSource.includes("props.panels.indexOf('media') !== -1"))
 check(
@@ -5975,6 +5996,32 @@ check(
   seatDialog.includes('data-media-seat="dialog"') && seatDialog.includes('data-media-action="open-panel"') && seatDialog.includes('data-media-view=') === false,
 )
 check('...and can still be forced inline', renderToStaticMarkup(h(A.MediaSeat, { inline: true })).includes('data-media-seat="inline"'))
+
+// The `media` service the band's button drives, and the reason it exists: a
+// click must open the DIALOG, never select the seat's panel and hand the main
+// column over to a page. Driven through a stub `reflect`, which is the seam the
+// real harness provides the service on.
+const providedMedia = {}
+audio.exports.apply({
+  slots: { inject: (name, fn) => fn(), register: () => () => {} },
+  sidebarRightTabs: { register: () => () => {}, entries: () => [] },
+  get: (name) => (name === 'modals' ? { open: () => Promise.resolve(null) } : undefined),
+  reflect: {
+    provide: (name, service) => {
+      providedMedia[name] = service
+      return () => {}
+    },
+  },
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+check('audio publishes the media service the left bar opens', typeof providedMedia.media?.open, 'function')
+check('...and open() answers whether a dialog was opened', providedMedia.media.open(), true)
+const seatHandBack = audioSource.slice(audioSource.indexOf('const pending = openMediaDialog'), audioSource.indexOf('const pending = openMediaDialog') + 600)
+check(
+  '...while the seat hands the column back as soon as the dialog is open',
+  seatHandBack.includes('restorePanel()') && seatHandBack.indexOf('restorePanel()') < seatHandBack.indexOf('pending.then'),
+)
 
 // The wiring that a render cannot see, pinned as source because it is the
 // decision that would quietly stop working if it were dropped.

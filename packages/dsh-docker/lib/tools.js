@@ -65,11 +65,6 @@ function table(headers, rows) {
   return [line(headers), ...rows.map(line)].join('\n')
 }
 
-/** One container row, as a line of the state answer. */
-function containerLine(row) {
-  return row.name + (row.running ? '' : ' (' + row.state + ')') + '  ' + row.image + (row.ports === '' ? '' : '  ' + row.ports)
-}
-
 /** The engine's one-line identity. */
 function engineLine(info) {
   const version = info.serverVersion !== '' ? info.serverVersion : info.cliVersion

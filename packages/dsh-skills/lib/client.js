@@ -85,7 +85,7 @@ window.__ModuleLoader__.load({
     // Constants
     // ---------------------------------------------------------------------
     /** Version marker, logged at activation; must equal package.json's version. */
-    const PLUGIN_VERSION = '0.1.0-alpha.3'
+    const PLUGIN_VERSION = '0.1.0-alpha.4'
     /** Keep in sync with lib/index.js. */
     const API_ROOT = '/api/dsh-skills'
     const LIST_ROUTE = API_ROOT + '/list'
@@ -793,6 +793,9 @@ window.__ModuleLoader__.load({
               modals.open({
                 title: '',
                 size: 'lg',
+                // The browser holds no draft of its own - the editor commits
+                // through the save route - so a click on the mask may close it.
+                dismissOnMask: true,
                 content: (helpers) => h(SkillsBrowser, { sessionId, close: helpers.close }),
               })
             },

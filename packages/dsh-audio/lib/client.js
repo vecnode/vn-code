@@ -68,8 +68,10 @@
  *    It is about FILES, not about the machine. This package enumerates no
  *    audio devices, opens no microphone, plays no test tone and routes no
  *    output: the console that did all four (alpha.3 to alpha.6) was removed,
- *    and nothing here is left behind for it - no service, no storage key, no
- *    child surface. The player still creates the one AudioContext it needs.
+ *    and nothing is left behind for it - no storage key, no child surface. The
+ *    player still creates the one AudioContext it needs. What the Media panel
+ *    DOES publish is the `media` service, so the left bar can open its dialog
+ *    without swapping the conversation out for the seat underneath.
  *
  * Module-table format of every client bundle here; no build step.
  */
@@ -93,7 +95,7 @@ window.__ModuleLoader__.load({
     /** The tab kind this package owns. */
     const KIND = 'audio'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.7'
+    const PLUGIN_VERSION = '0.1.0-alpha.8'
     /** Address grammar owned by @deepseek-ai/dsh-util-workspace-path. */
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
@@ -3148,6 +3150,12 @@ window.__ModuleLoader__.load({
     const SIDEBAR_SERVICE = 'sidebarRight'
     /** The pack's shared dialog surface (dsh-modal), resolved lazily at click time. */
     const MODAL_SERVICE = 'modals'
+    /**
+     * The client service this package PUBLISHES: `media.open()` opens the Media
+     * dialog without selecting the panel behind it, which is how the left bar's
+     * Media button stays a modal button instead of a page switch.
+     */
+    const MEDIA_SERVICE = 'media'
 
     // ---------------------------------------------------------------------
     // The services this file resolves lazily, and the sentence one error becomes
@@ -3396,13 +3404,66 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Open the Media dialog through the pack's shared surface.
+     *
+     * `sessionOf` is a FUNCTION, not a string: the service re-renders a rich
+     * dialog's content, so it has to read the CURRENT session each time instead
+     * of the one captured when the button was pressed - a session switch must
+     * not reopen the dialog on the conversation it was opened from.
+     *
+     * @param sessionOf - `() => string`, the session the panel browses.
+     * @param onOpenFailure - told when a file could not be handed to its tab.
+     * @returns the dialog's pending promise, or null when this profile has no
+     *   dialog service (or it refused to open).
+     */
+    function openMediaDialog(sessionOf, onOpenFailure) {
+      const modals = serviceNow(MODAL_SERVICE)
+      if (modals === null || modals === undefined || typeof modals.open !== 'function') return null
+      try {
+        return modals.open({
+          title: 'Media',
+          size: 'lg',
+          content: (helpers) => {
+            const sessionId = sessionOf()
+            return h(MediaPanel, {
+              sessionId,
+              close: helpers.close,
+              onOpen: (item) => {
+                const failure = openMediaInBar(sessionId, item)
+                if (failure === '') helpers.close(null)
+                else if (typeof onOpenFailure === 'function') onOpenFailure(failure)
+              },
+            })
+          },
+        })
+      } catch (err) {
+        return null
+      }
+    }
+
+    /**
+     * The client service the left bar's Media button drives: the dialog, and
+     * nothing else. `layout.selectPanel('media')` is deliberately NOT used - it
+     * would swap the main column from the conversation to the seat below, which
+     * is exactly what a modal button must not do.
+     *
+     * @returns `{ open() }`, where open() answers whether a dialog was opened.
+     */
+    function mediaService() {
+      return {
+        open: () => openMediaDialog(() => sessionIdFor({}), () => {}) !== null,
+      }
+    }
+
+    /**
      * The main column's seat: the panel the sidebar row selects, and the only
      * door to the Media panel.
      *
-     * The dialog is opened ON MOUNT, which is what makes the left-bar row behave
-     * like a modal button. The seat underneath is not a dead end either: it
-     * carries its own "Open the Media panel" control, so a dialog dismissed
-     * without the column being handed back can always be reopened.
+     * The dialog is opened ON MOUNT and the column is handed straight back, so
+     * the row behaves like a modal button even though the shell opened a panel
+     * to reach it. The seat underneath is not a dead end either: it carries its
+     * own "Open the Media panel" control, so a dialog dismissed without the
+     * column being handed back can always be reopened.
      */
     function MediaSeat(props) {
       const inline = props !== null && props !== undefined && props.inline === true
@@ -3423,28 +3484,13 @@ window.__ModuleLoader__.load({
       const modalsRef = useRef(modals)
       modalsRef.current = modals
       useEffect(() => {
-        const service = modalsRef.current
-        if (!hasModal || service === null) return undefined
+        if (!hasModal) return undefined
         let live = true
-        let pending = null
-        try {
-          pending = service.open({
-            title: 'Media',
-            size: 'lg',
-            content: (helpers) =>
-              h(MediaPanel, {
-                sessionId: sessionRef.current,
-                close: helpers.close,
-                onOpen: (item) => {
-                  const failure = openMediaInBar(sessionRef.current, item)
-                  if (failure === '') helpers.close(null)
-                },
-              }),
-          })
-        } catch (err) {
-          restorePanel()
-          return undefined
-        }
+        const pending = openMediaDialog(() => sessionRef.current, () => {})
+        // Hand the column back ONCE THE DIALOG IS OPEN, not when it closes: the
+        // dialog is the surface, and leaving the chat swapped out for the seat
+        // is the behaviour this button was reported for.
+        restorePanel()
         if (pending !== null && pending !== undefined && typeof pending.then === 'function') {
           pending.then(
             () => {
@@ -4058,6 +4104,12 @@ window.__ModuleLoader__.load({
           () => ctx.slots.inject(MAIN_SLOT, () => ctx.slots.register({ name: MAIN_SLOT, key: PANEL_ID, inject: () => ({}) }, MediaSeat)),
           'dsh-audio: the Media panel seat',
         )
+        // The `media` service: the left bar opens the dialog with it instead of
+        // selecting the seat's panel. Optional on the context (a profile or a
+        // harness build without `reflect.provide` keeps the row's own path).
+        if (ctx.reflect !== undefined && ctx.reflect !== null && typeof ctx.reflect.provide === 'function') {
+          ctx.effect(() => ctx.reflect.provide(MEDIA_SERVICE, mediaService()), 'dsh-audio: the media dialog service')
+        }
         ctx.logger?.debug?.('[dsh-audio] client half active (' + PLUGIN_VERSION + ')')
       } catch (err) {
         // eslint-disable-next-line no-console

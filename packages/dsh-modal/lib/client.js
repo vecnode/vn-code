@@ -31,7 +31,9 @@
  * `validate` and `submit` do not apply to one (the content drives its own work),
  * the panel grows to `size: 'lg'`, and a MASK CLICK NO LONGER CLOSES IT: a rich
  * dialog can hold half-finished work, and a stray click outside it must not
- * throw that away - Escape and the content's own Close button remain.
+ * throw that away - Escape and the content's own Close button remain. A caller
+ * that KNOWS its content holds nothing to lose opts back in with
+ * `dismissOnMask: true`, and the mask closes it like any other dialog.
  *
  * The host owns no slot: it creates its own detached container on
  * `document.body` and renders it with `react-dom/client`'s `createRoot`, both
@@ -54,7 +56,7 @@ window.__ModuleLoader__.load({
     const h = React.createElement
 
     /** Version marker, mirrored by the package manifest. */
-    const PLUGIN_VERSION = '0.1.0-alpha.3'
+    const PLUGIN_VERSION = '0.1.0-alpha.4'
     /** The client service name other plugins resolve. */
     const SERVICE = 'modals'
 
@@ -193,6 +195,12 @@ window.__ModuleLoader__.load({
         content: typeof source.content === 'function' ? source.content : undefined,
         /** `size: 'lg'` is the roomy frame a two-column rich dialog is laid out in. */
         size: source.size === 'lg' ? 'lg' : 'md',
+        /**
+         * A rich dialog's mask click. OFF by default (the body may hold work a
+         * stray click must not discard); a caller with nothing to lose turns it
+         * back on. A form dialog ignores this: its mask always cancels.
+         */
+        dismissOnMask: source.dismissOnMask === true,
         confirmLabel: typeof source.confirmLabel === 'string' && source.confirmLabel !== '' ? source.confirmLabel : 'OK',
         /** `cancelLabel: null` renders no cancel button (a plain acknowledgement). */
         cancelLabel: source.cancelLabel === null ? null : typeof source.cancelLabel === 'string' && source.cancelLabel !== '' ? source.cancelLabel : 'Cancel',
@@ -406,9 +414,10 @@ window.__ModuleLoader__.load({
         return h(
           'div',
           { className: 'dsm-overlay', role: 'presentation' },
-          // No mask click: a rich dialog can hold unsaved work, and Escape (and
-          // the header's own close control) is what closes it.
-          h('div', { className: 'dsm-mask', 'aria-hidden': true }),
+          // No mask click unless the caller opted in: a rich dialog can hold
+          // unsaved work, and Escape (and the header's own close control) is
+          // what closes it. `dismissOnMask: true` is the opt-in.
+          h('div', { className: 'dsm-mask', 'aria-hidden': true, ...(request.dismissOnMask === true ? { onClick: () => finish(request, null) } : {}) }),
           h(
             'div',
             {

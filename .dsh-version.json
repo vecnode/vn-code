@@ -87,7 +87,7 @@
       ]
     },
     "dsh-audio": {
-      "version": "0.1.0-alpha.7",
+      "version": "0.1.0-alpha.8",
       "rows": [
         "audio"
       ],
@@ -95,7 +95,7 @@
       "role": "Audio + Media: the `audio` tab draws WAV/AIFF/FLAC as a waveform (one row per channel, an adaptive ruler, a min/max envelope with the RMS core, zoom down to samples, selection, playback on the audio clock), and the left column's **Media** panel (alpha.5, one row above Plugins) scans the conversation workspace for every audio, image, video and GIF file it can reach - bounded, grouped by kind, previewed inline through the harness's own `/api/file` route, and handed to the tab that owns the type on one click. It is about files only: no microphone, no device enumeration and no output routing. Client-only, read in 2 MiB windows. See packages/dsh-audio/README.md.",
       "uses": [
         "dsh-rightbar",
-        "dsh-modal (the pack's shared dialog surface: the panel's seat opens it lazily through ctx.get and never injects it, so a profile without it draws the panel inline as a page instead)",
+        "dsh-modal (the pack's shared dialog surface: the panel's seat opens it lazily through ctx.get and never injects it, so a profile without it draws the panel inline as a page instead; the package also publishes the `media` service the left bar's Media button opens, which keeps the conversation in the main column)",
         "@deepseek-ai/dsh-api-workspace-files (the workspaceFiles remote: readBytes windows, list, stat)"
       ]
     },
@@ -296,7 +296,7 @@
       ]
     },
     "dsh-modal": {
-      "version": "0.1.0-alpha.3",
+      "version": "0.1.0-alpha.4",
       "rows": [
         "modal"
       ],
@@ -304,10 +304,10 @@
         "modals"
       ],
       "rowOverrides": [],
-      "role": "Modal: the pack's shared dialog surface, published as the `modals` service - `open` / `alert` / `confirm` / `prompt` with async submit work that keeps the dialog open, plus a rich `content` dialog whose mask click deliberately does not close it. See packages/dsh-modal/README.md."
+      "role": "Modal: the pack's shared dialog surface, published as the `modals` service - `open` / `alert` / `confirm` / `prompt` with async submit work that keeps the dialog open, plus a rich `content` dialog whose mask click deliberately does not close it unless the caller opts in with `dismissOnMask`. See packages/dsh-modal/README.md."
     },
     "dsh-skills": {
-      "version": "0.1.0-alpha.3",
+      "version": "0.1.0-alpha.4",
       "rows": [
         "skills"
       ],
@@ -316,7 +316,7 @@
         "@deepseek-ai/dsh-skill (ctx.skills, the host skill registry - NOT injected, resolved lazily per request)",
         "dsh-modal (the shared dialog surface, opened in its rich `content` form; resolved lazily so a profile without it still loads)"
       ],
-      "role": "Skills browser: one header seat opens a modal listing every skill the harness loads for this conversation, with three routes to read and save the markdown behind it. The client names a skill, never a path. See packages/dsh-skills/README.md."
+      "role": "Skills browser: the left bar's Skills button (and, in a profile without dsh-themes, one header seat) opens a modal listing every skill the harness loads for this conversation, closable by clicking outside it, with three routes to read and save the markdown behind it. The client names a skill, never a path. See packages/dsh-skills/README.md."
     },
     "dsh-ui-state": {
       "version": "0.1.0-alpha.2",
@@ -381,7 +381,7 @@
       ]
     },
     "dsh-themes": {
-      "version": "0.1.0-alpha.30",
+      "version": "0.1.0-alpha.31",
       "rows": [
         "themes"
       ],
@@ -391,7 +391,7 @@
         "@deepseek-ai/dsh-session-log-export",
         "dsh-ui-state (the uiState service, resolved lazily through ctx.get, for the durable page zoom and extension theme)"
       ],
-      "role": "Themes and header dress: the conversation header's own controls (page zoom, Screenshot, Themes, session-log download), the Nord/Monokai/Hacker/Cyber palettes, and the pack's appearance overrides - Markdown paper, the branding band, the band lines and the top row's centre, the account menu's Feedback row removed, and the right bar's resize seam. See packages/dsh-themes/README.md.",
+      "role": "Themes and header dress: the conversation header's own controls (page zoom, Screenshot, Themes, session-log download), the Nord/Monokai/Hacker/Cyber palettes, and the pack's appearance overrides - Markdown paper, the branding band, the band lines and the top row's centre, the account menu's Feedback row removed, the right bar's resize seam, and the band's four action buttons (Settings, Plugins, Media, Skills), where Media opens dsh-audio's `media` dialog instead of swapping the main column and the header's duplicate Skills seat is hidden. See packages/dsh-themes/README.md.",
       "overrides": [
         "markdown paper: re-declares ui-theme's light declarations on the rendered Markdown root, so the page stays white in the dark theme",
         "markdown chrome: hides the preview header's viewer menu on Markdown tabs (the page has exactly one renderer; the editor's Edit button is the way back to editing)",

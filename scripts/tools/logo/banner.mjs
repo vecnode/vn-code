@@ -36,7 +36,7 @@ const SIZE = { width: 1280, height: 320 }
 const plugins = fs.readdirSync(path.join(repo, 'packages'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).length
 
 const COPY = {
-  eyebrow: 'VNCODE \u00b7 IDE',
+  eyebrow: 'VNCODE \u00b7 ADE',
   count: String(plugins),
   countTail: 'plugins.',
   subhead: 'Node application.',

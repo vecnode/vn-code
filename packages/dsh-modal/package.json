@@ -1,7 +1,7 @@
 {
   "name": "dsh-modal",
-  "version": "0.1.0-alpha.3",
-  "description": "Modal: the pack's shared dialog surface, published as the `modals` service - `open` / `alert` / `confirm` / `prompt` with async submit work that keeps the dialog open, plus a rich `content` dialog whose mask click deliberately does not close it.",
+  "version": "0.1.0-alpha.4",
+  "description": "Modal: the pack's shared dialog surface, published as the `modals` service - `open` / `alert` / `confirm` / `prompt` with async submit work that keeps the dialog open, plus a rich `content` dialog whose mask click deliberately does not close it unless the caller opts in with `dismissOnMask`.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

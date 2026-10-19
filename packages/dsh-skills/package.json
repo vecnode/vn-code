@@ -1,7 +1,7 @@
 {
   "name": "dsh-skills",
-  "version": "0.1.0-alpha.3",
-  "description": "Skills browser: one header seat opens a modal listing every skill the harness loads for this conversation, with three routes to read and save the markdown behind it. The client names a skill, never a path.",
+  "version": "0.1.0-alpha.4",
+  "description": "Skills browser: the left bar's Skills button (and, in a profile without dsh-themes, one header seat) opens a modal listing every skill the harness loads for this conversation, closable by clicking outside it, with three routes to read and save the markdown behind it. The client names a skill, never a path.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
