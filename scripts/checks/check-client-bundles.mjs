@@ -1941,22 +1941,44 @@ check(
 // through the shipped Tooltip's `disabled` prop (its close-and-stay-closed
 // switch), so the bubble is gone rather than merely invisible.
 const themesSource = readFileSync(path.join(repo, 'packages/dsh-themes/lib/client.js'), 'utf8')
-// The band's SECOND ROW (alpha.29): Settings, Plugins, Media, mounted into the
-// 36px strip the top bar leaves under the mid-band hairline. ui-sidebar declares
-// no slot for that row, so this is the one override here that mounts DOM - and
-// what is pinned is the contract the mount has to keep, not its markup: it
-// targets the SAME pinned sidebar hash every band override uses, it is skipped
+// The band's SECOND ROW (alpha.29, four buttons and one size in alpha.30):
+// Settings, Plugins, Media, Skills, mounted into the 36px strip the top bar
+// leaves under the mid-band hairline. ui-sidebar declares no slot for that row,
+// so this is the one override here that mounts DOM - and what is pinned is the
+// contract the mount has to keep, not its markup: it targets the SAME pinned
+// sidebar hash every band override uses, it wears the SAME `.dst-button` class
+// the header controls wear (one button size in the app, 28x28), it is skipped
 // WHOLE when the document or react-dom/client is unavailable (a header seat must
 // never be lost to a missing module - the abdication trap above), it adds a
 // sibling of the branded identity rather than wrapping or moving shipped DOM, it
 // never reproduces Settings' state (the shipped panel's own trigger is clicked,
 // scoped to the column), the two panel buttons use the SAME ids the shell's rows
-// pass to `selectPanel`, Media is drawn only when its panel is declared, and the
+// pass to `selectPanel`, Media is drawn only when its panel is declared, Skills
+// is driven through the header control that carries the session id, and the
 // strip re-attaches on a sidebar remount without a timer.
 check(
-  'the band strip is styled as a row of real buttons',
-  themesCss.includes('.dst-band{position:absolute;left:16px;right:16px;top:43px;height:30px;display:flex') &&
-    themesCss.includes('.dst-band-action{height:26px;min-width:34px;box-sizing:border-box;'),
+  'the band strip is a row of the app\'s own 28px buttons',
+  themesCss.includes('.dst-band{position:absolute;left:16px;right:16px;top:44px;height:28px;display:flex') &&
+    themesSource.includes("className: 'dst-button'") &&
+    themesCss.includes('.dst-button{width:28px;height:28px;box-sizing:border-box;'),
+)
+check(
+  'the band carries four destinations, Skills last',
+  themesSource.includes("id: 'settings'") &&
+    themesSource.includes("id: 'plugins'") &&
+    themesSource.includes("id: 'media'") &&
+    themesSource.includes("id: 'skills'") &&
+    themesSource.indexOf("id: 'skills'") > themesSource.indexOf("id: 'media'") &&
+    themesSource.indexOf("id: 'media'") > themesSource.indexOf("id: 'plugins'"),
+)
+check(
+  'the bottom rows are hidden once the band is the navigation',
+  themesCss.includes('html:has([data-dsh-themes-band]) .hHd-Xa_panelList{display:none}') &&
+    themesCss.includes('html:has([data-dsh-themes-band]) .hHd-Xa_footArea [aria-haspopup="dialog"]{display:none}'),
+)
+check(
+  'Skills is driven through the header control that carries the session',
+  themesSource.includes('document.querySelector(\'[data-dsh-skills="button"]\')'),
 )
 check('the band strip is hidden in the collapsed rail', themesCss.includes('.hHd-Xa_collapsed .dst-band{display:none}'))
 check(

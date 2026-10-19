@@ -100,8 +100,9 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
   `docs/COMPATIBILITY.md`;
 - the app: `app/README.md` (the verbs, the bridge to `scripts/run-web.*`, the app's own
   root and the harness home inside it, and the three crates);
-- a plan, and not shipped behaviour: `docs/PLAN-controller.md` (the cut that removed the
-  web view and the window, and why the size is a budget rather than a result);
+- work in flight, and not shipped behaviour: `docs/PLAN-ollama.md` (the
+  `dsh-ollama` design — one host-only row of `ollama_*` tools, the metric
+  arithmetic, three skills and the checks that pin them);
 - security: `SECURITY.md`;
 - **the checks are the contract**: `scripts/checks/*.mjs` pin route registrations, bundle
   wiring, budgets, the launcher contract and the credential rules. They are run by hand;

@@ -255,7 +255,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.29'
+    const PLUGIN_VERSION = '0.1.0-alpha.30'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -418,12 +418,10 @@ window.__ModuleLoader__.load({
 .dst-button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .dst-button:disabled{cursor:default;opacity:.5}
 .dst-button:focus-visible{outline:.5px solid var(--dsw-alias-state-accent,#4f8cff);outline-offset:1px}
-.dst-band{position:absolute;left:16px;right:16px;top:43px;height:30px;display:flex;align-items:center;gap:6px}
-.dst-band-action{height:26px;min-width:34px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 9px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:7px;background:0 0;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;flex:none}
-.dst-band-action svg{width:14px;height:14px}
-.dst-band-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dst-band-action:focus-visible{outline:.5px solid var(--dsw-alias-state-accent,#4f8cff);outline-offset:1px}
+.dst-band{position:absolute;left:16px;right:16px;top:44px;height:28px;display:flex;align-items:center;gap:6px}
 html .hHd-Xa_root.hHd-Xa_collapsed .dst-band{display:none}
+html:has([data-dsh-themes-band]) .hHd-Xa_panelList{display:none}
+html:has([data-dsh-themes-band]) .hHd-Xa_footArea [aria-haspopup="dialog"]{display:none}
 html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
 `
     const CSS_TAG = 'dsh-themes/themes.css'
@@ -1780,10 +1778,12 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     // workspaces region and the foot, and the two at the top are single-occupant,
     // aria-hidden decoration this package already hides.
     //
-    // WHAT THIS DOES. The theme mounts its own strip into that row: three icon
-    // buttons - Settings, then Plugins, then Media, left-aligned and sharing one
-    // 26px height - each a rounded .5px-outlined button rather than a bare glyph,
-    // and each naming itself in a tooltip on hover. The strip is a SIBLING of the
+    // WHAT THIS DOES. The theme mounts its own strip into that row: FOUR icon
+    // buttons - Settings, Plugins, Media, Skills, in that order - and each one is
+    // the SAME .dst-button the header's controls are (28x28, the same .5px
+    // outline, a 15px glyph), so the app has ONE button size rather than a band
+    // that invented a second. Each names itself in a tooltip on hover. The strip
+    // is a SIBLING of the
     // branded (aria-hidden) identity, so the buttons are IN the accessibility
     // tree, and it is mounted additively: nothing shipped is moved, replaced or
     // wrapped.
@@ -1826,6 +1826,7 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     const SettingsGlyph = glyphOf(['IconSettingsOutlineRegular', 'IconSettingsOutline16'])
     const PluginsGlyph = glyphOf(['IconPluginPinwheelOutlineRegular', 'IconPluginPinwheelOutline16'])
     const MediaGlyph = glyphOf(['IconPlayOutlineRegular', 'IconPlayOutline16'])
+    const SkillsGlyph = glyphOf(['IconSkillOutlineRegular', 'IconSkillOutline16'])
 
     /**
      * Resolve one CLIENT service, or null - never an import and never a hard
@@ -1876,19 +1877,20 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
           'button',
           {
             type: 'button',
-            className: 'dst-band-action',
+            // The SAME class as the header controls: one button size in the app.
+            className: 'dst-button',
             'aria-label': props.label,
             'data-dsh-themes-band-action': props.id,
             onClick: props.onSelect,
           },
-          h(props.icon, { size: 14 }),
+          h(props.icon, { size: 15 }),
         ),
       )
     }
 
     /**
-     * The strip itself, in the order asked for: Settings, Plugins, Media.
-     * @param props - `{ panels, selectPanel, openSettings }`.
+     * The strip itself, in the order asked for: Settings, Plugins, Media, Skills.
+     * @param props - `{ panels, selectPanel, openSettings, openSkills }`.
      * @returns the group element.
      */
     function BandActions(props) {
@@ -1910,9 +1912,12 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
           onSelect: () => props.selectPanel('media'),
         })
       }
+      // The fourth element: the Skills browser the header carries, driven through
+      // its own control so the dialog keeps the session it was opened for.
+      items.push({ id: 'skills', label: 'Skills', icon: SkillsGlyph, onSelect: props.openSkills })
       return h(
         'div',
-        { className: 'dst-band', role: 'group', 'aria-label': 'Settings, Plugins, Media' },
+        { className: 'dst-band', role: 'group', 'aria-label': 'Settings, Plugins, Media, Skills' },
         items.map((item) => h(BandAction, { key: item.id, ...item })),
       )
     }
@@ -1950,6 +1955,18 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         }
       }
 
+      const openSkills = () => {
+        try {
+          // The header's own Skills control, which carries the session id the
+          // browser resolves its project folder from. Absent in a profile that
+          // never mounts dsh-skills - the button then does nothing.
+          const button = document.querySelector('[data-dsh-skills="button"]')
+          if (button !== null && typeof button.click === 'function') button.click()
+        } catch (err) {
+          /* a control that moved is not worth an exception in a click handler */
+        }
+      }
+
       const selectPanel = (id) => {
         const layout = clientService(ctx, 'layout')
         if (layout === null || typeof layout.selectPanel !== 'function') return
@@ -1962,7 +1979,7 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
 
       const paint = () => {
         if (reactRoot === null) return
-        reactRoot.render(h(BandActions, { panels: declaredPanels(ctx), selectPanel, openSettings }))
+        reactRoot.render(h(BandActions, { panels: declaredPanels(ctx), selectPanel, openSettings, openSkills }))
       }
 
       const ensure = () => {

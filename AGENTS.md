@@ -131,10 +131,10 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   lacks the pack, and then runs `scripts/run-web.*` in the foreground. Its verbs are
   `start` (default), `install`, `uninstall`, `status` and `key`; `-Mode embed` is
   refused **by name**, because there is no embedded browser to select.
-  `app/README.md` explains it and `docs/PLAN-controller.md` is the plan it was cut
-  from. `check-shell.mjs` is what proves it, and it drives the real binary.
-- `docs/` — install, build, deploy, release, paths, compatibility, and the plan the app
-  was cut from. There is no distributer and no ship list: the distribution is this
+  `app/README.md` explains it. `check-shell.mjs` is what proves it, and it drives
+  the real binary.
+- `docs/` — install, build, deploy, release, paths, compatibility, and the one plan
+  still in flight (`PLAN-ollama.md`). There is no distributer and no ship list: the distribution is this
   repository plus the binary, and the app installs the pack itself.
 - `.dsh-version.json` — the pinned harness line and the pack manifest
   (its versions must match every `package.json`; `check-node-routes.mjs` enforces
