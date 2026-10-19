@@ -1729,12 +1729,7 @@ window.__ModuleLoader__.load({
       // Authored HTML is parsed once per source; the elements below are then
       // built on every render, which is what keeps a re-render cheap-ish while
       // the parse (the expensive half) stays out of it.
-      const blocks = React.useMemo(() => {
-        if (text === '') return []
-        return splitHtmlBlocks(text).map((block) =>
-          block.kind === 'html' ? { kind: 'html', nodes: parseHtmlFragment(block.text) } : { kind: 'markdown', text: block.text },
-        )
-      }, [text])
+      const blocks = React.useMemo(() => (text === '' ? [] : splitHtmlBlocks(text)), [text])
       if (content === null || content === undefined || content.kind !== 'text') return null
       const tabId = info && info.tab && typeof info.tab.id === 'string' ? info.tab.id : ''
       const edit = props.edit
@@ -1747,21 +1742,30 @@ window.__ModuleLoader__.load({
         }
       }
       const resolveImage = (value) => markdownImageUrl(pageBaseUrl(), absolutePath, value)
-      const rendered = blocks.map((block, index) =>
-        block.kind === 'markdown'
-          ? h(MarkdownText, {
-              key: 'md' + index,
+      // A container's children are blocks in turn, so this recurses. Every HTML
+      // run keeps the `dse-mdhtml` wrapper - inside a container too - because
+      // that class is where the pane's image sizing, table borders and `<details>`
+      // spacing live, and a fragment drawn bare would lose them.
+      const renderBlocks = (list, prefix) =>
+        list.map((block, index) => {
+          const key = prefix + '.' + index
+          if (block.kind === 'markdown') {
+            return h(MarkdownText, {
+              key: key,
               text: block.text,
               streaming: !content.eof,
               labels: labels,
               pathImages: pathImages,
             })
-          : h(
-              'div',
-              { key: 'html' + index, className: 'dse-mdhtml', 'data-dsh-md-html': true },
-              renderHtmlNodes(block.nodes, resolveImage, 'b' + index),
-            ),
-      )
+          }
+          if (block.kind === 'html') {
+            return h('div', { key: key, className: 'dse-mdhtml', 'data-dsh-md-html': true }, renderHtmlNodes(block.nodes, resolveImage, key))
+          }
+          const props = elementProps(block.tag, block.attrs, resolveImage, key)
+          if (HTML_VOID_TAGS.has(block.tag)) return h(block.tag, props)
+          return h(block.tag, props, renderBlocks(block.children, key))
+        })
+      const rendered = renderBlocks(blocks, 'b')
       return h(
         'div',
         { className: 'dse-mdview' },
@@ -2036,6 +2040,51 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The React props for one authored element: the allowlisted attributes,
+     * with `src` resolved through the file route, `href` refused unless it is a
+     * real destination, and the numeric / boolean spellings React wants.
+     *
+     * Shared by the fragment renderer and by a container element, so an authored
+     * `<div align="center">` that OPENS a block and one that sits inside a
+     * fragment are drawn by the same rules.
+     */
+    function elementProps(tag, attrs, resolveImage, key) {
+      const allowed = HTML_TAG_ATTRS[tag]
+      const props = { key: key }
+      for (const attr of attrs) {
+        if (!HTML_GLOBAL_ATTRS.has(attr.name) && !(allowed !== undefined && allowed.has(attr.name))) continue
+        const propName = HTML_ATTR_ALIASES[attr.name] || attr.name
+        if (attr.name === 'src') {
+          const url = resolveImage(attr.value)
+          if (url !== undefined) props.src = url
+          continue
+        }
+        if (attr.name === 'href') {
+          const href = safeHref(attr.value)
+          if (href !== undefined) {
+            props.href = href
+            if (/^https?:/i.test(href)) {
+              props.target = '_blank'
+              props.rel = 'noreferrer noopener'
+            }
+          }
+          continue
+        }
+        if (attr.name === 'width' || attr.name === 'height' || attr.name === 'colspan' || attr.name === 'rowspan' || attr.name === 'start') {
+          const number = Number(attr.value)
+          if (Number.isFinite(number)) props[propName] = number
+          continue
+        }
+        if (attr.name === 'open' || attr.name === 'reversed') {
+          props[propName] = true
+          continue
+        }
+        props[propName] = attr.value
+      }
+      return props
+    }
+
+    /**
      * Rebuild parsed HTML as React elements.
      * @param nodes - nodes from {@link parseHtmlFragment}.
      * @param resolveImage - authored `src` to a displayable URL, or undefined.
@@ -2056,38 +2105,7 @@ window.__ModuleLoader__.load({
           continue
         }
         const tag = node.tag
-        const allowed = HTML_TAG_ATTRS[tag]
-        const props = { key: nodeKey }
-        for (const attr of node.attrs) {
-          if (!HTML_GLOBAL_ATTRS.has(attr.name) && !(allowed !== undefined && allowed.has(attr.name))) continue
-          const propName = HTML_ATTR_ALIASES[attr.name] || attr.name
-          if (attr.name === 'src') {
-            const url = resolveImage(attr.value)
-            if (url !== undefined) props.src = url
-            continue
-          }
-          if (attr.name === 'href') {
-            const href = safeHref(attr.value)
-            if (href !== undefined) {
-              props.href = href
-              if (/^https?:/i.test(href)) {
-                props.target = '_blank'
-                props.rel = 'noreferrer noopener'
-              }
-            }
-            continue
-          }
-          if (attr.name === 'width' || attr.name === 'height' || attr.name === 'colspan' || attr.name === 'rowspan' || attr.name === 'start') {
-            const number = Number(attr.value)
-            if (Number.isFinite(number)) props[propName] = number
-            continue
-          }
-          if (attr.name === 'open' || attr.name === 'reversed') {
-            props[propName] = true
-            continue
-          }
-          props[propName] = attr.value
-        }
+        const props = elementProps(tag, node.attrs, resolveImage, nodeKey)
         if (tag === 'img') {
           // A source the route could not vouch for has no src at all: the alt
           // text is then the whole of the image, as the shipped renderer does.
@@ -2134,43 +2152,98 @@ window.__ModuleLoader__.load({
       return depth
     }
 
-    /**
-     * The last line of the HTML block that starts at `start`, or -1 when the
-     * block is not balanced inside the document (an unclosed `<div>` then stays
-     * literal Markdown instead of swallowing every section after it).
-     */
-    function htmlBlockEnd(lines, start) {
-      const limit = Math.min(lines.length, start + 400)
-      let depth = 0
-      for (let index = start; index < limit; index += 1) {
-        depth += htmlLineDepth(lines[index])
-        if (depth <= 0) return index
+    /** The chain of elements a token run leaves OPEN, outermost first. */
+    function openElementChain(tokens) {
+      const chain = []
+      for (const token of tokens) {
+        if (token.type === 'open') {
+          if (!HTML_VOID_TAGS.has(token.tag) && !token.selfClose) chain.push({ tag: token.tag, attrs: token.attrs })
+          continue
+        }
+        if (token.type === 'close') {
+          for (let index = chain.length - 1; index >= 0; index -= 1) {
+            if (chain[index].tag === token.tag) {
+              chain.length = index
+              break
+            }
+          }
+        }
       }
-      return -1
+      return chain
+    }
+
+    /** The tag a line closes, when the whole line is that one closing tag. */
+    function closingTagOf(line) {
+      const match = /^\s*<\/([a-z][a-z0-9:-]*)\s*>\s*$/i.exec(line)
+      return match === null ? null : match[1].toLowerCase()
+    }
+
+    /** Whether a closing tag for `tag` sits on a line of its own at or after `start`. */
+    function closesAhead(lines, start, tag) {
+      for (let index = start; index < lines.length; index += 1) {
+        if (closingTagOf(lines[index]) === tag) return true
+      }
+      return false
     }
 
     /**
-     * Split a Markdown document into rendered-Markdown runs and authored-HTML
-     * runs. A fenced code block is NEVER split: an example's `<div>` is an
-     * example, and it must keep rendering as code.
+     * Split a document into blocks: rendered-Markdown runs, self-contained HTML
+     * runs, and HTML CONTAINERS whose children are blocks in turn.
+     *
+     * The container is what makes a GitHub README render the way GitHub renders
+     * it. `# vn-code` below `<div align="center">` is a MARKDOWN heading inside a
+     * still-open element: CommonMark ends an HTML block at the blank line, and
+     * the browser then nests the heading in the div that is still open. A
+     * splitter that only builds balanced fragments hands that line to the HTML
+     * parser instead, so the heading was drawn as the literal text `# vn-code`
+     * inside the div - a README header with no title, which is exactly what the
+     * vn-code README did until this container pass.
+     *
+     * The rule, stated once:
+     *   - an HTML run is the longest run of consecutive NON-BLANK lines starting
+     *     with an allowed open tag;
+     *   - balanced inside the run -> a fragment, exactly as before;
+     *   - leaves ONE allowed element open, and that element is closed on a line
+     *     of its own further down -> the element becomes a container and its
+     *     interior is parsed recursively, so Markdown, HTML and nested containers
+     *     can all sit inside it;
+     *   - anything else (several elements left open, a dropped tag like `<svg>`,
+     *     no closing line at all) keeps the conservative old behaviour: the lines
+     *     render as literal Markdown rather than swallowing the sections after
+     *     them.
+     *
+     * A fenced code block is NEVER split: an example's `<div>` is an example, and
+     * it must keep rendering as code.
      * @param text - the document source.
-     * @returns [{ kind: 'markdown' | 'html', text }]
+     * @returns [{ kind: 'markdown' | 'html' | 'element', ... }]
      */
     function splitHtmlBlocks(text) {
-      const lines = String(text).split('\n')
+      return parseBlocks(String(text).split('\n'), 0, null).blocks
+    }
+
+    /**
+     * One level of {@link splitHtmlBlocks}: parse from `start`, and if
+     * `closingTag` names the container this level sits in, stop at its closing
+     * line and report the line after it.
+     * @returns {{ blocks: Array, next: number }}
+     */
+    function parseBlocks(lines, start, closingTag) {
       const blocks = []
       let markdown = []
       let fence = null
+      let index = start
       const flush = () => {
-        if (markdown.length > 0) {
-          const value = markdown.join('\n')
-          if (value.trim() !== '') blocks.push({ kind: 'markdown', text: value })
-        }
+        if (markdown.length === 0) return
+        const value = markdown.join('\n')
         markdown = []
+        if (value.trim() !== '') blocks.push({ kind: 'markdown', text: value })
       }
-      let index = 0
       while (index < lines.length) {
         const line = lines[index]
+        if (closingTag !== null && closingTagOf(line) === closingTag) {
+          flush()
+          return { blocks, next: index + 1 }
+        }
         const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line)
         if (fence !== null) {
           if (fenceMatch !== null && fenceMatch[1].charAt(0) === fence.charAt(0) && fenceMatch[1].length >= fence.length) fence = null
@@ -2189,18 +2262,50 @@ window.__ModuleLoader__.load({
           index += 1
           continue
         }
-        const end = htmlBlockEnd(lines, index)
-        if (end === -1) {
+        // The HTML run: consecutive non-blank lines, stopping before the closing
+        // line of the container this level is inside, and stopping the moment the
+        // run balances - a `<br>` on its own must not swallow the heading under it.
+        let end = index
+        let depth = 0
+        while (end < lines.length) {
+          const candidate = lines[end]
+          if (candidate.trim() === '') break
+          if (closingTag !== null && depth <= 0 && closingTagOf(candidate) === closingTag) break
+          depth += htmlLineDepth(candidate)
+          end += 1
+          if (depth <= 0) break
+        }
+        const runText = lines.slice(index, end).join('\n')
+        const chain = openElementChain(tokenizeHtml(runText))
+        if (chain.length === 0) {
+          flush()
+          blocks.push({ kind: 'html', nodes: parseHtmlFragment(runText) })
+          index = end
+          continue
+        }
+        const container = chain.length === 1 ? chain[0] : null
+        if (container === null || !HTML_ALLOWED_TAGS.has(container.tag) || !closesAhead(lines, end, container.tag)) {
           markdown.push(line)
           index += 1
           continue
         }
         flush()
-        blocks.push({ kind: 'html', text: lines.slice(index, end + 1).join('\n') })
-        index = end + 1
+        // The run's own interior is the container's first content: `<div>` and
+        // its first paragraph are one run, and the parser has already nested
+        // that paragraph inside the open div.
+        const opened = parseHtmlFragment(runText)
+        const lastNode = opened.length > 0 ? opened[opened.length - 1] : null
+        const inner = parseBlocks(lines, end, container.tag)
+        const children = []
+        if (lastNode !== null && lastNode.type === 'element' && lastNode.tag === container.tag && lastNode.children.length > 0) {
+          children.push({ kind: 'html', nodes: lastNode.children })
+        }
+        for (const block of inner.blocks) children.push(block)
+        blocks.push({ kind: 'element', tag: container.tag, attrs: container.attrs, children: children })
+        index = inner.next
       }
       flush()
-      return blocks
+      return { blocks, next: index }
     }
 
     /** The directory part of a native path, both separators honoured. */

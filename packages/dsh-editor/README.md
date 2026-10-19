@@ -30,7 +30,8 @@ The workspace root is resolved host-side (live session header first, session per
 - No folder browser and no binary editing; `canOpen` refuses any address outside a session workspace.
 - Create-on-save, never overwrite: a create is create-exclusive.
 - Unsaved work is lost on tab close or restart.
-- The HTML allowlist draws **block-level** authored markup: a line that starts with an allowed tag opens an HTML run, so `<kbd>` in the middle of a prose sentence is still the shipped renderer's literal text. An unclosed block stays Markdown rather than swallowing every section after it.
+- The HTML allowlist draws **block-level** authored markup: a line that starts with an allowed tag opens an HTML run, so `<kbd>` in the middle of a prose sentence is still the shipped renderer's literal text. An unclosed block with no closing line anywhere below it stays Markdown rather than swallowing every section after it.
+- A **container** holds Markdown and HTML alike: `<div align="center">` on its own line, a blank line, then `# Title` draws the title as an `h1` **inside** the div, which is what GitHub does (CommonMark ends an HTML block at the blank line, and the browser nests what follows in the element still open). Only one element left open, closed on a line of its own, becomes a container; anything else - several elements open at once, a dropped tag like `<svg>`, no closing line - keeps the conservative fallback and renders as literal Markdown.
 
 ## Verify
 
@@ -39,7 +40,7 @@ node scripts/checks/check-client-bundles.mjs
 node scripts/checks/check-node-routes.mjs
 ```
 
-`check-client-bundles.mjs` drives the browser half through a real React runtime: the registration and guide order, the seats, the shadowed document body, the language-map guard, the Preview hand-off, the authored-HTML splitter (fenced examples excluded, an unclosed block left as Markdown), the allowlist (a `<script>` dropped with its contents, `onerror` and `javascript:` refused, no HTML string injected) and the image resolver (a relative destination rewritten to `/api/file?path=`, an `http` one left alone, an unresolvable one left as alt text). `check-node-routes.mjs` drives the routes against a scratch workspace.
+`check-client-bundles.mjs` drives the browser half through a real React runtime: the registration and guide order, the seats, the shadowed document body, the language-map guard, the Preview hand-off, the authored-HTML splitter (fenced examples excluded, an unclosed block left as Markdown, a div holding a heading drawn as a container), the allowlist (a `<script>` dropped with its contents, `onerror` and `javascript:` refused, no HTML string injected) and the image resolver (a relative destination rewritten to `/api/file?path=`, an `http` one left alone, an unresolvable one left as alt text). It also renders **this repository's own README header** and asserts that the title reaches the Markdown renderer as a heading inside the centred div, because that is the first thing a reader sees in the pane. `check-node-routes.mjs` drives the routes against a scratch workspace.
 
 ## Install
 

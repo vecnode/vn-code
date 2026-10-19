@@ -884,6 +884,69 @@ check(
   1,
 )
 check('html splitter: an unclosed div stays Markdown', editorInternals.splitHtmlBlocks('<div>\nloose').map((b) => b.kind).join(','), 'markdown')
+
+// The CONTAINER. A README header is `<div align="center">`, a blank
+// line, `# Title`, more elements, `</div>` - and GitHub draws that title as an
+// h1 INSIDE the div, because CommonMark ends an HTML block at the blank line and
+// the browser nests what follows in the element still open. A splitter that only
+// builds balanced fragments reads the heading as literal text, which is how the
+// vn-code README lost its title in this pane.
+const headingDoc = '<div align="center">\n\n# vn-code\n\n<p>tagline</p>\n\n</div>\n\nAfter'
+const headingBlocks = editorInternals.splitHtmlBlocks(headingDoc)
+check(
+  'html splitter: a div holding Markdown becomes a container',
+  headingBlocks.map((block) => block.kind).join(','),
+  'element,markdown',
+)
+check(
+  'html splitter: the container keeps its attributes',
+  headingBlocks[0].attrs.map((attr) => attr.name + '=' + attr.value).join(','),
+  'align=center',
+)
+check(
+  'html splitter: a heading inside it is MARKDOWN, not HTML text',
+  headingBlocks[0].children.map((block) => block.kind).join(','),
+  'markdown,html',
+)
+check('html splitter: ...and it is the heading, verbatim', headingBlocks[0].children[0].text.trim(), '# vn-code')
+check('html splitter: the sections after the div stay outside it', headingBlocks[1].text.trim(), 'After')
+check(
+  'html splitter: a div with its own first paragraph keeps it',
+  editorInternals
+    .splitHtmlBlocks('<div>\n  <p>a</p>\n\n  <p>b</p>\n</div>')[0]
+    .children.map((block) => (block.kind === 'html' ? 'html' : block.kind))
+    .join(','),
+  'html,html',
+)
+const headingBody = renderToStaticMarkup(
+  h(MarkdownPreviewBody, {
+    t: markdownT,
+    content: { kind: 'text', text: headingDoc, eof: true },
+    resourceAddress: 'dsh-resource://file/session/s1/readme.md',
+    useTabInfo: () => ({ tab: { id: 'tab7' } }),
+    useResource: () => ({ value: { absolutePath: '/work/project/readme.md' } }),
+    edit: markdownInjected.edit,
+  }),
+)
+check(
+  'the heading is drawn INSIDE the centred div',
+  headingBody.indexOf('# vn-code') > headingBody.indexOf('align="center"'),
+  true,
+)
+check('...it is not printed as HTML', headingBody.includes('&lt;div'), false)
+check('...and the element below it is drawn as an element', headingBody.includes('<p>tagline</p>'), true)
+
+// The same shape as this repository's own README: the reader's first look in the
+// preview pane is the pack's title, so it is checked against the file that ships.
+const repoReadme = readFileSync(path.join(repo, 'README.md'), 'utf8')
+const readmeHeader = editorInternals.splitHtmlBlocks(repoReadme.split('\n\n![vncode')[0])
+check('the README header is one container', readmeHeader.map((block) => block.kind).join(','), 'element')
+check(
+  '...holding the mark, the title and the tagline',
+  readmeHeader[0].children.map((block) => block.kind).join(','),
+  'html,markdown,html,html',
+)
+check('...where the title reaches the Markdown renderer as a heading', readmeHeader[0].children[1].text.trim(), '# vn-code')
 const authoredBody = renderToStaticMarkup(
   h(MarkdownPreviewBody, {
     t: markdownT,
