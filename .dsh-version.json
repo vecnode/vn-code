@@ -112,6 +112,26 @@
         "Docker Desktop, for `docker_start` on Windows and macOS (launched, then its daemon polled)"
       ]
     },
+    "dsh-ollama": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "ollama"
+      ],
+      "rowOverrides": [],
+      "role": "Ollama as a measured surface: five `ollama_*` tools (status, run, bench, models, embed) over the machine's own daemon at 127.0.0.1:11434 - the models on disk and what is loaded now, ONE bounded inference with the daemon's own token counts and nanosecond durations, a benchmark that refuses fewer than 3 runs and reports a median with spread (cold vs warm stated at the FIRST TOKEN, because eval_duration excludes the load), A/B and num_ctx sweeps, models with pull/delete behind a confirmation that repeats the tag, and embeddings with cosine similarity - plus three bundled skills (the REST API, the metric arithmetic, the Python client) whose examples the package check parses. The loopback fence refuses an OLLAMA_HOST on another machine before any request is made (DSH_OLLAMA_ALLOW_REMOTE=1 allows one explicitly). Host-only: one row, no route, no browser half. Zero npm dependencies, no bundled engine, nothing started on its own. See packages/dsh-ollama/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the five tools are registered into)",
+        "@deepseek-ai/dsh-skill (ctx.skills, resolved lazily; the three skills are also copied into $DSH_HOME/skills by both installers)",
+        "the Ollama daemon on this machine (its HTTP API at 127.0.0.1:11434; OLLAMA_HOST may move it)"
+      ],
+      "requires": [
+        "Ollama installed and its daemon RUNNING (`ollama serve`, or the desktop app) - this row starts nothing and names the command",
+        "a pulled model for ollama_run / ollama_bench, and an embedding model (e.g. nomic-embed-text) for ollama_embed"
+      ],
+      "vendors": [
+        "NOTHING is vendored, downloaded or installed: the daemon is the user's own service, and this package ships the HTTP client, one argv for `ollama --version`, and the arithmetic"
+      ]
+    },
     "dsh-media": {
       "version": "0.1.0-alpha.4",
       "rows": [
