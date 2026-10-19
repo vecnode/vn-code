@@ -39,7 +39,7 @@ only the bundle, its patch layer and the skill folders it wrote (each marked
 ## Reporting a vulnerability
 
 Report privately: on GitHub, **Security → Report a vulnerability** in
-[`vecnode/vncode`](https://github.com/vecnode/vncode). Include the package and
+[`vecnode/vn-code`](https://github.com/vecnode/vn-code). Include the package and
 version, the harness line you tested, the impact, and reproduction steps if they are
 safe to share. Best-effort acknowledgement within **3 business days**; credit on
 request.
