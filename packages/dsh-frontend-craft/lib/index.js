@@ -246,24 +246,27 @@ export function registerRoutes(deps) {
   // The direction round's two halves: what was dealt, and the pick. The deal is
   // made by `fe_direction` (the agent authors the directions); the tab can only
   // RECORD a choice, which is the one thing a person owns in that round.
-  register(DIRECTION_ROUTE, ['GET', 'HEAD'], async (request) => {
+  //
+  // ONE registration for this path, not two: `connection.fetch` keys routes by
+  // EXACT PATH and throws on a second one ("is already registered"), which is
+  // how this row failed to activate entirely. Methods share a handler and branch.
+  register(DIRECTION_ROUTE, ['GET', 'HEAD', 'POST'], async (request) => {
+    if (request.method === 'POST') {
+      let body
+      try {
+        body = await request.json()
+      } catch (err) {
+        return json(400, { ok: false, code: 'BAD_BODY', message: 'A direction request is JSON: { session, pick }.' })
+      }
+      const session = typeof body?.session === 'string' ? body.session : ''
+      const verdict = pickDirection(deps.dealOf(session), body?.pick)
+      if (!verdict.ok) return json(409, { ok: false, code: 'NO_DEAL', message: verdict.message })
+      deps.rememberPick(session, verdict.choice)
+      return json(200, { ok: true, pick: verdict.choice, deal: deps.dealOf(session) })
+    }
     const session = new URL(request.url).searchParams.get('session') ?? ''
     if (request.method === 'HEAD') return new Response(null, { status: 200 })
     return json(200, { ok: true, deal: deps.dealOf(session), pick: deps.pickOf(session) })
-  })
-
-  register(DIRECTION_ROUTE, ['POST'], async (request) => {
-    let body
-    try {
-      body = await request.json()
-    } catch (err) {
-      return json(400, { ok: false, code: 'BAD_BODY', message: 'A direction request is JSON: { session, pick }.' })
-    }
-    const session = typeof body?.session === 'string' ? body.session : ''
-    const verdict = pickDirection(deps.dealOf(session), body?.pick)
-    if (!verdict.ok) return json(409, { ok: false, code: 'NO_DEAL', message: verdict.message })
-    deps.rememberPick(session, verdict.choice)
-    return json(200, { ok: true, pick: verdict.choice, deal: deps.dealOf(session) })
   })
 
   // One rendered viewport's PNG. The id and width name a directory this plugin

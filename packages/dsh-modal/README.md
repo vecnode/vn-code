@@ -1,4 +1,4 @@
-# dsh-modal (alpha.2)
+# dsh-modal (alpha.3)
 
 **The pack's shared dialog surface** for the web GUI: a client-service plugin whose browser half mounts one body-level overlay and provides the **`modals`** service, so any client plugin — in this pack or in a deployment — opens a dialog with `ctx.get('modals')` instead of shipping its own prompt markup.
 
@@ -22,7 +22,7 @@ const values = await modals.open({ title: 'Save new file', fields: [...], submit
 
 `spec` (all fields optional): `title`, `message`; `fields` — `[{ name, label?, value?, placeholder?, hint?, mono?, required?, maxLength? }]`, text inputs, the first one focused and selected; `validate(values)`, returning an error **string** to show inline and block the submit; `submit(values, …)`, async work that runs **while the dialog stays open**; `confirmLabel` / `cancelLabel` / `busyLabel` (`cancelLabel: null` renders no cancel button, i.e. an alert); `danger`, which paints the confirm button as the error colour; and the rich pair `content` + `size`.
 
-**Rich dialogs** pass `content` — a render function handed `{ close }` that owns the whole body — instead of `fields`, for a dialog that is a browser rather than a question (a list beside a document, a picker, a form of its own). Fields, `validate` and `submit` do not apply to one: the content owns its own work and closes the dialog itself through the `close` it is handed, which settles the `open()` Promise with whatever it passed. `size: 'lg'` gives it the roomy frame (min(1120px, 94vw) × min(800px, 90vh)). The overlay, the Escape handling, the focus restore and the one-dialog-at-a-time queue are still this package's, so a rich surface never ships its own overlay.
+**Rich dialogs** pass `content` — a render function handed `{ close }` that owns the whole body — instead of `fields`, for a dialog that is a browser rather than a question (a list beside a document, a picker, a form of its own). Fields, `validate` and `submit` do not apply to one: the content owns its own work and closes the dialog itself through the `close` it is handed, which settles the `open()` Promise with whatever it passed. `size: 'lg'` gives it the roomy frame (min(1120px, 94vw) × min(800px, 90vh)), whose header carries the title and the frame's own **×** close control — a rich dialog has no mask click, so the frame is what guarantees a visible way out. The overlay, the Escape handling, the focus restore and the one-dialog-at-a-time queue are still this package's, so a rich surface never ships its own overlay.
 
 `submit` is the point of the whole surface: a save, a rename or a request that can fail runs with the dialog still on screen, so the failure is reported **inside** it and the user keeps everything they typed. Throwing (or rejecting) shows the message and leaves the dialog open; resolving closes it and settles the `open()` Promise with the returned value, or the values when it returns `undefined`.
 
@@ -34,7 +34,7 @@ Consumers: [`dsh-editor`](../dsh-editor) uses `open` for the save-as dialog (nam
 
 ## Limits
 
-- **A mask click does not close a rich dialog.** It can hold unfinished work, and a stray click outside it must not throw that away; Escape and the content's own Close control are the ways out. For a field dialog the cancel paths are the Cancel button, **Escape** (captured on the document, so the pane underneath never sees the key) and a click on the mask — none of which fires while `submit` is still running.
+- **A mask click does not close a rich dialog.** It can hold unfinished work, and a stray click outside it must not throw that away; the header's **×**, Escape and the content's own Close control are the ways out. For a field dialog the cancel paths are the Cancel button, **Escape** (captured on the document, so the pane underneath never sees the key) and a click on the mask — none of which fires while `submit` is still running.
 - Two calls that overlap **queue**: the second dialog opens when the first settles, so two racing saves can never replace each other's UI.
 - Focus moves to the first field and returns to whatever had it when the dialog closes.
 

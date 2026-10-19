@@ -10,6 +10,7 @@
 // skipped, exactly like any server render).
 //
 // Run:  node scripts/checks/check-client-bundles.mjs
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -471,6 +472,17 @@ const richMarkup = renderToStaticMarkup(captured.element)
 check('rich dialog uses the large frame', richMarkup.includes('class="dsm-panel dsm-lg"'))
 check('rich dialog renders the content', richMarkup.includes('class="rich-body"') && richMarkup.includes('rich content'))
 check('rich dialog has no form or action row', !richMarkup.includes('dsm-form') && !richMarkup.includes('dsm-actions'))
+// A rich dialog has NO mask click, so the frame must draw its own way out: no
+// Close control meant the only dismissal was an Escape key nobody can see.
+check(
+  'rich dialog draws a visible close control in its header',
+  richMarkup.includes('class="dsm-head"') &&
+    richMarkup.includes('class="dsm-close"') &&
+    richMarkup.includes('aria-label="Close this dialog"') &&
+    richMarkup.includes('title="Close"'),
+)
+const modalSource = readFileSync(path.join(repo, 'packages/dsh-modal/lib/client.js'), 'utf8')
+check('...and that control settles the queue the way Cancel does', modalSource.includes('onClick: () => finish(request, null)'))
 check('rich dialog content can close it', typeof richHelpers.close === 'function')
 richHelpers.close('done')
 richClosedWith = await richPromise
@@ -2919,6 +2931,26 @@ check(
 // skipped the patch list would show up here on the next re-sync.
 const barSource = readFileSync(path.join(repo, 'packages/dsh-rightbar/lib/client.js'), 'utf8')
 const syncSource = readFileSync(path.join(repo, 'scripts/tools/sync-vendored.ps1'), 'utf8')
+// The one thing no source-level assertion can catch: whether the committed fork
+// is still what the patch list PRODUCES. `-Check` regenerates each generated
+// bundle from the pinned core copy plus its patches and compares it byte for
+// byte, and it covers all three forks (dsh-rightbar, dsh-rightbar-files,
+// dsh-open-in-app). Without it a harness bump that moved the patched code rots
+// the 338 KB fork unnoticed until somebody opens the bar. It needs PowerShell, so
+// a host without one skips LOUDLY rather than passing.
+{
+  const shell = process.platform === 'win32' ? 'powershell.exe' : 'pwsh'
+  const args = ['-NoProfile']
+  if (process.platform === 'win32') args.push('-ExecutionPolicy', 'Bypass')
+  args.push('-File', path.join(repo, 'scripts/tools/sync-vendored.ps1'), '-Check')
+  const result = spawnSync(shell, args, { cwd: repo, encoding: 'utf8', timeout: 180_000, windowsHide: true })
+  if (result.error) {
+    console.log('skip the vendored-fork re-check                        (no PowerShell on this host: ' + result.error.code + ')')
+  } else {
+    if (result.status !== 0) console.log((String(result.stdout ?? '') + String(result.stderr ?? '')).trim())
+    check('the generated right-bar forks still match their patch list (sync-vendored.ps1 -Check)', result.status, 0)
+  }
+}
 check('right bar has no two-pane cap', /dockPaneIds\)\((?:state|layout|surface\.layout)\)\.length [<>]=? 2/.test(barSource), false)
 const dockTreeSource = readFileSync(path.join(repo, 'packages/dsh-rightbar/vendor/dock-tree.js'), 'utf8')
 // alpha.3, and the reason the cap lift alone was not enough: the kit RENDERS a
@@ -4419,6 +4451,17 @@ check(
     pdfSource.includes('OCR misreads digits, names, accents and punctuation') &&
     pdfSource.includes('Recognized, not extracted'),
 )
+// An engine installed while the harness is running is the case the `no-ocr`
+// sentence describes, and a RESTART was the only way to see it. The failed scan
+// now offers the re-probe, and that button asks the URL that clears the host's
+// memoized language list with the engines.
+check(
+  'a failed scan offers a re-detect that re-probes the host',
+  pdfSource.includes("action: 'scan-reprobe'") &&
+    pdfSource.includes('Re-detect') &&
+    pdfSource.includes("STATE_ROUTE + '?reprobe=1'") &&
+    pdfSource.includes('await scanNow()'),
+)
 const PdfBody = pdfSeats['sidebar.right.pane.tab#dsh-pdf'].component
 const pdfTab = { id: 'tab7', contentId: 'dsh-resource://file/session/s1/report.pdf', title: 'report.pdf' }
 const pdfMarkup = renderToStaticMarkup(h(PdfBody, { useTabInfo: () => ({ tab: pdfTab }), sessionId: 's1' }))
@@ -4812,6 +4855,19 @@ check(
 check('an unknown address shape is refused', videoInternals.parseVideoAddress('dsh-resource://diagram/session/s1/x') === null && videoInternals.parseVideoAddress('') === null)
 check('a browser error code is explained in words', /will not play this container or codec at all/.test(videoInternals.mediaErrorText({ error: { code: 4 } })))
 check('...and an unknown one is not blamed on the file', /without saying why/.test(videoInternals.mediaErrorText(null)))
+// The provisioning poll sleeps and fetches for up to 15 minutes. Switching tabs
+// or opening another file unmounts the body mid-download, and the loop used to
+// keep running: fetching every second and calling `setAttempt` on a tab that was
+// gone. The shape is `useFacts`': a live flag checked after EVERY await, and a
+// controller the unmount cleanup aborts.
+check(
+  'the provisioning poll stops when the tab goes away',
+  videoSource.includes('const provisionLive = useRef(true)') &&
+    videoSource.includes('provisionLive.current = false') &&
+    videoSource.includes('provisionRequest.current.abort()') &&
+    videoSource.includes('signal: controller.signal') &&
+    (videoSource.match(/if \(!provisionLive\.current\) return/g) ?? []).length >= 3,
+)
 
 const VideoBody = videoSeats['sidebar.right.pane.tab#dsh-video'].component
 const videoTab = { id: 'tab11', contentId: 'dsh-resource://file/session/s1/clips/holiday%20clip.mp4', title: 'holiday clip.mp4' }
@@ -5099,7 +5155,7 @@ const audioVersion = JSON.parse(readFileSync(path.join(repo, 'packages/dsh-audio
 check('the audio client version constant is the package version', audioSource.includes("PLUGIN_VERSION = '" + audioVersion + "'"))
 const A = audio.exports.__internals
 check('audio bundle id', audio.id, 'dsh-audio')
-check('audio inject', JSON.stringify(audio.exports.inject), '["slots","sidebarRightTabs","remote.workspaceFiles"]')
+check('audio inject', JSON.stringify(audio.exports.inject), '["sessions","slots","sidebarRightTabs","remote.workspaceFiles"]')
 check('audio stylesheet injected', audioCss.includes('.dsa-root{') && audioCss.includes('.dsa-tools{'))
 check(
   'audio top bar is the 38px pane header',
@@ -5699,263 +5755,40 @@ check(
     audioViewerInfoMarkup.includes('256 samples/bucket'),
 )
 
-// --- the audio console (alpha.3): this machine's devices, the output the page
-// plays through, and the tone that proves it
+// --- the audio console is GONE (alpha.7), and this block pins that by ABSENCE
 //
-// The console is the pack's first surface about the MACHINE rather than about a
-// file: which outputs and inputs this computer has, which one this page plays
-// through, and a tone that verifies the pick by ear. None of that is reachable
-// from a server render - enumeration, routing and playback are all effects - so
-// this section splits it the way the rest of this file does: the NUMBERS are
-// pure and driven here, and the MARKUP is rendered from hand-built devices.
-
-// The three shapes a browser can have, as environment objects: the branch that
-// decides whether a pick can be honoured AT ALL, and the sentence each branch
-// owes the reader. Only Chromium 110+ routes a page's Web Audio graph, and
-// Firefox/Safari route nothing - so the "no" branch has to name the way out.
-check('a browser with AudioContext.setSinkId routes the app\u2019s own engine', A.pickOutputStrategy({ contextSetSinkId: true, elementSetSinkId: true }).kind, 'context')
-check('a browser with only HTMLMediaElement.setSinkId routes the tone', A.pickOutputStrategy({ elementSetSinkId: true }).kind, 'element')
-const noRouting = A.pickOutputStrategy({})
-check('a browser with neither says so instead of pretending', noRouting.kind === 'none' && noRouting.sentence.includes('system mixer'))
-
-// The device list: the default alias is folded onto the EMPTY id, the two kinds
-// are separated, the browser's own order is replaced by default-then-label, a
-// device with no name is KEPT (it is a real device) and the list reports that a
-// name is missing, and a camera is not audio.
-const rawDeviceList = [
-  { kind: 'audioinput', deviceId: 'mic1', label: 'USB Microphone', groupId: 'g1' },
-  { kind: 'audiooutput', deviceId: 'default', label: 'Default', groupId: 'g2' },
-  { kind: 'audiooutput', deviceId: 'spk1', label: 'Speakers (Realtek)', groupId: 'g2' },
-  { kind: 'audiooutput', deviceId: 'hdmi1', label: '', groupId: 'g3' },
-  { kind: 'videoinput', deviceId: 'cam1', label: 'Webcam', groupId: 'g4' },
+// This package used to draw the machine's audio devices - outputs, inputs, an
+// output pick, a test tone and a microphone meter - under the Media panel's
+// second tab. It is about FILES: the whole construct was removed, so what is
+// asserted here is that none of it can come back unnoticed. Both the SOURCE and
+// the exported internals are checked, because a helper left behind in
+// `__internals` is a surface the next editor finds and re-uses.
+const removedAudioSurface = [
+  'navigator.mediaDevices',
+  'enumerateDevices',
+  'getUserMedia',
+  'setSinkId',
+  'audioDevices',
+  'AudioConsole',
+  'toneChannels',
+  'encodeWav',
+  'TONE_MAX_SECONDS',
+  'STORAGE_KEY',
 ]
-const devices = A.normalizeDevices(rawDeviceList)
 check(
-  'the device list splits the two kinds, default first',
-  devices.outputs.length === 3 && devices.inputs.length === 1 && devices.outputs[0].id === '' && devices.outputs[0].isDefault === true,
+  'the audio console and its device surface are absent from the bundle',
+  removedAudioSurface.every((token) => audioSource.includes(token) === false),
 )
-check('...sorts the rest by label', devices.outputs[1].id === 'hdmi1' && devices.outputs[2].id === 'spk1', true)
-check('...keeps an unnamed device and says a name is missing', devices.unnamed === true && devices.outputs[1].label === '')
-check('...and drops a camera', devices.outputs.every((device) => device.kind === 'output') && devices.inputs[0].id === 'mic1')
 check(
-  'a nameless device is named by its position instead',
-  A.deviceTitle({ label: '', kind: 'output' }, 1) === 'Output 2' && A.deviceTitle({ label: '', kind: 'input' }, 0) === 'Input 1' && A.deviceTitle({ label: 'Speakers' }, 0) === 'Speakers',
+  '...and absent from the internals the check can reach',
+  ['AudioConsole', 'AudioConsoleView', 'normalizeDevices', 'pickOutputStrategy', 'toneChannels', 'encodeWav', 'readChoice', 'writeChoice', 'AudioPanelRow'].every(
+    (name) => A[name] === undefined,
+  ),
 )
-check('an id is a hash, so a card shows six characters of it', A.shortId('0123456789abcdef') === '012345\u2026' && A.shortId('') === 'system default' && A.shortId('ab') === 'ab')
-// Where the system default GOES. Chromium gives the alias and the device it
-// resolves to the SAME groupId, which is the only way to show it rather than
-// leave a person to find out by ear.
-check('the default card can name the device it points at', A.defaultTargetOf(devices.outputs), 'Speakers (Realtek)')
-check('...and says nothing when the browser does not group them', A.defaultTargetOf([{ kind: 'output', id: '', label: 'Default', groupId: '', isDefault: true }]), '')
 check(
-  'a picked device is named, and a device that has gone says so',
-  A.nameOfId(devices.outputs, 'spk1') === 'Speakers (Realtek)' &&
-    A.nameOfId(devices.outputs, '') === 'system default' &&
-    A.nameOfId(devices.outputs, 'gone') === 'a device that is no longer connected',
+  'the stylesheet carries none of the console dress',
+  audioCss.includes('.dsa-console') === false && audioCss.includes('.dsa-card') === false && audioCss.includes('.dsa-meter') === false && audioCss.includes('.dsa-devSection') === false,
 )
-
-// The tone's numbers. The level is a SQUARE law so the slider's middle is -12 dB
-// (a linear slider spends nine tenths of its travel in the top 20 dB) and the
-// frequency is clamped to what a listener can hear.
-check('the level slider is a square law, so half of it is -12 dB', A.gainForLevel(50) === 0.25 && A.gainForLevel(100) === 1 && A.gainForLevel(0) === 0, true)
-check('...and the label beside it says the same thing', A.dbForLevel(50).toFixed(1), '-12.0')
-check('a typed frequency is clamped to the audible band', A.clampFrequency(0) === 440 && A.clampFrequency(999999) === 20000 && A.clampFrequency(3) === 20 && A.clampFrequency(440.4) === 440)
-check('the channel picker has three positions', A.panForChannel('left') === -1 && A.panForChannel('right') === 1 && A.panForChannel('both') === 0)
-check('a steady tone stops itself', A.TONE_MAX_SECONDS === 30)
-
-// The tone as samples, which is what the `element` path plays and what the WAV
-// encoder writes: silent at BOTH ends (a click is not a speaker test), and a
-// channel choice has to be SILENT on the side it is not testing - an equal-power
-// pan law would leave a "left" tone audible on the right.
-const toneLeft = A.toneChannels({ frequency: 250, level: 100, channel: 'both', sampleRate: 1000, seconds: 1 })
-check('a generated tone is two channels of a sine', toneLeft.length === 2 && toneLeft[0].length === 1000 && toneLeft[1].length === 1000)
-check('...silent at both ends', toneLeft[0][0] === 0 && toneLeft[0][999] === 0 && toneLeft[1][0] === 0)
-let tonePeak = 0
-for (let index = 100; index < 900; index += 1) tonePeak = Math.max(tonePeak, Math.abs(toneLeft[0][index]))
-check('...at the level the slider asked for', tonePeak > 0.999 && tonePeak <= 1)
-check('...and equal in both channels for "both"', toneLeft[0][400] === toneLeft[1][400] && toneLeft[0][400] !== 0)
-// A mono choice is the same signal on ONE side only, which is what makes the
-// channel picker a speaker check at all.
-const monoChoice = A.toneChannels({ frequency: 250, level: 100, channel: 'left', sampleRate: 1000, seconds: 0.01 })
-check('...and a left-only tone is exactly that', monoChoice[0][5] !== 0 && monoChoice[1][5] === 0)
-
-// THE WAV ENCODER, against the decoder that sits next to it in the same file:
-// the tone is encoded, parsed back as a container and decoded as PCM, and the
-// numbers that come out have to be the numbers that went in. That is the only
-// way the `element` path's sound is verified without a browser to play it.
-const encodedTone = A.encodeWav(toneLeft, 1000)
-const encodedFacts = A.parseWav(encodedTone, encodedTone.length)
-check(
-  'the generated tone is a real RIFF/WAVE the package\u2019s own parser accepts',
-  encodedFacts.ok === true && encodedFacts.format.kind === 's16' && encodedFacts.sampleRate === 1000 && encodedFacts.channels === 2 && encodedFacts.frames === 1000,
-)
-const decodedTone = A.decodePcm(encodedFacts.format, encodedTone.subarray(encodedFacts.dataOffset))
-let roundTripWorst = 0
-for (let index = 0; index < 1000; index += 1) {
-  roundTripWorst = Math.max(roundTripWorst, Math.abs(decodedTone.channels[0][index] - toneLeft[0][index]), Math.abs(decodedTone.channels[1][index] - toneLeft[1][index]))
-}
-check('...and 16-bit round-trips to within one LSB', roundTripWorst <= 1 / 32767 + 1e-9)
-
-// The meter. `getByteTimeDomainData` hands back unsigned bytes about 128, so the
-// reading is an amplitude and the bar is a dB scale - a linear bar would sit at
-// zero for every room a microphone is actually used in.
-check('the meter reads silence as silence', A.rmsOfWaveform(new Uint8Array(64).fill(128)) === 0)
-const halfScaleWave = new Uint8Array(64)
-for (let index = 0; index < 64; index += 1) halfScaleWave[index] = index % 2 === 0 ? 192 : 64
-check('...and a half-scale square wave as a half-scale amplitude', Math.abs(A.rmsOfWaveform(halfScaleWave) - 0.5) < 1e-12)
-check('the bar is a 60 dB scale', A.levelBar(1) === 1 && A.levelBar(0) === 0 && Math.abs(A.levelBar(0.5) - (60 - 20 * Math.log10(2)) / 60) < 1e-12)
-check('a camel-case setting reads as words', A.camelWords('echoCancellation') === 'echo cancellation' && A.camelWords('autoGainControl') === 'auto gain control')
-const described = A.describeStream({
-  getSettings: () => ({ sampleRate: 48000, channelCount: 1, latency: 0.01, echoCancellation: false, noiseSuppression: true }),
-  getCapabilities: () => ({ sampleRate: { min: 8000, max: 48000 } }),
-})
-check(
-  'the input test reports what the browser actually opened',
-  JSON.stringify(described),
-  JSON.stringify([
-    ['sample rate', '48000 Hz'],
-    ['channels', '1'],
-    ['latency', '10.0 ms'],
-    ['echo cancellation', 'off'],
-    ['noise suppression', 'on'],
-    ['device rates', '8000\u201348000 Hz'],
-  ]),
-)
-// A track with no `getSettings` at all is not a crash: the meter still runs.
-check('a track that reports nothing describes nothing', A.describeStream({}).length === 0 && A.describeStream(null).length === 0)
-check('a chosen input is opened EXACTLY, and the default is left to the system', JSON.stringify(A.captureConstraints('mic1')), JSON.stringify({ audio: { deviceId: { exact: 'mic1' } } }))
-check('...and the default asks for nothing in particular', JSON.stringify(A.captureConstraints('')), JSON.stringify({ audio: true }))
-
-// The remembered choice, driven with a storage double - including the two shapes
-// a real browser hands back: a BLOCKED store (which THROWS on access rather than
-// answering null) and a value that is not the JSON this package wrote.
-const storageDouble = { map: {}, getItem(key) { return Object.prototype.hasOwnProperty.call(this.map, key) ? this.map[key] : null }, setItem(key, value) { this.map[key] = String(value) } }
-check('an unset choice is the system default', JSON.stringify(A.readChoice(storageDouble)), JSON.stringify({ outputId: '', inputId: '' }))
-A.writeChoice(storageDouble, { outputId: 'spk1', inputId: 'mic1' })
-check('a choice round-trips through storage', JSON.stringify(A.readChoice(storageDouble)), JSON.stringify({ outputId: 'spk1', inputId: 'mic1' }))
-storageDouble.map[A.STORAGE_KEY] = '{ not json'
-check('...and corrupt storage is the default rather than a crash', A.readChoice(storageDouble).outputId === '')
-const throwingStorage = { getItem() { throw new Error('blocked') }, setItem() { throw new Error('blocked') } }
-check('...and a BLOCKED store is survivable in both directions', A.readChoice(throwingStorage).outputId === '' && A.writeChoice(throwingStorage, { outputId: 'x', inputId: '' }) === undefined)
-check('no storage at all is survivable too', A.readChoice(null).outputId === '' && A.writeChoice(null, { outputId: 'x', inputId: '' }) === undefined)
-
-// THE CONSOLE, RENDERED. One ready state with both kinds of device, a default
-// that points somewhere, a chosen output, and a routing verdict - which is as
-// much as a static render can see, and enough to catch a card that lost its
-// selection test or a control that lost its label.
-const consoleReady = {
-  phase: 'ready',
-  error: '',
-  unnamed: true,
-  outputs: [
-    { kind: 'output', id: '', label: 'Default', groupId: 'g2', isDefault: true },
-    { kind: 'output', id: 'hdmi1', label: '', groupId: 'g3', isDefault: false },
-    { kind: 'output', id: 'spk1', label: 'Speakers (Realtek)', groupId: 'g2', isDefault: false },
-  ],
-  inputs: [{ kind: 'input', id: 'mic1', label: 'USB Microphone', groupId: 'g1', isDefault: false }],
-}
-const consoleMarkup = renderToStaticMarkup(
-  h(A.AudioConsoleView, {
-    state: consoleReady,
-    choice: { outputId: 'spk1', inputId: 'mic1' },
-    routing: A.pickOutputStrategy({ contextSetSinkId: true }),
-    tone: { playing: false, frequency: 440, level: 50, channel: 'both' },
-    meter: { phase: 'idle', error: '', level: 0, peak: 0, rows: [] },
-    status: { tone: 'ok', message: 'The device names are visible now.' },
-    naming: false,
-    engineState: 'running',
-    engineRate: '48000 Hz',
-    onSelectOutput: () => {},
-    onSelectInput: () => {},
-    onFrequency: () => {},
-    onLevel: () => {},
-    onChannel: () => {},
-    onToggle: () => {},
-    onInputStart: () => {},
-    onInputStop: () => {},
-    onNames: () => {},
-    onReload: () => {},
-    onClose: () => {},
-  }),
-)
-check('the console draws its bar, its version and both columns', consoleMarkup.includes('data-audio-console="true"') && consoleMarkup.includes('v' + audioVersion) && consoleMarkup.includes('data-audio-section="output"') && consoleMarkup.includes('data-audio-section="input"'))
-check('every device is a card, named as the browser named it', consoleMarkup.includes('Speakers (Realtek)') && consoleMarkup.includes('USB Microphone') && consoleMarkup.includes('data-audio-device="spk1"'))
-check('...a nameless device is a card too', consoleMarkup.includes('Output 2') && consoleMarkup.includes('data-audio-device="hdmi1"'))
-check('...and the default card says where it points', consoleMarkup.includes('system default \u2192 Speakers (Realtek)'))
-check('the picked output and input are the marked ones', (consoleMarkup.match(/data-audio-device="(spk1|mic1)"[^>]*data-active="true"/g) || []).length === 2 && !/data-audio-device="hdmi1"[^>]*data-active/.test(consoleMarkup))
-check('the tone offers a frequency, a level, a channel and Play', consoleMarkup.includes('aria-label="Tone frequency in hertz"') && consoleMarkup.includes('aria-label="Tone level"') && consoleMarkup.includes('data-audio-channel="left"') && consoleMarkup.includes('-12.0 dB') && consoleMarkup.includes('data-audio-action="tone"'))
-check('the input side offers the meter and the names', consoleMarkup.includes('data-audio-meter="true"') && consoleMarkup.includes('data-audio-action="names"') && consoleMarkup.includes('Listen to this input'))
-check('the engine section reports the engine\u2019s own state', consoleMarkup.includes('data-audio-section="engine"') && consoleMarkup.includes('48000 Hz'))
-check('a status message is drawn with its own tone', consoleMarkup.includes('data-audio-status="ok"'))
-
-// A browser that cannot route draws the SAME cards, disabled and with the
-// reason on them: the machine has those devices, and knowing the list is what
-// makes the "choose it in the system mixer" sentence actionable.
-const noRouteMarkup = renderToStaticMarkup(
-  h(A.AudioConsoleView, {
-    state: consoleReady,
-    choice: { outputId: '', inputId: '' },
-    routing: A.pickOutputStrategy({}),
-    tone: { playing: false, frequency: 440, level: 50, channel: 'both' },
-    meter: { phase: 'idle', error: '', level: 0, peak: 0, rows: [] },
-    status: null,
-    naming: false,
-    engineState: 'not started',
-    engineRate: '',
-    onSelectOutput: () => {},
-    onSelectInput: () => {},
-    onFrequency: () => {},
-    onLevel: () => {},
-    onChannel: () => {},
-    onToggle: () => {},
-    onInputStart: () => {},
-    onInputStop: () => {},
-    onNames: () => {},
-    onReload: () => {},
-    onClose: () => {},
-  }),
-)
-check('an unrouteable browser still lists the devices', noRouteMarkup.includes('Speakers (Realtek)') && noRouteMarkup.includes('data-audio-device="spk1"'))
-check('...with the output cards disabled and the reason on them', noRouteMarkup.includes('cannot route a page\u2019s audio to a chosen output') && (noRouteMarkup.match(/data-device-kind="output"[^>]*disabled/g) || []).length >= 3)
-
-// The playing state: the button becomes Stop and the settings FREEZE - which is
-// the honest shape, because the generated-WAV path bakes them in and a control
-// that works on one browser and not another is worse than one that is disabled.
-const playingMarkup = renderToStaticMarkup(
-  h(A.ToneSection, {
-    tone: { playing: true, frequency: 1000, level: 50, channel: 'right' },
-    live: false,
-    target: 'Speakers (Realtek)',
-    onFrequency: () => {},
-    onLevel: () => {},
-    onChannel: () => {},
-    onToggle: () => {},
-  }),
-)
-check('a playing tone offers Stop and freezes its settings', playingMarkup.includes('Stop') && playingMarkup.includes('data-audio-note="frozen"') && (playingMarkup.match(/aria-label="Tone frequency in hertz"[^>]*disabled/g) || []).length === 1)
-check('...and the level slider freezes with it', (playingMarkup.match(/aria-label="Tone level"[^>]*disabled/g) || []).length === 1)
-
-// The meter, live and failed: the bar carries the level, the peak is printed,
-// and a refusal is a sentence rather than a silent zero.
-const meterMarkup = renderToStaticMarkup(
-  h(A.InputTestSection, {
-    meter: { phase: 'live', error: '', level: 0.5, peak: 0.9, rows: [['sample rate', '48000 Hz']] },
-    sentence: 'A live meter off the chosen input.',
-    onStart: () => {},
-    onStop: () => {},
-  }),
-)
-check('a live meter draws a bar, a reading and the capture\u2019s facts', meterMarkup.includes('data-audio-meter="true"') && meterMarkup.includes('-6.0 dBFS') && meterMarkup.includes('peak -0.9 dBFS') && meterMarkup.includes('48000 Hz'))
-check('...and offers the stop', meterMarkup.includes('Stop listening'))
-const meterFailed = renderToStaticMarkup(
-  h(A.InputTestSection, {
-    meter: { phase: 'error', error: 'The microphone could not be opened: NotAllowedError', level: 0, peak: 0, rows: [] },
-    sentence: 'A live meter off the chosen input.',
-    onStart: () => {},
-    onStop: () => {},
-  }),
-)
-check('a refused microphone is a sentence', meterFailed.includes('NotAllowedError') && meterFailed.includes('Listen to this input'))
 
 // The seat, with NO dialog service in the profile (the stub context answers
 // every service name with an object that has no `open`): the console is drawn
@@ -5980,40 +5813,9 @@ check(
 )
 check('...and can still be forced inline', renderToStaticMarkup(h(A.MediaSeat, { inline: true })).includes('data-media-seat="inline"'))
 
-// The wiring that a render cannot see, pinned as source because each of these is
-// a decision that would quietly stop working if it were dropped.
+// The wiring that a render cannot see, pinned as source because it is the
+// decision that would quietly stop working if it were dropped.
 check('the dialog surface is resolved lazily, never injected', audioSource.includes("const MODAL_SERVICE = 'modals'") && audioSource.includes('serviceNow(MODAL_SERVICE)'))
-check('the pick is remembered per browser', audioSource.includes("const STORAGE_KEY = 'dsh-audio.devices'"))
-check(
-  'the output is routed through the shared engine AND the page\u2019s media elements',
-  audioSource.includes('await audioContext.setSinkId(id)') && audioSource.includes("querySelectorAll('audio,video')") && audioSource.includes('await element.setSinkId(id)'),
-)
-// A context created AFTER the choice was made is pointed at it at the one moment
-// it exists: otherwise a reload would silently play through the system default.
-check('a context created later honours the remembered output', audioSource.includes('applyChosenSink(audioContext)'))
-// ...and a player mounted later is caught by the CAPTURE listener, because
-// `play` does not bubble: one listener catches every element the page will ever
-// start, instead of a sweep that only ever sees what is already mounted.
-check('a media element mounted later joins the chosen output', audioSource.includes("document.addEventListener('play', onPlay, true)"))
-check('the sink APIs are feature-detected, never assumed', audioSource.includes("typeof proto.setSinkId === 'function'") && audioSource.includes("'setSinkId' in elementProto"))
-// The meter is a SINK: nothing may connect an analyser to the destination, or
-// the microphone would feed the room back into it.
-check('the input meter is never played back', audioSource.includes('source.connect(analyser)') && audioSource.includes('analyser.connect(') === false)
-check('the tone stops itself and is ramped, never cut', audioSource.includes('oscillator.stop(endsAt)') && audioSource.includes('linearRampToValueAtTime(0.0001'))
-// THE CONSOLE STAYS SMALL, and it is pinned by ABSENCE so it cannot grow back one
-// button at a time: no frequency ladder, no left-right sweep, and no sentence
-// about the tone - the routing caveat lives once, in the output section, and the
-// status line is reserved for what went wrong.
-check(
-  'the console keeps ONE frequency control and no sweep',
-  audioSource.includes('TONE_PRESETS') === false &&
-    audioSource.includes('SWEEP_PLAN') === false &&
-    audioSource.includes('sweepSeconds') === false &&
-    audioSource.includes("'data-audio-action': 'sweep'") === false &&
-    audioSource.includes('Left \u2192 right') === false &&
-    audioSource.includes('stops itself after') === false &&
-    audioSource.includes('which is the graph the output pick moves') === false,
-)
 check('the panel list is asked for the row above Plugins', audioSource.includes('ctx.slots.register({ name: PANEL_SLOT, id: PANEL_ID, order: PANEL_ORDER, label: PANEL_LABEL'))
 // The dialog is opened ON MOUNT, and `version` is the only thing that re-opens
 // it: the service lives in a ref precisely so a provider answering a fresh
@@ -6021,20 +5823,19 @@ check('the panel list is asked for the row above Plugins', audioSource.includes(
 check('the seat opens the dialog on mount and can reopen it', audioSource.includes("'data-media-action': 'open-panel'") && audioSource.includes('[hasModal, version])') && audioSource.includes('modalsRef.current = modals'))
 check('the column is handed back only when it is still this package\u2019s', audioSource.includes('if (active !== PANEL_ID) return'))
 check('...and never to a panel that has gone', audioSource.includes('layout.selectPanel(panelBeforeAudio)') && audioSource.includes('layout.selectPanel(null)'))
-check('the console keeps the package client-only', audioSource.includes('fetch(') === false && audioSource.includes("'/api/") === false)
+check('the panel keeps the package client-only', audioSource.includes('fetch(') === false && audioSource.includes("'/api/") === false)
 check(
-  'the stylesheet carries the console\u2019s own dress',
-  audioCss.includes('.dsa-console{') && audioCss.includes('.dsa-card[') && audioCss.includes('.dsa-meterFill{') && audioCss.includes('.dsa-panelGlyph{'),
+  'the stylesheet carries the row and the panel\u2019s own dress',
+  audioCss.includes('.dsa-groupHead{') && audioCss.includes('.dsa-panelGlyph{') && audioCss.includes('.dsa-mediaBar{'),
 )
 
-// --- the Media panel (alpha.5)
+// --- the Media panel (alpha.5, ONE view since alpha.7)
 //
-// The left-bar row stopped opening the audio console and started opening the
-// MEDIA panel, whose Files view is the whole reason for the rename: every audio,
-// image, video and GIF file the conversation can reach. The scan, the grouping
-// and the address a row opens are the pure half and are driven directly here;
-// the panel itself is server-rendered to prove the two views exist and that a
-// seat with no dialog still draws a working surface.
+// The left-bar row opens the MEDIA panel: every audio, image, video and GIF file
+// the conversation can reach. The scan, the grouping and the address a row opens
+// are the pure half and are driven directly here; the panel itself is
+// server-rendered to prove the single view exists and that a seat with no dialog
+// still draws a working surface.
 check('media: a PNG is an image', A.classifyMediaPath('shots/cover.PNG'), 'image')
 check('media: a GIF is its own group', A.classifyMediaPath('loop.gif'), 'gif')
 check('media: a WAV is audio', A.classifyMediaPath('takes/take 01.wav'), 'audio')
@@ -6053,27 +5854,198 @@ check(
 )
 check('media: no absolute path, no URL', A.mediaFileUrl('') === '', true)
 const mediaListings = {
-  '': { entries: [{ name: 'shots', type: 'directory' }, { name: 'README.md', type: 'file' }, { name: 'loop.gif', type: 'file' }] },
+  '': { entries: [{ name: 'shots', type: 'directory' }, { name: '.vncode', type: 'directory' }, { name: 'README.md', type: 'file' }, { name: 'loop.gif', type: 'file' }] },
   shots: { entries: [{ name: 'cover.png', type: 'file' }, { name: 'take.wav', type: 'file' }, { name: 'node_modules', type: 'directory' }] },
+  '.vncode': { entries: [{ name: 'profile.png', type: 'file' }] },
 }
 const mediaScan = await A.scanMedia({ list: async (session, path) => ({ ok: true, value: mediaListings[path] || { entries: [] } }) }, 's1')
 check('media: the scan walks one level down', mediaScan.items.map((item) => item.path).join(','), 'shots/cover.png,loop.gif,shots/take.wav')
 check('media: the scan groups images, then GIFs, then audio', mediaScan.items.map((item) => item.kind).join(','), 'image,gif,audio')
 check('media: the scan skips node_modules', mediaScan.items.some((item) => item.path.includes('node_modules')), false)
+// The harness's own state folder lives inside many workspaces and holds
+// thousands of files; walking it spent the whole directory budget before a real
+// folder was reached.
+check('media: the scan skips the harness\u2019s own .vncode state', mediaScan.items.some((item) => item.path.includes('.vncode')), false)
 check('media: the scan reports whether it was cut', mediaScan.truncated, false)
+check('media: an empty workspace reports no error', mediaScan.error, '')
+// A host that REFUSES the listing is not a workspace with no media: the scan
+// used to swallow the refusal and answer with an empty list, so the panel said
+// "no media" about a workspace nobody had read.
+const refusedScan = await A.scanMedia({ list: async () => ({ ok: false, error: { message: 'not a workspace' } }) }, 's1')
+check('media: a refused listing is a REASON, not an empty folder', refusedScan.items.length === 0 && refusedScan.error.includes('not a workspace'), true)
+const thrownScan = await A.scanMedia({ list: async () => { throw new Error('the remote is gone') } }, 's1')
+check('media: a listing that throws is a reason too', thrownScan.error.includes('the remote is gone'), true)
 const mediaPanelMarkup = renderToStaticMarkup(h(A.MediaPanel, { sessionId: 's1', onOpen: () => {} }))
-check('media: the panel opens on the Files view', mediaPanelMarkup.includes('data-media-view="library"'), true)
+check('media: the panel draws the library view', mediaPanelMarkup.includes('data-media-view="library"'), true)
+// One view means no tab strip: a tablist with one tab is a control promising a
+// choice there is not, and the Devices tab it used to hold is gone with the
+// console.
 check(
-  'media: both views are offered',
-  mediaPanelMarkup.includes('data-media-tab="library"') && mediaPanelMarkup.includes('data-media-tab="devices"'),
+  'media: no tab strip and no Devices view remain',
+  mediaPanelMarkup.includes('data-media-tab') === false && mediaPanelMarkup.includes('Devices') === false,
   true,
+)
+// The Media dialog is a RICH modal, which used to have no dismissal at all: no
+// mask click, no Close, and only an invisible Escape. The frame now draws its
+// own ×, and the panel draws a Close in the row the person is reading.
+const mediaClosable = renderToStaticMarkup(h(A.MediaPanel, { sessionId: 's1', onOpen: () => {}, close: () => {} }))
+check('media: a closable panel offers Close', mediaClosable.includes('data-media-action="close"') && mediaClosable.includes('>Close<'))
+check('media: an inline panel does not offer a Close that closes nothing', mediaPanelMarkup.includes('data-media-action="close"'), false)
+check(
+  'media: the empty state says none were found, and what Rescan scans',
+  audioSource.includes("No audio, image, video or GIF files were found in this conversation's workspace") &&
+    audioSource.includes("Scan this conversation's workspace again"),
 )
 const mediaSeatMarkup = renderToStaticMarkup(h(A.MediaSeat, { inline: true, sessionId: 's1' }))
 check(
   'media: a seat with no dialog still draws the panel',
-  mediaSeatMarkup.includes('data-media-seat="inline"') && mediaSeatMarkup.includes('data-media-tab="devices"'),
+  mediaSeatMarkup.includes('data-media-seat="inline"') && mediaSeatMarkup.includes('data-media-view="library"'),
   true,
 )
+// THE SESSION THE PANEL BROWSES. A `main` panel is root-scoped and is rendered
+// with an EMPTY props object (`renderSlot("main", {}, …)`), so `props.sessionId`
+// is never there and the dialog could only say "open a conversation" - it listed
+// nothing. The harness's own answer is the Session the main view RETAINS, which
+// survives a global panel being selected. Driven through a re-activation with a
+// sessions service, because that lookup is the whole fix.
+{
+  const activate = (byId) => {
+    audio.exports.apply({
+      slots: { inject: (name, fn) => fn(), register: () => () => {} },
+      sidebarRightTabs: { register: () => () => {}, entries: () => [] },
+      get: (name) =>
+        name === 'sessions'
+          ? {
+              getListSnapshot: () => ({ ids: Object.keys(byId), byId }),
+              list: { getSnapshot: () => ({ ids: Object.keys(byId), byId }) },
+            }
+          : undefined,
+      effect: (fn) => fn(),
+      logger: { debug() {}, warn() {} },
+    })
+  }
+  activate({ 's-old': { id: 's-old', retainedBy: { mainView: 0 } }, 's-now': { id: 's-now', retainedBy: { mainView: 2 } } })
+  check('media: the panel browses the session the main view retains', A.sessionIdFor({}), 's-now')
+  check('...and an explicit sessionId still wins over it', A.sessionIdFor({ sessionId: 's-explicit' }), 's-explicit')
+  // Nothing retained (no conversation open yet) is answered with NO session, so
+  // the panel says "open a conversation" instead of scanning a stranger's files.
+  activate({ 's-archived': { id: 's-archived', retainedBy: { mainView: 0 } } })
+  check('...and with nothing retained it answers no session rather than guessing', A.sessionIdFor({}), '')
+}
+
+// ---------------------------------------------------------------- dsh-docker
+// The container tab. DockerSurface is exported BECAUSE it renders from a model
+// it is handed: every state a host can put this panel in - no CLI, a sleeping
+// engine, an engine with containers and images, a row being confirmed for
+// removal, an open drawer - is rendered here without a route, an engine or a
+// browser. What the LIVE tab does (the poll, the calls, the token) is source-
+// pinned at the end of this block.
+const dockerBundle = loadBundle('packages/dsh-docker/lib/client.js', {})
+const D = dockerBundle.exports.__internals
+check('docker bundle id', dockerBundle.id, 'dsh-docker')
+check('docker inject', JSON.stringify(dockerBundle.exports.inject), '["slots","sidebarRightTabs"]')
+const dockerCssTag = dockerBundle.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-docker/docker.css').pop()
+const dockerCss = dockerCssTag ? dockerCssTag.textContent : ''
+check('docker stylesheet injected', dockerCss.includes('.ddk-root{') && dockerCss.includes('.ddk-drawer{'))
+const dockerTypes = []
+dockerBundle.exports.apply({
+  sidebarRightTabs: { register: (type) => (dockerTypes.push(type), () => {}) },
+  slots: { inject: (name, fn) => fn(), register: () => () => {} },
+  effect: (fn) => fn(),
+  logger: { debug() {}, warn() {} },
+})
+check('docker registers one page type', dockerTypes.length === 1 && dockerTypes[0].kind, 'docker')
+check('...with a guide entry after History', dockerTypes[0].guide[0].order, 40)
+check('...and no file pattern', dockerTypes[0].patterns === undefined, true)
+const dockerNoop = {
+  onRefresh: () => {},
+  onDisk: () => {},
+  onStart: () => {},
+  onFilter: () => {},
+  onSelect: () => {},
+  onCloseDrawer: () => {},
+  onAskRemove: () => {},
+  onCancelRemove: () => {},
+  onAction: () => {},
+  onPullForm: () => {},
+  onRunForm: () => {},
+  onCloseForm: () => {},
+  onPull: () => {},
+  onRun: () => {},
+}
+const dockerModel = (patch) => ({
+  view: 'ready',
+  state: { ok: true, code: 'OK', daemon: 'up', engine: { cli: 'docker', serverVersion: '25.0.3', context: 'default' }, counts: { containers: 2, running: 1, images: 2 }, containers: [], images: [], disk: null, errors: {} },
+  containers: [],
+  images: [],
+  selected: null,
+  drawer: null,
+  confirm: null,
+  busy: false,
+  notice: '',
+  error: '',
+  filter: '',
+  form: null,
+  formImage: '',
+  ...patch,
+})
+const dockerContainers = [
+  { id: 'a1b2c3d4e5f6a1b2', name: 'web', image: 'nginx:1.27', state: 'running', running: true, ports: '0.0.0.0:8080->80/tcp', status: 'Up 2 hours', created: '', networks: 'bridge', mounts: '', size: '' },
+  { id: 'b2c3d4e5f6a1b2c3', name: 'db', image: 'postgres:16', state: 'exited', running: false, ports: '5432/tcp', status: 'Exited (0)', created: '', networks: 'bridge', mounts: '', size: '' },
+]
+const dockerImages = [
+  { id: 'sha256:' + 'c'.repeat(64), repository: 'nginx', tag: '1.27', ref: 'nginx:1.27', digest: '', size: '192MB', created: '2 weeks ago', containers: '1' },
+  { id: 'sha256:' + 'd'.repeat(64), repository: '<none>', tag: '<none>', ref: 'dddddddddddd', digest: '', size: '7MB', created: '2 weeks ago', containers: '0' },
+]
+const dockerSurface = (model) => renderToStaticMarkup(h(D.DockerSurface, { model: dockerModel(model), actions: dockerNoop }))
+const dockerLoading = dockerSurface({ view: 'loading' })
+check('docker: the loading state is a sentence', dockerLoading.includes('Asking the engine'), true)
+const dockerAbsent = dockerSurface({ view: 'absent', state: { ok: false, code: 'NO_CLI', message: 'This machine has no docker or podman CLI on PATH.' } })
+check('docker: no CLI says so', dockerAbsent.includes('No docker or podman CLI') && dockerAbsent.includes('data-docker-state="absent"'), true)
+const dockerDown = dockerSurface({ view: 'down', state: { ok: false, code: 'ENGINE_DOWN', message: 'The docker engine is not answering.', startable: { kind: 'app', label: 'Docker Desktop', hint: '' } } })
+check('docker: a sleeping engine offers the start button', dockerDown.includes('Start Docker Desktop') && dockerDown.includes('data-docker-action="start-engine"'), true)
+const dockerHint = dockerSurface({ view: 'down', state: { ok: false, code: 'ENGINE_DOWN', message: 'The docker engine is not answering.', startable: { kind: '', label: '', hint: 'Start the engine yourself: sudo systemctl start docker' } } })
+check('docker: an engine it cannot start gives the command instead', dockerHint.includes('systemctl start docker') && dockerHint.includes('data-docker-action="start-engine"') === false, true)
+const dockerReady = dockerSurface({ containers: dockerContainers, images: dockerImages })
+check('docker: the ready tab lists containers and images', dockerReady.includes('data-docker-row="container"') && dockerReady.includes('data-docker-row="image"') && dockerReady.includes('nginx:1.27'), true)
+check('docker: the engine line carries version and context', dockerReady.includes('docker 25.0.3') && dockerReady.includes('context default'), true)
+check('docker: the counts are the running/total pair', dockerReady.includes('1/2 up') && dockerReady.includes('2 images'), true)
+check('docker: a running container offers stop, a stopped one start', dockerReady.includes('data-docker-action="stop"') && dockerReady.includes('data-docker-action="start"'), true)
+const dockerEmpty = dockerSurface({ view: 'ready' })
+check('docker: an empty engine explains the two ways in', dockerEmpty.includes('No containers.') && dockerEmpty.includes('No images.'), true)
+const dockerConfirm = dockerSurface({ containers: dockerContainers, images: dockerImages, confirm: { kind: 'container', id: dockerContainers[0].id } })
+check('docker: a removal asks first, in the row', dockerConfirm.includes('Remove it') && dockerConfirm.includes('Keep') && dockerConfirm.includes('data-docker-action="confirm-remove"'), true)
+const dockerOpen = dockerSurface({
+  ...{
+    containers: dockerContainers,
+    images: dockerImages,
+    selected: { kind: 'container', id: dockerContainers[0].id },
+    drawer: {
+      kind: 'container',
+      id: dockerContainers[0].id,
+      phase: 'ready',
+      facts: { kind: 'container', id: dockerContainers[0].id, name: 'web', image: 'nginx:1.27', status: 'running', running: true, exitCode: 0, startedAt: '2026-01-01', finishedAt: '', cmd: ['nginx'], entrypoint: [], envCount: 2, restart: 'unless-stopped', networkMode: 'bridge', networks: ['bridge'], ports: ['8080 -> 80/tcp'], mounts: [] },
+      logs: 'line one\nline two',
+      error: '',
+    },
+  },
+})
+check('docker: an open row draws its facts and its logs', dockerOpen.includes('data-docker-drawer="container"') && dockerOpen.includes('unless-stopped') && dockerOpen.includes('line one'), true)
+const dockerFilter = dockerSurface({ containers: dockerContainers, images: dockerImages, filter: 'web' })
+check('docker: the filter narrows the rows and says so', dockerFilter.includes('Showing 1 of 2 containers') && dockerFilter.includes('data-docker-row="container"'), true)
+check('docker: the filter hides the rows it does not match', dockerFilter.includes('>db<'), false)
+const dockerForm = dockerSurface({ containers: dockerContainers, images: dockerImages, form: 'run' })
+check('docker: starting an image is a form', dockerForm.includes('data-docker-form="run"') && dockerForm.includes('data-docker-action="run"'), true)
+check('docker: the title is Docker', renderToStaticMarkup(h(D.DockerTitle, {})), '<span>Docker</span>')
+// The LIVE tab: a request is applied only while it is the newest, and the poll
+// stops when the document is hidden or the tab is gone. Both are the bug a
+// container tab invites - a slow ps overwriting a fresh start, and a hidden
+// pane spawning a docker process every five seconds.
+const dockerSource = readFileSync(path.join(repo, 'packages/dsh-docker/lib/client.js'), 'utf8')
+check('docker: every answer is applied under a token', dockerSource.includes('token.current += 1') && dockerSource.includes('mine === token.current'), true)
+check('docker: the poll stops when the document is hidden', dockerSource.includes("document.visibilityState !== 'hidden'") && dockerSource.includes('visible.current === false'), true)
+check('docker: the poll is cleared on unmount', dockerSource.includes('clearInterval(timer)'), true)
+check('docker: the removal sends the id as confirm', dockerSource.includes('confirm: confirmId'), true)
 
 // ----------------------------------------------------------- dsh-ui-state
 // The pack's durable UI state (alpha.1). Its Node half DECLARES the row's own

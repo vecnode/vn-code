@@ -28,7 +28,9 @@ never materialised is a failed call however green the exit code is.
 
 `File 'out.mp4' already exists.` is the message that most often looks like a media
 problem. It is a safety feature: the user's original is never the output, and
-replacing a file takes an explicit `overwrite: true`.
+replacing a file takes an explicit `overwrite: true`. Writing `-y` or `-n` in
+`args` never reaches ffmpeg at all: the tool refuses the flag and names the
+`overwrite` parameter instead.
 
 ## The catalogue
 

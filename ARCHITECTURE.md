@@ -55,7 +55,7 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
 | `dsh-editor` | `editor` | text/code editor tab (vendored CodeMirror 6), create-on-save, Markdown preview hand-off |
 | `dsh-gittree` | `gittree` | read-only **History** tab: commit graph, message, changed files |
 | `dsh-image` | `image` | image viewer tab: fit/zoom/pan, pixel readout |
-| `dsh-audio` | `audio` | waveform tab (WAV/AIFF/FLAC) + the Audio console (devices, routing, test tone) |
+| `dsh-audio` | `audio` | waveform tab (WAV/AIFF/FLAC) + the left column's **Media** panel (every audio, image, video and GIF file in the workspace, previewed and handed to the tab that owns it); no microphone, no device list, no output routing |
 | `dsh-video` | `video` | video player tab; the bytes stay on the host and stream through a Range route |
 | `dsh-media` | `media` | the pack's ffmpeg owner: `media_probe` / `media_run` / `media_frames`, the Range file route, remux jobs |
 | `dsh-supercollider` | `supercollider` | SuperCollider the agent can play: ten `sc_*` tools over one warm `sclang` session (~31 ms a call, state kept) and a hand-written OSC client to `scsynth`, the installed `.schelp` reference indexed for `sc_help`, the `.scd` file workflow, five skills whose every example is compiled by a check, and one small console tab |
@@ -64,6 +64,7 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
 | `dsh-pdf` | `pdf` | PDF reader tab + `pdf_info` / `pdf_read` / `pdf_find` / `pdf_render` / `pdf_scan` over vendored pdf.js |
 | `dsh-research` | `research` | research as a folder the agent fills and the right bar shows: a run is `RUN.json` + a `passport.json` that records the user's instructions and every gate answer **verbatim**, three `rs_*` tools, four routes, and the Research tab where a **person** — never the model — answers the two frame gates (`g1-rq`, `g2-intake`). No socket, no child process, no vendored engine |
 | `dsh-ocr` | `ocr` | the pack's OCR owner: one tool, `ocr`, over `tesseract` from PATH or the OCR engine Windows itself ships (`lib/win-ocr.ps1` + `Windows.Media.Ocr`, which rasterizes a PDF page through `Windows.Data.Pdf`). Host-only — no client, no route |
+| `dsh-docker` | `docker` | Docker (or Podman) as a surface: nine `docker_*` tools over the machine's CLI, a `docker_start` that launches Docker Desktop or a podman machine and waits for its **daemon**, and a Docker tab of containers and images. argv-only and validated; no `exec`, no `system prune`, no free-form `run` |
 | `dsh-proto-lab` | `proto-lab` | the **prototyping lab**: five `lab_*` tools write a run into the workspace's own `lab/<runtime>/<slug>/` (gitignored — the bundle ships the generator, not the runs), a runtime registry (`p5js`, `openframeworks`, and a template for the third) whose every module the checks drive, a committed example library beside each skill, an offline-vendored p5.js, and verification as an explicit ladder — `t0-structure` → `t4-measure` — that always names the tier it reached |
 | `dsh-browser` | `browser` | web surface: the host fetches and renders a page in a disposable sandboxed browser (**currently disabled by the master**) |
 | `dsh-themes` | `themes` | extra palettes (Nord, Monokai, Hacker, Cyber), header controls, branding, account-menu trimming |

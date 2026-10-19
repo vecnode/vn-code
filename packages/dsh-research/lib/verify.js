@@ -29,7 +29,7 @@ import { createHash } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
-import { ResearchError, messageOf, stamp } from './run.js'
+import { ResearchError, messageOf, sizeOf, stamp } from './run.js'
 import { claimStatusOf, readClaims, readSources, sourcesByKey } from './ledger.js'
 
 /** The rungs this module can run, in order. */
@@ -116,10 +116,13 @@ function finding(code, rung, detail, extra = {}) {
 /**
  * **r1-record** — the source is what it says it is.
  *
- * Four things are checked, and each has its own code because each one means
+ * Five things are checked, and each has its own code because each one means
  * something different to the person reading the report:
  *   - the stored bytes still hash to the name they are filed under
  *     (`bytes-tampered` is the one that catches a file replaced by hand);
+ *   - bytes this run could not hash - because the ceiling stopped it - are
+ *     named (`bytes-unhashed`) rather than passed over, since an unread source
+ *     is unverified, not verified;
  *   - the record has the fields a reference cannot be built without
  *     (`field-missing`);
  *   - every field names where it came from (`origin-missing`), because a field
@@ -128,9 +131,10 @@ function finding(code, rung, detail, extra = {}) {
  *     (`title-mismatch`) - the guard against a record pointing at a real paper
  *     that is not the paper the document quotes.
  *
- * @returns `{ findings, checked, uncheckable }` - and NO status change: r1 is about
- * sources, and a source's health is a fact about the record, not a verdict about a
- * claim.
+ * @returns `{ findings, checked, uncheckable, hashedBytes }` - and NO status
+ * change: r1 is about sources, and a source's health is a fact about the record,
+ * not a verdict about a claim. `hashedBytes` is what the ceiling actually let
+ * the run read, so a caller can say how much was proved.
  */
 export async function r1Sources(options) {
   const dir = options.dir
@@ -154,7 +158,21 @@ export async function r1Sources(options) {
         perSource.push(finding('bytes-missing', 'r1-record', key + ' has a file entry with no hash, so it cannot be checked at all'))
         continue
       }
-      if (hashed + (Number(file.bytes) || 0) > MAX_HASH_BYTES) continue
+      // The ceiling is reported, never skipped in silence: a source this run
+      // did not hash has NOT been proven to be the bytes that were ingested,
+      // and an unread byte is exactly what `bytes-tampered` exists to catch.
+      const bytes = Number(file.bytes) || 0
+      if (hashed + bytes > MAX_HASH_BYTES) {
+        perSource.push(
+          finding(
+            'bytes-unhashed',
+            'r1-record',
+            key + ': ' + sizeOf(bytes) + ' of stored bytes were NOT hashed because this run stops at ' + sizeOf(MAX_HASH_BYTES) + ', so those bytes are unverified rather than proved authentic',
+            { bytes, limit: MAX_HASH_BYTES, sha256 },
+          ),
+        )
+        continue
+      }
       const absolute = await findStoredFile(dir, sha256)
       if (absolute === null) {
         perSource.push(finding('bytes-missing', 'r1-record', 'the stored file for ' + key + ' (' + sha256.slice(0, 12) + '…) is not in sources/ - it was moved or deleted'))
@@ -342,6 +360,8 @@ export async function ladderReport(options) {
         rung: 'r1-record',
         state: r1.findings.length > 0 ? 'findings' : r1.checked > 0 ? 'ok' : 'nothing-to-check',
         checked: r1.checked,
+        hashedBytes: r1.hashedBytes,
+        hashLimit: MAX_HASH_BYTES,
         findings: r1.findings,
         uncheckable: r1.uncheckable,
       },

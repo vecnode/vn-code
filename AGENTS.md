@@ -88,6 +88,12 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   deadline with a tree kill, the launcher's UTF-16 table decoded, and the
   distribution NAMED because a Docker Desktop machine defaults to
   `docker-desktop-data`; host-only, inert and honest off Windows),
+  `dsh-docker` (Docker or Podman as a surface: nine `docker_*` tools over the
+  machine's own CLI, argv-only with every removal confirmed by repeating the
+  target, a `docker_start` that launches Docker Desktop or a podman machine and
+  then waits for the **daemon**, and a Docker tab of containers and images with
+  their logs; no `exec`, no `system prune`, no free-form `run`; zero npm
+  dependencies and no bundled engine),
   `dsh-research` (a run is a folder with a `passport.json` recording the user's own
   words; nine `rs_*` tools over an append-only claim and source ledger, a claim's
   numbers recorded as a validated `statistic` rather than left in the prose, a
@@ -104,10 +110,11 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with
   `npm run check` in that folder. They travel with the package (which is what
   makes them useful outside this repository) and they are ADDITIONAL to
-  `scripts/checks/`, never a replacement for it: today six packages ship their own
+  `scripts/checks/`, never a replacement for it: today eight packages ship their own
   (`dsh-supercollider` with four checks, `dsh-research` with seven, plus
-  `dsh-diagrams`, `dsh-frontend-craft`, `dsh-proto-lab` and `dsh-ocr`), and the
-  pack-wide checks still own the routes, the bundle and the manifest.
+  `dsh-diagrams`, `dsh-frontend-craft`, `dsh-proto-lab`, `dsh-ocr`, `dsh-wsl` and
+  `dsh-docker`), and the pack-wide checks still own the routes, the bundle and the
+  manifest.
 - `scripts/` — the launchers (`run-web.*`, `run-desktop.*`), and four folders:
   `console/` (the shared console layer), `setup/` (install and uninstall, which the
   app's verbs run), `tools/` (maintainer-only: the fork re-sync for the client bundles
@@ -151,8 +158,6 @@ Run the check that owns the area, and say which ones you ran:
   markers are absent from both children, no key file is written with no terminal to ask
   at, and `status` names the same home. It also proves `scripts/run-web.* -Help` answers
   with no binary involved, and it skips loudly with no cargo and no built binary;
-- `check-audio-browser.mjs` — the check that drives a
-  real browser (with none installed it skips loudly);
 - `check-skill-examples.mjs`, `check-media-examples.mjs` — every fenced example in
   the shipped skills (parsed, compiled, or actually run);
 - `npm run check` **in a package folder that ships its own** — today

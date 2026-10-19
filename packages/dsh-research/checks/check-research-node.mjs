@@ -1456,6 +1456,55 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
 }
 
 {
+  // The 32 MiB ceiling on how much stored bytes one r1 run will hash used to
+  // `continue` in SILENCE: a source past it was never read and the run still
+  // said nothing about it, so an unverified source was indistinguishable from a
+  // verified one. An unread byte is exactly what bytes-tampered exists to catch,
+  // so the skip is now a finding, and the bytes actually read are reported.
+  const { createHash } = await import('node:crypto')
+  const huge = await verifyModule.r1Sources({
+    dir: path.join(root, 'no-such-run'),
+    sources: [
+      {
+        key: 'huge2024',
+        kind: 'journal-article',
+        title: 'A very large source',
+        year: '2024',
+        container: 'J',
+        provenance: { title: 'author', year: 'author', container: 'author' },
+        files: [{ sha256: 'a'.repeat(64), bytes: verifyModule.MAX_HASH_BYTES + 1 }],
+      },
+    ],
+  })
+  const unhashed = huge.findings.filter((one) => one.code === 'bytes-unhashed')
+  check('a source past the hash ceiling is a FINDING, not a silent skip', unhashed.length, 1)
+  check('...and the finding says how much was left unread', unhashed[0].detail.includes('32.0 MiB'), true)
+  check('...and nothing past the ceiling is counted as hashed', huge.hashedBytes, 0)
+
+  const hashDir = path.join(root, 'hash-bytes-run')
+  await fsp.mkdir(path.join(hashDir, 'sources'), { recursive: true })
+  const tiny = Buffer.from('the bytes that were ingested, no more')
+  const tinySha = createHash('sha256').update(tiny).digest('hex')
+  await fsp.writeFile(path.join(hashDir, 'sources', tinySha + '.pdf'), tiny)
+  const small = await verifyModule.r1Sources({
+    dir: hashDir,
+    sources: [
+      {
+        key: 'tiny2024',
+        kind: 'journal-article',
+        title: 'A tiny source',
+        year: '2024',
+        container: 'J',
+        provenance: { title: 'author', year: 'author', container: 'author' },
+        files: [{ sha256: tinySha, bytes: tiny.length }],
+      },
+    ],
+  })
+  check('a source inside the ceiling is hashed and counted', small.hashedBytes, tiny.length)
+  check('...and reports no bytes-unhashed', small.findings.filter((one) => one.code === 'bytes-unhashed').length, 0)
+}
+
+{
   const exec2 = { agent: { session: { meta: { cwd: workspace } } } }
   const log = { warn() {}, info() {}, debug() {} }
   const tools2 = buildTools({ env, workspace, log })
@@ -1513,6 +1562,7 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('a miss in complete text is a locate-miss', recorded.value.text.includes('locate-miss'), true)
   check('and a source with no text is UNCHECKABLE, never a pass', recorded.value.text.includes('could not be checked'), true)
   check('and a title that is not in its own text is a title-mismatch', recorded.value.text.includes('title-mismatch'), true)
+  check('and the record summary reports the bytes it actually hashed', /of stored bytes hashed \(this run stops at 32\.0 MiB/.test(recorded.value.text), true)
 
   const after = await readClaims(path.join(root, 'ladder-check'))
   const located = after.current.find((row) => row.id === 'c0001')
@@ -1525,6 +1575,7 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check('the report names all four rungs', ['r1-record', 'r2-locate', 'r3-support', 'r4-audit'].every((rung) => report.value.text.includes(rung)), true)
   check('and says r3 needs a reader rather than claiming it ran', report.value.text.includes('needs-a-reader') && report.value.text.includes('waiting on a reader'), true)
   check('and writes nothing', report.value.text.includes('changed nothing on disk'), true)
+  check('and the report says how much r1 was allowed to hash', /hashed: .* of the 32\.0 MiB this run may read/.test(report.value.text), true)
 
   // ---- the two rungs a file cannot do
   check('a verdict with no judge is refused', (await call2('rs_verify', { slug: 'ladder-check', action: 'support', verdicts: [{ id: 'c0001', verdict: 'supported', reason: 'x' }] })).value.view.code, 'BAD_JUDGE')

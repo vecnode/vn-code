@@ -1,7 +1,7 @@
 {
   "name": "dsh-audio",
-  "version": "0.1.0-alpha.5",
-  "description": "Audio: WAV/AIFF/FLAC as a waveform (one row per channel, adaptive ruler, RMS core, sample-level zoom, selection, audio-clock playback) plus the MEDIA panel in the left column - a bounded scan of every audio, image, video and GIF file the conversation can reach, with an inline preview and a one-click hand-off to the tab that owns the type, and, under Devices, this machine's audio console. Client-only, read in 2 MiB windows.",
+  "version": "0.1.0-alpha.7",
+  "description": "Audio: WAV/AIFF/FLAC as a waveform (one row per channel, adaptive ruler, RMS core, sample-level zoom, selection, audio-clock playback) plus the MEDIA panel in the left column - a bounded scan of every audio, image, video and GIF file the conversation can reach, with an inline preview and a one-click hand-off to the tab that owns the type. Client-only, read in 2 MiB windows, about files only: no microphone, no device enumeration, no output routing.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

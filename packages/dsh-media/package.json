@@ -1,6 +1,6 @@
 {
   "name": "dsh-media",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "description": "The pack's media engine and the only owner of ffmpeg (host-only, no browser half): `media_probe`, `media_run` and `media_frames`, the Range-capable file route, remux jobs, and the pinned hash-verified ffmpeg provisioning that dsh-video's tab streams through.",
   "type": "module",
   "main": "lib/index.js",

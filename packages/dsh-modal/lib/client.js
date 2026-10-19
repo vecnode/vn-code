@@ -54,7 +54,7 @@ window.__ModuleLoader__.load({
     const h = React.createElement
 
     /** Version marker, mirrored by the package manifest. */
-    const PLUGIN_VERSION = '0.1.0-alpha.2'
+    const PLUGIN_VERSION = '0.1.0-alpha.3'
     /** The client service name other plugins resolve. */
     const SERVICE = 'modals'
 
@@ -70,6 +70,15 @@ window.__ModuleLoader__.load({
 /* A rich dialog (spec.content) owns its whole body: the panel is a frame that
    the content lays out, so it stops padding and scrolling itself. */
 .dsm-panel.dsm-lg{width:min(1120px,94vw);height:min(800px,90vh);padding:0;gap:0;overflow:hidden}
+/* A rich dialog's header: the title and the ONE control the frame itself owns.
+   A rich dialog has no mask click (it can hold half-finished work), so without
+   this the only way out was the Escape key - invisible, and the reason a Media
+   dialog looked like a dead end. */
+.dsm-head{flex:none;display:flex;align-items:center;gap:12px;padding:12px 14px 12px 18px;border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.22))}
+.dsm-head .dsm-title{flex:1;min-width:0;margin:0}
+.dsm-close{flex:none;width:26px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;border:.5px solid transparent;background:transparent;color:var(--dsw-alias-label-secondary,#b8b8b8);font:inherit;font-size:16px;line-height:1;cursor:pointer}
+.dsm-close:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#ececec)}
+.dsm-close:focus-visible{outline:2px solid var(--dsw-alias-state-accent,#4f8cff);outline-offset:1px}
 .dsm-content{flex:1;min-height:0;display:flex;flex-direction:column}
 .dsm-message{margin:0;color:var(--dsw-alias-label-secondary,#b8b8b8);font-size:12.5px;line-height:1.55;overflow-wrap:anywhere}
 .dsm-form{display:flex;flex-direction:column;gap:12px;margin:0}
@@ -398,7 +407,7 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'dsm-overlay', role: 'presentation' },
           // No mask click: a rich dialog can hold unsaved work, and Escape (and
-          // the content's own Close control) is what closes it.
+          // the header's own close control) is what closes it.
           h('div', { className: 'dsm-mask', 'aria-hidden': true }),
           h(
             'div',
@@ -409,7 +418,28 @@ window.__ModuleLoader__.load({
               'aria-modal': 'true',
               ...(request.title === '' ? { 'aria-label': 'Dialog' } : { 'aria-labelledby': titleId }),
             },
-            request.title === '' ? null : h('h2', { className: 'dsm-title', id: titleId }, request.title),
+            h(
+              'div',
+              { className: 'dsm-head' },
+              request.title === ''
+                ? h('h2', { className: 'dsm-title', id: titleId }, 'Dialog')
+                : h('h2', { className: 'dsm-title', id: titleId }, request.title),
+              // The frame's own dismissal, always rendered: a rich dialog's
+              // content owns its body, so it is the FRAME that must guarantee a
+              // visible way out. Escape still works, and the content's own
+              // Close button (when it has one) still works.
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dsm-close',
+                  'aria-label': 'Close this dialog',
+                  title: 'Close',
+                  onClick: () => finish(request, null),
+                },
+                '\u00d7',
+              ),
+            ),
             h('div', { className: 'dsm-content' }, request.content({ close: (result) => finish(request, result === undefined ? null : result) })),
           ),
         )

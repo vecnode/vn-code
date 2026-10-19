@@ -277,7 +277,7 @@ export function buildTools(deps) {
     name: 'media_run',
     description: [
       'Run a real ffmpeg or ffprobe command. `args` is an ARRAY of arguments - never a command string, never a shell: `["-i","in.mkv","-c","copy","out.mp4"]`. Nothing is interpolated, so a path with a space, a filter graph and a `%` in a filename all arrive exactly as written.',
-      'Two things are added for you unless you pass your own: `-nostdin` (so ffmpeg can never wait for input) and `-n` - it will NOT overwrite an existing file. Pass `overwrite: true` to allow that (it becomes `-y`), which is the only way this tool can replace something. `-hide_banner` and `-loglevel warning` are added for the same reason unless you set a log level yourself, so the answer is the diagnosis rather than the build banner.',
+      'Three things are added for you unless you pass your own: `-nostdin` (so ffmpeg can never wait for input), `-hide_banner` and `-loglevel warning` (so the answer is the diagnosis rather than the build banner; a log level you set wins). Overwrite is the tool\'s decision, not an argument: ffmpeg is given `-n` and will NOT overwrite an existing file, `overwrite: true` swaps that for `-y` and is the only way this tool can replace something, and a caller-supplied `-y` or `-n` in `args` is refused rather than honoured.',
       'It runs in the conversation workspace by default, so relative paths mean what you expect; pass `cwd` to change that. The call has a deadline (default 120 s, at most 600 s) and the output is capped, so a runaway decode is killed and a chatty one is trimmed rather than returned whole. The answer names the exit code, the elapsed time and the files the command wrote.',
       'Use it for anything the purpose-built tools do not cover: extracting or testing a stream, converting a frame to a different image format, reading deep ffprobe fields (`["-v","error","-select_streams","v:0","-show_frames","-read_intervals","%+#1","file.mp4"]`), building a contact sheet by hand, or measuring a filter.',
       'For the common cases prefer media_probe (a report, not a command), media_frames (frames out of a video) and the video tab\'s own remux, which reuses this same binary.',
@@ -344,13 +344,24 @@ export function buildTools(deps) {
       const binary = await binaryFor(binaryName)
       if (!binary.ok) return { text: binary.message, view: { file: '' } }
 
-      // ffmpeg's own overwrite flag is the caller's to decide and this plugin's
-      // to keep honest: `-n` unless they asked for `-y`, and never both. The
-      // injected flags go FIRST: a flag appended after the output file is still
-      // parsed, but a caller reading the answer sees a command line that looks
-      // like a mistake, and ffprobe has no `-n` at all - so only ffmpeg gets
-      // any of these.
+      // Overwrite is this tool's decision, never an argument. A caller-supplied
+      // `-y` used to suppress the injected `-n` and replace a file with
+      // `overwrite` left unset, which is exactly the promise "never a -y without
+      // overwrite: true" says this tool keeps. Refuse both spellings: the
+      // parameter is the one documented way to say it, and a command line that
+      // looks like it is overriding the tool is a command line nobody can read.
       const supplied = args.args.filter((entry) => OVERWRITE_FLAGS.has(entry))
+      if (binaryName === 'ffmpeg' && supplied.length > 0) {
+        return {
+          text:
+            'Refusing a caller-supplied ' +
+            supplied.join('/') +
+            ': whether an ffmpeg output may replace an existing file is this tool\'s decision, not an argument. Remove ' +
+            supplied.join('/') +
+            ' from args and pass `overwrite: true` to allow replacing a file; without it ffmpeg is given -n and an existing output stops the command.',
+          view: { file: '' },
+        }
+      }
       const injected = []
       if (binaryName === 'ffmpeg') {
         if (!args.args.includes('-hide_banner')) injected.push('-hide_banner')
@@ -360,7 +371,7 @@ export function buildTools(deps) {
         const hasLevel = args.args.some((entry) => entry === '-loglevel' || entry === '-v' || entry.startsWith('-loglevel='))
         if (!hasLevel) injected.push('-loglevel', 'warning')
         if (!args.args.includes('-nostdin')) injected.push('-nostdin')
-        if (supplied.length === 0) injected.push(args.overwrite === true ? '-y' : '-n')
+        injected.push(args.overwrite === true ? '-y' : '-n')
       }
       const argv = [...injected, ...args.args]
 

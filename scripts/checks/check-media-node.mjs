@@ -386,6 +386,15 @@ if (!hasFfmpeg) {
   check('a second run will NOT overwrite by default', /already exists/.test(refusedOverwrite.text) && /exit 1/.test(refusedOverwrite.text))
   const allowedOverwrite = await call('media_run', { args: ['-i', 'fixture.mp4', '-vn', '-c:a', 'copy', 'audio-out.m4a'], overwrite: true })
   check('...unless overwrite: true says so', /exit 0/.test(allowedOverwrite.text) && /-y/.test(allowedOverwrite.text))
+  // The bypass this used to have: a `-y` in the argv suppressed the injected
+  // `-n`, so a caller could replace a file with `overwrite` unset - the exact
+  // promise "never a -y without overwrite: true" says the tool keeps. The flag
+  // is now refused by name, and the command never runs.
+  const smuggledY = await call('media_run', { args: ['-y', '-i', 'fixture.mp4', '-vn', '-c:a', 'copy', 'smuggled-out.m4a'] })
+  check('a caller-supplied -y is refused by name', /Refusing a caller-supplied -y/.test(smuggledY.text) && /overwrite: true/.test(smuggledY.text))
+  check('...and that command never ran', !existsSync(path.join(workspace, 'smuggled-out.m4a')) && !/ffmpeg said/.test(smuggledY.text))
+  const smuggledN = await call('media_run', { args: ['-n', '-i', 'fixture.mp4', 'smuggled-out.m4a'] })
+  check('a caller-supplied -n is refused too, so the tool owns the decision', /Refusing a caller-supplied -n/.test(smuggledN.text))
   const noShell = await call('media_run', { args: ['-version', '&&', 'echo', 'pwned'] })
   check('a shell metacharacter is just an argument', !/pwned/.test(noShell.text.split('--- ffmpeg said ---')[1] ?? ''))
   const badCwd = await call('media_run', { args: ['-version'], cwd: '../elsewhere' })

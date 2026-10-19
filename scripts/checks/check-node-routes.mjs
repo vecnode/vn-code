@@ -1740,7 +1740,21 @@ try {
   await fsp.writeFile(path.join(fcWorkspace, 'card.css'), '.card{border-left:4px solid #6366f1;border-radius:12px}\n')
   const fcCtx = {
     get: (name) => {
-      if (name === 'connection') return { fetch: { register: (route) => (fcRoutes.push(route), () => {}) } }
+      // The stub mirrors the REAL registry: `connection.fetch` keys routes by
+      // EXACT PATH and throws on a second registration of one. Accepting a
+      // duplicate here is what let two `register(DIRECTION_ROUTE, …)` calls ship
+      // and take the whole row down at boot with "is already registered".
+      if (name === 'connection') {
+        return {
+          fetch: {
+            register: (route) => {
+              if (fcRoutes.some((entry) => entry.path === route.path)) throw new Error('connection: exact Fetch route "' + route.path + '" is already registered')
+              fcRoutes.push(route)
+              return () => {}
+            },
+          },
+        }
+      }
       if (name === 'sessions') return { get: (id) => (id === 'session-frontend' ? { header: { cwd: fcWorkspace } } : undefined) }
       return undefined
     },
@@ -1755,6 +1769,14 @@ try {
     [...new Set(fcRoutes.map((route) => route.path))].sort().join(','),
     ['/api/dsh-frontend-craft/artifacts', '/api/dsh-frontend-craft/direction', '/api/dsh-frontend-craft/render-image', '/api/dsh-frontend-craft/rules', '/api/dsh-frontend-craft/scan', '/api/dsh-frontend-craft/state'].join(','),
   )
+  // One registration per exact path, and the path carries both halves of the
+  // direction round in its method set.
+  check('frontend: no exact path is registered twice', fcRoutes.length, new Set(fcRoutes.map((route) => route.path)).size)
+  check(
+    'frontend: one route carries both directions of the record',
+    fcRoutes.find((route) => route.path === '/api/dsh-frontend-craft/direction').methods.join(','),
+    'GET,HEAD,POST',
+  )
   check(
     'frontend: methods stay inside the registry vocabulary',
     fcRoutes.every((route) => route.methods.every((method) => ['GET', 'HEAD', 'POST'].includes(method))),
@@ -1765,7 +1787,8 @@ try {
     fcTools.every((tool) => tool.parameters.type === 'object' && tool.parameters.additionalProperties === false && tool.output && typeof tool.output.render === 'function' && typeof tool.execute === 'function'),
     true,
   )
-  // A path can carry two registrations (GET and POST); the call picks by method.
+  // One registration carries a method SET, so a call picks the route by path and
+  // the route decides by method - exactly what the real registry does.
   const fcCall = (routePath, request) => {
     const route = fcRoutes.find((entry) => entry.path === routePath && entry.methods.includes(request.method))
     if (!route) throw new Error('no route registered for ' + request.method + ' ' + routePath)
@@ -1833,6 +1856,44 @@ try {
   await fsp.rm(fcWorkspace, { recursive: true, force: true })
 }
 
+// ------------------------------------------------- every host half's exact paths
+// `connection.fetch` keys routes by EXACT PATH and THROWS on a second one, so a
+// row that registers one path twice does not merely log: its whole entry fails
+// to activate ("1 entry did not activate"). dsh-frontend-craft shipped exactly
+// that - a GET/HEAD registration and a POST one for /direction - and its stub
+// above accepted the duplicate, which is why nothing caught it. That stub now
+// refuses a duplicate (the behavioural guard for the row); this is the sweep
+// across the pack, so the same mistake anywhere else is caught the day it is
+// written instead of the day the harness boots.
+{
+  const walk = (dir, found = []) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (entry.name === 'vendor' || entry.name === 'node_modules' || entry.name === '.git') continue
+        walk(path.join(dir, entry.name), found)
+      } else if (entry.name.endsWith('.js')) {
+        found.push(path.join(dir, entry.name))
+      }
+    }
+    return found
+  }
+  const doubled = []
+  let scanned = 0
+  for (const file of walk(path.join(repo, 'packages'))) {
+    if (!file.slice(repo.length).split(path.sep).includes('lib')) continue
+    scanned += 1
+    const text = readFileSync(file, 'utf8')
+    const counts = new Map()
+    for (const match of text.matchAll(/(?<![.\w])register\s*\(\s*([A-Za-z_$][\w$.]*)\s*,\s*\[/g)) {
+      counts.set(match[1], (counts.get(match[1]) ?? 0) + 1)
+    }
+    for (const [name, count] of counts) {
+      if (count > 1) doubled.push(path.relative(repo, file) + ': ' + name + ' x' + count)
+    }
+  }
+  check('no host half registers one exact route path twice (' + scanned + ' lib files)', doubled.length === 0 ? 'ok' : doubled.join(' | '), 'ok')
+}
+
 // ------------------------------------------------------------------- dsh-ocr
 // The OCR row is host-only: no route, one tool, and ONE answer that can only be
 // checked by taking the engines away. A host with nothing that can recognize
@@ -1888,6 +1949,38 @@ try {
   check('ocr: that answer says what to install', bare.text.includes('Install one'), true)
   check('ocr: that answer still carries a view for the card', typeof bare.view.file, 'string')
   await fsp.rm(ocrTemp, { recursive: true, force: true })
+}
+
+// ------------------------------------------------------------- dsh-docker
+// The container row's wiring, driven: the row activates against a stub context
+// and registers its nine tools and its eight exact-path routes, and the health
+// route answers WITHOUT a daemon - which is the one route that must work on a
+// machine whose Docker Desktop is closed. What each route DOES with a sleeping
+// engine, a removal and a run spec is the package's own check
+// (packages/dsh-docker/checks/check-docker-node.mjs); this block owns the
+// pack-wide contract.
+{
+  const dockerModule = await import('../../packages/dsh-docker/lib/index.js')
+  const seen = { tools: [], routes: [] }
+  const dockerCtx = {
+    get: (name) => (name === 'connection' ? { fetch: { register: (route) => (seen.routes.push(route), () => {}) } } : undefined),
+    effect: (fn) => fn(),
+    logger: { info() {}, warn() {} },
+  }
+  dockerCtx.tools = { register: (tool) => (seen.tools.push(tool), () => {}) }
+  dockerModule.apply(dockerCtx)
+  check('docker: the row registers nine tools', seen.tools.length, 9)
+  check(
+    'docker: ...each with a name, a schema and an execute',
+    seen.tools.every((tool) => typeof tool.name === 'string' && typeof tool.execute === 'function' && tool.parameters !== undefined),
+    true,
+  )
+  check('docker: ...and eight exact-path routes', seen.routes.map((route) => route.path).sort().join(','), dockerModule.API_ROUTES.slice().sort().join(','))
+  const health = seen.routes.find((route) => route.path === dockerModule.HEALTH_ROUTE)
+  const healthAnswer = await health.fetch(new Request('http://x' + dockerModule.HEALTH_ROUTE))
+  const healthBody = await healthAnswer.json()
+  check('docker: the health route answers without a daemon', healthAnswer.status, 200)
+  check('docker: ...and names what is deliberately absent', healthBody.notBuilt.includes('exec') && healthBody.tools.length, 9)
 }
 
 // --------------------------------------------------------- the repo manifest

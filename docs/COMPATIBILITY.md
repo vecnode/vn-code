@@ -32,7 +32,8 @@ requirement: `wry` and its three engines left with the window.
 | `dsh-editor` | `editor` | CodeMirror tab type for text and code, Markdown included, blank documents from "+", Preview/Edit hand-off to the rendered view |
 | `dsh-gittree` | `gittree` | **History**: read-only commit list with a branch-lane graph; needs `git` on `PATH` |
 | `dsh-image` | `image` | image viewer (PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, SVG, TIFF) |
-| `dsh-audio` | `audio` | waveform viewer (WAV, AIFF, FLAC) plus the Audio console row in the left panel list |
+| `dsh-docker` | `docker` | Docker or Podman as tools and a tab; needs `docker`/`podman` on `PATH`, and `docker_start` needs Docker Desktop where it is installed |
+| `dsh-audio` | `audio` | waveform viewer (WAV, AIFF, FLAC) plus the Media row in the left panel list (workspace media, previewed) |
 | `dsh-media` | `media` | the host-only media engine and the only owner of ffmpeg (`media_probe`, `media_run`, `media_frames`) |
 | `dsh-video` | `video` | video player tab, streamed from dsh-media's Range route |
 | `dsh-browser` | `browser` | the pack's own Browser tab, rendering pages on the host; disables `ui-sidebar-browser` (currently disabled again by the master) |

@@ -1,4 +1,4 @@
-# dsh-media (alpha.3)
+# dsh-media (alpha.4)
 
 **Media the agent can actually work with, and the one copy of ffmpeg this pack runs.**
 
@@ -19,8 +19,10 @@ the engine it and the agent share.
   adds ffprobe's own JSON.
 - `media_run` - a REAL ffmpeg or ffprobe command as an **argv array**, never a shell string,
   so a path with a space, a filter graph and a literal `&` arrive as themselves. It injects
-  `-hide_banner`, `-loglevel warning` (unless the caller sets a level), `-nostdin` and `-n`
-  (never overwrite) unless `overwrite: true`, which becomes `-y`; ffprobe gets none of those.
+  `-hide_banner`, `-loglevel warning` (unless the caller sets a level) and `-nostdin`, and it
+  owns the overwrite decision: `-n` (never overwrite), or `-y` when `overwrite: true` says so.
+  A caller-supplied `-y`/`-n` in `args` is REFUSED by name rather than honoured - accepting it
+  would let an argv replace a file with `overwrite` unset. ffprobe gets none of those flags.
   It runs in the conversation workspace by default, kills at a deadline (120 s, 600 s max),
   caps the output keeping head and tail and naming the drop, and reports the exit code, the
   elapsed time and the files ffmpeg named as outputs.
@@ -70,7 +72,8 @@ stale one.
   file from a failed conversion is deleted, not served.
 - darwin-arm64 is deliberately unpinned - no Apple-Silicon build publishes both a versioned URL
   and a checksum - so that platform is told to use `brew install ffmpeg` or the two variables.
-- never a shell, an implicit transcode, a `-y` without `overwrite: true`, or an unvalidated path.
+- never a shell, an implicit transcode, a `-y` without `overwrite: true` (a caller-supplied
+  `-y`/`-n` in `args` is refused), or an unvalidated path.
 
 ## Verify
 

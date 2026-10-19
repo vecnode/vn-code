@@ -83,7 +83,7 @@ import { DISCLOSURE_FIELDS, DISCLOSURE_FILE, DISCLOSURE_MD, disclosureSummary, n
 import { GOLD_ITEMS, MIN_ITEMS, publicItems, renderCalibration, scoreVerdicts } from './calibration.js'
 import { FORMATS, FORMATS_DOCUMENT, FORMATS_READY, combineReports, ensureIntegrityGate, hashOf, loadRefs, loadStyles, readRunState, runBuild, writeBuildReport } from './build.js'
 import { API_ROUTES } from './api.js'
-import { ladderReport, r1Sources, r2Claims } from './verify.js'
+import { MAX_HASH_BYTES, ladderReport, r1Sources, r2Claims } from './verify.js'
 import {
   CONCESSION_MAX,
   CONCESSION_THRESHOLD,
@@ -1470,6 +1470,7 @@ export function buildTools(deps = {}) {
             lines.push(rung.rung + '  [' + rung.state + ']')
             if (rung.why !== undefined) lines.push('  ' + rung.why)
             if (rung.checked !== undefined) lines.push('  checked: ' + rung.checked)
+            if (rung.hashedBytes !== undefined) lines.push('  hashed: ' + sizeOf(rung.hashedBytes) + ' of the ' + sizeOf(rung.hashLimit) + ' this run may read (a source past the ceiling is reported as bytes-unhashed, never skipped in silence)')
             if (rung.located !== undefined) lines.push('  quotes located: ' + rung.located)
             if (rung.waiting !== undefined) lines.push('  waiting on a reader: ' + rung.waiting)
             for (const one of (rung.findings ?? []).slice(0, 12)) lines.push('  · ' + one.code + ': ' + one.detail)
@@ -1576,7 +1577,19 @@ export function buildTools(deps = {}) {
             if (own.length > 0) await applyFindings(dir, { target: 'source', id: recordEntry.key, rung: 'r1-record', findings: own }, args.now)
           }
           tally(r1.findings)
-          lines.push('- r1-record: ' + r1.checked + ' source(s) matched their own text, ' + r1.findings.length + ' finding(s), ' + r1.uncheckable.length + ' could not be checked')
+          lines.push(
+            '- r1-record: ' +
+              r1.checked +
+              ' source(s) matched their own text, ' +
+              r1.findings.length +
+              ' finding(s), ' +
+              r1.uncheckable.length +
+              ' could not be checked; ' +
+              sizeOf(r1.hashedBytes) +
+              ' of stored bytes hashed (this run stops at ' +
+              sizeOf(MAX_HASH_BYTES) +
+              ', and anything past it is reported as bytes-unhashed rather than passed over)',
+          )
           for (const one of r1.uncheckable.slice(0, 6)) lines.push('    ? ' + one.key + ': ' + one.why)
         }
 

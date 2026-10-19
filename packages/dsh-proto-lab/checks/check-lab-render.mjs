@@ -65,9 +65,9 @@ const SETTLE_TIMEOUT_MS = 20000
 /**
  * The browsers this host might have, in the order worth trying.
  *
- * The same search `check-audio-browser.mjs` documents: the override first, then
- * the standard install locations per platform, because a machine with a browser
- * is the normal case and a machine without one must say so loudly.
+ * The usual search, in the order worth trying: the override first, then the
+ * standard install locations per platform, because a machine with a browser is
+ * the normal case and a machine without one must say so loudly.
  *
  * @returns `{ file, source }` or null.
  */
@@ -455,9 +455,9 @@ try {
   }
 } catch (err) {
   // A sandbox that refuses to spawn a browser is not a verdict about the plugin:
-  // the pack's own `check-audio-browser.mjs` fails the same way under such a
-  // sandbox (a bare `spawn EPERM`), which is why this is reported as a skip with
-  // the reason rather than as a failed assertion. On an ordinary machine it runs.
+  // a bare `spawn EPERM` is the sandbox, not the page, which is why this is
+  // reported as a skip with the reason rather than as a failed assertion. On an
+  // ordinary machine it runs.
   const message = String(err && err.message)
   // Two shapes of the same refusal: Node cannot spawn at all (EPERM), or the
   // browser starts, cannot reach its own crash handler, and self-terminates

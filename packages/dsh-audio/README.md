@@ -1,6 +1,6 @@
-# dsh-audio (alpha.5)
+# dsh-audio (alpha.7)
 
-**Audio opens as a waveform — and the left column's Media panel lists every media file the conversation can reach.** The right bar's `audio` tab covers **WAV/RIFF, AIFF/AIFC and FLAC**, instead of the preview's bare `<audio>` element. The **Media** panel is a **Media** row in the left column's global-panel list (`sidebar.panellist`) at `order: -1`, above Plugins: its **Files** view scans the workspace for audio, image, video and GIF files and previews them in place, and its **Devices** view is this machine's audio console. Client-only: bytes come from the harness's `workspaceFiles` remote, so it ships no route and no host state; `lib/index.js` is one no-op row.
+**Audio opens as a waveform — and the left column's Media panel lists every media file the conversation can reach.** The right bar's `audio` tab covers **WAV/RIFF, AIFF/AIFC and FLAC**, instead of the preview's bare `<audio>` element. The **Media** panel is a **Media** row in the left column's global-panel list (`sidebar.panellist`) at `order: -1`, above Plugins: it scans the workspace for audio, image, video and GIF files and previews them in place. Client-only: bytes come from the harness's `workspaceFiles` remote, so it ships no route and no host state; `lib/index.js` is one no-op row.
 
 ## What it adds
 
@@ -11,15 +11,14 @@
 
 ## The Media panel
 
-The left column's row is **Media**, not Audio, and it opens one dialog with two views.
+The left column's row is **Media**, not Audio, and it opens one dialog: the library. The panel is a **root-scoped** seat — the harness renders `main` with no props — so the conversation it browses is found the way the harness itself finds it: the session the main view **retains** (`retainedBy.mainView`), which survives a global panel being shown. Without that lookup the dialog had no session and could only say "open a conversation"; it listed nothing.
 
-- **Files** (the default) lists the media in this conversation's workspace: **images, GIFs, audio and video**, grouped in that order with a count per group. The walk is **bounded and says so** — depth 5, 120 directories, 120 files, `node_modules`/`.git`/`dist`/`vendor`/`__pycache__` and their kin skipped — and a cut list is labelled `(list cut)` in the header rather than passed off as complete. Every listing comes from the harness's own `workspaceFiles.list` under the session id, so the host decides what is readable; the panel never names a path it was not given.
+- **One view, and it is the files.** The dialog lists the media in this conversation's workspace: **images, GIFs, audio and video**, grouped in that order with a count per group. The walk is **bounded and says so** — depth 5, 120 directories, 120 files, `node_modules`/`.git`/`.vncode`/`dist`/`vendor`/`__pycache__` and their kin skipped — and a cut list is labelled `(list cut)` in the header rather than passed off as complete. Every listing comes from the harness's own `workspaceFiles.list` under the session id, so the host decides what is readable; the panel never names a path it was not given. A refused listing is shown as **the reason it was refused**, never as an empty workspace, and a genuinely empty one says **"No audio, image, video or GIF files were found in this conversation's workspace"** — the sentence names what Rescan scans, because "no media" and "could not read" are different answers. The panel carries a **Close** in its own bar, beside Rescan, as well as the frame's own ×.
 - **The pick previews in place.** An image draws as an `<img>`, a GIF too, a video as a `<video controls>`, audio as an `<audio controls>`, all through the harness's authenticated `/api/file?path=` route against the file's **absolute path** (one `stat` per pick, never per row). **Open in a tab** then hands the `dsh-resource://file/session/<id>/<path>` address to the right bar's registry, so a WAV lands on this package's own waveform, a PNG on dsh-image's zoom, an MP4 on dsh-video's player, and a format this pack claims nowhere still reaches the shipped preview.
-- **Devices** is the audio console described below, unchanged.
 
-## The Audio console
+## What this package is NOT
 
-`enumerateDevices` (re-run on `devicechange`) lists one card per device, the default **naming its target** via `groupId`. `AudioContext.setSinkId` moves the **one** AudioContext the player and the tone share; `HTMLMediaElement.setSinkId` moves every media element, and with neither the console names the system mixer. The tone is one frequency clamped to 20 Hz-20 kHz, one square-law level, `Both`/`Left`/`Right`, a **self-stop after 30 s**; the input meter's analyser is **never connected to the destination**. The pick lives in guarded `localStorage`, published as **`audioDevices`**; the row carries its `main` seat (`layout.selectPanel(<id>)` throws without one) and opens it in `dsh-modal`'s lazily resolved dialog, or **inline**.
+It is about **files, not about the machine**. There is no audio console: no `enumerateDevices`, no `getUserMedia`, no microphone meter, no `setSinkId` routing of the page's audio, no test tone, and no `audioDevices` service — the row's dialog lists files and nothing else. The player still creates the one `AudioContext` its playback needs, and playback goes wherever the operating system sends it, which is the job of the system mixer. The Devices view and its construct were removed in alpha.7.
 
 ## How it plugs in
 
@@ -27,8 +26,8 @@ The left column's row is **Media**, not Audio, and it opens one dialog with two 
 |---|---|
 | `id` / kind | `dsh-audio` / `audio` |
 | `patterns` / `priority` | `['*.wav','*.wave','*.aif','*.aiff','*.aifc','*.flac']` / `extension` |
-| seats | `sidebar.right.pane.tab` / `.title`; panel `sidebar.panellist` row + `main` seat (`media`, `order: -1`), whose dialog carries the Files and Devices views |
-| services | `slots`, `sidebarRightTabs`, `remote.workspaceFiles` (lazily `modals`, `layout`); provides `audioDevices`; no guide entry, disabled row, route or dependency |
+| seats | `sidebar.right.pane.tab` / `.title`; panel `sidebar.panellist` row + `main` seat (`media`, `order: -1`), whose dialog is the media library |
+| services | `slots`, `sidebarRightTabs`, `remote.workspaceFiles` (lazily `modals`, `layout`, `sessions`); provides nothing; no guide entry, disabled row, route or dependency |
 
 The audio suffixes at `extension` beat the shipped preview's `text` type at `fallback`, while every other file keeps its surface (MP3, M4A and Ogg included). **One address shape:** `dsh-resource://file/session/<sessionId>/<path>`; there is no package-owned absolute form, since `session` authorizes the read.
 
@@ -52,10 +51,9 @@ The audio suffixes at `extension` beat the shipped preview's `text` type at `fal
 ```
 node --check packages/dsh-audio/lib/client.js
 node scripts/checks/check-client-bundles.mjs
-node scripts/checks/check-audio-browser.mjs
 ```
 
-`check-client-bundles.mjs` drives the bundle's **pure half** (`exports.__internals`) against RIFF/WAVE, IFF FORM and FLAC bytes it builds itself, and drives the Media panel's half too: the suffix→kind index, the session-scoped address a row opens, the `/api/file` URL an absolute path becomes, a scan over a scripted listing (one level down, `node_modules` skipped, groups in order, the cut flag reported), and the panel and seat renders (both views offered, a seat with no dialog still draws a working surface). `check-audio-browser.mjs` needs Chromium and skips loudly without it.
+`check-client-bundles.mjs` drives the bundle's **pure half** (`exports.__internals`) against RIFF/WAVE, IFF FORM and FLAC bytes it builds itself, and drives the Media panel's half too: the suffix→kind index, the session-scoped address a row opens, the `/api/file` URL an absolute path becomes, a scan over a scripted listing (one level down, `node_modules` skipped, groups in order, the cut flag and a refused listing), the panel and seat renders (one view, a seat with no dialog still draws a working surface), and — by ABSENCE, so it cannot grow back — that the console is gone: no `enumerateDevices`, no `getUserMedia`, no `setSinkId`, no `audioDevices` service and no Devices tab.
 
 ## Install
 

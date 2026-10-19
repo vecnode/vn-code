@@ -45,7 +45,7 @@ export const name = 'dsh-media'
 export const inject = ['connection', 'tools']
 
 /** This build's marker (the tracked checks pin it against package.json). */
-export const PLUGIN_VERSION = '0.1.0-alpha.3'
+export const PLUGIN_VERSION = '0.1.0-alpha.4'
 
 /** Every route this plugin owns, kept in sync with dsh-video's client by hand. */
 const API_ROOT = '/api/dsh-media'

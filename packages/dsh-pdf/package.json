@@ -1,6 +1,6 @@
 {
   "name": "dsh-pdf",
-  "version": "0.1.0-alpha.8",
+  "version": "0.1.0-alpha.9",
   "description": "PDF: five `pdf_*` tools (info, read, find, render, scan) over a vendored pdf.js, plus the reader tab (zoom, search, thumbnails, outline) and a workspace index. Read-only, with extraction in a child process that never evaluates a document's JavaScript.",
   "type": "module",
   "main": "lib/index.js",

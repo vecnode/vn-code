@@ -18,7 +18,7 @@
       "rowOverrides": []
     },
     "dsh-rightbar": {
-      "version": "0.1.0-alpha.6",
+      "version": "0.1.0-alpha.7",
       "rows": [
         "rightbar"
       ],
@@ -87,20 +87,33 @@
       ]
     },
     "dsh-audio": {
-      "version": "0.1.0-alpha.5",
+      "version": "0.1.0-alpha.7",
       "rows": [
         "audio"
       ],
       "rowOverrides": [],
-      "role": "Audio + Media: the `audio` tab draws WAV/AIFF/FLAC as a waveform (one row per channel, an adaptive ruler, a min/max envelope with the RMS core, zoom down to samples, selection, playback on the audio clock), and the left column's **Media** panel (alpha.5, one row above Plugins) scans the conversation workspace for every audio, image, video and GIF file it can reach - bounded, grouped by kind, previewed inline through the harness's own `/api/file` route, and handed to the tab that owns the type on one click - with this machine's audio console under its Devices view. Client-only, read in 2 MiB windows. See packages/dsh-audio/README.md.",
+      "role": "Audio + Media: the `audio` tab draws WAV/AIFF/FLAC as a waveform (one row per channel, an adaptive ruler, a min/max envelope with the RMS core, zoom down to samples, selection, playback on the audio clock), and the left column's **Media** panel (alpha.5, one row above Plugins) scans the conversation workspace for every audio, image, video and GIF file it can reach - bounded, grouped by kind, previewed inline through the harness's own `/api/file` route, and handed to the tab that owns the type on one click. It is about files only: no microphone, no device enumeration and no output routing. Client-only, read in 2 MiB windows. See packages/dsh-audio/README.md.",
       "uses": [
         "dsh-rightbar",
-        "dsh-modal (the pack's shared dialog surface: the console's seat opens it lazily through ctx.get and never injects it, so a profile without it draws the console inline as a page instead)",
-        "@deepseek-ai/dsh-api-workspace-files (the workspaceFiles remote: readBytes windows, readAll, stat)"
+        "dsh-modal (the pack's shared dialog surface: the panel's seat opens it lazily through ctx.get and never injects it, so a profile without it draws the panel inline as a page instead)",
+        "@deepseek-ai/dsh-api-workspace-files (the workspaceFiles remote: readBytes windows, list, stat)"
+      ]
+    },
+    "dsh-docker": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "docker"
+      ],
+      "rowOverrides": [],
+      "role": "Docker + Podman as a surface: nine `docker_*` tools (state, ps, images, inspect, logs, pull, run, action, start) over the machine's own CLI, argv-only and with every removal confirmed by repeating the target; a `docker_start` that launches Docker Desktop or a podman machine and then waits for the DAEMON; and a Docker tab in the right bar listing containers and images with start/stop/remove, pull and run, plus a container's facts and logs. No `exec`, no `system prune`, no free-form `run`: the schema has no spelling for `--privileged`. Zero npm dependencies, no bundled engine, no socket. See packages/dsh-docker/README.md.",
+      "uses": [
+        "dsh-rightbar",
+        "docker or podman on PATH (the engine this row drives; `DSH_DOCKER_CLI` pins a binary PATH does not cover)",
+        "Docker Desktop, for `docker_start` on Windows and macOS (launched, then its daemon polled)"
       ]
     },
     "dsh-media": {
-      "version": "0.1.0-alpha.3",
+      "version": "0.1.0-alpha.4",
       "rows": [
         "media"
       ],
@@ -135,7 +148,7 @@
       ]
     },
     "dsh-video": {
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.2",
       "rows": [
         "video"
       ],
@@ -175,7 +188,7 @@
       ]
     },
     "dsh-frontend-craft": {
-      "version": "0.1.0-alpha.1",
+      "version": "0.1.0-alpha.2",
       "rows": [
         "frontend-craft"
       ],
@@ -195,7 +208,7 @@
       ]
     },
     "dsh-pdf": {
-      "version": "0.1.0-alpha.8",
+      "version": "0.1.0-alpha.9",
       "rows": [
         "pdf"
       ],
@@ -263,7 +276,7 @@
       ]
     },
     "dsh-modal": {
-      "version": "0.1.0-alpha.2",
+      "version": "0.1.0-alpha.3",
       "rows": [
         "modal"
       ],
@@ -328,7 +341,7 @@
       ]
     },
     "dsh-research": {
-      "version": "0.1.0-alpha.4",
+      "version": "0.1.0-alpha.5",
       "rows": [
         "research"
       ],

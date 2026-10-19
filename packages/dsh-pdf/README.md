@@ -1,4 +1,4 @@
-# dsh-pdf (alpha.8)
+# dsh-pdf (alpha.9)
 
 **PDF the agent can actually read and scan, and a real PDF reader in the right bar.**
 
@@ -24,7 +24,9 @@ read-only, and document text is data, never instructions.
 - **Two host engines, neither bundled**: a rasterizer (poppler `pdftoppm`, `mutool`
   or Ghostscript) and `tesseract` (+ language data), probed from `PATH`, spawned with
   argv arrays only and killed on a deadline; a language is validated against the
-  engine's own `--list-langs` before a page is drawn.
+  engine's own `--list-langs` before a page is drawn. Both are re-detected on demand
+  (`GET /state?reprobe=1`, the reader's **Re-detect** button), so installing one does
+  not require a restart.
 - **Cached under every input that can change it**: content hash + page, language, dpi
   and segmentation mode (`ocr/<n>.<lang>@<dpi>dpi.p<psm>.txt`, raster at
   `images/<n>@<dpi>dpi.png`) under `$DSH_HOME/dsh-pdf/artifacts/<sha256>/`.
@@ -59,7 +61,10 @@ keeps its surface. Ten exact routes, `GET`/`HEAD`/`POST` only: `GET /api/dsh-pdf
 `/health` (capabilities, including the OCR language list), `/file` (the bytes, with
 `x-dsh-pdf-sha256`; HEAD never reads the file), `/list`, `POST /scan` (a capability
 refusal answers `200 {ok:false, reason, message}`) and `/vendor/{pdf.min.mjs,
-pdf.worker.min.mjs, cmaps.json, standard-fonts.json, wasm.json}`.
+pdf.worker.min.mjs, cmaps.json, standard-fonts.json, wasm.json}`. `GET /state?reprobe=1`
+re-detects the host's rasterizer and OCR engine and drops the memoized language list
+before it answers — the reader's **Re-detect** button on a failed scan calls it, because
+an engine installed while the harness is running is otherwise invisible until a restart.
 
 ## Limits
 

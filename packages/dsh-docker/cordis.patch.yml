@@ -1,0 +1,20 @@
+# dsh-docker bundle layer (alpha).
+#
+# One row ('docker') owns the whole plugin. Its Node half registers nine
+# `docker_*` tools and seven `/api/dsh-docker/*` routes; its browser half is one
+# page tab type on the pack's right bar (`dsh-rightbar` provides the
+# `sidebarRightTabs` registry and the keyed tab seats), with one guide entry on
+# the tab strip's "+" / Start page beside Files (10), Editor (20) and History
+# (30).
+#
+# Nothing shipped is patched and no core row is disabled: core DSH has no
+# container surface, and the `bash` / `pwsh` tools it does ship run a command
+# string this row deliberately does not accept. This package adds surface; it
+# replaces nothing.
+#
+# Nothing for scripts/sync-vendored.ps1 either: no engine is vendored, forked or
+# downloaded. `docker` / `podman` are the user's own programs, and the plugin
+# ships the argv it builds and the parsers for what those programs print.
+- insert:
+    - id: docker
+      name: 'dsh-docker'

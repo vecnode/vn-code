@@ -1,4 +1,4 @@
-# dsh-video (alpha.1)
+# dsh-video (alpha.2)
 
 **Video as a surface that actually plays, and says what is inside it.** A right-bar `video` tab type for MP4, M4V, MOV, WebM, MKV, AVI, WMV, FLV, OGV, MPEG-TS and 3GP. The shipped preview opens an `.mkv` as a black rectangle with a player that either plays or silently does not; here the film streams from the host, fits the pane, and states what is in the file. Client-only: the bytes, the probe and the ffmpeg belong to `dsh-media` (`/api/dsh-media/*`), so its Node half is one no-op row.
 
@@ -8,7 +8,7 @@
 - **The bytes never enter the tab.** The `<video>` element is handed a URL to `dsh-media`'s Range-capable route: no `fetch` of the file, no `arrayBuffer`, no blob, no `workspaceFiles` read. The route speaks HTTP Range, so the browser streams **and seeks**; reading a 2 GB film into memory would make it impossible and destroy scrubbing, and the tracked check asserts the absence of every one of those calls.
 - **A facts panel** - `dsh-media`'s probe as a drawer: container, duration, bitrate, size, one block per stream (codec, profile, pixel size, aspect, frame rate and its rational, pixel format, bit depth, rotation, sample rate, channel layout, language, title, default/forced), every chapter as a **jump target** that seeks and plays, the tags, and the browser verdict with the copyable ffmpeg command.
 - **One action fixes an undecodable file**: **Remux to MP4** (instant, no re-encoding) or **Convert for the browser** (H.264/AAC) - a POST to `dsh-media`, polled every **700 ms** with ffmpeg's own percentage on a thin bar; the cached MP4 then plays through the same route, so a second visit is instant. **The poll's effect depends on `[running, jobId]`, never on the job object**: every poll replaces that object, so an effect depending on it would rebuild its interval every tick.
-- **Nothing is a dead end.** A missing ffmpeg offers the pinned download and re-probes; an unreadable probe and a host error are an **overlay on the live player** with **Play it anyway** and **Read it again**, not a screen that replaced the player. A profile without `dsh-media` gets one sentence naming the package that owns the routes.
+- **Nothing is a dead end.** A missing ffmpeg offers the pinned download and re-probes; an unreadable probe and a host error are an **overlay on the live player** with **Play it anyway** and **Read it again**, not a screen that replaced the player. A profile without `dsh-media` gets one sentence naming the package that owns the routes. The provisioning poll is bounded by the tab's own life: unmount sets a live flag and aborts the request in flight (the `useFacts` shape), so switching tabs mid-download cannot keep fetching and setting state on a surface that is gone.
 
 ## How it plugs in
 
@@ -42,7 +42,7 @@ node scripts/checks/check-client-bundles.mjs
 node scripts/checks/check-media-node.mjs
 ```
 
-The client check drives the bundle through a real React runtime and pins the type definition (bands, patterns, both refusals, no guide entry), the opening markup, the URL hand-off with the asserted **absence of every byte-reading call**, the POST-then-poll conversion and its `[running, jobId]` dependency, the "play it anyway" overlay, and the address reassembly cases (POSIX, Windows drive, UNC, unknown refused). `check-media-node.mjs` pins the other side: the same extension list and the Range route this tab needs.
+The client check drives the bundle through a real React runtime and pins the type definition (bands, patterns, both refusals, no guide entry), the opening markup, the URL hand-off with the asserted **absence of every byte-reading call**, the POST-then-poll conversion and its `[running, jobId]` dependency, the "play it anyway" overlay, the provisioning poll's live flag and abort, and the address reassembly cases (POSIX, Windows drive, UNC, unknown refused). `check-media-node.mjs` pins the other side: the same extension list and the Range route this tab needs.
 
 ## Install
 

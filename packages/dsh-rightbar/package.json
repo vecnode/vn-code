@@ -1,6 +1,6 @@
 {
   "name": "dsh-rightbar",
-  "version": "0.1.0-alpha.6",
+  "version": "0.1.0-alpha.7",
   "description": "Right bar: the tab strip, docking panel, expand button, Start page and the `sidebarRightTabs` / `sidebarRight` services every tab type registers into. A GENERATED fork of the shipped bar whose layer disables `ui-sidebar-right` / `ui-sidebar-files`, rendering the kit's recursive `DockSurface` through its own `vendor/dock-tree.js`.",
   "type": "module",
   "main": "lib/index.js",

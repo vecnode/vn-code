@@ -533,6 +533,48 @@ check('state carries the scan caps', state.caps.scanMaxPages === 10 && state.cap
 check('state carries the index caps', state.caps.listMaxFiles === 200 && state.caps.listMaxDepth === 6 && state.caps.listPageCountFiles === 12)
 check('state reports the OCR capability honestly', typeof state.capabilities.ocr.available === 'boolean' && (state.capabilities.ocr.available ? typeof state.capabilities.ocr.name === 'string' : state.capabilities.ocr.name === null))
 
+// `?reprobe=1` must re-detect the host's engines BEFORE it answers, and drop the
+// memoized language list with them: an engine installed while the harness runs is
+// exactly the case the `no-ocr` sentence describes, and a boot-time probe would
+// keep telling a person to restart. Driven through `registerRoutes` with a
+// counted reprobe, because `apply()` keeps its deps private.
+const reprobeRoutes = new Map()
+const reprobeEngines = { rasterizer: null, ocr: null }
+let reprobes = 0
+plugin.registerRoutes(
+  {
+    logger: { warn() {}, info() {} },
+    get: (name) =>
+      name === 'connection'
+        ? {
+            fetch: {
+              register(route) {
+                reprobeRoutes.set(route.path, route)
+                return () => {}
+              },
+            },
+          }
+        : undefined,
+  },
+  {
+    log: { warn() {}, info() {} },
+    cache: { entries: () => [], size: () => 0 },
+    reader: {},
+    version: '6.3.289',
+    enginesNow: () => reprobeEngines,
+    reprobe: () => {
+      reprobes += 1
+      return reprobeEngines
+    },
+  },
+)
+const reprobeRoute = reprobeRoutes.get('/api/dsh-pdf/state')
+const plainState = await (await reprobeRoute.fetch(new Request('http://127.0.0.1/api/dsh-pdf/state'))).json()
+check('a plain state read re-probes nothing', reprobes === 0 && plainState.ok === true)
+const reprobed = await (await reprobeRoute.fetch(new Request('http://127.0.0.1/api/dsh-pdf/state?reprobe=1'))).json()
+check('?reprobe=1 re-detects the engines before answering', reprobes === 1 && reprobed.ok === true && typeof reprobed.capabilities.ocr.available === 'boolean')
+check('...and the answer describes the same shapes a plain read does', JSON.stringify(Object.keys(reprobed).sort()), JSON.stringify(Object.keys(plainState).sort()))
+
 /**
  * One POST to the scan route: the reader's own "scan this page" call.
  */

@@ -1,4 +1,4 @@
-# dsh-research (alpha.4)
+# dsh-research (alpha.5)
 
 **Research as a folder the agent fills and the right bar shows — and that you keep,
 open in any session, and edit yourself.**
@@ -122,7 +122,10 @@ the **record** first.
   - `r1-record` — the stored bytes still hash to the names they are filed under
     (`bytes-tampered`), the record has the fields a reference needs, every field
     names its origin, and the title it claims actually appears in the text that was
-    ingested (`title-mismatch`). This is PROVENANCE, not existence: it never says a
+    ingested (`title-mismatch`). One run hashes at most 32 MiB, and a source past
+    that ceiling is reported as `bytes-unhashed` rather than skipped in silence —
+    an unread source is unverified, not verified — with the bytes actually read
+    reported as `hashedBytes`. This is PROVENANCE, not existence: it never says a
     DOI is real.
   - `r2-locate` — every claim's quoted passage really is in its source's stored
     text. **A miss and an inconclusive are different answers**: a quote that is not

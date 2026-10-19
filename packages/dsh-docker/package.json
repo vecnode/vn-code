@@ -1,0 +1,36 @@
+{
+  "name": "dsh-docker",
+  "version": "0.1.0-alpha.1",
+  "description": "Docker and Podman as a structured surface: nine `docker_*` tools (state, ps, images, inspect, logs, pull, run, action, start), the engine's own on switch for Docker Desktop and a podman machine, and a Docker tab in the right bar listing this machine's containers and images with start/stop/remove, pull and run. argv-only, no shell, every removal confirmed; zero npm dependencies, no bundled engine.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-docker-node.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "dsh-rightbar"
+      ]
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

@@ -54,7 +54,7 @@ import { fileURLToPath } from 'node:url'
 import { MAX_CACHE_BYTES, PdfCache, resolveHome } from './cache.js'
 import { DEFAULT_DPI, MAX_DPI, MIN_DPI, clampDpi, probeEngines, rasterize } from './engines.js'
 import { MAX_PAGES_PER_RUN, Reader } from './runner.js'
-import { DEFAULT_LANG, DEFAULT_PSM, MAX_SCAN_PAGES, SCAN_DPI, languagesFor, scanPages, scanReasonText } from './scan.js'
+import { DEFAULT_LANG, DEFAULT_PSM, MAX_SCAN_PAGES, SCAN_DPI, forgetLanguages, languagesFor, scanPages, scanReasonText } from './scan.js'
 
 /**
  * The row's identity, and the services activation waits for.
@@ -1616,7 +1616,20 @@ export function registerRoutes(ctx, deps) {
     )
   }
 
-  register(STATE_ROUTE, ['GET', 'HEAD'], async () => json(200, { ok: true, ...snapshot(deps, (await languagesFor(deps.enginesNow().ocr)).list) }))
+  // `?reprobe=1` re-detects the host's rasterizer and OCR engine and drops the
+  // memoized language list with them: an engine installed while the harness is
+  // running is exactly the case the `no-ocr` refusal describes, and without this
+  // the only way to see it would be to restart the harness. The probe is cheap
+  // (a handful of PATH lookups) and it runs before the snapshot, so the answer
+  // describes the engines that were just found.
+  register(STATE_ROUTE, ['GET', 'HEAD'], async (request) => {
+    const url = new URL(request.url)
+    if (url.searchParams.get('reprobe') === '1') {
+      forgetLanguages()
+      deps.reprobe()
+    }
+    return json(200, { ok: true, ...snapshot(deps, (await languagesFor(deps.enginesNow().ocr)).list) })
+  })
   register(HEALTH_ROUTE, ['GET', 'HEAD'], async () => json(200, { ok: true, ...snapshot(deps, (await languagesFor(deps.enginesNow().ocr)).list) }))
 
   /**

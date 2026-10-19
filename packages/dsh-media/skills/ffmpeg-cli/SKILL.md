@@ -15,6 +15,8 @@ the program comes from `.binary` and is NOT the first element.
 The tool injects `-n` (never overwrite), `-nostdin`, `-hide_banner` and
 `-loglevel warning` (unless you pass a level) at the FRONT of the argv.
 `overwrite: true` swaps `-n` for `-y` and is the only way to replace a file;
+writing `-y` or `-n` in `args` yourself is refused, because the overwrite
+decision belongs to the parameter and not to the argument list.
 `binary: "ffprobe"` gets none of those ffmpeg-only flags. A call runs in the
 conversation workspace unless `cwd` says otherwise, is killed after `timeoutMs`
 (default 120 s, max 600 s), and its output is capped (head and tail kept, the
@@ -284,7 +286,8 @@ code can and cannot tell you.
 ## Safety rules
 
 - **Create-exclusive by default.** `-n` is injected and only `overwrite: true`
-  replaces a file. The user's original is the input, never the output.
+  replaces a file; a `-y`/`-n` written in `args` is refused. The user's original
+  is the input, never the output.
 - **argv arrays, always.** No shell exists to quote for.
 - **Never guess a path.** `media_probe` it first, or ask. A typo becomes "No such
   file or directory", and a guessed *output* path may write where the user did

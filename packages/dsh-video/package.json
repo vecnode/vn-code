@@ -1,6 +1,6 @@
 {
   "name": "dsh-video",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Video: a player tab for MP4/MOV/WebM/MKV/AVI/WMV/FLV/OGV/TS/3GP that fits the pane, with the ffprobe facts, chapters as jump targets and one-click remux/convert. The bytes never enter the tab: the `<video>` is handed a URL to dsh-media's Range route.",
   "type": "module",
   "main": "lib/index.js",

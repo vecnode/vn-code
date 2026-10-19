@@ -65,7 +65,7 @@ window.__ModuleLoader__.load({
     /** The address shape a page-address tab is opened with. */
     const PAGE_PREFIX = 'sidebar://'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.8'
+    const PLUGIN_VERSION = '0.1.0-alpha.9'
     /** Keep in sync with lib/index.js. */
     const API_ROOT = '/api/dsh-pdf'
     const FILE_ROUTE = API_ROOT + '/file'
@@ -728,6 +728,23 @@ window.__ModuleLoader__.load({
         }
       }, [pageNumber, props.onScan])
 
+      /**
+       * Re-detect the host's engines, then try this page again.
+       *
+       * An engine installed while the harness is running is invisible until the
+       * host re-probes: `no-ocr` is a sentence about what the host found at
+       * boot. `?reprobe=1` re-runs the probe AND drops the memoized language
+       * list, so the retry asks the new engine what it can read.
+       */
+      const reprobeNow = useCallback(async () => {
+        try {
+          await fetch(STATE_ROUTE + '?reprobe=1', { credentials: 'same-origin' })
+        } catch (err) {
+          /* the retry below reports whatever the host says */
+        }
+        await scanNow()
+      }, [scanNow])
+
       const copyScanned = useCallback(() => {
         try {
           if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
@@ -788,6 +805,13 @@ window.__ModuleLoader__.load({
                 scan.phase === 'busy' ? 'Scanning…' : scan.phase === 'error' ? 'Retry scan' : 'Scan this page',
               ),
               scan.phase === 'error' ? h('span', { className: 'dpf-scanErr' }, scan.message) : null,
+              scan.phase === 'error'
+                ? h(
+                    ToolButton,
+                    { action: 'scan-reprobe', onClick: reprobeNow, title: 'Re-detect the rasterizer and OCR engine on this host, then scan this page again' },
+                    'Re-detect',
+                  )
+                : null,
             )
           : null,
         scan.phase === 'done'

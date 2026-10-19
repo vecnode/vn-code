@@ -1,4 +1,4 @@
-# dsh-rightbar (alpha.6)
+# dsh-rightbar (alpha.7)
 
 **The pack's own right bar** — the web GUI's right-hand column: the tab strip with its "+" control, the docking panel (split / float / fullscreen), the header expand button, the Start guide page, the tab-type registry other plugins register into, and the keyed tab body/title seats.
 
@@ -55,7 +55,7 @@ node scripts/checks/check-client-bundles.mjs
 pwsh -NoProfile -File scripts/tools/sync-vendored.ps1 -Check
 ```
 
-The client check pins the cap lift, the renderer, the seam, the fill and the fullscreen layer as recorded patches, and fails when a harness bump moves the app's z-index ladder under the bar.
+The client check pins the cap lift, the renderer, the seam, the fill and the fullscreen layer as recorded patches, and fails when a harness bump moves the app's z-index ladder under the bar. It also runs `sync-vendored.ps1 -Check` itself (all three generated forks, byte for byte), so a re-sync nobody remembered to run fails the check rather than rotting the fork silently.
 
 ## Layout
 

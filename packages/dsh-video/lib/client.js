@@ -54,7 +54,7 @@ window.__ModuleLoader__.load({
     /** The tab kind this package owns. */
     const KIND = 'video'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.1'
+    const PLUGIN_VERSION = '0.1.0-alpha.2'
     /** Address grammar owned by @deepseek-ai/dsh-util-workspace-path. */
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
@@ -556,6 +556,30 @@ window.__ModuleLoader__.load({
       const [dismissed, setDismissed] = useState(false)
       const [provisioning, setProvisioning] = useState(false)
       const videoRef = useRef(null)
+      /**
+       * A provisioning poll outlives the tab that started it: switching tabs,
+       * or opening another file, unmounts this body while ffmpeg is still
+       * downloading. The loop below sleeps and fetches for up to 15 minutes, so
+       * without these two it keeps polling and calls `setAttempt` on a tab that
+       * is gone. Same shape as `useFacts`: a live flag checked after every
+       * await, and a controller unmount can abort.
+       */
+      const provisionLive = useRef(true)
+      const provisionRequest = useRef(null)
+      useEffect(() => {
+        provisionLive.current = true
+        return () => {
+          provisionLive.current = false
+          if (provisionRequest.current !== null) {
+            try {
+              provisionRequest.current.abort()
+            } catch (err) {
+              /* already aborted */
+            }
+            provisionRequest.current = null
+          }
+        }
+      }, [])
 
       /** The URL the <video> element is given for one address, or for a cache. */
       const directUrl = useMemo(() => (parsed === null ? '' : FILE_ROUTE + '?' + addressParams(parsed, sessionId).toString()), [addressKey(parsed), sessionId])
@@ -593,12 +617,17 @@ window.__ModuleLoader__.load({
 
       const startProvision = useCallback(async () => {
         setProvisioning(true)
+        const controller = new AbortController()
+        provisionRequest.current = controller
         try {
-          await fetchJson(PROVISION_ROUTE, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+          await fetchJson(PROVISION_ROUTE, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}', signal: controller.signal })
+          if (!provisionLive.current) return
           // Poll the state until the pinned copy is installed, then re-probe.
           for (let step = 0; step < 900; step += 1) {
             await new Promise((resolve) => setTimeout(resolve, 1000))
-            const state = await fetchJson(STATE_ROUTE)
+            if (!provisionLive.current) return
+            const state = await fetchJson(STATE_ROUTE, { signal: controller.signal })
+            if (!provisionLive.current) return
             const phase = state.provision ? state.provision.state : ''
             if (phase === 'installed') {
               setAttempt((value) => value + 1)
@@ -609,7 +638,8 @@ window.__ModuleLoader__.load({
         } catch (err) {
           /* the state box below reports whatever the host said */
         } finally {
-          setProvisioning(false)
+          if (provisionRequest.current === controller) provisionRequest.current = null
+          if (provisionLive.current) setProvisioning(false)
         }
       }, [])
 

@@ -1,4 +1,4 @@
-# dsh-frontend-craft (alpha.1)
+# dsh-frontend-craft (alpha.2)
 
 **Front-end design with a floor under it.** Impeccable's craft corpus and its
 61-rule detector, shipped whole inside this plugin: no `npx impeccable`, no engine
