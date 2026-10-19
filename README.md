@@ -1,13 +1,22 @@
-<h1 align="center">vn-code</h1>
+<div align="center">
 
-<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo/vn-code-white-512.png">
+  <img src="assets/logo/vn-code-512.png" alt="vn-code" width="112">
+</picture>
+
+# vn-code
+
+<p>
   <img alt="Language: JavaScript" src="https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black"> <img alt="Runtime: Node.js" src="https://img.shields.io/badge/runtime-Node.js-339933?logo=nodedotjs&logoColor=white"> <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-000000?logo=rust&logoColor=white"> <img alt="License: AGPL-3.0-only" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue"> <img alt="Platforms: Windows | macOS | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey"> <img alt="DeepSeek Harness 0.2.0-rc.2" src="https://img.shields.io/badge/dsh-0.2.0--rc.2-4f8cff">
 </p>
 
-<p align="center">
+<p>
   Agent-Human IDE/ADE ⌨️<br>
   Web and Desktop versions, bundles <a href="packages/">Plugins</a>, <a href="docs/">Skills</a> and <a href="docs/">Interfaces</a>
 </p>
+
+</div>
 
 ![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner3.png)
 

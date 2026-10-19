@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="512" height="512" role="img" aria-label="vn-code">
+  <defs>
+    <linearGradient id="inlay" x1="12" y1="2.8" x2="12" y2="21.2" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#74CAA3"/>
+      <stop offset="0.55" stop-color="#1FA96B"/>
+      <stop offset="1" stop-color="#198856"/>
+    </linearGradient>
+  </defs>
+<path d="M12 2.8 L20.8 7.4 L20.8 16.6 L12 21.2 L3.2 16.6 L3.2 7.4 Z" fill="url(#inlay)"/>
+<g fill="none" stroke="#0B0D10" stroke-width="2.914" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 2.8 L20.8 7.4 L20.8 16.6 L12 21.2 L3.2 16.6 L3.2 7.4 Z"/>
+  <path d="M3.2 7.4 L12 12 L20.8 7.4"/>
+  <path d="M12 12 L12 21.2"/>
+  <path d="M12 2.8 L12 12"/>
+  <path d="M12 15.4 L3.2 16.6"/>
+  <path d="M12 15.4 L20.8 16.6"/>
+</g>
+</svg>

@@ -6,7 +6,8 @@
   "license": "AGPL-3.0-only",
   "scripts": {
     "install:web": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup/install-all.ps1",
-    "uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup/uninstall-all.ps1"
+    "uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup/uninstall-all.ps1",
+    "logo": "node scripts/tools/logo/render.mjs"
   },
   "engines": {
     "node": ">=22"
