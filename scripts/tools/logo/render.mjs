@@ -23,13 +23,12 @@
 //  browser's PNG encoder is not promised byte-identical across versions, so a fresh
 //  render is checked by its size and its pixels, not by a hash.
 
-import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
+import { findBrowser, shoot } from './chrome.mjs'
 import { appSvg, GEOMETRY, INK, JADE, lightSvg, MUTED, PAPER, SIZES, TILE, whiteSvg } from './marks.mjs'
 import { SHEET, sheetHtml } from './sheet.mjs'
 import { asRatio, contrast } from './color.mjs'
@@ -56,81 +55,13 @@ const BRAND = {
 }
 
 // ---------------------------------------------------------------------------
-// The browser
+// The page wrapper: one SVG at one exact size, nothing else on the page
 // ---------------------------------------------------------------------------
-const CANDIDATES = [
-  process.env.CHROME,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  '/usr/bin/google-chrome',
-  '/usr/bin/chromium',
-  '/usr/bin/chromium-browser',
-  '/snap/bin/chromium',
-]
-
-function findBrowser(explicit) {
-  // An explicit path is an instruction, not a hint: if it does not work, say so rather
-  // than quietly rendering with a different browser.
-  if (explicit) {
-    if (!fs.existsSync(explicit)) throw new Error(`--chrome ${explicit} does not exist`)
-    const probe = spawnSync(explicit, ['--version'], { encoding: 'utf8', timeout: 30000 })
-    if (probe.status !== 0) throw new Error(`--chrome ${explicit} does not answer --version`)
-    return explicit
-  }
-  for (const candidate of CANDIDATES.filter(Boolean)) {
-    if (!fs.existsSync(candidate)) continue
-    const probe = spawnSync(candidate, ['--version'], { encoding: 'utf8', timeout: 30000 })
-    if (probe.status === 0) return candidate
-  }
-  throw new Error(
-    'no Chrome or Chromium found - pass --chrome <path>, set CHROME, or install one of: ' +
-      CANDIDATES.filter(Boolean).join(', '),
-  )
-}
-
 const frame = (svg, size, background) =>
   `<!doctype html><html><head><meta charset="utf-8"><style>
    html,body{margin:0;padding:0;width:${size}px;height:${size}px;overflow:hidden;background:${background}}
    svg{display:block;width:${size}px;height:${size}px}
    </style></head><body>${svg}</body></html>`
-
-// One page -> one PNG, at the exact size asked for, corners left transparent.
-function shoot(browser, { html, width, height, out }) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vncode-logo-'))
-  const page = path.join(dir, 'page.html')
-  fs.writeFileSync(page, html)
-  const absolute = path.resolve(out)
-  fs.mkdirSync(path.dirname(absolute), { recursive: true })
-  fs.rmSync(absolute, { force: true })
-  const run = spawnSync(
-    browser,
-    [
-      '--headless=new',
-      '--disable-gpu',
-      '--hide-scrollbars',
-      '--no-first-run',
-      '--no-default-browser-check',
-      '--allow-file-access-from-files',
-      '--force-device-scale-factor=1',
-      '--user-data-dir=' + path.join(dir, 'profile'),
-      `--window-size=${width},${height}`,
-      '--default-background-color=00000000',
-      '--virtual-time-budget=3000',
-      '--screenshot=' + absolute,
-      pathToFileURL(page).href,
-    ],
-    { encoding: 'utf8', timeout: 120000 },
-  )
-  fs.rmSync(dir, { recursive: true, force: true })
-  if (run.status !== 0 || !fs.existsSync(absolute)) {
-    throw new Error(`chrome failed (${run.status}) rendering ${path.basename(out)}: ${run.stderr ?? ''}`)
-  }
-  return absolute
-}
 
 // ---------------------------------------------------------------------------
 // The files this tool owns
@@ -321,7 +252,8 @@ function regenerate(browser) {
   console.log(`svgs      ${svgFiles().length} written`)
 
   for (const file of pngFiles()) {
-    shoot(browser, {
+    shoot({
+      browser: browser,
       html: frame(file.render(), file.size, 'transparent'),
       width: file.size,
       height: file.size,
@@ -331,7 +263,8 @@ function regenerate(browser) {
   }
   console.log(`pngs      ${pngFiles().length} rendered at their exact size`)
 
-  shoot(browser, {
+  shoot({
+    browser: browser,
     html: sheetHtml(BRAND),
     width: SHEET.width,
     height: SHEET.height,

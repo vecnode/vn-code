@@ -7,7 +7,8 @@
   "scripts": {
     "install:web": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup/install-all.ps1",
     "uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup/uninstall-all.ps1",
-    "logo": "node scripts/tools/logo/render.mjs"
+    "logo": "node scripts/tools/logo/render.mjs",
+    "banner": "node scripts/tools/logo/banner.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -197,6 +197,17 @@ pixels rather than by a hash.
 Changing the mark means changing `marks.mjs`, then `npm run logo`: the committed SVG is a
 build product, like the PNGs, so the drawing exists in exactly one place.
 
+The README banner next door (`assets/vncode-banner3.png`, 1280 × 320) is rendered by the same
+folder's `scripts/tools/logo/banner.mjs`:
+
+```sh
+npm run banner              # rewrite assets/vncode-banner3.png
+npm run banner -- --check   # verify its size and the count it carries
+```
+
+It reads the plugin count off `packages/` rather than a number someone has to remember, and
+takes its glow, rings and headline colour from the same jade.
+
 ## Licence
 
 AGPL-3.0-only, like the rest of the repository. The mark is original vecnode work and
