@@ -1,4 +1,4 @@
-# dsh-themes (alpha.27)
+# dsh-themes (alpha.28)
 
 **The vncode Web GUI's conversation-header package: four controls on that header, plus the pack's appearance overrides.**
 
@@ -42,7 +42,10 @@ Open In… (`dsh-open-in-app`) is `-10` and dsh-cmdbar's button `30`; no shipped
   **VN branding** (`assets/vncode.svg` inlined as a data URI, a 24px mark, the name `vncode`) centred on the
   band's own top row; the **header
   ring** on `[data-conversation-header-corner] button`; the account menu's **Feedback row**, hidden on the
-  paper-plane `path` artwork; the **right bar's resize seam**, placed from a CSS anchor under `html[data-dsh-page-zoomed]`; the left
+  paper-plane `path` artwork; the **right bar's resize seam**, placed from the open panel's own
+  left edge as a CSS anchor under `html[data-dsh-page-zoomed]` (the panel, not the column: at a zoom the
+  solve reads a scaled rect, so at 90% the panel is drawn 616px wide in a 648px track and the column's
+  edge is 32px off the seam); the left
   column's **panel order** (`regionArea` 1, `panelList` 2, `footArea` 3); the **band lines** — the same `.5px`
   hairline the band already ends in, drawn a second time on the frame's **y=40** in ALL THREE columns: between the
   middle column's button row and its session tabs, under the left column's branding row, and in the right bar 2px

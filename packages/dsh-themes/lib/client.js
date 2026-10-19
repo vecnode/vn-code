@@ -95,17 +95,18 @@
  *    this row's first render, because in the shell there is no browser zoom to
  *    remember it instead. See the zoom section below.
  *
- *    THE ONE PIECE OF FRAME GEOMETRY IT HAD TO PUT BACK (alpha.16). A root
- *    `zoom` divides the initial containing block, so the frame's own
- *    `getBoundingClientRect()` comes back SCALED while the right bar's outer
- *    resize seam is placed by pixel arithmetic in layout pixels. At 100% the
- *    two are the same number; with a level in force the seam slides away from
- *    the right column's edge and the bar can no longer be dragged - in the
- *    desktop window, the one host the control exists for, that reads as "the
- *    right bar stops being resizable after I zoom". One rule,
- *    `installZoomSeam`, anchors that seam to the right column instead; it is
- *    gated on the root marker a live zoom writes, so at the resting level the
- *    frame's own inline `left` is untouched.
+ *    THE ONE PIECE OF FRAME GEOMETRY IT HAD TO PUT BACK (alpha.16, corrected in
+ *    alpha.28). A root `zoom` divides the initial containing block, so the
+ *    frame's own `getBoundingClientRect()` comes back SCALED while the right
+ *    bar's outer resize seam is placed by pixel arithmetic in layout pixels. At
+ *    100% the two are the same number; with a level in force the seam slides
+ *    away from the edge it belongs on and the bar can no longer be dragged
+ *    there - in the desktop window, the one host the control exists for, that
+ *    reads as "the right bar stops being resizable after I zoom". One rule,
+ *    `installZoomSeam`, puts it back; it is gated on the root marker a live zoom
+ *    writes, so at the resting level the frame's own inline `left` is
+ *    untouched. It anchors the seam to the PANEL, not to the column - see the
+ *    measurement recorded with the rule.
  *
  * It also carries the pack's appearance OVERRIDES - rules that hold one surface
  * on a fixed palette regardless of the app theme, or give a core surface the
@@ -244,7 +245,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.27'
+    const PLUGIN_VERSION = '0.1.0-alpha.28'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -2183,30 +2184,49 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     // frame's `getBoundingClientRect().width` reports the SCALED width while
     // `offsetWidth` - and every `left` the frame writes on a child - is in
     // layout pixels. The frame solves its three columns from the measured rect
-    // but places the right bar's outer seam with `left: viewport - rightbar`,
-    // which is the one place the two spaces meet. At 100% they are the same
-    // number and nothing shows; the moment the page-zoom control writes a level
-    // the seam slides towards the middle of the conversation - at 80% on a
-    // 1440px frame it sat 288px left of the right column's edge, so the bar
-    // could no longer be dragged at all, while the LEFT bar's seam stayed
-    // exactly where it belongs (its `left` is a layout-pixel width, with no
-    // measurement folding into it). Measured in the desktop window, where the
-    // control exists precisely because a WebView has no Ctrl+ / Ctrl-: the bug
-    // reads as "the right bar stops being resizable after I zoom".
+    // and then places the right bar's outer seam with
+    // `left: viewport - rightbar`, which is the one place the two spaces meet.
+    // At 100% they are the same number and nothing shows; the moment the
+    // page-zoom control writes a level the seam slides towards the middle of the
+    // conversation - at 80% on a 1440px frame it sat 288px left of the right
+    // column's edge, so the bar could no longer be dragged at all, while the
+    // LEFT bar's seam stayed exactly where it belongs (its `left` is a
+    // layout-pixel width, with no measurement folding into it).
     //
-    // THE FIX is to stop deriving the seam from a measured rect and derive it
-    // from the LAYOUT: the right column carries `data-rightbar-col` (ui-layout's
-    // own stable marker, the one dsh-cmdbar already follows), that column is
-    // named as a CSS ANCHOR while a zoom is in force, and the seam is placed at
-    // the anchor's left edge. Both sides of that are layout pixels, so a zoom
-    // cannot separate them again - verified at 80%, 100% and 125% in the real
-    // window, with the seam on the column's edge to the tenth of a pixel and a
-    // drag still moving the panel.
+    // THE FIRST FIX ANCHORED THE WRONG BOX, and this is the correction
+    // (alpha.28). Alpha.16 stopped deriving the seam from the measured rect and
+    // derived it from the LAYOUT - but from the COLUMN's left edge. That is
+    // only the same place as the visible seam while the panel and the track
+    // agree, and at a zoom they do not: the solve reads a scaled rect, so it
+    // returns a DIFFERENT width from the one the grid track resolves to in
+    // layout pixels. Measured in a real browser on a 1440px frame at 90% (the
+    // level this machine runs): the grid track takes 648 layout px, the solve
+    // returns 616, and the panel is drawn 616 wide against the frame's right
+    // edge. So the seam is at x=824, the track starts at x=792, and the frame's
+    // own inline `left` says x=680 - three answers, and the handle sat on the
+    // middle one. That reads exactly as the report: the visible seam line is
+    // OFFSET FROM THE BAR'S EDGE in some views, and the bar has to be
+    // repositioned by hand. At 125% the same three numbers separate further.
+    //
+    // THE CORRECTION anchors the seam to the PANEL - the box that actually
+    // draws it (its `right:0` plus its inline width) - instead of to the column.
+    // Then the grab zone is the visible edge BY CONSTRUCTION, whatever the
+    // frame's own arithmetic says, at every level: measured against the same
+    // replica at 90% and at 125%, the handle's centre and the panel's left edge
+    // agree to 0.00px, where the column anchor was 32px (90%) and the inline
+    // `left` 144px (90%) away.
+    //
+    // WHY THE `:has()` GUARD. `anchor()` against a name nothing defined is
+    // invalid at computed-value time, and `left` then falls back to `auto` - the
+    // handle would jump to its static position instead of the inline one. So
+    // the name is only declared while the open panel exists, and the handle rule
+    // is only active for a column that HAS one: with no panel the frame's own
+    // inline `left` keeps governing, which is the behaviour of before.
     //
     // WHY CSS AND NOT A FORK. ui-layout is core, and the pack forks a core
     // bundle only to own a surface it replaces. This is dress: one rule that
     // holds one core edge in place, the same shape as the header-ring override
-    // above. It is also INERT at the resting level - both rules are gated on the
+    // above. It is also INERT at the resting level - every rule is gated on the
     // root marker, so a page nobody has zoomed keeps the frame's own inline
     // `left` untouched - and a browser without anchor positioning drops the
     // declarations and leaves exactly the behaviour of today.
@@ -2215,19 +2235,21 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     const SEAM_TAG = 'dsh-themes/zoom-seam.css'
 
     /**
-     * Install the right-bar seam override (alpha.16) and the fullscreen panel's
-     * width repair (alpha.22).
+     * Install the right-bar seam override (alpha.16, corrected alpha.28) and the
+     * fullscreen panel's width repair (alpha.22).
      * @returns whether the rule is in place.
      */
     function installZoomSeam() {
       if (typeof document === 'undefined') return false
       const seam =
+        // The anchor is the OPEN PANEL (one element, the box that draws the
+        // seam), and it is only named while it exists - see the guard above.
         'html[' +
         ZOOM_MARKER +
-        '] [data-rightbar-col]{anchor-name:--dsh-themes-rightbar-seam}' +
+        '] [data-sidebar-right-panel][data-sidebar-right-open]{anchor-name:--dsh-themes-rightbar-seam}' +
         'html[' +
         ZOOM_MARKER +
-        '] [data-rightbar-col]~[data-side="rightbar"]{left:anchor(--dsh-themes-rightbar-seam left)!important}' +
+        '] [data-rightbar-col]:has([data-sidebar-right-panel][data-sidebar-right-open])~[data-side="rightbar"]{left:anchor(--dsh-themes-rightbar-seam left)!important}' +
         // THE FULLSCREEN PANEL'S WIDTH (alpha.22 again, and the SAME root cause
         // one box over). The forked right bar sizes the fullscreen panel with
         // ONE INLINE DECLARATION - `width:100vw` - and a viewport unit is NOT
@@ -2987,15 +3009,17 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     // The frame solves its columns from `getBoundingClientRect().width`, which a
     // root `zoom` SCALES, while it places the right bar's outer seam with
     // `left: viewport - rightbar`, which is layout pixels - so a level slid that
-    // seam off the right column's edge and the bar became undraggable. That one
-    // is FIXED rather than documented: `installZoomSeam` names the right column
-    // as a CSS anchor while a zoom is in force and sets the seam to the anchor's
-    // left edge, which is layout pixels on both sides. Measured in the desktop
-    // window at 80%, 100% and 125%: the seam sits on the column to the tenth of
-    // a pixel and a drag still resizes the panel. The frame's other
-    // visual-pixel numbers under a zoom - the 45% first-open width and the 70%
-    // drag ceiling - stay as they are: they are proportions of the window that
-    // a zoom is expected to shrink, not a control that stops working.
+    // seam off the edge it belongs on and the bar became undraggable. That one
+    // is FIXED rather than documented: `installZoomSeam` names the OPEN PANEL as
+    // a CSS anchor while a zoom is in force and sets the seam to the anchor's
+    // left edge. The panel, not the column: at a zoom the solve reads the scaled
+    // rect and returns a width the grid track does not match (measured at 90% on
+    // a 1440px frame: a 616px panel in a 648px track), so the column's edge is not
+    // the seam. Measured against a replica of the frame at 90% and 125%: the
+    // handle sits on the panel to 0.00px and a drag still resizes it. The
+    // frame's other visual-pixel numbers under a zoom - the 45% first-open width
+    // and the 70% drag ceiling - stay as they are: they are proportions of the
+    // window that a zoom is expected to shrink, not a control that stops working.
     // ---------------------------------------------------------------------
     /**
      * The zoom glyphs: one magnifier for the button, the same lens carrying the

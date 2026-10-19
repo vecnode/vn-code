@@ -1977,22 +1977,37 @@ check('header ring rule injected', headerRing.includes('html [data-conversation-
 check('header ring uses the same hairline', headerRing.includes('border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3))'))
 check('header ring keeps the box 28px', headerRing.includes('border-radius:28px;box-sizing:border-box'))
 check('header ring keys on a stable marker', headerRing.includes('_root') === false && headerRing.includes('.P3OORG_') === false)
-// The right bar's outer resize seam under a page zoom (alpha.16). A root `zoom`
-// scales the rect the frame measures its columns from while the seam's `left` is
-// layout pixels, so with a level in force the seam slid off the right column's
-// edge and the bar could not be dragged - measured in the desktop window at 80%,
-// where it sat 288px away. The override places it from the LAYOUT instead, and
-// the two things that make that safe are pinned here: it is GATED on the marker
-// a live zoom writes (so a page at 100% keeps the frame's own inline `left`), and
-// it keys on ui-layout's stable `data-rightbar-col` marker rather than a hashed
-// class, so a harness bump cannot turn it into a rule that silently matches
-// nothing while still looking right.
+// The right bar's outer resize seam under a page zoom (alpha.16, corrected in
+// alpha.28). A root `zoom` scales the rect the frame measures its columns from
+// while the seam's `left` is layout pixels, so with a level in force the seam
+// slid off the edge it belongs on and the bar could not be dragged - measured
+// in the desktop window at 80%, where it sat 288px away. The override places it
+// from the LAYOUT instead, and the three things that make that safe are pinned
+// here: it is GATED on the marker a live zoom writes (so a page at 100% keeps
+// the frame's own inline `left`), it keys on stable data attributes rather than
+// a hashed class, and - the alpha.28 correction - the anchor is the OPEN PANEL,
+// not the right column. The column is only the same place as the seam while the
+// panel and the grid track agree, and at a zoom they do not: measured in a real
+// browser on a 1440px frame at 90%, the track takes 648 layout px while the
+// solve returns 616, so the panel's edge is 32px right of the column's and the
+// handle sat on the column - "the handle is offset from the bar's edge". The
+// `:has()` guard keeps the name undeclared while no panel exists, because
+// `anchor()` against a missing name makes `left` fall back to `auto`.
 const seamTag = themes.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-themes/zoom-seam.css').pop()
 const zoomSeam = seamTag ? seamTag.textContent : ''
-check('zoom seam rule injected', zoomSeam.includes('[data-rightbar-col]{anchor-name:--dsh-themes-rightbar-seam}'))
+check(
+  'zoom seam anchors the panel that draws it',
+  zoomSeam.includes('[data-sidebar-right-panel][data-sidebar-right-open]{anchor-name:--dsh-themes-rightbar-seam}'),
+)
+check(
+  'zoom seam does not anchor the column, which is a different edge at a zoom',
+  zoomSeam.includes('[data-rightbar-col]{anchor-name') === false,
+)
 check(
   'the seam is placed at the anchor, beating the inline left',
-  zoomSeam.includes('[data-rightbar-col]~[data-side="rightbar"]{left:anchor(--dsh-themes-rightbar-seam left)!important}'),
+  zoomSeam.includes(
+    '[data-rightbar-col]:has([data-sidebar-right-panel][data-sidebar-right-open])~[data-side="rightbar"]{left:anchor(--dsh-themes-rightbar-seam left)!important}',
+  ),
 )
 check(
   'the seam override is inert at the resting level',
