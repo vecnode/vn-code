@@ -61,8 +61,10 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
    the harness already on disk.
 8. **CI builds the app; the checks prove it.** `.github/workflows/ci.yml` runs clippy
    with warnings denied, the workspace tests, a release build, a **6 MB size ceiling**
-   and a smoke run - on one OS for a push to `main`, on all three for a pull request,
-   the Monday schedule, and `release.yml`, which calls it as its gate. A release
+   and a smoke run - on all three OSes for a pull request, the Monday schedule, a manual
+   dispatch, and `release.yml`, which calls it as its gate. **A push to `main` starts no
+   CI at all**: commits and pushes are free, and CI runs at the boundaries (a PR, the
+   weekly run, or the cut). A release
    publishes **two** artefacts: one `vncode` per OS, and one `vncode-web` for the
    node/JS half, which is the same bytes everywhere. The checks in `scripts/checks/`
    are still run by hand; they are the contract, and `scripts/checks/README.md` lists

@@ -70,10 +70,12 @@ a reader who checks the hash is not relying on the warning being wrong.
 ## CI
 
 `.github/workflows/ci.yml` runs clippy (`-D warnings`), the workspace tests, a release
-build, the size budget and a smoke run - on one OS for a push to `main`, on all three for a
-pull request, the Monday schedule, and `release.yml`, which calls the same workflow as its
-gate. There is no per-package JavaScript build to run in CI; the checks in
-`scripts/checks/` remain the contract and are run by hand.
+build, the size budget and a smoke run - on all three OSes for a pull request, the Monday
+schedule, a manual dispatch, and `release.yml`, which calls the same workflow as its gate.
+**A push to `main` runs no CI at all** - that trigger is deliberately absent, so commits
+and pushes are free and the checks that must not be skipped run at the boundaries. There is
+no per-package JavaScript build to run in CI; the checks in `scripts/checks/` remain the
+contract and are run by hand.
 
 ## Checks
 

@@ -163,6 +163,16 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
     const { Button, Menu, Modal, Toast, Tooltip } = primitives
+    // The band's action strip (alpha.29) is the one thing in this bundle that
+    // mounts a React root of its own, outside any slot - see the band section.
+    // Resolved defensively: a module table without it costs the strip, not the
+    // bundle (a `require` that throws here would take every control with it).
+    let reactDom = null
+    try {
+      reactDom = require('react-dom/client') ?? null
+    } catch (err) {
+      reactDom = null
+    }
 
     // ---------------------------------------------------------------------
     // THE GLYPHS, RESOLVED BY NAME (alpha.23).
@@ -245,7 +255,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.28'
+    const PLUGIN_VERSION = '0.1.0-alpha.29'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -408,6 +418,12 @@ window.__ModuleLoader__.load({
 .dst-button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .dst-button:disabled{cursor:default;opacity:.5}
 .dst-button:focus-visible{outline:.5px solid var(--dsw-alias-state-accent,#4f8cff);outline-offset:1px}
+.dst-band{position:absolute;left:16px;right:16px;top:43px;height:30px;display:flex;align-items:center;gap:6px}
+.dst-band-action{height:26px;min-width:34px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 9px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:7px;background:0 0;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;flex:none}
+.dst-band-action svg{width:14px;height:14px}
+.dst-band-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dst-band-action:focus-visible{outline:.5px solid var(--dsw-alias-state-accent,#4f8cff);outline-offset:1px}
+html .hHd-Xa_root.hHd-Xa_collapsed .dst-band{display:none}
 html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
 `
     const CSS_TAG = 'dsh-themes/themes.css'
@@ -1750,6 +1766,272 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
       }
       if (tag.textContent !== topBar) tag.textContent = topBar
       return true
+    }
+
+    // ---------------------------------------------------------------------
+    // The band's SECOND ROW: Settings | Plugins | Media (alpha.29).
+    //
+    // THE HOLE. The left column's band is 76px (installLeftTopBar): the top 40px
+    // carry the mark, the product text and the collapse toggle, the mid-band
+    // hairline divides it, and the 36px UNDER that line - the strip the
+    // conversation header spends on its own title row - has nothing in it. The
+    // shell exposes no slot for that strip: the six holes ui-sidebar declares are
+    // the brand mark, the brand name, the toggle badge, the panel-icon list, the
+    // workspaces region and the foot, and the two at the top are single-occupant,
+    // aria-hidden decoration this package already hides.
+    //
+    // WHAT THIS DOES. The theme mounts its own strip into that row: three icon
+    // buttons - Settings, then Plugins, then Media, left-aligned and sharing one
+    // 26px height - each a rounded .5px-outlined button rather than a bare glyph,
+    // and each naming itself in a tooltip on hover. The strip is a SIBLING of the
+    // branded (aria-hidden) identity, so the buttons are IN the accessibility
+    // tree, and it is mounted additively: nothing shipped is moved, replaced or
+    // wrapped.
+    //
+    // WHY A MOUNT AND NOT A SLOT. There is no slot to register into (above), and
+    // the two that exist at the top are hidden by this package's own rules. The
+    // alternative - moving the shell's own DOM with CSS - cannot produce the
+    // requested ORDER: the panel list holds Media and Plugins, Settings lives in
+    // another container, and the settings container also carries the connection
+    // indicator, which would ride up into the band with it.
+    //
+    // WHAT EACH BUTTON DOES is what the row of the same name does:
+    //   - **Settings** clicks the shipped panel's own trigger, scoped to this
+    //     column. ui-settings exposes NO service for opening it (the panel is the
+    //     seat's own state, opened by its own button, and the `settings.open`
+    //     shortcut exposes `resolve` but not `invoke`), so this drives the control
+    //     rather than reconstructing its state - the bindings, onboarding and
+    //     connection notices all stay the seat's own;
+    //   - **Plugins** selects the `plugins` main panel through `ctx.layout`, the
+    //     same call the shell's row makes;
+    //   - **Media** does the same for `media`, and is only DRAWN when that panel
+    //     is registered - a profile without dsh-audio gets two buttons, never a
+    //     third that would select a panel nothing occupies.
+    //
+    // The classes are the package's own `dst-` prefix; the only hashed name is
+    // ui-sidebar's `hHd-Xa_` prefix, which every band override here already pins
+    // to the harness line (a bump that renames it matches nothing and the strip
+    // simply does not mount - the accepted failure mode of every override).
+    // ---------------------------------------------------------------------
+    /** The strip's mount attribute: the one identity this package's CSS and JS share. */
+    const BAND_ACTIONS_ATTR = 'data-dsh-themes-band'
+    /**
+     * ui-sidebar's hashed class prefix - the same one `installLeftTopBar` and
+     * `installSidebarOrder` pin - so the mount finds the band the CSS dresses.
+     */
+    const SIDEBAR_CLASS = 'hHd-Xa'
+    /** The three band glyphs, resolved by name like every other glyph here. */
+    const SettingsGlyph = glyphOf(['IconSettingsOutlineRegular', 'IconSettingsOutline16'])
+    const PluginsGlyph = glyphOf(['IconPluginPinwheelOutlineRegular', 'IconPluginPinwheelOutline16'])
+    const MediaGlyph = glyphOf(['IconPlayOutlineRegular', 'IconPlayOutline16'])
+
+    /**
+     * Resolve one CLIENT service, or null - never an import and never a hard
+     * edge, the same rule the other seats here follow.
+     * @param ctx - the owning client context.
+     * @param name - the service name (`layout`, `slots`).
+     * @returns the service, or null.
+     */
+    function clientService(ctx, name) {
+      try {
+        const service = ctx && typeof ctx.get === 'function' ? ctx.get(name) : undefined
+        return service === undefined || service === null ? null : service
+      } catch (err) {
+        return null
+      }
+    }
+
+    /**
+     * The main-panel ids this profile actually declares, read from the same
+     * `sidebar.panellist` list the shell draws its rows from.
+     * @param ctx - the owning client context.
+     * @returns the declared ids (empty when the registry is unavailable).
+     */
+    function declaredPanels(ctx) {
+      try {
+        const slots = clientService(ctx, 'slots')
+        if (slots === null || typeof slots.entriesOfSlot !== 'function') return []
+        return slots
+          .entriesOfSlot('sidebar.panellist')
+          .map((entry) => (entry && entry.options ? entry.options.id : undefined))
+          .filter((id) => typeof id === 'string')
+      } catch (err) {
+        return []
+      }
+    }
+
+    /**
+     * One band button: the band's own height, the shared glyph size, and the
+     * shipped Tooltip carrying the name.
+     * @param props - `{ id, label, icon, onSelect }`.
+     * @returns the button element.
+     */
+    function BandAction(props) {
+      return h(
+        Tooltip,
+        { label: props.label, side: 'bottom', delayMs: 300 },
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'dst-band-action',
+            'aria-label': props.label,
+            'data-dsh-themes-band-action': props.id,
+            onClick: props.onSelect,
+          },
+          h(props.icon, { size: 14 }),
+        ),
+      )
+    }
+
+    /**
+     * The strip itself, in the order asked for: Settings, Plugins, Media.
+     * @param props - `{ panels, selectPanel, openSettings }`.
+     * @returns the group element.
+     */
+    function BandActions(props) {
+      const items = [
+        { id: 'settings', label: 'Settings', icon: SettingsGlyph, onSelect: props.openSettings },
+        {
+          id: 'plugins',
+          label: 'Plugins',
+          icon: PluginsGlyph,
+          onSelect: () => props.selectPanel('plugins'),
+        },
+      ]
+      // Only a profile that actually declares the Media panel gets its button.
+      if (props.panels.indexOf('media') !== -1) {
+        items.push({
+          id: 'media',
+          label: 'Media',
+          icon: MediaGlyph,
+          onSelect: () => props.selectPanel('media'),
+        })
+      }
+      return h(
+        'div',
+        { className: 'dst-band', role: 'group', 'aria-label': 'Settings, Plugins, Media' },
+        items.map((item) => h(BandAction, { key: item.id, ...item })),
+      )
+    }
+
+    /**
+     * Mount the band's action strip and keep it mounted.
+     *
+     * The mount is idempotent: `ensure` finds the band, re-attaches the host if
+     * React replaced the row, and repaints. It is re-run on the panel list (so a
+     * profile that mounts dsh-audio after this row paints gains its button) and on
+     * the sidebar column's own child list (a remount), never on a timer.
+     *
+     * @param ctx - the owning client context.
+     * @returns the disposer (unmount the React root, remove the host, stop observing).
+     */
+    function installBandActions(ctx) {
+      if (typeof document === 'undefined') return null
+      if (reactDom === null || typeof reactDom.createRoot !== 'function') return null
+      let host = null
+      let reactRoot = null
+      let observer = null
+      let scheduled = null
+
+      const openSettings = () => {
+        try {
+          const sidebar = document.querySelector('.' + SIDEBAR_CLASS + '_root')
+          if (sidebar === null) return
+          // The shipped settings panel's trigger, scoped to THIS column: the one
+          // control in the sidebar that declares a dialog. Nothing else is clicked.
+          const trigger = sidebar.querySelector('[aria-haspopup="dialog"]')
+          if (trigger !== null && typeof trigger.click === 'function') trigger.click()
+        } catch (err) {
+          /* a shell that moved the trigger keeps a working row and no shortcut */
+        }
+      }
+
+      const selectPanel = (id) => {
+        const layout = clientService(ctx, 'layout')
+        if (layout === null || typeof layout.selectPanel !== 'function') return
+        try {
+          layout.selectPanel(id)
+        } catch (err) {
+          /* an unregistered id is the shell's answer, not an error to surface */
+        }
+      }
+
+      const paint = () => {
+        if (reactRoot === null) return
+        reactRoot.render(h(BandActions, { panels: declaredPanels(ctx), selectPanel, openSettings }))
+      }
+
+      const ensure = () => {
+        try {
+          const sidebar = document.querySelector('.' + SIDEBAR_CLASS + '_root')
+          if (sidebar === null) return
+          const row = sidebar.querySelector('.' + SIDEBAR_CLASS + '_logoRow')
+          if (row === null) return
+          if (host === null) {
+            host = document.createElement('div')
+            host.setAttribute(BAND_ACTIONS_ATTR, '')
+          }
+          if (host.parentNode !== row) row.appendChild(host)
+          if (reactRoot === null) reactRoot = reactDom.createRoot(host)
+          paint()
+        } catch (err) {
+          /* a band that is not there yet is not a failure */
+        }
+      }
+
+      const schedule = () => {
+        if (scheduled !== null) return
+        const run = () => {
+          scheduled = null
+          ensure()
+        }
+        if (typeof requestAnimationFrame === 'function') scheduled = requestAnimationFrame(run)
+        else scheduled = setTimeout(run, 16)
+      }
+
+      ensure()
+
+      const slots = clientService(ctx, 'slots')
+      if (slots !== null && typeof slots.subscribe === 'function') {
+        try {
+          ctx.effect(() => slots.subscribe('sidebar.panellist', schedule), 'dsh-themes: band actions follow the panel list')
+        } catch (err) {
+          /* a shell without the subscription keeps the buttons it painted once */
+        }
+      }
+
+      try {
+        if (typeof MutationObserver === 'function') {
+          const sidebar = document.querySelector('.' + SIDEBAR_CLASS + '_root')
+          const column = sidebar === null ? null : sidebar.parentNode
+          if (column !== null && column !== undefined) {
+            observer = new MutationObserver(schedule)
+            // The COLUMN's own child list only: a remounted sidebar, not the
+            // conversation streaming into a sibling column.
+            observer.observe(column, { childList: true })
+          }
+        }
+      } catch (err) {
+        /* an environment without MutationObserver just never re-attaches */
+      }
+
+      return () => {
+        try {
+          if (observer !== null) observer.disconnect()
+          if (scheduled !== null) {
+            if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(scheduled)
+            else clearTimeout(scheduled)
+            scheduled = null
+          }
+          if (reactRoot !== null) reactRoot.unmount()
+        } catch (err) {
+          /* teardown must not throw into the plugin's dispose path */
+        }
+        reactRoot = null
+        if (host !== null && host.parentNode !== null) host.parentNode.removeChild(host)
+        host = null
+      }
     }
 
     // ---------------------------------------------------------------------
@@ -3594,6 +3876,18 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
       // One-shot: the left column's top bar is static CSS too, and belongs to
       // the frame rather than to any one appearance.
       installLeftTopBar()
+
+      // The band's SECOND ROW (alpha.29): Settings, Plugins, Media, mounted into
+      // the 36px strip the top bar above leaves empty. The one override here
+      // that mounts DOM instead of CSS, because the sidebar declares no slot for
+      // that row - see the band section for why nothing else can fill it.
+      ctx.effect(
+        () => {
+          const dispose = installBandActions(ctx)
+          return typeof dispose === 'function' ? dispose : () => {}
+        },
+        'dsh-themes: band actions',
+      )
 
       // One-shot (alpha.25, and alpha.27 for the top rows): the band's second
       // hairline - the mid-band line the

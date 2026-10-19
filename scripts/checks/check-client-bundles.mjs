@@ -1941,6 +1941,53 @@ check(
 // through the shipped Tooltip's `disabled` prop (its close-and-stay-closed
 // switch), so the bubble is gone rather than merely invisible.
 const themesSource = readFileSync(path.join(repo, 'packages/dsh-themes/lib/client.js'), 'utf8')
+// The band's SECOND ROW (alpha.29): Settings, Plugins, Media, mounted into the
+// 36px strip the top bar leaves under the mid-band hairline. ui-sidebar declares
+// no slot for that row, so this is the one override here that mounts DOM - and
+// what is pinned is the contract the mount has to keep, not its markup: it
+// targets the SAME pinned sidebar hash every band override uses, it is skipped
+// WHOLE when the document or react-dom/client is unavailable (a header seat must
+// never be lost to a missing module - the abdication trap above), it adds a
+// sibling of the branded identity rather than wrapping or moving shipped DOM, it
+// never reproduces Settings' state (the shipped panel's own trigger is clicked,
+// scoped to the column), the two panel buttons use the SAME ids the shell's rows
+// pass to `selectPanel`, Media is drawn only when its panel is declared, and the
+// strip re-attaches on a sidebar remount without a timer.
+check(
+  'the band strip is styled as a row of real buttons',
+  themesCss.includes('.dst-band{position:absolute;left:16px;right:16px;top:43px;height:30px;display:flex') &&
+    themesCss.includes('.dst-band-action{height:26px;min-width:34px;box-sizing:border-box;'),
+)
+check('the band strip is hidden in the collapsed rail', themesCss.includes('.hHd-Xa_collapsed .dst-band{display:none}'))
+check(
+  'the band mount targets the pinned sidebar hash, not a second one',
+  themesSource.includes("const SIDEBAR_CLASS = 'hHd-Xa'") &&
+    themesSource.includes("sidebar.querySelector('.' + SIDEBAR_CLASS + '_logoRow')"),
+)
+check(
+  'the band mount is skipped whole without a document or react-dom/client',
+  themesSource.includes("if (typeof document === 'undefined') return null") &&
+    themesSource.includes("if (reactDom === null || typeof reactDom.createRoot !== 'function') return null"),
+)
+check(
+  'the band mounts additively into a row it does not own',
+  themesSource.includes('host.setAttribute(BAND_ACTIONS_ATTR, \'\')') &&
+    themesSource.includes('row.appendChild(host)') &&
+    themesSource.includes("host.parentNode.removeChild(host)"),
+)
+check(
+  'Settings drives the shipped trigger, scoped to this column',
+  themesSource.includes('sidebar.querySelector(\'[aria-haspopup="dialog"]\')'),
+)
+check(
+  'Plugins and Media use the shell\'s own panel ids',
+  themesSource.includes("props.selectPanel('plugins')") && themesSource.includes("props.selectPanel('media')"),
+)
+check('Media is drawn only when its panel is declared', themesSource.includes("props.panels.indexOf('media') !== -1"))
+check(
+  'the band strip re-attaches on a sidebar remount, never on a timer',
+  themesSource.includes('new MutationObserver(schedule)') && themesSource.includes('observer.observe(column, { childList: true })'),
+)
 // The MENU is the registry's own list, not a copy of it: the control iterates
 // `snapshot.themes` and appends the `system` preference last, so the shipped
 // trio keeps its places and a registered theme lands between Dark and System.

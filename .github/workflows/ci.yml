@@ -1,12 +1,13 @@
 name: CI
 
-# Three operating systems, but not on every commit.
+# Three operating systems, and none of them on a push.
 #
-# A push to main runs one job, on the platform a Windows development machine cannot check
-# for itself. The full matrix runs on a pull request, on the Monday schedule, when asked,
-# and - through `workflow_call` - as the gate a release passes before it publishes
-# anything. That is the whole policy: the check that must never be skipped is the one at
-# the cut, and it is the cut that now pays for it.
+# A push to main starts NOTHING here: the owner commits and pushes freely, and CI is a
+# thing that runs at the boundaries instead - a pull request, the Monday schedule, a
+# manual dispatch, and - through `workflow_call` - the gate a release passes before it
+# publishes anything. The check that must never be skipped is the one at the cut, and the
+# cut is what pays for it. (Before this, every push to main ran one job, on the platform a
+# Windows development machine cannot check for itself; that job now waits for the release.)
 #
 # This workflow builds the RUST app only. The node/JS half needs no build: it is the same
 # files on every platform, it is packaged by release.yml as its own archive, and
@@ -18,12 +19,8 @@ name: CI
 # against a tool the runner image already carries - git, rustc, cargo, node, gh - so the
 # workflow runs under the policy instead of asking for the policy to be relaxed.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'assets/**'
+  # NO `push` TRIGGER, on purpose. Adding one back brings the per-commit CI bill back with
+  # it; a release reaches this workflow through `workflow_call` from release.yml.
   pull_request:
     paths-ignore:
       - '**.md'
