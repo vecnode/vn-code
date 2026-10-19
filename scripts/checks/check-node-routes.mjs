@@ -1710,7 +1710,7 @@ try {
 // whose registration nothing pinned. It is here now.
 {
   const registrations = []
-  for (const packageName of ['dsh-media', 'dsh-diagrams', 'dsh-pdf', 'dsh-supercollider', 'dsh-proto-lab', 'dsh-research', 'dsh-frontend-craft']) {
+  for (const packageName of ['dsh-media', 'dsh-diagrams', 'dsh-pdf', 'dsh-supercollider', 'dsh-proto-lab', 'dsh-research', 'dsh-frontend-craft', 'dsh-ollama']) {
     registrations.push({
       packageName,
       source: await fsp.readFile(path.join(repo, 'packages', packageName, 'lib', 'index.js'), 'utf8'),
@@ -1720,7 +1720,7 @@ try {
   check(
     'every bundled-skill registration names its file and source bucket',
     named.map((entry) => entry.packageName).join(','),
-    'dsh-media,dsh-diagrams,dsh-pdf,dsh-supercollider,dsh-proto-lab,dsh-research,dsh-frontend-craft',
+    'dsh-media,dsh-diagrams,dsh-pdf,dsh-supercollider,dsh-proto-lab,dsh-research,dsh-frontend-craft,dsh-ollama',
   )
 }
 
@@ -1981,6 +1981,62 @@ try {
   const healthBody = await healthAnswer.json()
   check('docker: the health route answers without a daemon', healthAnswer.status, 200)
   check('docker: ...and names what is deliberately absent', healthBody.notBuilt.includes('exec') && healthBody.tools.length, 9)
+}
+
+// ------------------------------------------------------------- dsh-ollama
+// The model row is host-only: five tools, NO route, and one refusal that has to
+// happen BEFORE a socket is opened. The arithmetic and every other refusal are
+// the package's own check (packages/dsh-ollama/checks/check-ollama-node.mjs,
+// against a fake daemon with fixed nanosecond durations); what is pinned here is
+// the pack-wide contract - the registration, the absence of a route, and the
+// loopback fence counted at `fetch`.
+{
+  const ollamaModule = await import('../../packages/dsh-ollama/lib/index.js')
+  const seen = { tools: [], routes: 0 }
+  ollamaModule.apply({
+    get: (name) => (name === 'connection' ? { fetch: { register: () => (seen.routes += 1, () => {}) } } : undefined),
+    tools: { register: (tool) => (seen.tools.push(tool), () => {}) },
+    effect: (fn) => fn(),
+    logger: { info() {}, warn() {} },
+  })
+  check('ollama: the row registers five tools', seen.tools.length, 5)
+  check(
+    'ollama: ...named for the surface the README promises',
+    seen.tools.map((tool) => tool.name).join(','),
+    'ollama_status,ollama_run,ollama_bench,ollama_models,ollama_embed',
+  )
+  check(
+    'ollama: ...each with a closed schema and an execute',
+    seen.tools.every((tool) => tool.parameters && tool.parameters.type === 'object' && tool.parameters.additionalProperties === false && typeof tool.execute === 'function' && tool.output && tool.output.schema),
+    true,
+  )
+  check('ollama: ...and NO route, because the row is host-only', seen.routes, 0)
+  check('ollama: the skill registration is the one this check drives', ollamaModule.SKILL_FILES.length, 3)
+
+  // The fence, counted: an OLLAMA_HOST on another machine is refused and the
+  // fetch spy is never reached. `runner` is a stub so this check spawns nothing.
+  let fetches = 0
+  const ollamaDeps = ollamaModule.__internals.createDeps(
+    { logger: { info() {}, warn() {} }, get: () => undefined, effect: (fn) => fn() },
+    {
+      env: { OLLAMA_HOST: 'http://10.0.0.5:11434' },
+      fetch: async () => {
+        fetches += 1
+        return new Response('{}')
+      },
+      runner: async () => ({ status: 0, stdout: '', stderr: '' }),
+    },
+  )
+  const fenced = await ollamaModule.__internals.buildTools(ollamaDeps)
+    .find((tool) => tool.name === 'ollama_status')
+    .execute({}, {})
+  check('ollama: an off-machine daemon is refused', fenced.view.code, 'REMOTE_REFUSED')
+  check('ollama: ...before any request is made', fetches, 0)
+  check(
+    'ollama: ...and the sentence names the opt-in variable',
+    fenced.text.includes('DSH_OLLAMA_ALLOW_REMOTE=1'),
+    true,
+  )
 }
 
 // --------------------------------------------------------- the repo manifest

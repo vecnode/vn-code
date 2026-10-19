@@ -1,0 +1,29 @@
+{
+  "name": "dsh-ollama",
+  "version": "0.1.0-alpha.1",
+  "description": "Ollama as a measured surface: five `ollama_*` tools over the machine's own daemon (status, one bounded run with its token counts and durations, a benchmark that reports 3+ runs as a median with spread, models with confirmed pull/delete, embeddings with cosine similarity), the loopback fence that refuses a daemon on another machine by default, and three skills that teach the REST API, the metric arithmetic and the Python client. Host-only: one row, no route, no browser half, zero npm dependencies, no bundled engine, nothing started on its own.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-ollama-node.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

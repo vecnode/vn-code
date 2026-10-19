@@ -65,6 +65,7 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
 | `dsh-research` | `research` | research as a folder the agent fills and the right bar shows: a run is `RUN.json` + a `passport.json` that records the user's instructions and every gate answer **verbatim**, three `rs_*` tools, four routes, and the Research tab where a **person** — never the model — answers the two frame gates (`g1-rq`, `g2-intake`). No socket, no child process, no vendored engine |
 | `dsh-ocr` | `ocr` | the pack's OCR owner: one tool, `ocr`, over `tesseract` from PATH or the OCR engine Windows itself ships (`lib/win-ocr.ps1` + `Windows.Media.Ocr`, which rasterizes a PDF page through `Windows.Data.Pdf`). Host-only — no client, no route |
 | `dsh-docker` | `docker` | Docker (or Podman) as a surface: nine `docker_*` tools over the machine's CLI, a `docker_start` that launches Docker Desktop or a podman machine and waits for its **daemon**, and a Docker tab of containers and images. argv-only and validated; no `exec`, no `system prune`, no free-form `run` |
+| `dsh-ollama` | `ollama` | Ollama as a **measured** surface: five `ollama_*` tools over the machine's own daemon — status (models on disk, what is loaded, and `ollama serve` when nothing answers), one bounded inference with the daemon's token counts and nanosecond durations, a benchmark that **refuses fewer than 3 runs** and reports a median with spread (cold vs warm stated at the first token), models with pull/delete confirmed by repeating the tag, embeddings with cosine similarity — three skills whose examples a check parses, and a **loopback fence** that refuses a daemon on another machine before any request. Host-only, no route, no browser half |
 | `dsh-proto-lab` | `proto-lab` | the **prototyping lab**: five `lab_*` tools write a run into the lab root (`~/Desktop/vncode-lab/runs/<runtime>/<slug>/` on a machine with a Desktop, `<workspace>/lab` otherwise, `DSH_PROTO_LAB_ROOT` to move it; gitignored — the bundle ships the generator, not the runs), a runtime registry (`p5js`, `openframeworks`, and a template for the third) whose every module the checks drive, a committed example library beside each skill, an offline-vendored p5.js, and verification as an explicit ladder — `t0-structure` → `t4-measure` — that always names the tier it reached |
 | `dsh-browser` | `browser` | web surface: the host fetches and renders a page in a disposable sandboxed browser (**currently disabled by the master**) |
 | `dsh-themes` | `themes` | extra palettes (Nord, Monokai, Hacker, Cyber), header controls, branding, account-menu trimming |
@@ -100,9 +101,6 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
   `docs/COMPATIBILITY.md`;
 - the app: `app/README.md` (the verbs, the bridge to `scripts/run-web.*`, the app's own
   root and the harness home inside it, and the three crates);
-- work in flight, and not shipped behaviour: `docs/PLAN-ollama.md` (the
-  `dsh-ollama` design — one host-only row of `ollama_*` tools, the metric
-  arithmetic, three skills and the checks that pin them);
 - security: `SECURITY.md`;
 - **the checks are the contract**: `scripts/checks/*.mjs` pin route registrations, bundle
   wiring, budgets, the launcher contract and the credential rules. They are run by hand;

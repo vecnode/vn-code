@@ -1,0 +1,28 @@
+# dsh-ollama bundle layer (alpha).
+#
+# One row ('ollama') owns the whole plugin: its Node half registers FIVE tools
+# over the machine's own Ollama daemon and three bundled skills - `ollama_status`
+# (which models are on disk, which are loaded, whether the daemon answers, and
+# the command that starts one), `ollama_run` (ONE bounded inference with the
+# daemon's own token counts and nanosecond durations), `ollama_bench` (3+ runs,
+# cold vs warm, A/B and a num_ctx sweep, reported as a median with a spread),
+# `ollama_models` (list/show, and pull/delete behind a confirmation that repeats
+# the tag) and `ollama_embed` (dimension, norms, cosine similarity).
+#
+# Host-only: the answer is numbers and prose, so there is no route to serve and
+# no browser half to load - the package declares no dsh.client, and the boot
+# graph gains one row. Like dsh-wsl and dsh-ocr, not like dsh-docker: no UI
+# follows, and none is hidden behind an unregistered route.
+#
+# Nothing shipped is patched and no core row is disabled: core DSH has no
+# Ollama surface and no tool reads the daemon's eval_count / eval_duration /
+# load_duration. The harness's `bash` / `pwsh` tools can call `ollama run`, but
+# they cannot return the measurement this row exists to report.
+#
+# Nothing for scripts/sync-vendored.ps1 either: no engine is vendored, forked or
+# downloaded. `ollama` is the user's own program and its daemon is the user's
+# own service at 127.0.0.1:11434; this package ships the HTTP client, the argv
+# for one version probe, and the arithmetic.
+- insert:
+    - id: ollama
+      name: 'dsh-ollama'

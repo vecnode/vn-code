@@ -96,6 +96,13 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   then waits for the **daemon**, and a Docker tab of containers and images with
   their logs; no `exec`, no `system prune`, no free-form `run`; zero npm
   dependencies and no bundled engine),
+  `dsh-ollama` (Ollama as a measured surface: five `ollama_*` tools over the
+  machine's own daemon - status that names `ollama serve` when nothing answers,
+  one bounded inference with the daemon's token counts and nanosecond durations,
+  a benchmark that refuses fewer than 3 runs and reports a median with spread,
+  confirmed pull/delete, embeddings with cosine similarity - three skills whose
+  examples a check parses/compiles, and a loopback fence that refuses a daemon on
+  another machine before any request; host-only, zero npm dependencies),
   `dsh-research` (a run is a folder with a `passport.json` recording the user's own
   words; nine `rs_*` tools over an append-only claim and source ledger, a claim's
   numbers recorded as a validated `statistic` rather than left in the prose, a
@@ -112,10 +119,10 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with
   `npm run check` in that folder. They travel with the package (which is what
   makes them useful outside this repository) and they are ADDITIONAL to
-  `scripts/checks/`, never a replacement for it: today eight packages ship their own
+  `scripts/checks/`, never a replacement for it: today nine packages ship their own
   (`dsh-supercollider` with four checks, `dsh-research` with seven, plus
-  `dsh-diagrams`, `dsh-frontend-craft`, `dsh-proto-lab`, `dsh-ocr`, `dsh-wsl` and
-  `dsh-docker`), and the pack-wide checks still own the routes, the bundle and the
+  `dsh-diagrams`, `dsh-frontend-craft`, `dsh-proto-lab`, `dsh-ocr`, `dsh-wsl`,
+  `dsh-docker` and `dsh-ollama`), and the pack-wide checks still own the routes, the bundle and the
   manifest.
 - `scripts/` — the launchers (`run-web.*`, `run-desktop.*`), and four folders:
   `console/` (the shared console layer), `setup/` (install and uninstall, which the
@@ -133,8 +140,8 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   refused **by name**, because there is no embedded browser to select.
   `app/README.md` explains it. `check-shell.mjs` is what proves it, and it drives
   the real binary.
-- `docs/` — install, build, deploy, release, paths, compatibility, and the one plan
-  still in flight (`PLAN-ollama.md`). There is no distributer and no ship list: the distribution is this
+- `docs/` — install, build, deploy, release, paths, compatibility. There is no
+  distributer and no ship list: the distribution is this
   repository plus the binary, and the app installs the pack itself.
 - `.dsh-version.json` — the pinned harness line and the pack manifest
   (its versions must match every `package.json`; `check-node-routes.mjs` enforces

@@ -41,12 +41,17 @@ Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-r
 ## The checks that live inside a package
 
 `dsh-docker`, `dsh-wsl`, `dsh-ocr`, `dsh-diagrams`, `dsh-frontend-craft`,
-`dsh-research`, `dsh-supercollider` and `dsh-proto-lab` each ship their own under
+`dsh-research`, `dsh-supercollider`, `dsh-proto-lab` and `dsh-ollama` each ship
+their own under
 `packages/<name>/checks/`, run with `npm run check` in that folder. They are
 additional to the list above, never a replacement for it: a host half's fixtures
 and its live skips belong beside the package (see
 `packages/dsh-docker/checks/check-docker-node.mjs`, which drives the runner
-against a real child process and every engine state against a scripted one), and
+against a real child process and every engine state against a scripted one, and
+`packages/dsh-ollama/checks/check-ollama-node.mjs`, which serves a **fake
+daemon** on `127.0.0.1:0` with fixed nanosecond durations so tok/s and TTFT are
+assertions rather than observations, parses every skill example, and runs one
+generation against a real daemon only when one answers), and
 the pack-wide checks still own the routes, the bundle and the manifest.
 
 `dsh-proto-lab`'s three carry the pack's **verification ladder** — the claim that a
