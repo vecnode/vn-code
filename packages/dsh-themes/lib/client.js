@@ -255,7 +255,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.30'
+    const PLUGIN_VERSION = '0.1.0-alpha.31'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -422,6 +422,14 @@ window.__ModuleLoader__.load({
 html .hHd-Xa_root.hHd-Xa_collapsed .dst-band{display:none}
 html:has([data-dsh-themes-band]) .hHd-Xa_panelList{display:none}
 html:has([data-dsh-themes-band]) .hHd-Xa_footArea [aria-haspopup="dialog"]{display:none}
+/* The band's Skills button is the pack's ONE Skills entry point. dsh-skills also
+   registers a book icon in the conversation header; with the band mounted that
+   is a second door to the same dialog, so the header one is hidden - not
+   removed, because it is what the band's button CLICKS (its click handler
+   carries the session id the browser resolves its folder from), and a
+   display:none control still takes a programmatic click. A profile without this
+   row keeps the header control as its only way in. */
+html:has([data-dsh-themes-band]) [data-dsh-skills="button"]{display:none}
 html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
 `
     const CSS_TAG = 'dsh-themes/themes.css'
@@ -1890,7 +1898,7 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
 
     /**
      * The strip itself, in the order asked for: Settings, Plugins, Media, Skills.
-     * @param props - `{ panels, selectPanel, openSettings, openSkills }`.
+     * @param props - `{ panels, selectPanel, openSettings, openSkills, openMedia }`.
      * @returns the group element.
      */
     function BandActions(props) {
@@ -1904,12 +1912,14 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         },
       ]
       // Only a profile that actually declares the Media panel gets its button.
+      // Its own service opens the dialog, so the conversation is not swapped out
+      // for the seat underneath (`openMedia` explains the fallback).
       if (props.panels.indexOf('media') !== -1) {
         items.push({
           id: 'media',
           label: 'Media',
           icon: MediaGlyph,
-          onSelect: () => props.selectPanel('media'),
+          onSelect: props.openMedia,
         })
       }
       // The fourth element: the Skills browser the header carries, driven through
@@ -1977,9 +1987,33 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         }
       }
 
+      /**
+       * The Media dialog, WITHOUT the panel underneath it.
+       *
+       * `layout.selectPanel('media')` swaps the main column from the
+       * conversation to dsh-audio's seat, and the seat then opens its dialog -
+       * a modal button that changes the background on its way in, and can leave
+       * it changed. dsh-audio publishes the `media` service for exactly this
+       * click, so the band opens the dialog and the chat stays where it is. The
+       * fallback is the old path, for a profile running this row against an
+       * older audio row.
+       */
+      const openMedia = () => {
+        const media = clientService(ctx, 'media')
+        if (media !== null && typeof media.open === 'function') {
+          try {
+            media.open()
+            return
+          } catch (err) {
+            /* an audio row that refuses its own service falls back below */
+          }
+        }
+        selectPanel('media')
+      }
+
       const paint = () => {
         if (reactRoot === null) return
-        reactRoot.render(h(BandActions, { panels: declaredPanels(ctx), selectPanel, openSettings, openSkills }))
+        reactRoot.render(h(BandActions, { panels: declaredPanels(ctx), selectPanel, openSettings, openSkills, openMedia }))
       }
 
       const ensure = () => {

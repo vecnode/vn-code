@@ -1,4 +1,4 @@
-# dsh-themes (alpha.30)
+# dsh-themes (alpha.31)
 
 **The vncode Web GUI's conversation-header package: four controls on that header, plus the pack's appearance overrides.**
 
@@ -45,7 +45,7 @@ Open In… (`dsh-open-in-app`) is `-10` and dsh-cmdbar's button `30`; no shipped
   paper-plane `path` artwork; the **right bar's resize seam**, placed from the open panel's own
   left edge as a CSS anchor under `html[data-dsh-page-zoomed]` (the panel, not the column: at a zoom the
   solve reads a scaled rect, so at 90% the panel is drawn 616px wide in a 648px track and the column's
-  edge is 32px off the seam); the **band's action strip** — **Settings, Plugins, Media, Skills** mounted as four of the app's own 28px `.dst-button` controls in the 36px row under the `vncode` band, each naming itself in a tooltip, with the bottom rows they mirror hidden once the strip is there (the one override here that mounts DOM rather than CSS: the sidebar declares no slot for that row, so the theme adds a sibling of the branded identity and drives each destination the way its own row does); the left
+  edge is 32px off the seam); the **band's action strip** — **Settings, Plugins, Media, Skills** mounted as four of the app's own 28px `.dst-button` controls in the 36px row under the `vncode` band, each naming itself in a tooltip, with the bottom rows they mirror hidden once the strip is there (the one override here that mounts DOM rather than CSS: the sidebar declares no slot for that row, so the theme adds a sibling of the branded identity and drives each destination the way its own row does). Two of the four are deliberate departures from the rows they mirror: **Media** opens `dsh-audio`'s `media` dialog (`ctx.get('media').open()`) instead of selecting the panel behind it, so the conversation stays in the main column; and **Skills** is the pack's ONE visible entry to that dialog — the header seat `dsh-skills` still registers is hidden by a `:has([data-dsh-themes-band])` rule, because it is what the band's button CLICKS (its click handler carries the session id) and a `display:none` control still takes a programmatic click. The left
   column's **panel order** (`regionArea` 1, `panelList` 2, `footArea` 3); the **band lines** — the same `.5px`
   hairline the band already ends in, drawn a second time on the frame's **y=40** in ALL THREE columns: between the
   middle column's button row and its session tabs, under the left column's branding row, and in the right bar 2px
