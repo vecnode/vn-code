@@ -1815,6 +1815,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     // ---------------------------------------------------------------------
     /** The strip's mount attribute: the one identity this package's CSS and JS share. */
     const BAND_ACTIONS_ATTR = 'data-dsh-themes-band'
+    /** How many animation frames the mount waits for the sidebar (about five). */
+    const MOUNT_TRIES = 300
     /**
      * ui-sidebar's hashed class prefix - the same one `installLeftTopBar` and
      * `installSidebarOrder` pin - so the mount finds the band the CSS dresses.
@@ -1933,6 +1935,7 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
       let reactRoot = null
       let observer = null
       let scheduled = null
+      let tries = 0
 
       const openSettings = () => {
         try {
@@ -1985,12 +1988,38 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         const run = () => {
           scheduled = null
           ensure()
+          // The client activates before the frame's first render, so the band is
+          // normally NOT there on the first pass: keep asking for a few seconds
+          // (a profile whose sidebar mounts late is not a failure), and attach the
+          // remount observer once the strip found its row.
+          if (host === null) {
+            tries += 1
+            if (tries <= MOUNT_TRIES) schedule()
+            return
+          }
+          attachObserver()
         }
         if (typeof requestAnimationFrame === 'function') scheduled = requestAnimationFrame(run)
         else scheduled = setTimeout(run, 16)
       }
 
-      ensure()
+      /** Watch the sidebar's own column for a remount - once, and only once. */
+      const attachObserver = () => {
+        if (observer !== null || typeof MutationObserver !== 'function') return
+        try {
+          const sidebar = document.querySelector('.' + SIDEBAR_CLASS + '_root')
+          const column = sidebar === null ? null : sidebar.parentNode
+          if (column === null || column === undefined) return
+          observer = new MutationObserver(schedule)
+          // The COLUMN's own child list only: a remounted sidebar, not the
+          // conversation streaming into a sibling column.
+          observer.observe(column, { childList: true })
+        } catch (err) {
+          /* an environment without MutationObserver just never re-attaches */
+        }
+      }
+
+      schedule()
 
       const slots = clientService(ctx, 'slots')
       if (slots !== null && typeof slots.subscribe === 'function') {
@@ -1999,21 +2028,6 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         } catch (err) {
           /* a shell without the subscription keeps the buttons it painted once */
         }
-      }
-
-      try {
-        if (typeof MutationObserver === 'function') {
-          const sidebar = document.querySelector('.' + SIDEBAR_CLASS + '_root')
-          const column = sidebar === null ? null : sidebar.parentNode
-          if (column !== null && column !== undefined) {
-            observer = new MutationObserver(schedule)
-            // The COLUMN's own child list only: a remounted sidebar, not the
-            // conversation streaming into a sibling column.
-            observer.observe(column, { childList: true })
-          }
-        }
-      } catch (err) {
-        /* an environment without MutationObserver just never re-attaches */
       }
 
       return () => {
