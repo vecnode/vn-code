@@ -189,6 +189,38 @@ The one rule that used to be about the pane survives, and now belongs to the lau
 a **loopback** URL is ever opened, checked in the launcher immediately before the process
 starts.
 
+## Code execution this pack adds on purpose
+
+Three packages run code for the agent rather than merely reading files. Each is named
+here because "the tool ran a command" is a security property of the INSTALL, not a bug
+in a route — and because the loopback bind is the only thing between that power and a
+network.
+
+| Surface | What it can run | What fences it |
+|---|---|---|
+| `dsh-supercollider`: the `sc_exec` / `sc_check` / `sc_load` tools and **`POST /api/dsh-supercollider/eval`** | **arbitrary `sclang`**, in the one long-lived interpreter the session shares — file I/O, `unixCmd`, `Pipe`, anything SuperCollider can reach | the harness session check only: loopback bind + the `dsh-auth-…` cookie + the Host/Origin fence. No path policy, no allowlist, no sandbox — by design, because it is the point of the plugin |
+| `dsh-supercollider`: `sc_exec` → `scsynth`, and `sc_capture` | a SuperCollider audio server, its `.schelp` tree, and a UDP/OSC socket on loopback | argv-only spawn (no shell), a deadline per call, loopback-only UDP |
+| `dsh-diagrams` (a TeX engine), `dsh-proto-lab` (the user's `make` / projectGenerator), `dsh-frontend-craft` and `dsh-browser` (this machine's Chrome/Edge) | a compiler or a browser | argv-only, no shell, throwaway browser profile, `-no-shell-escape`, loopback-only page URLs, deadlines and output caps |
+
+**The `eval` route is the sharp edge.** `POST /api/dsh-supercollider/eval` exists so the
+plugin's own console page can run a snippet; it is authenticated exactly like every other
+pack route (401 without a cookie, 403 for a foreign authority or a cross-site fetch) and
+it is **not** narrowed beyond that. Anyone who can load the GUI, or who holds the cookie,
+can therefore execute code as your user — which is already true of the harness's own
+terminal and file tools, but this route is the pack's own version of that power and it
+should be read as such:
+
+1. **Never expose the port.** No `--host`, no proxy, no tunnel, no published container
+   port, no reverse proxy — this route is what makes "LAN-exposed" mean "remote code
+   execution as you", not "someone can read my conversation".
+2. **Stop the app when you are done**, and treat the printed URL as a password (a leaked
+   URL buys a cookie, and a cookie buys `eval`).
+3. **Uninstall the package if you do not use SuperCollider** — a row you never open is
+   still a route that is mounted.
+4. Do not treat the route as sandboxed: it inherits the harness's file policy for the
+   files the tools name, but `sclang` itself is a general-purpose interpreter with the
+   privileges of the process that started it.
+
 ## Lock it down
 
 1. **Keep it on loopback**: the pack's launcher or
@@ -315,5 +347,7 @@ scanning and push protection as a second net.
   names the reason and never the value.
 - No way to weaken the harness's authentication, and no flag, setting or variable
   that turns the session check off.
-- No WebSocket upgrade and **no shell of any kind** — the dock is a read-only
-  transcript, and shells come from the harness's own terminal tabs.
+- No WebSocket upgrade and **no shell of its own** — the dock is a read-only
+  transcript, and shells come from the harness's own terminal tabs. The code this pack
+  runs on purpose (a SuperCollider interpreter, a TeX engine, a compiler, a browser) is
+  listed with its fence under **Code execution this pack adds on purpose** above.

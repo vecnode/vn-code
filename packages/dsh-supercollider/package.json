@@ -44,5 +44,5 @@
   "engines": {
     "node": ">=22"
   },
-  "license": "MIT"
+  "license": "AGPL-3.0-only"
 }

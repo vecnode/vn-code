@@ -1,7 +1,7 @@
 {
   "name": "dsh-audio",
-  "version": "0.1.0-alpha.4",
-  "description": "Audio: WAV/AIFF/FLAC as a waveform - one row per channel, an adaptive ruler, a min/max envelope with the RMS core, zoom down to samples, selection, and playback on the audio clock - plus the Audio console for this machine's devices. Client-only, read in 2 MiB windows.",
+  "version": "0.1.0-alpha.5",
+  "description": "Audio: WAV/AIFF/FLAC as a waveform (one row per channel, adaptive ruler, RMS core, sample-level zoom, selection, audio-clock playback) plus the MEDIA panel in the left column - a bounded scan of every audio, image, video and GIF file the conversation can reach, with an inline preview and a one-click hand-off to the tab that owns the type, and, under Devices, this machine's audio console. Client-only, read in 2 MiB windows.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -28,5 +28,5 @@
       ]
     }
   },
-  "license": "MIT"
+  "license": "AGPL-3.0-only"
 }

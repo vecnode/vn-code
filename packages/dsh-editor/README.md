@@ -1,4 +1,4 @@
-# dsh-editor (alpha.13)
+# dsh-editor (alpha.14)
 
 **A CodeMirror 6 tab type for the pack's right bar (`dsh-rightbar`) that opens text files editable.** It registers the id `dsh-editor` and the kind `editor` through the bar's own tab-type registry, with its body and chip title in the keyed `sidebar.right.pane.tab` / `sidebar.right.pane.tab.title` seats and a guide entry at `order: 20` for the "+" control. It is text-only (strict UTF-8, binary refused), starts blank documents, and writes through authenticated Node routes because `remote.workspaceFiles` exposes no mutation operation.
 
@@ -11,6 +11,7 @@
 - **The language map.** Every extension is mapped in `languageExtensionFor` and every lookup goes through a guard, so an engine older than the bundle opens the document unhighlighted rather than killing the tab. Lezer factories (function shape) via `engineLanguage` cover javascript (js/mjs/cjs/jsx/ts/tsx), json (json/jsonc), markdown (md/markdown/mdown), python (py/pyw), html (html/htm/xhtml), css and yaml (yaml/yml). CM5-style **StreamParser objects** (found by their `token()`, via `engineStreamMode`) cover shell (sh/bash/zsh/ksh/dash), powerShell (ps1/psm1/psd1), batch (bat/cmd, from the pack's own `vendor/batch-mode.js`), rust (rs) and toml (toml) from the vendored `@codemirror/legacy-modes`. Each returns `null` plus one console warning naming the missing factory and the rebuild command, so `languageExtensionFor` has no direct `CM.<name>(...)` call.
 - **The palette follows the app's theme**: **oneDark only while the app is dark**, a token-driven transparent light layer otherwise, switched live through a CodeMirror `Compartment` reconfigured off `ctx.get('theme')` / `theme/change`, with `body[data-ds-dark-theme]` as the fallback. Both theme services are resolved lazily.
 - **The rendered Markdown body is shadowed.** The keyed `sidebar.right.tab.document` slot is registered at `priority: -10` (lowest renders), so only the page body is this package's while the shipped preview keeps its chrome; uninstalling brings the shipped body back. That body carries an **Edit** pill back to the editor and undoes what the preview's plain-text scrollport imposes (`white-space:pre` and the mono stack).
+- **Authored HTML is rendered, and images resolve (alpha.14).** The shipped Markdown primitive draws raw HTML as literal text and only resolves an image when it is handed a `pathImages` vocabulary, so a README with a centred badge row, a `<table>`, `<details>` or `![shot](docs/shot.png)` showed its own markup and broken pictures. The shadow body now parses **block-level HTML** itself and rebuilds it as **React elements over an allowlist** — nothing becomes an HTML string, so there is no `innerHTML` to poison and no attribute spelling that can smuggle an `onerror=` through: `<script>`, `<style>`, `<iframe>`, `<object>`, `<embed>`, form controls and SVG are dropped **with their contents**, every `on*` attribute is refused, a `javascript:` URL is refused, and an unknown structural tag loses the tag but keeps its children. **Images** resolve through the harness's authenticated `/api/file?path=` route, against the **document's own absolute path** (read off the resource, the same way the shipped body does), for a Markdown image and for an `<img src>` inside authored HTML alike; an absolute `http(s)` image is left exactly as written, and a source the route cannot vouch for degrades to its alt text. A fenced code block is never split, so an example's `<div>` still renders as code.
 
 ## How it plugs in
 
@@ -29,6 +30,7 @@ The workspace root is resolved host-side (live session header first, session per
 - No folder browser and no binary editing; `canOpen` refuses any address outside a session workspace.
 - Create-on-save, never overwrite: a create is create-exclusive.
 - Unsaved work is lost on tab close or restart.
+- The HTML allowlist draws **block-level** authored markup: a line that starts with an allowed tag opens an HTML run, so `<kbd>` in the middle of a prose sentence is still the shipped renderer's literal text. An unclosed block stays Markdown rather than swallowing every section after it.
 
 ## Verify
 
@@ -37,7 +39,7 @@ node scripts/checks/check-client-bundles.mjs
 node scripts/checks/check-node-routes.mjs
 ```
 
-`check-client-bundles.mjs` drives the browser half through a real React runtime: the registration and guide order, the seats, the shadowed document body, the language-map guard and the Preview hand-off. `check-node-routes.mjs` drives the routes against a scratch workspace.
+`check-client-bundles.mjs` drives the browser half through a real React runtime: the registration and guide order, the seats, the shadowed document body, the language-map guard, the Preview hand-off, the authored-HTML splitter (fenced examples excluded, an unclosed block left as Markdown), the allowlist (a `<script>` dropped with its contents, `onerror` and `javascript:` refused, no HTML string injected) and the image resolver (a relative destination rewritten to `/api/file?path=`, an `http` one left alone, an unresolvable one left as alt text). `check-node-routes.mjs` drives the routes against a scratch workspace.
 
 ## Install
 

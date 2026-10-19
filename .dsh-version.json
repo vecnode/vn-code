@@ -42,7 +42,7 @@
       ]
     },
     "dsh-editor": {
-      "version": "0.1.0-alpha.13",
+      "version": "0.1.0-alpha.14",
       "rows": [
         "editor"
       ],
@@ -87,12 +87,12 @@
       ]
     },
     "dsh-audio": {
-      "version": "0.1.0-alpha.4",
+      "version": "0.1.0-alpha.5",
       "rows": [
         "audio"
       ],
       "rowOverrides": [],
-      "role": "Audio: WAV/AIFF/FLAC as a waveform - one row per channel, an adaptive ruler, a min/max envelope with the RMS core, zoom down to samples, selection, and playback on the audio clock - plus the Audio console for this machine's devices. Client-only, read in 2 MiB windows. See packages/dsh-audio/README.md.",
+      "role": "Audio + Media: the `audio` tab draws WAV/AIFF/FLAC as a waveform (one row per channel, an adaptive ruler, a min/max envelope with the RMS core, zoom down to samples, selection, playback on the audio clock), and the left column's **Media** panel (alpha.5, one row above Plugins) scans the conversation workspace for every audio, image, video and GIF file it can reach - bounded, grouped by kind, previewed inline through the harness's own `/api/file` route, and handed to the tab that owns the type on one click - with this machine's audio console under its Devices view. Client-only, read in 2 MiB windows. See packages/dsh-audio/README.md.",
       "uses": [
         "dsh-rightbar",
         "dsh-modal (the pack's shared dialog surface: the console's seat opens it lazily through ctx.get and never injects it, so a profile without it draws the console inline as a page instead)",

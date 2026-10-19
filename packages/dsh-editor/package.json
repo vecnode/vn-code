@@ -1,6 +1,6 @@
 {
   "name": "dsh-editor",
-  "version": "0.1.0-alpha.13",
+  "version": "0.1.0-alpha.14",
   "description": "Editor: the tab type for text and code - a vendored CodeMirror 6 fetched lazily - with create-on-save inside the session workspace through this package's own authenticated routes. Markdown is claimed too, and hands off to the shipped preview.",
   "type": "module",
   "main": "lib/index.js",
@@ -27,5 +27,5 @@
       ]
     }
   },
-  "license": "MIT"
+  "license": "AGPL-3.0-only"
 }

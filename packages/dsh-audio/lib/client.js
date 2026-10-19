@@ -112,7 +112,7 @@ window.__ModuleLoader__.load({
     /** The tab kind this package owns. */
     const KIND = 'audio'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.4'
+    const PLUGIN_VERSION = '0.1.0-alpha.5'
     /** Address grammar owned by @deepseek-ai/dsh-util-workspace-path. */
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
@@ -270,6 +270,41 @@ window.__ModuleLoader__.load({
 /* The seat: the panel the row selects. It is behind the dialog, and it is also
    the whole surface when the pack's dialog bundle is not installed. */
 .dsa-seat{height:100%;min-height:0;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;background:var(--dsw-alias-bg-l1,rgba(127,127,127,.055))}
+/* The Media panel (alpha.5): two views (Files / Devices) in one dialog. The
+   Files view is a LIST on the left and a PREVIEW on the right, and neither
+   column is allowed to widen the other: a 4000px screenshot is capped and a
+   long path truncates rather than pushing the dialog. */
+.dsa-media{flex:1;min-height:0;display:flex;flex-direction:column;box-sizing:border-box;color:var(--dsw-alias-label-primary,#ececec);font-size:13px;line-height:1.5}
+.dsa-mediaTabs{flex:none;display:flex;align-items:center;gap:6px;padding:8px 12px 0}
+.dsa-mediaTab{height:26px;box-sizing:border-box;display:inline-flex;align-items:center;padding:0 12px;border:.5px solid transparent;border-radius:13px;background:transparent;color:var(--dsw-alias-label-secondary,#a8a8a8);font:inherit;font-size:12px;cursor:pointer}
+.dsa-mediaTab[aria-selected="true"]{border-color:var(--dsw-alias-border-l3,rgba(127,127,127,.35));background:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.12));color:var(--dsw-alias-label-primary,#ececec)}
+.dsa-mediaBody{flex:1;min-height:0;display:flex;flex-direction:column;box-sizing:border-box}
+.dsa-mediaBar{flex:none;display:flex;align-items:center;gap:8px;padding:8px 16px}
+.dsa-mediaFacts{font-size:12px;color:var(--dsw-alias-label-secondary,#a8a8a8)}
+.dsa-mediaColumns{flex:1;min-height:0;display:flex}
+.dsa-mediaColumn{flex:1;min-width:0;min-height:0;overflow:auto;padding:0 16px 16px;box-sizing:border-box}
+.dsa-mediaColumn + .dsa-mediaColumn{border-left:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.22))}
+.dsa-mediaSide{display:flex;flex-direction:column;gap:12px}
+.dsa-mediaGroup{display:flex;flex-direction:column;gap:2px;margin-bottom:12px}
+.dsa-mediaList{display:flex;flex-direction:column;gap:1px}
+.dsa-mediaRow{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;padding:4px 8px;border:.5px solid transparent;border-radius:6px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dsa-mediaRow:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
+.dsa-mediaRow[data-active="true"]{border-color:var(--dsw-alias-brand-primary,#4d6bfe);background:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.12))}
+.dsa-mediaDot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.dsa-mediaRow[data-media-kind="audio"] .dsa-mediaDot{background:#4d6bfe}
+.dsa-mediaRow[data-media-kind="video"] .dsa-mediaDot{background:#c46bd6}
+.dsa-mediaRow[data-media-kind="image"] .dsa-mediaDot{background:#2fb47c}
+.dsa-mediaRow[data-media-kind="gif"] .dsa-mediaDot{background:#e0a02f}
+.dsa-mediaName{flex:none;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsa-mediaPath{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.dsa-mediaEmpty{padding:12px 0;color:var(--dsw-alias-label-secondary,#a8a8a8)}
+.dsa-mediaError{color:var(--dsw-alias-label-error,#e5484d)}
+.dsa-mediaImage,.dsa-mediaVideo{max-width:100%;max-height:46vh;object-fit:contain;border-radius:6px;background:rgba(0,0,0,.2)}
+.dsa-mediaAudio{width:100%}
+.dsa-mediaPick{display:flex;flex-direction:column;gap:4px;border-top:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.22));padding-top:10px}
+.dsa-mediaPickName{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsa-mediaPickPath{font-size:11.5px;color:var(--dsw-alias-label-tertiary,#8a8a8a);word-break:break-all}
+.dsa-mediaOpen{align-self:flex-start}
 /* The console fills whatever holds it: the pack's lg dialog (1120x800 with no
    padding of its own) or the central column, inline. */
 .dsa-console{flex:1;min-height:0;display:flex;flex-direction:column;box-sizing:border-box;color:var(--dsw-alias-label-primary,#ececec);font-size:13px;line-height:1.5}
@@ -3166,10 +3201,21 @@ window.__ModuleLoader__.load({
     const PANEL_SLOT = 'sidebar.panellist'
     /** The central column's keyed panels: the seat the row above needs. */
     const MAIN_SLOT = 'main'
-    /** The id shared by the sidebar row, the main seat and layout.selectPanel. */
-    const PANEL_ID = 'audio'
+    /**
+     * The id shared by the sidebar row, the main seat and layout.selectPanel.
+     *
+     * It is `media`, not `audio` (alpha.5): the row opens the MEDIA panel, whose
+     * Files view lists every audio, image, video and GIF file the conversation
+     * can reach, and whose Devices view is the audio console this id used to
+     * name on its own.
+     */
+    const PANEL_ID = 'media'
+    /** The label the shell prints in the row and in its tooltip. */
+    const PANEL_LABEL = 'Media'
     /** The panel list sorts ASCENDING and Plugins registers at 0: this is above it. */
     const PANEL_ORDER = -1
+    /** The right bar's navigation controller (resolved lazily, never required). */
+    const SIDEBAR_SERVICE = 'sidebarRight'
     /** The pack's shared dialog surface (dsh-modal), resolved lazily at click time. */
     const MODAL_SERVICE = 'modals'
     /** The service other bundles read this page's choice through. */
@@ -3989,11 +4035,37 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The Media row's glyph: a frame with a play mark over a note - the picture
+     * and the sound in one mark, because the row now opens both.
+     */
+    function MediaGlyph(props) {
+      const size = props !== null && props !== undefined && typeof props.size === 'number' ? props.size : 16
+      return h(
+        'svg',
+        {
+          width: size,
+          height: size,
+          viewBox: '0 0 16 16',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.2,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+          focusable: 'false',
+        },
+        h('rect', { x: 1.6, y: 2.6, width: 12.8, height: 10.8, rx: 1.6 }),
+        h('path', { d: 'M4.2 11.3l2.6-2.9 1.9 2.1 1.5-1.6 1.6 2.4' }),
+        h('circle', { cx: 5.4, cy: 5.6, r: 0.9 }),
+      )
+    }
+
+    /**
      * The left column's row: the glyph the shell draws inside its own button,
      * plus the ONE subscription this feature needs from a component.
      *
-     * WHY THE WATCHER LIVES HERE. `layout.selectPanel('audio')` is what the row's
-     * click does, so by the time the seat mounts the store already says `audio`
+     * WHY THE WATCHER LIVES HERE. `layout.selectPanel('media')` is what the row's
+     * click does, so by the time the seat mounts the store already says `media`
      * and the value that was there BEFORE it is gone - and only `layout` knows,
      * because it owns `panelInfo`. `layout` may also not be applied yet when this
      * bundle applies (client plugins arrive in boot-graph order), so this cannot
@@ -4001,9 +4073,9 @@ window.__ModuleLoader__.load({
      * from boot, long after the sidebar (and therefore layout) exists, and it is
      * exactly the thing whose click changes the answer.
      */
-    function AudioPanelRow(props) {
+    function MediaPanelRow(props) {
       useEffect(() => watchPanels(), [])
-      return h('span', { className: 'dsa-panelGlyph' }, h(SpeakerGlyph, { size: props !== null && props !== undefined && typeof props.size === 'number' ? props.size : 16 }))
+      return h('span', { className: 'dsa-panelGlyph' }, h(MediaGlyph, { size: props !== null && props !== undefined && typeof props.size === 'number' ? props.size : 16 }))
     }
 
     /** One section's heading: a title, the count, and room for one control. */
@@ -4691,18 +4763,93 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The session this panel browses.
+     *
+     * The `main` seat is rendered inside the Session scope, so the slot hands it
+     * `sessionId` and that is the answer in the normal case. The fallback covers
+     * the other one: the right bar's active tab carries the session in its own
+     * address, so a panel opened beside an open file still knows where it is.
+     * @returns the session id, or '' when this page is showing no conversation.
+     */
+    function sessionIdFor(props) {
+      if (props !== null && props !== undefined && typeof props.sessionId === 'string' && props.sessionId !== '') return props.sessionId
+      const ctx = pluginCtx
+      if (ctx === null || typeof ctx.get !== 'function') return ''
+      let bar = null
+      try {
+        bar = ctx.get(SIDEBAR_SERVICE)
+      } catch (err) {
+        bar = null
+      }
+      if (bar === null || bar === undefined || typeof bar.active !== 'function') return ''
+      try {
+        const tab = bar.active()
+        const address = tab !== null && tab !== undefined && typeof tab.contentId === 'string' ? tab.contentId : ''
+        const parsed = parseAudioAddress(address)
+        return parsed === null ? '' : parsed.sessionId
+      } catch (err) {
+        return ''
+      }
+    }
+
+    /** The address one listed file opens through (the session authorizes the read). */
+    function mediaAddress(sessionId, path) {
+      const segments = String(path)
+        .split('/')
+        .map((segment) => encodeURIComponent(segment))
+        .join('/')
+      return FILE_PREFIX + SESSION_SEGMENT + encodeURIComponent(sessionId) + '/' + segments
+    }
+
+    /**
+     * Hand one media file to the tab that owns its type.
+     *
+     * The registry routes it - this package only knows it as an address - so a
+     * WAV lands on the waveform, a PNG on the zooming image viewer and an MP4 on
+     * the player, and a format this pack claims nowhere still reaches the
+     * shipped preview. That is why the panel has an "open in a tab" and does not
+     * try to be the viewer for four formats.
+     * @returns '' on success, or the sentence to show.
+     */
+    function openMediaInBar(sessionId, item) {
+      const ctx = pluginCtx
+      if (sessionId === '') return 'Open a conversation first: this panel browses the files of a session.'
+      let bar = null
+      try {
+        bar = ctx !== null && typeof ctx.get === 'function' ? ctx.get(SIDEBAR_SERVICE) : null
+      } catch (err) {
+        bar = null
+      }
+      if (bar === null || bar === undefined || typeof bar.openResource !== 'function') {
+        return 'The right bar is not mounted, so there is no tab to open this in.'
+      }
+      try {
+        bar.openResource(mediaAddress(sessionId, item.path))
+        return ''
+      } catch (err) {
+        return messageOf(err)
+      }
+    }
+
+    /**
      * The main column's seat: the panel the sidebar row selects, and the only
-     * door to the console.
+     * door to the Media panel.
      *
      * The dialog is opened ON MOUNT, which is what makes the left-bar row behave
      * like a modal button. The seat underneath is not a dead end either: it
-     * carries its own "Open the console" control, so a dialog dismissed without
-     * the column being handed back can always be reopened.
+     * carries its own "Open the Media panel" control, so a dialog dismissed
+     * without the column being handed back can always be reopened.
      */
-    function AudioSeat(props) {
+    function MediaSeat(props) {
       const inline = props !== null && props !== undefined && props.inline === true
       const modals = serviceNow(MODAL_SERVICE)
       const hasModal = inline !== true && modals !== null && modals !== undefined && typeof modals.open === 'function'
+      const sessionId = sessionIdFor(props)
+      // The dialog's content is a FUNCTION the service calls on every render, so
+      // it reads the CURRENT session instead of the one captured when the button
+      // was pressed - a session switch must not reopen the dialog.
+      const sessionRef = useRef(sessionId)
+      sessionRef.current = sessionId
       const [version, setVersion] = useState(0)
       // The service goes in a REF rather than in the effect's dependencies.
       // `version` is what re-opens the dialog, and a service whose identity
@@ -4717,7 +4864,19 @@ window.__ModuleLoader__.load({
         let live = true
         let pending = null
         try {
-          pending = service.open({ title: '', size: 'lg', content: (helpers) => h(AudioConsole, { close: helpers.close }) })
+          pending = service.open({
+            title: 'Media',
+            size: 'lg',
+            content: (helpers) =>
+              h(MediaPanel, {
+                sessionId: sessionRef.current,
+                close: helpers.close,
+                onOpen: (item) => {
+                  const failure = openMediaInBar(sessionRef.current, item)
+                  if (failure === '') helpers.close(null)
+                },
+              }),
+          })
         } catch (err) {
           restorePanel()
           return undefined
@@ -4737,18 +4896,416 @@ window.__ModuleLoader__.load({
         }
       }, [hasModal, version])
       if (!hasModal) {
-        return h('div', { className: 'dsa-seat', 'data-audio-seat': 'inline' }, h(AudioConsole, { close: () => restorePanel() }))
+        return h('div', { className: 'dsa-seat', 'data-media-seat': 'inline' }, h(MediaPanel, {
+          sessionId: sessionId,
+          close: () => restorePanel(),
+          onOpen: (item) => openMediaInBar(sessionId, item),
+        }))
       }
       return h(
         'div',
-        { className: 'dsa-seat', 'data-audio-seat': 'dialog' },
+        { className: 'dsa-seat', 'data-media-seat': 'dialog' },
         h(
           'div',
           { className: 'dsa-state' },
-          h('div', { className: 'dsa-stateTitle' }, 'The audio console opens in a dialog'),
-          h('div', { className: 'dsa-stateNote' }, 'Devices, the output this page plays through, and a tone that proves it.'),
-          h('button', { type: 'button', className: 'dsa-btn', 'data-audio-action': 'open-console', onClick: () => setVersion((value) => value + 1) }, 'Open the console'),
+          h('div', { className: 'dsa-stateTitle' }, 'The Media panel opens in a dialog'),
+          h('div', { className: 'dsa-stateNote' }, 'Every audio, image, video and GIF file this conversation can reach \u2014 and, under Devices, this machine\u2019s audio devices.'),
+          h('button', { type: 'button', className: 'dsa-btn', 'data-media-action': 'open-panel', onClick: () => setVersion((value) => value + 1) }, 'Open the Media panel'),
         ),
+      )
+    }
+
+    // =====================================================================
+    // 13b. The Media panel: every media file this conversation can reach
+    //
+    // WHY THIS IS NOT A FILE BROWSER. The Files tab already draws the whole
+    // workspace tree; repeating it behind a second button would be two doors to
+    // one room. What this panel answers is the question a MEDIA surface owes:
+    // "what audio, image, video and GIF is in here, and let me look at it" - so
+    // it scans, it filters by kind, it previews the pick in place, and it hands
+    // the file to the tab that owns its type when the person wants the real
+    // viewer (dsh-audio's waveform, dsh-image's zoom, dsh-video's player).
+    //
+    // The scan is BOUNDED and it says so. A workspace can hold a hundred
+    // thousand files under node_modules, so the walk skips the folders no media
+    // lives in, stops at a depth and a directory budget, and reports the cut in
+    // the header instead of pretending the list is complete. Every read goes
+    // through the harness's `workspaceFiles` remote with the session id, so the
+    // host decides what is readable - this panel names no path it did not get
+    // from that listing.
+    // =====================================================================
+    /** The groups the list draws, in the order it draws them. */
+    const MEDIA_GROUPS = [
+      { kind: 'image', label: 'Images' },
+      { kind: 'gif', label: 'GIFs' },
+      { kind: 'audio', label: 'Audio' },
+      { kind: 'video', label: 'Video' },
+    ]
+    /** Suffixes per group. A GIF has its own group AND is an image. */
+    const MEDIA_SUFFIXES = {
+      image: ['png', 'jpg', 'jpeg', 'webp', 'avif', 'bmp', 'ico', 'svg', 'tif', 'tiff'],
+      gif: ['gif'],
+      audio: ['wav', 'wave', 'aif', 'aiff', 'aifc', 'flac', 'mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'weba', 'mid', 'midi'],
+      video: ['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', 'wmv', 'flv', 'ogv', 'ts', '3gp', 'mpg', 'mpeg'],
+    }
+    /** The suffix-to-kind index, built once. */
+    const MEDIA_KIND_BY_SUFFIX = (() => {
+      const index = {}
+      for (const group of MEDIA_GROUPS) {
+        for (const suffix of MEDIA_SUFFIXES[group.kind]) index[suffix] = group.kind
+      }
+      return index
+    })()
+    /** Folders no media file lives in, skipped so the budget is spent on real ones. */
+    const MEDIA_SKIP_DIRECTORIES = new Set([
+      'node_modules', '.git', '.hg', '.svn', 'dist', 'build', 'target', '.next', '.nuxt', '.cache', '.venv',
+      'venv', '__pycache__', '.gradle', '.idea', '.vs', 'coverage', '.turbo', 'vendor',
+    ])
+    /** The scan's budget: depth, directories visited, files returned. */
+    const MEDIA_SCAN_DEPTH = 5
+    const MEDIA_SCAN_DIRECTORIES = 120
+    const MEDIA_SCAN_FILES = 120
+
+    /**
+     * The media kind a name belongs to, or '' when it is not media at all.
+     * @param name - a file name or a path; only the suffix is read.
+     */
+    function classifyMediaPath(name) {
+      const suffix = extensionOf(name === null || name === undefined ? '' : name)
+      return MEDIA_KIND_BY_SUFFIX[suffix] === undefined ? '' : MEDIA_KIND_BY_SUFFIX[suffix]
+    }
+
+    /** The URL a browser can load an absolute file through (the harness's own route). */
+    function mediaFileUrl(absolutePath) {
+      if (typeof absolutePath !== 'string' || absolutePath === '') return ''
+      if (typeof document === 'undefined' || typeof document.baseURI !== 'string' || !/^https?:/i.test(document.baseURI)) return ''
+      try {
+        return new URL('api/file?path=' + encodeURIComponent(absolutePath), document.baseURI).href
+      } catch (err) {
+        return ''
+      }
+    }
+
+    /** Join a workspace-relative directory and a child name with one `/`. */
+    function joinWorkspacePath(directory, name) {
+      if (directory === '' || directory === '.') return name
+      return directory.replace(/[/\\]+$/, '') + '/' + name
+    }
+
+    /**
+     * Walk the session workspace and collect the media files in it.
+     *
+     * Breadth-first, so a shallow screenshot folder is found before a deep
+     * archive one; every failure inside one directory is stepped over rather
+     * than ending the walk, because one unreadable folder is not an empty
+     * workspace.
+     * @returns `{ items: [{ path, name, kind }], truncated }`
+     */
+    async function scanMedia(files, sessionId, signal) {
+      const queue = [{ path: '', depth: 0 }]
+      const found = []
+      let directories = 0
+      let truncated = false
+      while (queue.length > 0) {
+        if (signal !== undefined && signal.aborted === true) break
+        const current = queue.shift()
+        directories += 1
+        if (directories > MEDIA_SCAN_DIRECTORIES) {
+          truncated = true
+          break
+        }
+        let listing = null
+        // The root is asked for as the EMPTY path first (a workspace-relative
+        // child carries no prefix, which is what the address grammar wants) and
+        // as `.` second, because a backend that refuses the empty one still has
+        // an answer for the dot. No other directory has two spellings.
+        for (const candidate of current.path === '' ? ['', '.'] : [current.path]) {
+          try {
+            const result = await files.list(sessionId, candidate, signal)
+            listing = result !== null && result !== undefined && result.ok === true ? result.value : null
+          } catch (err) {
+            listing = null
+          }
+          if (listing !== null && listing !== undefined) break
+        }
+        if (listing === null || listing === undefined) continue
+        if (listing.truncated === true) truncated = true
+        const entries = Array.isArray(listing.entries) ? listing.entries : []
+        for (const entry of entries) {
+          if (entry === null || entry === undefined || typeof entry.name !== 'string') continue
+          const child = joinWorkspacePath(current.path, entry.name)
+          if (entry.type === 'directory') {
+            if (MEDIA_SKIP_DIRECTORIES.has(entry.name.toLowerCase())) continue
+            if (current.depth + 1 > MEDIA_SCAN_DEPTH) {
+              truncated = true
+              continue
+            }
+            queue.push({ path: child, depth: current.depth + 1 })
+            continue
+          }
+          if (entry.type !== 'file') continue
+          const kind = classifyMediaPath(entry.name)
+          if (kind === '') continue
+          found.push({ path: child, name: entry.name, kind: kind })
+          if (found.length >= MEDIA_SCAN_FILES) {
+            truncated = true
+            break
+          }
+        }
+        if (found.length >= MEDIA_SCAN_FILES) break
+      }
+      found.sort((left, right) => {
+        const byKind = MEDIA_GROUPS.findIndex((group) => group.kind === left.kind) - MEDIA_GROUPS.findIndex((group) => group.kind === right.kind)
+        if (byKind !== 0) return byKind
+        return left.path.localeCompare(right.path)
+      })
+      return { items: found, truncated: truncated }
+    }
+
+    /** One file row: what it is, what it is called and where it lives. */
+    function MediaRow(props) {
+      const item = props.item
+      return h(
+        'button',
+        {
+          type: 'button',
+          role: 'listitem',
+          className: 'dsa-mediaRow',
+          'data-media-kind': item.kind,
+          'data-media-path': item.path,
+          'data-active': props.active === true ? 'true' : undefined,
+          title: item.path,
+          onClick: () => props.onSelect(item),
+        },
+        h('span', { className: 'dsa-mediaDot', 'aria-hidden': true }),
+        h('span', { className: 'dsa-mediaName' }, item.name),
+        h('span', { className: 'dsa-mediaPath' }, item.path),
+      )
+    }
+
+    /** The preview of the selected file, drawn by the element its kind owns. */
+    function MediaPreview(props) {
+      const item = props.item
+      if (item === null || item === undefined) {
+        return h('div', { className: 'dsa-mediaEmpty' }, 'Pick a file to see it here.')
+      }
+      if (props.preview.phase === 'loading') {
+        return h('div', { className: 'dsa-mediaEmpty' }, 'Reading ' + item.name + '\u2026')
+      }
+      if (props.preview.phase === 'failed') {
+        return h('div', { className: 'dsa-mediaEmpty dsa-mediaError', 'data-media-preview': 'failed' }, props.preview.error)
+      }
+      if (props.preview.url === '') {
+        return h('div', { className: 'dsa-mediaEmpty' }, 'This file has no preview this page can load.')
+      }
+      const url = props.preview.url
+      if (item.kind === 'audio') return h('audio', { className: 'dsa-mediaAudio', controls: true, src: url, preload: 'metadata' })
+      if (item.kind === 'video') return h('video', { className: 'dsa-mediaVideo', controls: true, src: url, preload: 'metadata' })
+      return h('img', { className: 'dsa-mediaImage', src: url, alt: item.name })
+    }
+
+    /**
+     * The panel, stateful half: scan, group, preview, hand off.
+     *
+     * @param props - `{ sessionId, onOpen, close }`; `onOpen(address)` opens the
+     *   file in the tab type that claims it and is what makes the viewers the
+     *   real surface rather than this preview.
+     */
+    function MediaLibrary(props) {
+      const sessionId = typeof props.sessionId === 'string' ? props.sessionId : ''
+      const files = workspaceFiles
+      const [scan, setScan] = useState({ phase: 'loading', items: [], truncated: false, error: '' })
+      const [reload, setReload] = useState(0)
+      const [selected, setSelected] = useState(null)
+      const [preview, setPreview] = useState({ phase: 'idle', url: '', error: '' })
+
+      useEffect(() => {
+        if (sessionId === '') {
+          setScan({ phase: 'failed', items: [], truncated: false, error: 'This panel browses the files of a conversation. Open a conversation, then press Media again.' })
+          return undefined
+        }
+        if (files === null || files === undefined || typeof files.list !== 'function') {
+          setScan({ phase: 'failed', items: [], truncated: false, error: 'This harness exposes no workspaceFiles remote, so there is nothing to list.' })
+          return undefined
+        }
+        let live = true
+        const controller = new AbortController()
+        setScan({ phase: 'loading', items: [], truncated: false, error: '' })
+        scanMedia(files, sessionId, controller.signal).then(
+          (result) => {
+            if (live) setScan({ phase: 'ready', items: result.items, truncated: result.truncated, error: '' })
+          },
+          (err) => {
+            if (live) setScan({ phase: 'failed', items: [], truncated: false, error: messageOf(err) })
+          },
+        )
+        return () => {
+          live = false
+          controller.abort()
+        }
+      }, [sessionId, reload])
+
+      // The preview needs the file's ABSOLUTE path: the harness's file route
+      // only serves an absolute one, and the listing carries workspace-relative
+      // names. One stat per pick, never per row.
+      useEffect(() => {
+        if (selected === null) {
+          setPreview({ phase: 'idle', url: '', error: '' })
+          return undefined
+        }
+        if (files === null || files === undefined || typeof files.stat !== 'function') {
+          setPreview({ phase: 'failed', url: '', error: 'This harness cannot stat a file, so it cannot be previewed here.' })
+          return undefined
+        }
+        let live = true
+        const controller = new AbortController()
+        setPreview({ phase: 'loading', url: '', error: '' })
+        files.stat(sessionId, selected.path, controller.signal).then(
+          (result) => {
+            if (!live) return
+            const absolute = result !== null && result !== undefined && result.ok === true && result.value ? result.value.absolutePath : ''
+            const url = mediaFileUrl(absolute)
+            setPreview(
+              url === ''
+                ? { phase: 'failed', url: '', error: 'The host did not report an absolute path for this file, so it cannot be shown inline.' }
+                : { phase: 'ready', url: url, error: '' },
+            )
+          },
+          (err) => {
+            if (live) setPreview({ phase: 'failed', url: '', error: messageOf(err) })
+          },
+        )
+        return () => {
+          live = false
+          controller.abort()
+        }
+      }, [selected, sessionId])
+
+      const counts = {}
+      for (const group of MEDIA_GROUPS) counts[group.kind] = 0
+      for (const item of scan.items) counts[item.kind] = (counts[item.kind] || 0) + 1
+      const total = scan.items.length
+      const head =
+        scan.phase === 'loading'
+          ? 'Scanning\u2026'
+          : scan.phase === 'failed'
+            ? 'Unavailable'
+            : total === 0
+              ? 'no media'
+              : total + (total === 1 ? ' file' : ' files') + (scan.truncated ? ' (list cut)' : '')
+
+      const groups = []
+      for (const group of MEDIA_GROUPS) {
+        const items = scan.items.filter((item) => item.kind === group.kind)
+        if (items.length === 0) continue
+        groups.push(
+          h(
+            'section',
+            { key: 'g-' + group.kind, className: 'dsa-mediaGroup', 'data-media-group': group.kind },
+            h(SectionHead, { title: group.label, count: String(items.length) }, null),
+            h('div', { className: 'dsa-mediaList', role: 'list' }, items.map((item) => h(MediaRow, {
+              key: 'r-' + item.path,
+              item: item,
+              active: selected !== null && selected.path === item.path,
+              onSelect: setSelected,
+            }))),
+          ),
+        )
+      }
+
+      return h(
+        'div',
+        { className: 'dsa-mediaBody', 'data-media-view': 'library' },
+        h(
+          'div',
+          { className: 'dsa-mediaBar' },
+          h('span', { className: 'dsa-mediaFacts', 'data-media-count': String(total) }, head),
+          h('span', { className: 'dsa-spacer' }),
+          h('button', { type: 'button', className: 'dsa-btn', 'data-media-action': 'rescan', onClick: () => setReload((value) => value + 1) }, 'Rescan'),
+        ),
+        scan.phase === 'failed'
+          ? h('div', { className: 'dsa-mediaEmpty dsa-mediaError', 'data-media-state': 'failed' }, scan.error)
+          : null,
+        h(
+          'div',
+          { className: 'dsa-mediaColumns' },
+          h(
+            'div',
+            { className: 'dsa-mediaColumn', 'data-media-column': 'list' },
+            scan.phase === 'loading' ? h('div', { className: 'dsa-mediaEmpty' }, 'Looking for audio, image, video and GIF files\u2026') : null,
+            scan.phase === 'ready' && total === 0
+              ? h('div', { className: 'dsa-mediaEmpty' }, 'No audio, image, video or GIF files are in this workspace.')
+              : null,
+            groups,
+          ),
+          h(
+            'div',
+            { className: 'dsa-mediaColumn dsa-mediaSide', 'data-media-column': 'preview' },
+            h(MediaPreview, { item: selected, preview: preview }),
+            selected === null
+              ? null
+              : h(
+                  'div',
+                  { className: 'dsa-mediaPick' },
+                  h('div', { className: 'dsa-mediaPickName' }, selected.name),
+                  h('div', { className: 'dsa-mediaPickPath' }, selected.path),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'dsa-btn dsa-mediaOpen',
+                      'data-media-action': 'open',
+                      onClick: () => props.onOpen(selected),
+                    },
+                    'Open in a tab',
+                  ),
+                ),
+          ),
+        ),
+      )
+    }
+
+    /**
+     * THE MEDIA PANEL: the library, and the device console that used to be the
+     * whole button.
+     *
+     * Two views in one dialog rather than two rows in the left column. The audio
+     * console is about THIS MACHINE's devices and the library is about THIS
+     * WORKSPACE's files; both are "media", and a second left-bar row would have
+     * made the person decide which door a picture lives behind.
+     */
+    function MediaPanel(props) {
+      const [view, setView] = useState('library')
+      const close = props !== null && props !== undefined && typeof props.close === 'function' ? props.close : () => {}
+      const tabs = [
+        { id: 'library', label: 'Files' },
+        { id: 'devices', label: 'Devices' },
+      ]
+      return h(
+        'div',
+        { className: 'dsa-media', 'data-media-view': view },
+        h(
+          'div',
+          { className: 'dsa-mediaTabs', role: 'tablist' },
+          tabs.map((tab) =>
+            h(
+              'button',
+              {
+                key: tab.id,
+                type: 'button',
+                role: 'tab',
+                className: 'dsa-mediaTab',
+                'data-media-tab': tab.id,
+                'aria-selected': view === tab.id ? 'true' : 'false',
+                onClick: () => setView(tab.id),
+              },
+              tab.label,
+            ),
+          ),
+        ),
+        view === 'devices'
+          ? h(AudioConsole, { close: close })
+          : h(MediaLibrary, { sessionId: props.sessionId, onOpen: props.onOpen }),
       )
     }
 
@@ -4906,12 +5463,12 @@ window.__ModuleLoader__.load({
         )
         // The left column's row, ONE ABOVE Plugins, and the seat its click needs.
         ctx.effect(
-          () => ctx.slots.inject(PANEL_SLOT, () => ctx.slots.register({ name: PANEL_SLOT, id: PANEL_ID, order: PANEL_ORDER, label: 'Audio', inject: () => ({}) }, AudioPanelRow)),
-          'dsh-audio: the left column row',
+          () => ctx.slots.inject(PANEL_SLOT, () => ctx.slots.register({ name: PANEL_SLOT, id: PANEL_ID, order: PANEL_ORDER, label: PANEL_LABEL, inject: () => ({}) }, MediaPanelRow)),
+          'dsh-audio: the left column Media row',
         )
         ctx.effect(
-          () => ctx.slots.inject(MAIN_SLOT, () => ctx.slots.register({ name: MAIN_SLOT, key: PANEL_ID, inject: () => ({}) }, AudioSeat)),
-          'dsh-audio: the panel seat',
+          () => ctx.slots.inject(MAIN_SLOT, () => ctx.slots.register({ name: MAIN_SLOT, key: PANEL_ID, inject: () => ({}) }, MediaSeat)),
+          'dsh-audio: the Media panel seat',
         )
         // Every media element the page starts joins the chosen output, whether or
         // not the console has been opened in this session.
@@ -5024,8 +5581,20 @@ window.__ModuleLoader__.load({
       DeviceSection: DeviceSection,
       ToneSection: ToneSection,
       InputTestSection: InputTestSection,
-      AudioPanelRow: AudioPanelRow,
-      AudioSeat: AudioSeat,
+      AudioPanelRow: MediaPanelRow,
+      AudioSeat: MediaSeat,
+      MediaPanelRow: MediaPanelRow,
+      MediaSeat: MediaSeat,
+      MediaPanel: MediaPanel,
+      MediaLibrary: MediaLibrary,
+      MediaPreview: MediaPreview,
+      PANEL_LABEL: PANEL_LABEL,
+      classifyMediaPath: classifyMediaPath,
+      scanMedia: scanMedia,
+      mediaAddress: mediaAddress,
+      mediaFileUrl: mediaFileUrl,
+      MEDIA_GROUPS: MEDIA_GROUPS,
+      MEDIA_SCAN_FILES: MEDIA_SCAN_FILES,
     }
     return module.exports
   },

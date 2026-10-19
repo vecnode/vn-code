@@ -2,10 +2,9 @@
 
 ![Language: JavaScript](https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black)
 ![Language: Rust](https://img.shields.io/badge/language-Rust-000000?logo=rust&logoColor=white)    
-![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Platforms: Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)      
 ![DeepSeek Harness 0.2.0-rc.2](https://img.shields.io/badge/dsh-0.2.0--rc.2-4f8cff)
-[![egui: 0.36.2, planned](https://img.shields.io/badge/shell-egui_0.36.2_planned-4f8cff)](docs/PLAN-egui-shell.md)
 
 Agent-Human IDE/ADE ⌨️    
 Web and Desktop versions, bundles [`Plugins`](packages/),  [`Skills`](docs/) and [`Interfaces`](docs/)
@@ -110,9 +109,17 @@ rebuild, review the diff, run the package's own check.
 
 ## Security & license
 
-- MIT - see [LICENSE](LICENSE). Plugins are authored by **vecnode**.
-- [SECURITY.md](SECURITY.md): the threat model, the launch token, what the pack
-  deliberately does not do, and how `check-no-secrets.mjs` keeps a credential out
-  of a commit. Report a vulnerability privately, as described there.
+- **AGPL-3.0-only** - see [LICENSE](LICENSE). Copyright (C) 2026 **vecnode**.
+  The pack is copyleft: you may run, study, change and share it, and a version
+  you **distribute or offer over a network** must carry its source under the same
+  license. That is deliberate - vn-code is not to become a closed product on
+  somebody else's bench. A commercial exception is available on request; see
+  [CONTRIBUTING.md](CONTRIBUTING.md) for the CLA that keeps that possible, and
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the vendored trees that keep
+  their own licenses (Apache-2.0, MIT, LGPL-2.1) and are **not** relicensed by this.
+- [SECURITY.md](SECURITY.md): the threat model, the launch token, the code this pack
+  runs on purpose (`dsh-supercollider`'s interpreter and its `eval` route among them),
+  what the pack deliberately does not do, and how `check-no-secrets.mjs` keeps a
+  credential out of a commit. Report a vulnerability privately, as described there.
 - [ARCHITECTURE.md](ARCHITECTURE.md) is the deep dive; [docs/](docs) holds install,
   distribute, compatibility and per-host notes.

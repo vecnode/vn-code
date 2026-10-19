@@ -1,6 +1,6 @@
-# dsh-audio (alpha.4)
+# dsh-audio (alpha.5)
 
-**Audio opens as a waveform, and this machine's audio devices sit one click away in the left column.** The right bar's `audio` tab covers **WAV/RIFF, AIFF/AIFC and FLAC**, instead of the preview's bare `<audio>` element. The **Audio console** is an **Audio** row in the left column's global-panel list (`sidebar.panellist`) at `order: -1`, above Plugins. Client-only: bytes come from the harness's `workspaceFiles` remote, so it ships no route and no host state; `lib/index.js` is one no-op row.
+**Audio opens as a waveform — and the left column's Media panel lists every media file the conversation can reach.** The right bar's `audio` tab covers **WAV/RIFF, AIFF/AIFC and FLAC**, instead of the preview's bare `<audio>` element. The **Media** panel is a **Media** row in the left column's global-panel list (`sidebar.panellist`) at `order: -1`, above Plugins: its **Files** view scans the workspace for audio, image, video and GIF files and previews them in place, and its **Devices** view is this machine's audio console. Client-only: bytes come from the harness's `workspaceFiles` remote, so it ships no route and no host state; `lib/index.js` is one no-op row.
 
 ## What it adds
 
@@ -8,6 +8,14 @@
 - **Zoom by layout.** `pxPerSecond` **1 to 500000**, layout capped inside 16 M CSS px; `+`/`-`, **Fit**, **Ctrl/Cmd+wheel** at the pointer, **bare wheel scrolls sideways**, stems past ~3 px per sample. A 1-2-5 ruler runs 0.1 ms to 1 h; the scale is **linear or dBFS** (72 dB); **Shift+wheel** gains 0.25x to 16x.
 - **Playback and selection.** WebAudio with the **playhead on the audio clock** (`currentTime - startedAt + from`), never a CSS animation; a selection plays **looped** and `Space` toggles it. A drag selects; the status line reports duration, peak and RMS **naming its source** (samples or N-sample buckets).
 - **Refusals.** Unsupported codecs refused **by name** (`IMA ADPCM`, `MACE`, `GSM`, `ima4`); a `fmt ` chunk whose **block align is narrower than one frame** refused with its stride; a **zero-size chunk** stepped over, not ending the WAV/AIFF/FLAC walk; a truncated file draws what exists and says the tail is **UNKNOWN**.
+
+## The Media panel
+
+The left column's row is **Media**, not Audio, and it opens one dialog with two views.
+
+- **Files** (the default) lists the media in this conversation's workspace: **images, GIFs, audio and video**, grouped in that order with a count per group. The walk is **bounded and says so** — depth 5, 120 directories, 120 files, `node_modules`/`.git`/`dist`/`vendor`/`__pycache__` and their kin skipped — and a cut list is labelled `(list cut)` in the header rather than passed off as complete. Every listing comes from the harness's own `workspaceFiles.list` under the session id, so the host decides what is readable; the panel never names a path it was not given.
+- **The pick previews in place.** An image draws as an `<img>`, a GIF too, a video as a `<video controls>`, audio as an `<audio controls>`, all through the harness's authenticated `/api/file?path=` route against the file's **absolute path** (one `stat` per pick, never per row). **Open in a tab** then hands the `dsh-resource://file/session/<id>/<path>` address to the right bar's registry, so a WAV lands on this package's own waveform, a PNG on dsh-image's zoom, an MP4 on dsh-video's player, and a format this pack claims nowhere still reaches the shipped preview.
+- **Devices** is the audio console described below, unchanged.
 
 ## The Audio console
 
@@ -19,7 +27,7 @@
 |---|---|
 | `id` / kind | `dsh-audio` / `audio` |
 | `patterns` / `priority` | `['*.wav','*.wave','*.aif','*.aiff','*.aifc','*.flac']` / `extension` |
-| seats | `sidebar.right.pane.tab` / `.title`; console `sidebar.panellist` row + `main` seat (`audio`, `order: -1`) |
+| seats | `sidebar.right.pane.tab` / `.title`; panel `sidebar.panellist` row + `main` seat (`media`, `order: -1`), whose dialog carries the Files and Devices views |
 | services | `slots`, `sidebarRightTabs`, `remote.workspaceFiles` (lazily `modals`, `layout`); provides `audioDevices`; no guide entry, disabled row, route or dependency |
 
 The audio suffixes at `extension` beat the shipped preview's `text` type at `fallback`, while every other file keeps its surface (MP3, M4A and Ogg included). **One address shape:** `dsh-resource://file/session/<sessionId>/<path>`; there is no package-owned absolute form, since `session` authorizes the read.
@@ -37,6 +45,7 @@ The audio suffixes at `extension` beat the shipped preview's `text` type at `fal
 | zoom / playback | 1 to 500000 px/s (layout inside 16 M CSS px); playback under 32 MiB and under 24 M samples - a larger file still draws its waveform and disables the transport with the reason |
 | FLAC | up to the single-read cap (32 MiB by default); past it the facts are shown and the waveform refused |
 | not claimed, no editing | MP3, M4A/AAC, Ogg/Opus and unknown codec tags; no trim, normalize, convert, re-encode or save |
+| Media panel | the scan stops at depth 5 / 120 directories / 120 files inside the workspace, skips build and package folders, and labels a cut list; the preview is one file at a time and the workspace is the only root (no absolute or outside paths) |
 
 ## Verify
 
@@ -46,7 +55,7 @@ node scripts/checks/check-client-bundles.mjs
 node scripts/checks/check-audio-browser.mjs
 ```
 
-`check-client-bundles.mjs` drives the bundle's **pure half** (`exports.__internals`) against RIFF/WAVE, IFF FORM and FLAC bytes it builds itself; `check-audio-browser.mjs` needs Chromium and skips loudly without it.
+`check-client-bundles.mjs` drives the bundle's **pure half** (`exports.__internals`) against RIFF/WAVE, IFF FORM and FLAC bytes it builds itself, and drives the Media panel's half too: the suffix→kind index, the session-scoped address a row opens, the `/api/file` URL an absolute path becomes, a scan over a scripted listing (one level down, `node_modules` skipped, groups in order, the cut flag reported), and the panel and seat renders (both views offered, a seat with no dialog still draws a working surface). `check-audio-browser.mjs` needs Chromium and skips loudly without it.
 
 ## Install
 

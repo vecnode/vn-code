@@ -106,6 +106,10 @@ let failures = 0
 // The last Menu the stand-in primitives rendered, so a check can read the props
 // a bundle handed it (its items and its onSelect) instead of only the markup.
 let lastMenuProps = null
+// The last MarkdownText a bundle rendered. dsh-editor's rendered Markdown body
+// hands the primitive its `pathImages` vocabulary (alpha.14), and the resolver
+// is the half a static render cannot show, so a check reads it back from here.
+let lastMarkdownProps = null
 // ... and the same for the primitives whose interesting half is a PORTAL the
 // server renderer cannot follow.
 function check(label, actual, expected) {
@@ -202,6 +206,11 @@ function fakeDocument() {
     removeEventListener() {},
     activeElement: null,
     contains: () => false,
+    // The page's own origin. A real browser always has one, and dsh-editor's
+    // rendered Markdown body builds an image URL against it (`api/file?path=`,
+    // the harness's authenticated route), so the stub must carry it or that
+    // resolution is untestable here.
+    baseURI: 'http://127.0.0.1:3080/',
   }
 }
 
@@ -307,7 +316,10 @@ function loadBundle(relative, extraRequire) {
       const Text =
         extraRequire && extraRequire.withoutMarkdownText === true
           ? undefined
-          : React.memo((props) => props.text)
+          : React.memo((props) => {
+              lastMarkdownProps = props
+              return props.text
+            })
       // Modal renders nothing while closed and its title / description / body /
       // footer when open, like the real one (which portals to document.body).
       const Dialog = (props) => {
@@ -830,6 +842,92 @@ const renderedMarkdown = renderToStaticMarkup(
 check('rendered body draws the page', renderedMarkdown.includes('data-document-markdown') && renderedMarkdown.includes('# Title'))
 check('rendered body offers Edit', renderedMarkdown.includes('data-markdown-edit') && renderedMarkdown.includes('>Edit<'))
 check('rendered body ignores non-text', renderToStaticMarkup(h(MarkdownPreviewBody, { t: markdownT, content: { kind: 'image' } })), '')
+
+// Author and images (alpha.14). The shipped primitive draws authored HTML as
+// literal text and only resolves an image when it is handed a `pathImages`
+// vocabulary, so both halves are this body's job: an HTML block is parsed and
+// rebuilt as elements over an allowlist, and a relative image destination is
+// rewritten to the harness's authenticated file route through the document's
+// OWN absolute path (read off the resource, exactly as the shipped body does).
+const editorInternals = editor.exports.__internals
+check(
+  'html splitter: plain Markdown is one run',
+  editorInternals.splitHtmlBlocks('# Title\n\nsome text').map((block) => block.kind).join(','),
+  'markdown',
+)
+const authoredDoc = '# Title\n\n<div align="center"><img src="docs/shot.png" alt="shot"></div>\n\nAfter'
+check(
+  'html splitter: authored block is its own run',
+  editorInternals.splitHtmlBlocks(authoredDoc).map((block) => block.kind).join(','),
+  'markdown,html,markdown',
+)
+check(
+  'html splitter: a fenced example is never split',
+  editorInternals.splitHtmlBlocks('```html\n<div>x</div>\n```').map((block) => block.kind).join(','),
+  'markdown',
+)
+check(
+  'html splitter: a multi-line block stays whole',
+  editorInternals.splitHtmlBlocks('<div>\n  <p>a</p>\n\n  <p>b</p>\n</div>').length,
+  1,
+)
+check('html splitter: an unclosed div stays Markdown', editorInternals.splitHtmlBlocks('<div>\nloose').map((b) => b.kind).join(','), 'markdown')
+const authoredBody = renderToStaticMarkup(
+  h(MarkdownPreviewBody, {
+    t: markdownT,
+    content: { kind: 'text', text: authoredDoc, eof: true },
+    resourceAddress: 'dsh-resource://file/session/s1/readme.md',
+    useTabInfo: () => ({ tab: { id: 'tab7' } }),
+    useResource: () => ({ value: { absolutePath: '/work/project/readme.md' } }),
+    edit: markdownInjected.edit,
+  }),
+)
+check('authored HTML is DRAWN, not printed', authoredBody.includes('<div align="center">') && !authoredBody.includes('&lt;div'), true)
+check(
+  'a relative image resolves through the file route',
+  authoredBody.includes('src="http://127.0.0.1:3080/api/file?path=%2Fwork%2Fproject%2Fdocs%2Fshot.png"'),
+  true,
+)
+check('the image keeps its alt text', authoredBody.includes('alt="shot"'), true)
+// The Markdown half gets the same vocabulary: the primitive refuses a local
+// destination without it, which is why images were missing before alpha.14.
+check('Markdown images get the resolver', lastMarkdownProps !== null && typeof lastMarkdownProps.pathImages.resolve, 'function')
+check(
+  'the resolver agrees with the HTML rewrite',
+  lastMarkdownProps.pathImages.resolve('docs/shot.png'),
+  'http://127.0.0.1:3080/api/file?path=%2Fwork%2Fproject%2Fdocs%2Fshot.png',
+)
+check('an http image is left alone', editorInternals.markdownImageUrl('http://127.0.0.1:3080/', '/w/r.md', 'https://x.test/a.png'), 'https://x.test/a.png')
+check(
+  'a javascript: image is refused',
+  editorInternals.markdownImageUrl('http://127.0.0.1:3080/', '/w/r.md', 'javascript:alert(1)') === undefined,
+  true,
+)
+check(
+  'an unresolvable relative image stays alt text',
+  editorInternals.markdownImageUrl('http://127.0.0.1:3080/', undefined, 'a.png') === undefined,
+  true,
+)
+const hostileNodes = editorInternals.parseHtmlFragment(
+  '<div><script>alert(1)</script><img src="x.png" onerror="alert(2)"><a href="javascript:alert(3)">x</a></div>',
+)
+const hostileMarkup = renderToStaticMarkup(
+  h(
+    'div',
+    null,
+    editorInternals.renderHtmlNodes(
+      hostileNodes,
+      (value) => editorInternals.markdownImageUrl('http://127.0.0.1:3080/', '/w/r.md', value),
+      'h',
+    ),
+  ),
+)
+check('a script is dropped with its contents', hostileMarkup.includes('alert(1)'), false)
+check('an event handler never reaches the page', hostileMarkup.includes('onerror'), false)
+check('a javascript: href is refused', hostileMarkup.includes('javascript:'), false)
+check('no HTML string is injected', editorSource.includes('dangerouslySetInnerHTML'), false)
+check('entities are decoded once', editorInternals.decodeHtmlEntities('a &amp; b &#65;'), 'a & b A')
+
 const Body = registered['sidebar.right.pane.tab#dsh-editor'].component
 const blankTab = { id: 'tab1', contentId: 'sidebar://editor', title: 'Editor', navigation: { revision: 0 } }
 const fileTab = { id: 'tab2', contentId: 'dsh-resource://file/session/s1/src/app.ts', title: 'app.ts', navigation: { revision: 3 } }
@@ -5481,17 +5579,18 @@ check('the audio chip title is the file name', audioTypes[0].title('dsh-resource
 check(
   'audio seats',
   Object.keys(audioSeats).sort().join(','),
-  'main#audio,sidebar.panellist,sidebar.right.pane.tab#dsh-audio,sidebar.right.pane.tab.title#dsh-audio',
+  'main#media,sidebar.panellist,sidebar.right.pane.tab#dsh-audio,sidebar.right.pane.tab.title#dsh-audio',
 )
 check(
-  'the Audio row is a panel row of this package, above Plugins',
+  'the Media row is a panel row of this package, above Plugins',
   audioSeats['sidebar.panellist'] !== undefined &&
     audioSeats['sidebar.panellist'].spec.name === 'sidebar.panellist' &&
     audioSeats['sidebar.panellist'].spec.id === A.PANEL_ID &&
     audioSeats['sidebar.panellist'].spec.order === A.PANEL_ORDER &&
-    audioSeats['sidebar.panellist'].spec.label === 'Audio',
+    audioSeats['sidebar.panellist'].spec.label === 'Media',
 )
-check('...and the seat its click selects is keyed by the same id', audioSeats['main#audio'] !== undefined && audioSeats['main#audio'].spec.key === A.PANEL_ID)
+check('...and the seat its click selects is keyed by the same id', audioSeats['main#media'] !== undefined && audioSeats['main#media'].spec.key === A.PANEL_ID)
+check('the row is keyed media, not audio', A.PANEL_ID, 'media')
 // Plugins is the row this one must sit ON TOP OF, and `order` is the whole
 // mechanism: the list sorts ascending. Pinned against the SHIPPED bundle rather
 // than against a comment, and skipped loudly on a host with no harness install.
@@ -5507,16 +5606,16 @@ check('...and the seat its click selects is keyed by the same id', audioSeats['m
     check('...so an order below zero is above it', A.PANEL_ORDER < 0, true)
     // The label is what the shell prints in the row AND in its tooltip, so it
     // has to be the plain product name and nothing else.
-    check('the row is labelled exactly "Audio"', audioSeats['sidebar.panellist'].spec.label === 'Audio', true)
+    check('the row is labelled exactly "Media"', audioSeats['sidebar.panellist'].spec.label === 'Media', true)
   }
 }
-// The glyph is drawn here (the shipped primitives have no speaker icon) and it
+// The glyph is drawn here (the shipped primitives have no media icon) and it
 // is the ONLY thing the row's registrant owns: the shell draws the button, its
 // hover, its active state and the label.
 check(
-  'the row draws a speaker glyph and nothing else',
-  renderToStaticMarkup(h(A.AudioPanelRow, { size: 16, active: false })).indexOf('<svg') !== -1 &&
-    renderToStaticMarkup(h(A.AudioPanelRow, { size: 16, active: false })).indexOf('Audio') === -1,
+  'the row draws a glyph and nothing else',
+  renderToStaticMarkup(h(A.MediaPanelRow, { size: 16, active: false })).indexOf('<svg') !== -1 &&
+    renderToStaticMarkup(h(A.MediaPanelRow, { size: 16, active: false })).indexOf('Media') === -1,
 )
 const AudioBody = audioSeats['sidebar.right.pane.tab#dsh-audio'].component
 const audioTab = { id: 'tab11', contentId: 'dsh-resource://file/session/s1/takes/take%2001.wav', title: 'take 01.wav' }
@@ -5862,8 +5961,8 @@ check('a refused microphone is a sentence', meterFailed.includes('NotAllowedErro
 // every service name with an object that has no `open`): the console is drawn
 // INLINE, which is the whole point of the degradation - a working surface
 // instead of an unhandled exception, and no dead end either way.
-const seatInline = renderToStaticMarkup(h(A.AudioSeat, {}))
-check('without the dialog service the console is a page, not a crash', seatInline.includes('data-audio-console="true"') && seatInline.includes('data-audio-seat="inline"'))
+const seatInline = renderToStaticMarkup(h(A.MediaSeat, {}))
+check('without the dialog service the panel is a page, not a crash', seatInline.includes('data-media-seat="inline"') && seatInline.includes('data-media-view="library"'))
 // ...and WITH one, the seat defers to it and draws the reopen control instead of
 // a second copy of the console - activated against a context that HAS `modals`,
 // because that is the only difference between the two profiles.
@@ -5874,9 +5973,12 @@ audio.exports.apply({
   effect: (fn) => fn(),
   logger: { debug() {}, warn() {} },
 })
-const seatDialog = renderToStaticMarkup(h(A.AudioSeat, {}))
-check('with the dialog service the seat opens it and offers it again', seatDialog.includes('data-audio-seat="dialog"') && seatDialog.includes('data-audio-action="open-console"') && seatDialog.includes('data-audio-console="true"') === false)
-check('...and can still be forced inline', renderToStaticMarkup(h(A.AudioSeat, { inline: true })).includes('data-audio-seat="inline"'))
+const seatDialog = renderToStaticMarkup(h(A.MediaSeat, {}))
+check(
+  'with the dialog service the seat opens it and offers it again',
+  seatDialog.includes('data-media-seat="dialog"') && seatDialog.includes('data-media-action="open-panel"') && seatDialog.includes('data-media-view=') === false,
+)
+check('...and can still be forced inline', renderToStaticMarkup(h(A.MediaSeat, { inline: true })).includes('data-media-seat="inline"'))
 
 // The wiring that a render cannot see, pinned as source because each of these is
 // a decision that would quietly stop working if it were dropped.
@@ -5912,17 +6014,65 @@ check(
     audioSource.includes('stops itself after') === false &&
     audioSource.includes('which is the graph the output pick moves') === false,
 )
-check('the panel list is asked for the row above Plugins', audioSource.includes("ctx.slots.register({ name: PANEL_SLOT, id: PANEL_ID, order: PANEL_ORDER, label: 'Audio'"))
+check('the panel list is asked for the row above Plugins', audioSource.includes('ctx.slots.register({ name: PANEL_SLOT, id: PANEL_ID, order: PANEL_ORDER, label: PANEL_LABEL'))
 // The dialog is opened ON MOUNT, and `version` is the only thing that re-opens
 // it: the service lives in a ref precisely so a provider answering a fresh
 // wrapper cannot turn one press into a queue of dialogs.
-check('the seat opens the dialog on mount and can reopen it', audioSource.includes("'data-audio-action': 'open-console'") && audioSource.includes('[hasModal, version])') && audioSource.includes('modalsRef.current = modals'))
+check('the seat opens the dialog on mount and can reopen it', audioSource.includes("'data-media-action': 'open-panel'") && audioSource.includes('[hasModal, version])') && audioSource.includes('modalsRef.current = modals'))
 check('the column is handed back only when it is still this package\u2019s', audioSource.includes('if (active !== PANEL_ID) return'))
 check('...and never to a panel that has gone', audioSource.includes('layout.selectPanel(panelBeforeAudio)') && audioSource.includes('layout.selectPanel(null)'))
 check('the console keeps the package client-only', audioSource.includes('fetch(') === false && audioSource.includes("'/api/") === false)
 check(
   'the stylesheet carries the console\u2019s own dress',
   audioCss.includes('.dsa-console{') && audioCss.includes('.dsa-card[') && audioCss.includes('.dsa-meterFill{') && audioCss.includes('.dsa-panelGlyph{'),
+)
+
+// --- the Media panel (alpha.5)
+//
+// The left-bar row stopped opening the audio console and started opening the
+// MEDIA panel, whose Files view is the whole reason for the rename: every audio,
+// image, video and GIF file the conversation can reach. The scan, the grouping
+// and the address a row opens are the pure half and are driven directly here;
+// the panel itself is server-rendered to prove the two views exist and that a
+// seat with no dialog still draws a working surface.
+check('media: a PNG is an image', A.classifyMediaPath('shots/cover.PNG'), 'image')
+check('media: a GIF is its own group', A.classifyMediaPath('loop.gif'), 'gif')
+check('media: a WAV is audio', A.classifyMediaPath('takes/take 01.wav'), 'audio')
+check('media: an MP4 is video', A.classifyMediaPath('cut/final.mp4'), 'video')
+check('media: a README is not media', A.classifyMediaPath('README.md'), '')
+check('media: a dotfile is not media', A.classifyMediaPath('.gitignore'), '')
+check(
+  'media: a row opens the session-scoped address the registry routes',
+  A.mediaAddress('s1', 'shots/my cover.png'),
+  'dsh-resource://file/session/s1/shots/my%20cover.png',
+)
+check(
+  'media: an absolute path becomes the harness file URL',
+  A.mediaFileUrl('/work/shot.png'),
+  'http://127.0.0.1:3080/api/file?path=%2Fwork%2Fshot.png',
+)
+check('media: no absolute path, no URL', A.mediaFileUrl('') === '', true)
+const mediaListings = {
+  '': { entries: [{ name: 'shots', type: 'directory' }, { name: 'README.md', type: 'file' }, { name: 'loop.gif', type: 'file' }] },
+  shots: { entries: [{ name: 'cover.png', type: 'file' }, { name: 'take.wav', type: 'file' }, { name: 'node_modules', type: 'directory' }] },
+}
+const mediaScan = await A.scanMedia({ list: async (session, path) => ({ ok: true, value: mediaListings[path] || { entries: [] } }) }, 's1')
+check('media: the scan walks one level down', mediaScan.items.map((item) => item.path).join(','), 'shots/cover.png,loop.gif,shots/take.wav')
+check('media: the scan groups images, then GIFs, then audio', mediaScan.items.map((item) => item.kind).join(','), 'image,gif,audio')
+check('media: the scan skips node_modules', mediaScan.items.some((item) => item.path.includes('node_modules')), false)
+check('media: the scan reports whether it was cut', mediaScan.truncated, false)
+const mediaPanelMarkup = renderToStaticMarkup(h(A.MediaPanel, { sessionId: 's1', onOpen: () => {} }))
+check('media: the panel opens on the Files view', mediaPanelMarkup.includes('data-media-view="library"'), true)
+check(
+  'media: both views are offered',
+  mediaPanelMarkup.includes('data-media-tab="library"') && mediaPanelMarkup.includes('data-media-tab="devices"'),
+  true,
+)
+const mediaSeatMarkup = renderToStaticMarkup(h(A.MediaSeat, { inline: true, sessionId: 's1' }))
+check(
+  'media: a seat with no dialog still draws the panel',
+  mediaSeatMarkup.includes('data-media-seat="inline"') && mediaSeatMarkup.includes('data-media-tab="devices"'),
+  true,
 )
 
 // ----------------------------------------------------------- dsh-ui-state

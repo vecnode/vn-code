@@ -32,6 +32,15 @@
  *     the `.dse-mdview*` rules): a source newline is a soft break again instead
  *     of a hard one, and the Edit pill uses the app's UI font like every other
  *     button around it;
+ *   - since alpha.14 that body also renders what the shipped primitive refuses:
+ *     BLOCK-LEVEL AUTHORED HTML (parsed here and rebuilt as React elements over
+ *     an allowlist - no HTML string ever reaches the DOM, `<script>`/`<iframe>`
+ *     and friends are dropped with their contents, every `on*` attribute and
+ *     every `javascript:` URL is refused) and IMAGES (a relative destination is
+ *     rewritten to the harness's authenticated `/api/file?path=` route against
+ *     the document's own absolute path, read off the resource - the same
+ *     rewrite the shipped body does, now applied to `<img src>` in authored
+ *     HTML as well as to a Markdown image);
  *   - it contributes a guide entry, so the tab strip's "+" control - which
  *     opens the "Start" page - offers "Editor". Picking it creates an editor
  *     tab that opens on a BLANK document: nothing is read from disk until the
@@ -109,7 +118,7 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the toolbar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.13'
+    const PLUGIN_VERSION = '0.1.0-alpha.14'
     /** The client service dsh-modal provides; resolved lazily, never required. */
     const MODAL_SERVICE = 'modals'
     /** The client service @deepseek-ai/dsh-client-ui-theme provides; resolved lazily too. */
@@ -203,6 +212,18 @@ window.__ModuleLoader__.load({
 .dse-mdviewEdit{pointer-events:auto;display:inline-flex;align-items:center;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:12px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);font-family:var(--dsw-font-family,inherit);font-size:11.5px;padding:0 10px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .dse-mdviewEdit:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
 .dse-mdviewPaper{flex:1;min-height:0;white-space:normal}
+/* Images (alpha.14): a Markdown image now resolves, so its SIZE matters - a
+   2400 px screenshot must not widen the bar. Authored HTML renders through the
+   same paper, so a README's <table> scrolls inside its own box and its
+   <details> keeps the browser's own disclosure behaviour. */
+.dse-mdviewPaper img{max-width:100%;height:auto}
+.dse-mdhtml img{max-width:100%;height:auto}
+.dse-mdhtml table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto;margin:8px 0}
+.dse-mdhtml td,.dse-mdhtml th{border:.5px solid var(--dsw-alias-border-l2,rgba(127,127,127,.28));padding:4px 8px;text-align:left}
+.dse-mdhtml th{background:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.08))}
+.dse-mdhtml details{margin:6px 0}
+.dse-mdhtml summary{cursor:pointer}
+.dse-mdhtml pre{overflow-x:auto}
 `
     const CSS_TAG = 'dsh-editor/editor.css'
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
@@ -1680,9 +1701,19 @@ window.__ModuleLoader__.load({
     function MarkdownPreviewBody(props) {
       const t = props.t
       const content = props.content
-      // Hooks must be called unconditionally, and both are provided by the
-      // preview's own child declaration.
+      // Hooks must be called unconditionally, and each is provided by the
+      // preview's own slot declaration.
       const info = typeof props.useTabInfo === 'function' ? props.useTabInfo() : null
+      const address = typeof props.resourceAddress === 'string' ? props.resourceAddress : ''
+      // The file's ABSOLUTE path, which is what the harness's `/api/file` route
+      // demands and the only way a relative image destination can be resolved.
+      // The shipped Markdown body reads it the same way.
+      const resource = typeof props.useResource === 'function' ? props.useResource(address) : null
+      const absolutePath =
+        resource !== null && resource !== undefined && resource.value && typeof resource.value.absolutePath === 'string'
+          ? resource.value.absolutePath
+          : undefined
+      const text = content !== null && content !== undefined && content.kind === 'text' ? content.text : ''
       const labels = React.useMemo(
         () => ({
           code: { copyLabel: t('md.copy'), copiedLabel: t('md.copied') },
@@ -1690,8 +1721,21 @@ window.__ModuleLoader__.load({
         }),
         [t],
       )
-      if (!content || content.kind !== 'text') return null
-      const address = typeof props.resourceAddress === 'string' ? props.resourceAddress : ''
+      // The authored images are resolved ONCE per document, not per <img>.
+      const pathImages = React.useMemo(
+        () => ({ resolve: (value) => markdownImageUrl(pageBaseUrl(), absolutePath, value) }),
+        [absolutePath],
+      )
+      // Authored HTML is parsed once per source; the elements below are then
+      // built on every render, which is what keeps a re-render cheap-ish while
+      // the parse (the expensive half) stays out of it.
+      const blocks = React.useMemo(() => {
+        if (text === '') return []
+        return splitHtmlBlocks(text).map((block) =>
+          block.kind === 'html' ? { kind: 'html', nodes: parseHtmlFragment(block.text) } : { kind: 'markdown', text: block.text },
+        )
+      }, [text])
+      if (content === null || content === undefined || content.kind !== 'text') return null
       const tabId = info && info.tab && typeof info.tab.id === 'string' ? info.tab.id : ''
       const edit = props.edit
       const backToEditor = () => {
@@ -1702,6 +1746,22 @@ window.__ModuleLoader__.load({
           console.warn('[dsh-editor] could not return to the editor', err && err.message ? err.message : err)
         }
       }
+      const resolveImage = (value) => markdownImageUrl(pageBaseUrl(), absolutePath, value)
+      const rendered = blocks.map((block, index) =>
+        block.kind === 'markdown'
+          ? h(MarkdownText, {
+              key: 'md' + index,
+              text: block.text,
+              streaming: !content.eof,
+              labels: labels,
+              pathImages: pathImages,
+            })
+          : h(
+              'div',
+              { key: 'html' + index, className: 'dse-mdhtml', 'data-dsh-md-html': true },
+              renderHtmlNodes(block.nodes, resolveImage, 'b' + index),
+            ),
+      )
       return h(
         'div',
         { className: 'dse-mdview' },
@@ -1720,12 +1780,478 @@ window.__ModuleLoader__.load({
             t('md.edit'),
           ),
         ),
-        h(
-          'div',
-          { className: 'dse-mdviewPaper', 'data-document-markdown': true },
-          h(MarkdownText, { text: content.text, streaming: !content.eof, labels: labels }),
-        ),
+        h('div', { className: 'dse-mdviewPaper', 'data-document-markdown': true }, rendered),
       )
+    }
+
+    // ---------------------------------------------------------------------
+    // Authored HTML, and the images a document names
+    //
+    // The shipped renderer draws authored HTML as LITERAL TEXT - that is its
+    // documented contract, and the right default for untrusted assistant
+    // output. This body is the other case: the files it draws are the
+    // workspace's own READMEs, design notes and reports, where
+    // `<div align="center">`, a badge row, `<details>` and a plain <table> are
+    // ordinary prose. So block-level HTML is parsed here and rebuilt as REACT
+    // ELEMENTS over an allowlist - nothing becomes an HTML string, so there is
+    // no innerHTML to poison and no attribute spelling that can smuggle an
+    // `onerror=` through. Elements the allowlist does not name are dropped
+    // with their contents; an unknown element that is merely structural has
+    // its tag removed and its children kept.
+    //
+    // Images are the other half of the same gap. A README's
+    // `![shot](docs/shot.png)` is a RELATIVE path and the page is served from
+    // the app's origin, so it resolved to nothing. The shipped preview solved
+    // this by handing the renderer a `pathImages` vocabulary plus the file's
+    // own absolute path (read off the resource), rewriting a destination to
+    // the harness's authenticated `/api/file?path=` route. This body does the
+    // same, and the SAME rewrite applies to an <img src> inside authored
+    // HTML - which is why the renderer below takes the resolver.
+    // ---------------------------------------------------------------------
+    /** Tags that may OPEN an HTML block at the top of a line. */
+    const HTML_BLOCK_TAGS = new Set([
+      'a', 'abbr', 'address', 'article', 'aside', 'b', 'blockquote', 'br', 'caption', 'center', 'cite', 'code', 'col',
+      'colgroup', 'dd', 'del', 'details', 'div', 'dl', 'dt', 'em', 'fieldset', 'figcaption', 'figure', 'footer', 'h1',
+      'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'hr', 'i', 'img', 'ins', 'kbd', 'legend', 'li', 'main', 'mark',
+      'nav', 'ol', 'p', 'picture', 'pre', 'q', 's', 'section', 'small', 'source', 'span', 'strong', 'sub', 'summary',
+      'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'time', 'tr', 'u', 'ul', 'var',
+    ])
+    /** Elements that never take a closing tag. */
+    const HTML_VOID_TAGS = new Set(['area', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'])
+    /** Elements dropped WITH their subtree: none of them can be drawn safely. */
+    const HTML_DROP_TAGS = new Set([
+      'applet', 'audio', 'base', 'button', 'canvas', 'embed', 'form', 'frame', 'frameset', 'iframe', 'input', 'link',
+      'math', 'meta', 'noscript', 'object', 'option', 'portal', 'script', 'select', 'style', 'svg', 'template',
+      'textarea', 'video',
+    ])
+    /** Every tag this renderer will ever draw. */
+    const HTML_ALLOWED_TAGS = new Set([
+      'a', 'abbr', 'address', 'article', 'aside', 'b', 'blockquote', 'br', 'caption', 'center', 'cite', 'code', 'col',
+      'colgroup', 'dd', 'del', 'details', 'div', 'dl', 'dt', 'em', 'fieldset', 'figcaption', 'figure', 'footer', 'h1',
+      'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'hr', 'i', 'img', 'ins', 'kbd', 'legend', 'li', 'main', 'mark',
+      'nav', 'ol', 'p', 'picture', 'pre', 'q', 's', 'section', 'small', 'source', 'span', 'strong', 'sub', 'summary',
+      'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'time', 'tr', 'u', 'ul', 'var',
+    ])
+    /** Attributes kept on any allowed element (presentation only). */
+    const HTML_GLOBAL_ATTRS = new Set(['align', 'colspan', 'dir', 'headers', 'height', 'lang', 'rowspan', 'scope', 'title', 'valign', 'width'])
+    /** Attributes kept only where the tag means something by them. */
+    const HTML_TAG_ATTRS = {
+      a: new Set(['href', 'name']),
+      details: new Set(['open']),
+      img: new Set(['alt', 'loading', 'src']),
+      ol: new Set(['reversed', 'start', 'type']),
+      time: new Set(['datetime']),
+    }
+    /** The three React spells differently from HTML. */
+    const HTML_ATTR_ALIASES = { colspan: 'colSpan', rowspan: 'rowSpan', valign: 'vAlign' }
+    /** The named entities a README actually uses; numeric ones are handled below. */
+    const HTML_ENTITIES = {
+      amp: '&', apos: "'", bull: '\u2022', check: '\u2713', copy: '\u00a9', gt: '>', hellip: '\u2026', laquo: '\u00ab',
+      ldquo: '\u201c', lsquo: '\u2018', lt: '<', mdash: '\u2014', middot: '\u00b7', nbsp: '\u00a0', ndash: '\u2013',
+      quot: '"', raquo: '\u00bb', rdquo: '\u201d', reg: '\u00ae', rsquo: '\u2019', rarr: '\u2192', larr: '\u2190',
+      times: '\u00d7', trade: '\u2122',
+    }
+
+    /** Decode the entities an authored document can name. */
+    function decodeHtmlEntities(text) {
+      if (text.indexOf('&') === -1) return text
+      return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]{1,31});/gi, (match, body) => {
+        if (body.charAt(0) === '#') {
+          const hex = body.charAt(1) === 'x' || body.charAt(1) === 'X'
+          const code = hex ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10)
+          if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return match
+          try {
+            return String.fromCodePoint(code)
+          } catch (err) {
+            return match
+          }
+        }
+        const named = HTML_ENTITIES[body.toLowerCase()]
+        return named === undefined ? match : named
+      })
+    }
+
+    /**
+     * Split one HTML fragment into text and tag tokens.
+     *
+     * Hand-written rather than regex-only so a quoted attribute may contain a
+     * `>` (`alt="a > b"`) and so `<script>`'s contents cannot confuse the tag
+     * stream: a comment or declaration is skipped whole, and anything that is
+     * not a tag start stays text.
+     */
+    function tokenizeHtml(html) {
+      const tokens = []
+      const source = String(html)
+      const length = source.length
+      let i = 0
+      let text = ''
+      const flushText = () => {
+        if (text === '') return
+        tokens.push({ type: 'text', value: decodeHtmlEntities(text) })
+        text = ''
+      }
+      while (i < length) {
+        if (source.charAt(i) !== '<') {
+          text += source.charAt(i)
+          i += 1
+          continue
+        }
+        if (source.startsWith('<!--', i)) {
+          const end = source.indexOf('-->', i + 4)
+          i = end === -1 ? length : end + 3
+          continue
+        }
+        if (source.startsWith('<!', i) || source.startsWith('<?', i)) {
+          const end = source.indexOf('>', i + 2)
+          i = end === -1 ? length : end + 1
+          continue
+        }
+        const closing = /^<\/\s*([a-z][a-z0-9:-]*)\s*>/i.exec(source.slice(i, i + 64))
+        if (closing !== null) {
+          flushText()
+          tokens.push({ type: 'close', tag: closing[1].toLowerCase() })
+          i += closing[0].length
+          continue
+        }
+        const opening = /^<([a-z][a-z0-9:-]*)/i.exec(source.slice(i, i + 64))
+        if (opening === null) {
+          // A bare `<` in prose (or an autolink this renderer does not own).
+          text += '<'
+          i += 1
+          continue
+        }
+        const tag = opening[1].toLowerCase()
+        let j = i + opening[0].length
+        const attrs = []
+        let selfClose = false
+        while (j < length) {
+          while (j < length && /\s/.test(source.charAt(j))) j += 1
+          if (source.charAt(j) === '>') {
+            j += 1
+            break
+          }
+          if (source.charAt(j) === '/' && source.charAt(j + 1) === '>') {
+            selfClose = true
+            j += 2
+            break
+          }
+          const nameMatch = /^[^\s=/>]+/.exec(source.slice(j, j + 64))
+          if (nameMatch === null) {
+            j += 1
+            continue
+          }
+          const name = nameMatch[0].toLowerCase()
+          j += nameMatch[0].length
+          while (j < length && /\s/.test(source.charAt(j))) j += 1
+          let value = ''
+          if (source.charAt(j) === '=') {
+            j += 1
+            while (j < length && /\s/.test(source.charAt(j))) j += 1
+            const quote = source.charAt(j)
+            if (quote === '"' || quote === "'") {
+              const end = source.indexOf(quote, j + 1)
+              value = end === -1 ? source.slice(j + 1) : source.slice(j + 1, end)
+              j = end === -1 ? length : end + 1
+            } else {
+              const unquoted = /^[^\s>]*/.exec(source.slice(j))
+              value = unquoted === null ? '' : unquoted[0]
+              j += value.length
+            }
+          }
+          attrs.push({ name: name, value: decodeHtmlEntities(value) })
+        }
+        flushText()
+        tokens.push({ type: 'open', tag: tag, attrs: attrs, selfClose: selfClose })
+        i = j
+      }
+      flushText()
+      return tokens
+    }
+
+    /**
+     * Turn one HTML fragment into a tree of allowed elements and text.
+     *
+     * A dropped element takes its whole subtree with it, so the contents of a
+     * `<script>` or a `<style>` never reach the page even as text; an element
+     * outside the allowlist that is not dropped is TRANSPARENT (its children
+     * keep their place, the tag does not).
+     */
+    function parseHtmlFragment(html) {
+      const tokens = tokenizeHtml(html)
+      const root = { tag: '#root', attrs: [], children: [] }
+      const stack = [{ node: root, tag: '#root' }]
+      for (let index = 0; index < tokens.length; index += 1) {
+        const token = tokens[index]
+        if (token.type === 'text') {
+          if (token.value !== '') {
+            const parent = stack[stack.length - 1]
+            parent.node.children.push({ type: 'text', value: token.value })
+          }
+          continue
+        }
+        if (token.type === 'open') {
+          if (HTML_DROP_TAGS.has(token.tag)) {
+            // Skip the dropped element's whole subtree. Void elements have
+            // none, so a `<meta>` or `<link>` costs one token.
+            if (!HTML_VOID_TAGS.has(token.tag) && !token.selfClose) {
+              let depth = 1
+              while (index + 1 < tokens.length && depth > 0) {
+                index += 1
+                const inner = tokens[index]
+                if (inner.type === 'open' && inner.tag === token.tag && !inner.selfClose) depth += 1
+                else if (inner.type === 'close' && inner.tag === token.tag) depth -= 1
+              }
+            }
+            continue
+          }
+          const parent = stack[stack.length - 1]
+          if (!HTML_ALLOWED_TAGS.has(token.tag)) {
+            // Transparent: children land on the element above it.
+            if (!HTML_VOID_TAGS.has(token.tag) && !token.selfClose) stack.push({ node: parent.node, tag: token.tag })
+            continue
+          }
+          const element = { type: 'element', tag: token.tag, attrs: token.attrs, children: [] }
+          parent.node.children.push(element)
+          if (!HTML_VOID_TAGS.has(token.tag) && !token.selfClose) stack.push({ node: element, tag: token.tag })
+          continue
+        }
+        // A closing tag pops to its own frame; an unmatched one is ignored, so
+        // a stray `</div>` in a document cannot unseat an outer block.
+        for (let k = stack.length - 1; k > 0; k -= 1) {
+          if (stack[k].tag === token.tag) {
+            stack.length = k
+            break
+          }
+        }
+      }
+      return root.children
+    }
+
+    /** Whether an authored destination may be handed to a browser as-is. */
+    function safeHref(value) {
+      const trimmed = String(value).trim()
+      if (trimmed === '') return undefined
+      if (trimmed.charAt(0) === '#') return trimmed
+      return /^(https?:|mailto:)/i.test(trimmed) ? trimmed : undefined
+    }
+
+    /**
+     * Rebuild parsed HTML as React elements.
+     * @param nodes - nodes from {@link parseHtmlFragment}.
+     * @param resolveImage - authored `src` to a displayable URL, or undefined.
+     * @param key - React key prefix, kept stable across renders.
+     */
+    function renderHtmlNodes(nodes, resolveImage, key, depth) {
+      const level = typeof depth === 'number' ? depth : 0
+      // A document cannot nest this deep; anything that does is crafted, and a
+      // renderer that recurses without a floor is a stack overflow away from
+      // taking the pane down.
+      if (level > 32) return []
+      const out = []
+      for (let index = 0; index < nodes.length; index += 1) {
+        const node = nodes[index]
+        const nodeKey = key + '.' + index
+        if (node.type === 'text') {
+          out.push(node.value)
+          continue
+        }
+        const tag = node.tag
+        const allowed = HTML_TAG_ATTRS[tag]
+        const props = { key: nodeKey }
+        for (const attr of node.attrs) {
+          if (!HTML_GLOBAL_ATTRS.has(attr.name) && !(allowed !== undefined && allowed.has(attr.name))) continue
+          const propName = HTML_ATTR_ALIASES[attr.name] || attr.name
+          if (attr.name === 'src') {
+            const url = resolveImage(attr.value)
+            if (url !== undefined) props.src = url
+            continue
+          }
+          if (attr.name === 'href') {
+            const href = safeHref(attr.value)
+            if (href !== undefined) {
+              props.href = href
+              if (/^https?:/i.test(href)) {
+                props.target = '_blank'
+                props.rel = 'noreferrer noopener'
+              }
+            }
+            continue
+          }
+          if (attr.name === 'width' || attr.name === 'height' || attr.name === 'colspan' || attr.name === 'rowspan' || attr.name === 'start') {
+            const number = Number(attr.value)
+            if (Number.isFinite(number)) props[propName] = number
+            continue
+          }
+          if (attr.name === 'open' || attr.name === 'reversed') {
+            props[propName] = true
+            continue
+          }
+          props[propName] = attr.value
+        }
+        if (tag === 'img') {
+          // A source the route could not vouch for has no src at all: the alt
+          // text is then the whole of the image, as the shipped renderer does.
+          if (props.src === undefined) {
+            out.push(props.alt === undefined ? '' : props.alt)
+            continue
+          }
+          if (props.loading === undefined) props.loading = 'lazy'
+        }
+        if (HTML_VOID_TAGS.has(tag)) {
+          // React refuses children on a void element, so the third argument is
+          // omitted entirely rather than passed as an empty array.
+          out.push(h(tag, props))
+          continue
+        }
+        out.push(h(tag, props, renderHtmlNodes(node.children, resolveImage, nodeKey, level + 1)))
+      }
+      return out
+    }
+
+    /** The tag a line OPENS with, or null when the line is not a block start. */
+    function htmlBlockTagAt(line) {
+      const match = /^\s{0,3}<([a-z][a-z0-9:-]*)(?=[\s/>])/i.exec(line)
+      if (match === null) return null
+      const tag = match[1].toLowerCase()
+      if (HTML_ALLOWED_TAGS.has(tag) || HTML_DROP_TAGS.has(tag)) return tag
+      return null
+    }
+
+    /**
+     * How many elements one line opens minus how many it closes. The value is
+     * NOT clamped: a line that only closes (`</div>`) has to contribute -1 for
+     * the block scanner to see a block end.
+     */
+    function htmlLineDepth(line) {
+      let depth = 0
+      for (const token of tokenizeHtml(line)) {
+        if (token.type === 'open') {
+          if (!HTML_VOID_TAGS.has(token.tag) && !token.selfClose) depth += 1
+        } else if (token.type === 'close') {
+          depth -= 1
+        }
+      }
+      return depth
+    }
+
+    /**
+     * The last line of the HTML block that starts at `start`, or -1 when the
+     * block is not balanced inside the document (an unclosed `<div>` then stays
+     * literal Markdown instead of swallowing every section after it).
+     */
+    function htmlBlockEnd(lines, start) {
+      const limit = Math.min(lines.length, start + 400)
+      let depth = 0
+      for (let index = start; index < limit; index += 1) {
+        depth += htmlLineDepth(lines[index])
+        if (depth <= 0) return index
+      }
+      return -1
+    }
+
+    /**
+     * Split a Markdown document into rendered-Markdown runs and authored-HTML
+     * runs. A fenced code block is NEVER split: an example's `<div>` is an
+     * example, and it must keep rendering as code.
+     * @param text - the document source.
+     * @returns [{ kind: 'markdown' | 'html', text }]
+     */
+    function splitHtmlBlocks(text) {
+      const lines = String(text).split('\n')
+      const blocks = []
+      let markdown = []
+      let fence = null
+      const flush = () => {
+        if (markdown.length > 0) {
+          const value = markdown.join('\n')
+          if (value.trim() !== '') blocks.push({ kind: 'markdown', text: value })
+        }
+        markdown = []
+      }
+      let index = 0
+      while (index < lines.length) {
+        const line = lines[index]
+        const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line)
+        if (fence !== null) {
+          if (fenceMatch !== null && fenceMatch[1].charAt(0) === fence.charAt(0) && fenceMatch[1].length >= fence.length) fence = null
+          markdown.push(line)
+          index += 1
+          continue
+        }
+        if (fenceMatch !== null) {
+          fence = fenceMatch[1]
+          markdown.push(line)
+          index += 1
+          continue
+        }
+        if (htmlBlockTagAt(line) === null) {
+          markdown.push(line)
+          index += 1
+          continue
+        }
+        const end = htmlBlockEnd(lines, index)
+        if (end === -1) {
+          markdown.push(line)
+          index += 1
+          continue
+        }
+        flush()
+        blocks.push({ kind: 'html', text: lines.slice(index, end + 1).join('\n') })
+        index = end + 1
+      }
+      flush()
+      return blocks
+    }
+
+    /** The directory part of a native path, both separators honoured. */
+    function directoryOf(path) {
+      const trimmed = String(path).replace(/[/\\]+$/, '')
+      if (trimmed === '') return ''
+      return trimmed.slice(0, Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\')) + 1)
+    }
+
+    /** Whether a path is absolute on either platform. */
+    function isAbsoluteNativePath(path) {
+      return path.charAt(0) === '/' || /^[a-z]:[/\\]/i.test(path) || /^\\\\/.test(path)
+    }
+
+    /**
+     * Resolve one authored image destination into a displayable URL.
+     *
+     * A relative destination resolves against the DOCUMENT's own directory,
+     * which is the whole reason the body reads the file's absolute path off the
+     * resource; an http(s) destination is already displayable. Everything else
+     * (a `javascript:` URL, a protocol-relative `//host/x`) resolves to
+     * undefined and stays alt text.
+     */
+    function markdownImageUrl(base, documentPath, destination) {
+      const value = String(destination)
+      const cut = value.search(/[?#]/)
+      let decoded
+      try {
+        decoded = decodeURIComponent(cut === -1 ? value : value.slice(0, cut))
+      } catch (err) {
+        return undefined
+      }
+      if (decoded === '') return undefined
+      if (!/^[a-z]:[/\\]/i.test(decoded) && /^[a-z][a-z\d+.-]*:/i.test(decoded)) {
+        // A protocol (http, https, data, javascript): only the web ones are
+        // displayable, and an absolute http(s) URL needs no rewrite at all.
+        return /^https?:/i.test(decoded) ? decoded : undefined
+      }
+      if (!isAbsoluteNativePath(decoded)) {
+        if (typeof documentPath !== 'string' || documentPath === '') return undefined
+        decoded = directoryOf(documentPath) + decoded
+      }
+      if (/^[/\\]{2}/.test(decoded) || /[\u0000-\u001f\u007f]/.test(decoded)) return undefined
+      if (typeof base !== 'string' || !/^https?:/i.test(base)) return undefined
+      return new URL('api/file?path=' + encodeURIComponent(decoded), base).href
+    }
+
+    /** The page's own origin, or '' when there is none (server render). */
+    function pageBaseUrl() {
+      if (typeof document === 'undefined') return ''
+      return typeof document.baseURI === 'string' ? document.baseURI : ''
     }
 
     // ---------------------------------------------------------------------
@@ -1948,6 +2474,16 @@ window.__ModuleLoader__.load({
     exports.name = 'dsh-editor'
     exports.inject = inject
     exports.apply = apply
+    // The pure half of the rendered-Markdown body, so a check can drive the
+    // splitter, the parser and the image resolver without a browser.
+    exports.__internals = {
+      splitHtmlBlocks: splitHtmlBlocks,
+      parseHtmlFragment: parseHtmlFragment,
+      renderHtmlNodes: renderHtmlNodes,
+      tokenizeHtml: tokenizeHtml,
+      markdownImageUrl: markdownImageUrl,
+      decodeHtmlEntities: decodeHtmlEntities,
+    }
     return module.exports
   },
 })
