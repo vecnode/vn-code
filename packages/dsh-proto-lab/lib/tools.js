@@ -155,7 +155,8 @@ export function buildTools(deps = {}) {
     name: 'lab_open',
     description: [
       'Where the prototyping lab is, what is in it, and (with action "create") make it exist.',
-      'The lab is the folder prototypes are written into: `<workspace>/lab/`, grouped by runtime as `lab/<runtime>/<slug>/`. It is NOT part of the plugin and NOT part of the repository - it is generated on this machine and .gitignore keeps it out of every commit.',
+      'The lab is a folder prototypes are written into, grouped by runtime as `<root>/<runtime>/<slug>/`. It is NOT part of the plugin and NOT part of the repository - it is generated on this machine and .gitignore keeps it out of every commit.',
+      'The default root is the DESKTOP (`~/Desktop/vncode-lab/runs/`), because a prototype is something a person opens; a machine with no Desktop falls back to `<workspace>/lab` - so never assume the path, read it from this call.',
       'Call this first in a session: it answers the absolute path, which runtime folders exist, how many runs there are and whether the catalog agrees with the disk.',
       'Set DSH_PROTO_LAB_ROOT to put the lab somewhere else entirely (relative paths resolve against the workspace).',
     ].join('\n'),
@@ -174,7 +175,7 @@ export function buildTools(deps = {}) {
         const exists = await present(resolved.root)
         let created = false
         if (args.action === 'create') {
-          // All three, because ction=create is the one call that makes the lab.
+          // All three, because action=create is the one call that makes the lab.
           for (const dir of [resolved.root, resolved.prints, resolved.apps]) {
             const present = await fsp
               .stat(dir)
@@ -385,7 +386,7 @@ export function buildTools(deps = {}) {
   const create = {
     name: 'lab_new',
     description: [
-      'Write a prototype into the lab. That is a real folder of real source: `lab/<runtime>/<slug>/`, with the shell and the library a run needs to open, a README with the exact command that runs it, and a NOTES with the seed.',
+      'Write a prototype into the lab. That is a real folder of real source: `<root>/<runtime>/<slug>/`, with the shell and the library a run needs to open, a README with the exact command that runs it, and a NOTES with the seed. `<root>` is the lab root `lab_open` reports (the Desktop by default), never a path guessed from here.',
       'action "create" (default) scaffolds a new run from the runtime\'s template. Give it a `concept`: one sentence saying what the algorithm IS, not what it looks like. Give `seed` to make the picture reproducible - with none, the seed is derived from the run id, so the same name always draws the same first frame.',
       'action "example" instantiates one of the runtime\'s committed examples (`lab_runtimes action=examples`) - a checked, known-good run - and then it is yours to change.',
       '`params` are the run\'s tunables: `[{ name: "particles", min: 200, max: 6000, value: 1800, step: 50 }]`. A p5 run turns each one into a live slider; an openFrameworks run records them for you to read in its Params struct.',
