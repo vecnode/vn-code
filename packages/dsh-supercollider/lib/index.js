@@ -1,7 +1,7 @@
 /**
  * dsh-supercollider — the row, and everything it mounts.
  *
- * This is the host half: one SuperCollider session owned by this plugin, the ten
+ * This is the host half: one SuperCollider session owned by this plugin, the eleven
  * tools the agent calls, the five skills that teach it the language, and the
  * three routes a deliberately small console reads.
  *

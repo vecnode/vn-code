@@ -3637,8 +3637,8 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
         // list, one more order step LEFT (lower renders first), so the row reads
         // zoom | capture | themes | download next to Open In. It is the one
         // control here that replaces a browser GESTURE rather than a shipped
-        // control, which is why it exists at all: the desktop launcher's native
-        // window has no Ctrl+ / Ctrl- page zoom to fall back on.
+        // control, which is why it exists at all: a browser zoom reflows the shell, and
+        // the frame's layout is exactly what this control leaves alone.
         ctx.effect(
           () =>
             ctx.slots.inject(HEADER_SLOT, () =>

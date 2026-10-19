@@ -1,6 +1,6 @@
 # dsh-supercollider bundle layer (alpha).
 #
-# One row ('supercollider') owns the whole package: the ten agent tools built in
+# One row ('supercollider') owns the whole package: the eleven agent tools built in
 # lib/tools.js, the five bundled skills, one long-lived sclang session and the
 # OSC client that talks to scsynth, the three host routes the console tab reads,
 # and the console tab itself.

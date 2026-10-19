@@ -18,7 +18,7 @@ The shipped `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` row is left alo
 
 ## What it adds
 
-- **Four docked panes, not two.** The fork's eleven patches lift the shipped two-pane cap in all five places it is enforced, re-open the top/bottom drop bands, and let the kit's own `canSplit` be the ceiling.
+- **Four docked panes, not two.** The fork's fourteen patches lift the shipped two-pane cap in all five places it is enforced, re-open the top/bottom drop bands, and let the kit's own `canSplit` be the ceiling.
 - **A renderer that can draw the tree those bands build.** The kit's `DockLayout` renders one pane or two side by side and THROWS on anything else, so a stacked pane reached the shell's slot boundary as a crash. The fork renders the kit's recursive `DockSurface` instead, through its one hand-written component `vendor/dock-tree.js` (spliced in verbatim by the sync script), with `DockLayout` only as the fallback for a kit line without `DockSurface`.
 - **The three things the flat renderer's tab host provided**, all on the `data-dockkit-host="dock"` wrapper `DockTree` emits: the bar's LEFT SEAM (`border-right: .5px solid var(--dsw-alias-border-l3)`, the token the app's own column separators use), an OPAQUE `--dsw-alias-bg-base` fill on the box the tab bodies are MOUNTED IN (without it a fullscreen bar shows the conversation through every pixel the active tab does not paint itself), and the fullscreen layer.
 

@@ -57,7 +57,7 @@ the **record** first.
   words does: a verdict says "this passage supports what this claim asserts", and
   `p = .032` is part of what it asserts.
 - **The method layer is a skill, and the dense content is a reference.**
-  `research-methods` is one of the **seven** bundled skills: ~10 KB carrying the
+  `research-methods` is one of the **eight** bundled skills: ~10 KB carrying the
   design→what-it-can-support table wired to the `strength` enum, the reporting
   guideline each design owes, and the two refusals above. Beside it,
   `reference/method.md` holds what a run actually needs — question frameworks

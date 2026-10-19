@@ -18,7 +18,7 @@ The `ui-state` row declares its own `.volatile()` `Config`. The Host projects ev
 
 Two conventions: **a negative width means "never recorded"**, deliberately not `0`, because for the sidebar `0` is a real state (collapsed) and is restored through ui-layout's toggle rather than its width setter; and **`theme` holds an extension theme only**, because `light`/`dark`/`system` are already durable in ui-theme's own form and duplicating a preference would give one setting two owners.
 
-There is deliberately **no field for the terminal dock's open state**: the panel is the window onto a *process*, and reopening it after the server's five-minute PTY retention lapsed would start a shell nobody asked for. The desktop shell's window geometry lives separately, in `$DSH_HOME/vncode/window.json`, because the size must be known before the window is built.
+There is deliberately **no field for the terminal dock's open state**: the panel is the window onto a *process*, and reopening it after the server's five-minute PTY retention lapsed would start a shell nobody asked for.
 
 ## How it plugs in
 

@@ -1231,12 +1231,11 @@ export function buildTools(deps = {}) {
       additionalProperties: false,
       properties: {
         slug: { type: 'string', description: 'The run.' },
-        // The enum ADVERTISES the three formats this build refuses, on purpose: a
-        // model that asks for `docx` gets a refusal naming the phase that brings it,
-        // which is a more useful answer than a schema violation that only says the
-        // value is not allowed. The authority on what can actually be written is
-        // `rs_open action=capabilities`, and the skills point there rather than
-        // listing formats that would go stale.
+        // Every format in this enum is implemented (`FORMATS` and `FORMATS_READY` are
+        // the same list), so a format outside it is a schema violation rather than a
+        // refusal. The authority on what can actually be written is `rs_open
+        // action=capabilities`, and the skills point there rather than listing
+        // formats that would go stale.
         format: { type: 'string', enum: [...FORMATS, 'all'], description: '`md` (default), `docx`, `html`, `tex`, `ris`, `bib`, `enw`, `package` (the gated submission folder), or `all` for every DOCUMENT format. `tex` PRINTS the pdflatex command: this plugin runs no engine.' },
         draft: { type: 'string', enum: ['watermark', 'clean'], description: '`watermark` (default) always builds; `clean` is gated.' },
         style: { type: 'string', description: 'Citation style id. Defaults to the run\'s own.' },

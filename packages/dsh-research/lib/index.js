@@ -132,7 +132,7 @@ function routeEnv() {
 }
 
 /**
- * Register this row's four routes.
+ * Register this row's eight routes.
  *
  * @param options - `{ ctx, log }`.
  * @returns a disposer that unregisters every route it added.
@@ -517,7 +517,6 @@ export const REFUSAL_CODES = [
   'BLOCKING_CLAIMS',
   'REFS_EMPTY',
   'STYLES_UNAVAILABLE',
-  'REFS_UNAVAILABLE',
 ]
 
 // ---------------------------------------------------------------------------

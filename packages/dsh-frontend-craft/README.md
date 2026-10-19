@@ -16,7 +16,7 @@ so, below).
 
 | | |
 |---|---|
-| **skill** | `frontend-craft`: 24 commands (`init`, `document`, `critique`, `audit`, `polish`, `bolder`, `quieter`, `distill`, `harden`, `onboard`, `animate`, `colorize`, `typeset`, `layout`, `delight`, `overdrive`, `clarify`, `adapt`, `optimize`, `shape`, `extract`, `craft`, `live`, `generate`), the craft floor, the four visitor modes, and the iOS/Android platform references - 41 reference files copied from the pin |
+| **skill** | `frontend-craft`: 24 commands (`init`, `document`, `critique`, `audit`, `polish`, `bolder`, `quieter`, `distill`, `harden`, `onboard`, `animate`, `colorize`, `typeset`, `layout`, `delight`, `overdrive`, `clarify`, `adapt`, `optimize`, `shape`, `extract`, `craft`, `live`, `generate`), the craft floor, the four visitor modes, and the iOS/Android platform references - 41 top-level reference files copied from the pin (45 with the four under `reference/degraded/`) |
 | **tools** | `fe_context` (product truth, design system, surface briefs, config, directives), `fe_detect` (the 61 source rules over a file or folder), `fe_direction` (a deterministic hand from the directions the agent authored, plus one challenger from the local deck), `fe_render` (the page rendered in a throwaway headless browser, measured), `fe_artifact` (read/write + shape-validate `PRODUCT.md`, `DESIGN.md`, a surface brief) |
 | **tab** | **Frontend**: Findings (by file and rule, filters, re-scan), Artifacts (`PRODUCT.md`, `DESIGN.md`, the briefs, with their shape verdict), Directions (the dealt hand, the pick) and Preview (the rendered picture at each viewport, with the measured findings) |
 | **routes** | `GET /api/dsh-frontend-craft/state`, `POST .../scan`, `GET .../artifacts`, `GET .../rules`, `GET`/`POST .../direction`, `GET .../render-image` |
@@ -143,14 +143,14 @@ From the repository root, `node scripts/checks/check-node-routes.mjs` and
 ## Layout
 
 ```
-lib/index.js      the row: four tools, four routes, the bundled skill
+lib/index.js      the row: five tools, six routes, the bundled skill
 lib/tools.js      fe_context / fe_detect / fe_direction / fe_artifact
 lib/vendor.js     the wasm loader, local-stylesheet inlining, config ignores
 lib/context.js    PRODUCT.md / DESIGN.md / brief reading, validation, directives
 lib/paths.js      the workspace policy and the deterministic source walk
 lib/client.js     the Frontend tab (classic script, no build step)
 lib/vendor/impeccable/  the pinned corpus + the built detector
-skills/frontend-craft/  SKILL.md + 41 references
+skills/frontend-craft/  SKILL.md + 41 references (+4 under reference/degraded/)
 vendor/impeccable/      build.mjs (corpus), build-engine.mjs (wasm), overrides/
 checks/                 the package contract + the parity fixtures
 ```

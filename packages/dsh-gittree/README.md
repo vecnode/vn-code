@@ -16,7 +16,8 @@
 | `id` / kind / address | `dsh-gittree` / `gittree` / `sidebar://gittree` |
 | seats / services | `sidebar.right.pane.tab` / `.title`; `slots` and the bar's `sidebarRightTabs` |
 
-Three authenticated `connection.fetch` routes, all read-only:
+Three authenticated `connection.fetch` routes (four calls below: `?brief=1` is a form of `state`), all
+read-only:
 
 | Route | Git behind it |
 |---|---|

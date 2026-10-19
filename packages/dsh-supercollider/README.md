@@ -129,13 +129,14 @@ vncode copy runs them as `npm run check` in `packages/dsh-supercollider/`, and a
 clone of that repository needs no scripts of its own.
 
 ```
-npm run check                 # all three, in order
+npm run check                 # all four, in order
 npm run check:node            # the engine, offline; the live half skips loudly
 npm run check:wiring          # the package's contract, without the harness
 npm run check:examples        # every skill example, compiled
+npm run check:library         # the sixteen committed examples, compiled
 ```
 
-All three skip a section loudly and exit 0 when the machine has no
+All four skip a section loudly and exit 0 when the machine has no
 SuperCollider, and none is ever weakened to make a change pass.
 
 ## Install

@@ -33,7 +33,7 @@ reads, addressed without naming one (`dsh-resource://diagram/library/<id>`).
   write. `diagrams` (the index, `sidebar://diagrams`, `priority: 'builtin'`) lists the library, this
   conversation and the **design kit**, with the one guide entry at `order: 40` (after Files 10, Editor 20,
   History 30), and a `tool.call.toolview` card per tool draws it inline.
-- **Export** saves mmd/md/tex/html/pdf/svg/png to the **Desktop of the machine running the harness**,
+- **Export** saves what each kind can actually produce - `mmd`/`md`/`svg`/`png` for Mermaid (no PDF), `tex`/`pdf`/`svg`/`png` for TikZ, `html`/`svg` for the kit (no PNG) - to the **Desktop of the machine running the harness**,
   create-exclusively; the client names a format, never a path (a browser download is the fallback). An `html`
   diagram exports as `.html` (the composed document a person can open) and `.svg` (the picture inside it).
 

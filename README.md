@@ -1,13 +1,13 @@
-# 💻 vn-code
+<h1 align="center">💻 vn-code</h1>
 
-![Language: JavaScript](https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black)
-![Language: Rust](https://img.shields.io/badge/language-Rust-000000?logo=rust&logoColor=white)    
-![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
-![Platforms: Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)      
-![DeepSeek Harness 0.2.0-rc.2](https://img.shields.io/badge/dsh-0.2.0--rc.2-4f8cff)
+<p align="center">
+  <img alt="Language: JavaScript" src="https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black"> <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-000000?logo=rust&logoColor=white"> <img alt="License: AGPL-3.0-only" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue"> <img alt="Platforms: Windows | macOS | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey"> <img alt="DeepSeek Harness 0.2.0-rc.2" src="https://img.shields.io/badge/dsh-0.2.0--rc.2-4f8cff">
+</p>
 
-Agent-Human IDE/ADE ⌨️    
-Web and Desktop versions, bundles [`Plugins`](packages/),  [`Skills`](docs/) and [`Interfaces`](docs/)
+<p align="center">
+  Agent-Human IDE/ADE ⌨️<br>
+  Web and Desktop versions, bundles <a href="packages/">Plugins</a>, <a href="docs/">Skills</a> and <a href="docs/">Interfaces</a>
+</p>
 
 ![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner3.png)
 

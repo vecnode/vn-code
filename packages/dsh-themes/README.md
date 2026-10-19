@@ -31,9 +31,9 @@ Open In… (`dsh-open-in-app`) is `-10` and dsh-cmdbar's button `30`; no shipped
 - **Screenshot** (`-30`) — `getDisplayMedia` on the current tab, one frame into a canvas, POSTed to this
   package's host route. The open tooltip bubble is kept out of the frame by `html[data-dsh-screenshot] [role=tooltip]`.
 - **Page zoom** (`-40`) — Chrome's own ladder, cut at both ends: `50, 67, 75, 80, 90, 100, 110, 125, 150, 175,
-  200`. It writes one inline `zoom` on the document element and removes it at 100%. It exists because the
-  native window `scripts\run-desktop.bat` opens has no Ctrl+ / Ctrl- gesture; the button sits inside the page
-  it zooms, hence the 200% top rung. The level is kept in `ui-state`'s volatile `pageZoom`, with a
+  200`. It writes one inline `zoom` on the document element and removes it at 100%. It exists because a browser zoom reflows the whole
+  shell while a page zoom does not - the frame keeps its layout, which is what makes it usable on a
+  1440px screen; the button sits inside the page it zooms, hence the 200% top rung. The level is kept in `ui-state`'s volatile `pageZoom`, with a
   `localStorage` copy under `dsh-themes.page-zoom`.
 - **Appearance overrides**, plain CSS: the **Markdown paper** (ui-theme's own light declarations re-read at
   boot and re-declared on `body [data-document-markdown]`, plus white — all-or-nothing, re-installed on

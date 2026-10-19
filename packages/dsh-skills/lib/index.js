@@ -52,7 +52,7 @@ import path from 'node:path'
 export const name = 'dsh-skills'
 
 /** Version marker, logged at activation; the client's constant must match it. */
-export const PLUGIN_VERSION = '0.1.0-alpha.1'
+export const PLUGIN_VERSION = '0.1.0-alpha.3'
 
 export const inject = ['connection']
 

@@ -1,7 +1,7 @@
 # dsh-frontend-craft bundle layer (alpha.1).
 #
-# One row ('frontend-craft') owns the whole package: the three fe_* tools, the
-# four routes the Frontend tab reads, the bundled frontend-craft skill, and the
+# One row ('frontend-craft') owns the whole package: the five fe_* tools, the
+# six routes the Frontend tab reads, the bundled frontend-craft skill, and the
 # vendored Impeccable corpus + detector under lib/vendor/impeccable/.
 #
 # Nothing shipped is patched and no core row is disabled, so there is no

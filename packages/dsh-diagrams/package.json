@@ -1,7 +1,7 @@
 {
   "name": "dsh-diagrams",
   "version": "0.1.0-alpha.8",
-  "description": "Diagrams: Mermaid, TikZ and the Diagram Design kit in one bundle - seven `diagram_*` tools whose writes are validated on the host before they are stored, a conversation store plus a shared library, a tab per diagram with an export menu, an index page with the 44-type design gallery, and browser render reports.",
+  "description": "Diagrams: Mermaid, TikZ and the Diagram Design kit in one bundle - seven `diagram_*` tools whose writes are validated on the host before they are stored, a conversation store plus a shared library, a tab per diagram with an export menu, an index page that also browses the kit's 71 example keys, and browser render reports.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
