@@ -941,12 +941,28 @@ check('...and the element below it is drawn as an element', headingBody.includes
 const repoReadme = readFileSync(path.join(repo, 'README.md'), 'utf8')
 const readmeHeader = editorInternals.splitHtmlBlocks(repoReadme.split('\n\n![vncode')[0])
 check('the README header is one container', readmeHeader.map((block) => block.kind).join(','), 'element')
+// Asserted by BEHAVIOUR, not by block count: the header may gain a `<br>` or a
+// spacer paragraph without this check having to be edited, but the mark must open
+// it and the title must still be Markdown inside it.
+const readmeHeaderChildren = readmeHeader[0].children
 check(
-  '...holding the mark, the title and the tagline',
-  readmeHeader[0].children.map((block) => block.kind).join(','),
-  'html,markdown,html,html',
+  '...the mark opens it, as a picture',
+  (readmeHeaderChildren[0].nodes || []).map((node) => node.tag).join('+'),
+  'picture',
 )
-check('...where the title reaches the Markdown renderer as a heading', readmeHeader[0].children[1].text.trim(), '# vn-code')
+check(
+  '...where every line that is a heading reaches the Markdown renderer as one',
+  readmeHeaderChildren
+    .filter((block) => block.kind === 'markdown')
+    .map((block) => block.text.trim())
+    .join(' | '),
+  '# vn-code',
+)
+check(
+  '...and the authored elements around it are still drawn as elements',
+  readmeHeaderChildren.filter((block) => block.kind === 'html').length >= 2,
+  true,
+)
 const authoredBody = renderToStaticMarkup(
   h(MarkdownPreviewBody, {
     t: markdownT,

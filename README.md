@@ -5,6 +5,8 @@
   <img src="assets/logo/vn-code-512.png" alt="vn-code" width="112">
 </picture>
 
+<br>
+
 # vn-code
 
 <p>
@@ -13,18 +15,15 @@
 
 <p>
   Agent-Human IDE/ADE ⌨️<br>
-  Web and Desktop versions, bundles <a href="packages/">Plugins</a>, <a href="docs/">Skills</a> and <a href="docs/">Interfaces</a>
+  Bundles <a href="packages/">Plugins</a>, <a href="docs/">Skills</a> and <a href="docs/">Interfaces</a>
 </p>
 
 </div>
 
-![vncode: the plugin pack, no core patches - the vncode README header](./assets/vncode-banner3.png)
+![vncode: the plugin pack, a Node application - the vncode README header](./assets/vncode-banner3.png)
 
-Cross-platform IDE/ADE. Wraps core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design: every plugin is **Node.js** (plain JavaScript bundles, zero npm dependencies), while **Rust** is only the small front-door installer binary that composes the harness home and runs the launcher. The launchers run on **Windows, macOS and Linux**.
+Cross-platform Node IDE/ADE with core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design: every plugin is **Node.js** (plain JavaScript bundles, zero npm dependencies), while **Rust** is only the small front-door installer binary that composes the harness home and runs the launcher. The launchers run on **Windows, macOS and Linux**.
 
-<p align="left">
-  <img src="assets/img1.png" alt="The vncode window while the pinned harness starts: a dark splash with the mark, the name and a &quot;Starting the harness…&quot; line" width="49%">
-</p>
 
 ## Run
 
