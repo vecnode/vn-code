@@ -32,13 +32,24 @@ const out = path.join(repo, 'assets', 'vncode-banner3.png')
 const INK = '#05060A'
 const SIZE = { width: 1280, height: 320 }
 
-// The plugin count is the number of bundles in the pack, not a number to remember.
+// The two counts are read from the tree, not remembered: the number of bundles in
+// the pack, and the number of skill folders those bundles carry (`skills/<name>/`,
+// which is exactly what the installers copy into $DSH_HOME/skills).
 const plugins = fs.readdirSync(path.join(repo, 'packages'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).length
+const skills = fs
+  .readdirSync(path.join(repo, 'packages'), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .flatMap((entry) => {
+    const root = path.join(repo, 'packages', entry.name, 'skills')
+    return fs.existsSync(root) ? fs.readdirSync(root, { withFileTypes: true }).filter((skill) => skill.isDirectory()) : []
+  }).length
 
 const COPY = {
   eyebrow: 'VNCODE \u00b7 ADE',
   count: String(plugins),
-  countTail: 'plugins.',
+  countTail: 'plugins, ',
+  skills: String(skills),
+  skillsTail: 'skills.',
   subhead: 'Node application.',
   // Two rows of about one row's width, so the list reads as a list rather than a
   // paragraph. The first row is the one the hand-made banner already carried.
@@ -84,7 +95,7 @@ export function bannerHtml(copy = COPY) {
   <div class="rings"></div>
   <div class="text">
     <div class="eyebrow">${copy.eyebrow}</div>
-    <div class="headline"><span class="n">${copy.count}</span> ${copy.countTail}</div>
+    <div class="headline"><span class="n">${copy.count}</span> ${copy.countTail}<span class="n">${copy.skills}</span> ${copy.skillsTail}</div>
     <div class="subhead">${copy.subhead}</div>
     ${copy.rows.map((row, index) => `<div class="row row${index + 1}">${row}</div>`).join('\n    ')}
   </div>
@@ -104,13 +115,13 @@ try {
     if (header.width !== SIZE.width || header.height !== SIZE.height) {
       throw new Error(`the banner is ${header.width}x${header.height}, not ${SIZE.width}x${SIZE.height}`)
     }
-    console.log(`ok: the banner is ${header.width}x${header.height}, ${plugins} plugins`)
+    console.log(`ok: the banner is ${header.width}x${header.height}, ${plugins} plugins, ${skills} skills`)
     process.exit(0)
   }
   const browser = findBrowser(explicit)
   console.log(`browser   ${browser}`)
   shoot({ browser, html: bannerHtml(), width: SIZE.width, height: SIZE.height, out })
-  console.log(`banner    ${path.relative(repo, out)} - ${plugins} plugins, ${COPY.rows.length} list rows`)
+  console.log(`banner    ${path.relative(repo, out)} - ${plugins} plugins, ${skills} skills, ${COPY.rows.length} list rows`)
 } catch (error) {
   console.error('banner.mjs: ' + error.message)
   process.exit(1)
