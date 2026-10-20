@@ -206,13 +206,32 @@ function verificationView(verification, extra = {}) {
   }
 }
 
+/**
+ * What a tool's `output` must be, and why.
+ *
+ * Measured against the harness, twice: `render` is called as `render(args, value)`
+ * and must return an ARRAY of content blocks - a string return fails with
+ * `content.some is not a function` - and `presentResult` is what supplies a card.
+ * Both mistakes shipped in the first version of this file while its own checks were
+ * green, because the checks only proved the renderer was a function.
+ */
 const OUTPUT_SCHEMA = {
   type: 'object',
-  properties: {
-    view: { type: 'object' },
-    text: { type: 'string' },
-  },
-  required: ['view', 'text'],
+  properties: { text: { type: 'string' }, view: { type: 'object' } },
+  required: ['text', 'view'],
+}
+
+/** The title a card shows, from whatever the view happens to carry. */
+function resultTitle(result) {
+  const view = viewOf(result)
+  return String(view.rung ?? view.status ?? view.action ?? 'shader')
+}
+
+const OUTPUT = {
+  schema: OUTPUT_SCHEMA,
+  render: (_args, value) => [{ type: 'text', text: String(value !== null && value !== undefined && value.text !== undefined ? value.text : '') }],
+  presentationMeta: (_args, value) => viewOf(value),
+  presentResult: (_args, result) => ({ card: 'generic', title: resultTitle(result), content: result !== null && result !== undefined && typeof result.text === 'string' ? result.text : '' }),
 }
 
 /** Wrap a result the registry will accept: a view, and the text for the model. */
@@ -268,14 +287,7 @@ export function buildTools(deps) {
       },
       required: [],
     },
-    output: {
-      schema: OUTPUT_SCHEMA,
-      render: (result) => {
-        const view = viewOf(result)
-        const count = Array.isArray(view.diagnostics) ? view.diagnostics.length : 0
-        return 'shader ' + String(view.id ?? '?') + ' · ' + String(view.rung ?? view.status ?? '?') + (count > 0 ? ' · ' + String(count) + ' diagnostic(s)' : '')
-      },
-    },
+    output: OUTPUT,
     async execute(args, exec) {
       const sessionId = exec?.agent?.session?.id ?? 'anonymous'
       if (args.remove === true) {
@@ -340,14 +352,7 @@ export function buildTools(deps) {
       },
       required: [],
     },
-    output: {
-      schema: OUTPUT_SCHEMA,
-      render: (result) => {
-        const view = viewOf(result)
-        const count = Array.isArray(view.diagnostics) ? view.diagnostics.length : 0
-        return 'verify · ' + String(view.rung ?? '?') + ' · ' + String(view.status ?? '?') + (count > 0 ? ' · ' + String(count) + ' diagnostic(s)' : '')
-      },
-    },
+    output: OUTPUT,
     async execute(args, exec) {
       const sessionId = exec?.agent?.session?.id ?? 'anonymous'
       let source = String(args.source ?? '')
@@ -390,15 +395,7 @@ export function buildTools(deps) {
       },
       required: [],
     },
-    output: {
-      schema: OUTPUT_SCHEMA,
-      render: (result) => {
-        const view = viewOf(result)
-        const frame = view.frame
-        if (frame === null || frame === undefined) return 'render · ' + String(view.status ?? 'failed')
-        return 'render · ' + String(frame.width) + '×' + String(frame.height) + ' · ' + String(frame.distinctColors) + ' colours'
-      },
-    },
+    output: OUTPUT,
     async execute(args, exec) {
       const sessionId = exec?.agent?.session?.id ?? 'anonymous'
       let source = String(args.source ?? '')
@@ -514,13 +511,7 @@ export function buildTools(deps) {
       },
       required: [],
     },
-    output: {
-      schema: OUTPUT_SCHEMA,
-      render: (result) => {
-        const view = viewOf(result)
-        return 'read · ' + String(Array.isArray(view.shaders) ? view.shaders.length : 1) + ' shader(s)'
-      },
-    },
+    output: OUTPUT,
     async execute(args, exec) {
       const sessionId = exec?.agent?.session?.id ?? 'anonymous'
       const scope = args.scope === 'library' ? 'library' : 'session'
@@ -580,7 +571,7 @@ export function buildTools(deps) {
       properties: { id: { type: 'string' }, note: { type: 'string' } },
       required: ['id'],
     },
-    output: { schema: OUTPUT_SCHEMA, render: (result) => 'publish · ' + String(viewOf(result).id ?? '?') },
+    output: OUTPUT,
     async execute(args, exec) {
       const sessionId = exec?.agent?.session?.id ?? 'anonymous'
       const id = String(args.id ?? '')
@@ -619,13 +610,7 @@ export function buildTools(deps) {
       },
       required: ['target'],
     },
-    output: {
-      schema: OUTPUT_SCHEMA,
-      render: (result) => {
-        const view = viewOf(result)
-        return 'target · ' + String(view.target ?? '?') + ' · ' + String(Array.isArray(view.files) ? view.files.length : 0) + ' file(s)'
-      },
-    },
+    output: OUTPUT,
     async execute(args, exec) {
       const sessionId = exec?.agent?.session?.id ?? 'anonymous'
       let shader
@@ -714,7 +699,7 @@ export function buildTools(deps) {
       },
       required: [],
     },
-    output: { schema: OUTPUT_SCHEMA, render: (result) => 'kit · ' + String(viewOf(result).action ?? 'catalog') },
+    output: OUTPUT,
     async execute(args) {
       const action = args.action ?? 'catalog'
       if (action === 'catalog') {

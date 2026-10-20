@@ -256,26 +256,37 @@ check('every tool declares its surface', tools.every((tool) => tool.parameters?.
 // when this row first ran inside the harness, with every check here green. So the
 // renderer is driven in BOTH shapes, against an ok view and a failing one.
 {
-  const okView = { status: 'ok', rung: 'v3-drawn', id: 'rings', target: 'web', files: [], frame: { width: 64, height: 64, distinctColors: 9, signature: 'abcd1234' }, diagnostics: [], warnings: [], shaders: [{ id: 'a' }], action: 'catalog' }
+  const okView = { status: 'ok', rung: 'v3-drawn', id: 'rings', target: 'web', files: [{ name: 'a.html' }], frame: { width: 64, height: 64, distinctColors: 9, signature: 'abcd1234' }, diagnostics: [], warnings: [], shaders: [{ id: 'a' }], action: 'catalog' }
   const badView = { status: 'error', rung: 'v1-static', id: 'rings', diagnostics: [{ line: 3, message: 'x' }], warnings: [] }
-  let rendererErrors = []
+  const problems = []
   for (const tool of tools) {
+    // The shape is the harness's, not this row's: `render(args, value)` returning an
+    // ARRAY of content blocks, `presentationMeta` returning the view, and
+    // `presentResult` returning the card. Measured twice in the live harness - a
+    // one-argument renderer threw `Cannot read properties of undefined`, and a string
+    // return threw `content.some is not a function`, both with these checks green.
+    if (typeof tool.output.presentationMeta !== 'function') problems.push(tool.name + ': no presentationMeta')
+    if (typeof tool.output.presentResult !== 'function') problems.push(tool.name + ': no presentResult')
     for (const [label, value] of [
-      ['wrapped ok', { view: okView, text: '' }],
-      ['bare ok', okView],
-      ['wrapped error', { view: badView, text: '' }],
-      ['bare error', badView],
+      ['wrapped ok', { view: okView, text: 'hello' }],
+      ['wrapped error', { view: badView, text: 'bad' }],
+      ['bare view', okView],
       ['empty', {}],
     ]) {
       try {
-        const text = tool.output.render(value)
-        if (typeof text !== 'string') rendererErrors.push(tool.name + ' ' + label + ': not a string')
+        const blocks = tool.output.render({}, value)
+        if (!Array.isArray(blocks)) problems.push(tool.name + ' ' + label + ': render did not return an array')
+        else if (blocks.length === 0 || blocks[0].type !== 'text' || typeof blocks[0].text !== 'string') problems.push(tool.name + ' ' + label + ': bad block')
+        const meta = tool.output.presentationMeta({}, value)
+        if (meta === null || typeof meta !== 'object') problems.push(tool.name + ' ' + label + ': presentationMeta is not an object')
+        const card = tool.output.presentResult({}, value)
+        if (card === null || typeof card !== 'object' || typeof card.content !== 'string' || typeof card.title !== 'string') problems.push(tool.name + ' ' + label + ': bad card')
       } catch (err) {
-        rendererErrors.push(tool.name + ' ' + label + ': ' + String(err && err.message))
+        problems.push(tool.name + ' ' + label + ': ' + String(err && err.message))
       }
     }
   }
-  check('every renderer survives the wrapped result, a bare view and an empty one', rendererErrors.join(' | '), '')
+  check('every tool output renders blocks and a card, in the harness signature', problems.join(' | '), '')
 }
 
 const call = (routePath, request) => routes.get(routePath).fetch(request)
