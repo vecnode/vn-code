@@ -69,6 +69,23 @@ Parameters are declared in the source and become sliders everywhere:
 // @param SPEED float 0.1..2.0 default 0.6 "Rotation speed"
 ```
 
+## Making a new shader — the loop
+
+Compiling is not drawing, and drawing is not looking. In order, and stopping early
+is how a shader arrives that compiles and shows nothing:
+
+1. `shader_kit action=example id=gallery/ocean` — start from a piece the check
+   compiles and draws.
+2. `shader_write title="…" source="…"` — stops at a **rung**; anything below
+   `v2-compiled` is a diagnostic on your own line numbers, not a result.
+3. `shader_render id="…" frames=3` — black? flat? do the frames differ?
+4. look at the PNG it wrote.
+5. `shader_target target=web` and open it in the browser that will run it.
+
+The skills carry the same loop with the reasoning (`fragment-shaders`,
+`shader-debugging`), and every GLSL example in them is compiled by a check, so the
+path they teach is the path that passes.
+
 ## What it will not do
 
 - **Build an FFGL plugin.** FFGL is a C++ ABI; the SDK is not vendored and no C++

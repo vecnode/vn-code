@@ -250,6 +250,33 @@ check('six routes registered', routes.size, 6)
 check('route paths match the capability list', [...routes.keys()].sort().join(','), index.CAPABILITIES.routes.slice().sort().join(','))
 check('routes only use GET/HEAD/POST', [...routes.values()].every((route) => route.methods.every((method) => ['GET', 'HEAD', 'POST'].includes(method))), true)
 check('every tool declares its surface', tools.every((tool) => tool.parameters?.type === 'object' && tool.output?.schema && typeof tool.output.render === 'function' && typeof tool.execute === 'function'), true)
+// MEASURED, the hard way: the registry hands `output.render` the WHOLE value
+// `execute()` returned (`{ view, text }`), not the view. A renderer written against
+// the view alone throws on the first real call - which is exactly what happened
+// when this row first ran inside the harness, with every check here green. So the
+// renderer is driven in BOTH shapes, against an ok view and a failing one.
+{
+  const okView = { status: 'ok', rung: 'v3-drawn', id: 'rings', target: 'web', files: [], frame: { width: 64, height: 64, distinctColors: 9, signature: 'abcd1234' }, diagnostics: [], warnings: [], shaders: [{ id: 'a' }], action: 'catalog' }
+  const badView = { status: 'error', rung: 'v1-static', id: 'rings', diagnostics: [{ line: 3, message: 'x' }], warnings: [] }
+  let rendererErrors = []
+  for (const tool of tools) {
+    for (const [label, value] of [
+      ['wrapped ok', { view: okView, text: '' }],
+      ['bare ok', okView],
+      ['wrapped error', { view: badView, text: '' }],
+      ['bare error', badView],
+      ['empty', {}],
+    ]) {
+      try {
+        const text = tool.output.render(value)
+        if (typeof text !== 'string') rendererErrors.push(tool.name + ' ' + label + ': not a string')
+      } catch (err) {
+        rendererErrors.push(tool.name + ' ' + label + ': ' + String(err && err.message))
+      }
+    }
+  }
+  check('every renderer survives the wrapped result, a bare view and an empty one', rendererErrors.join(' | '), '')
+}
 
 const call = (routePath, request) => routes.get(routePath).fetch(request)
 const state = await call('/api/dsh-shaders/state', new Request('http://x/api/dsh-shaders/state?session=session-a'))

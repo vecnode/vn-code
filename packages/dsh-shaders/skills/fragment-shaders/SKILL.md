@@ -224,6 +224,36 @@ void main() {
 For static images use an ordered or interleaved-gradient dither instead of white
 noise, so it does not crawl. `module/post` has `ditherTPDF`.
 
+## Validate as you create — the loop, in order
+
+Writing a shader is not one call. It is this loop, and stopping early is how a
+shader arrives that compiles and shows nothing.
+
+1. **Start from a known-good technique.** `shader_kit action=search query=...` or
+   `action=example id=gallery/ocean`. A corpus piece that the check compiles and
+   draws is a better starting point than a blank file, and reading one teaches the
+   technique faster than inventing it.
+2. **Write it, and let the compiler answer.**
+   `shader_write title="..." source="..."` returns a **rung** and any diagnostic on
+   your own line numbers. If it is not `v2-compiled` or better, the loop stops here
+   — fix the line it named, do not move on.
+3. **Prove it draws.** `shader_render id="..." frames=3`. This is the step people
+   skip: a shader can compile, link, draw, and be a black rectangle. The answer says
+   `black`, `flat`, and whether the three frames differ.
+4. **Look at the frame.** The tool hands back a PNG artifact. That is the only step
+   that judges the picture; the rung only judges the code.
+5. **Only then** `shader_target target=web` (or `frag`, `isf`) and open it in the
+   browser that will run it.
+
+Two rules that make this work:
+
+- **the examples are the reference and the baseline.** If your shader's frame is
+  flat while the corpus piece you started from is not, the difference is yours to
+  find — render both at the same size and time and compare the signatures.
+- **a rung is a claim with a ceiling.** `v1-static` means *nothing was compiled*.
+  Never report a shader as working from it. If the host has no browser, say the
+  compile did not happen rather than implying it did.
+
 ## Check the picture, not the log
 
 A shader can compile, link, draw, and produce a black rectangle. `shader_render`
