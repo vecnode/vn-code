@@ -605,13 +605,25 @@ export function buildTools(deps) {
         const within = path.relative(workspace, target)
         if (within.startsWith('..') || path.isAbsolute(within)) throw Object.assign(new Error('that path is outside the workspace'), { code: 'BAD_REQUEST' })
         await fsp.mkdir(target, { recursive: true })
+        const realTarget = await fsp.realpath(target)
         for (const file of result.files) {
-          const filePath = path.join(target, file.name)
-          if (existsSync(filePath) && args.overwrite !== true) {
-            throw Object.assign(new Error(file.name + ' already exists; pass overwrite: true to replace it'), { code: 'EXISTS' })
+          // Containment is checked on the REAL folder, and the path reported back is
+          // the LOGICAL one: on Windows a temp folder's realpath can carry a different
+          // 8.3 spelling, and `path.relative(workspace, realpath)` then reports
+          // `../../..` for a file that is inside the workspace.
+          const resolved = path.resolve(realTarget, file.name)
+          if (path.relative(realTarget, resolved).startsWith('..')) throw Object.assign(new Error('refusing to write outside the folder: ' + file.name), { code: 'BAD_REQUEST' })
+          // Create-exclusive, as SECURITY.md requires: `wx` fails on an existing
+          // file atomically, where `existsSync` + write is a race two callers lose.
+          try {
+            await fsp.writeFile(resolved, file.text, { encoding: 'utf8', flag: args.overwrite === true ? 'w' : 'wx' })
+          } catch (err) {
+            if (err && err.code === 'EEXIST') {
+              throw Object.assign(new Error(file.name + ' already exists; pass overwrite: true to replace it'), { code: 'EXISTS' })
+            }
+            throw err
           }
-          await fsp.writeFile(filePath, file.text, 'utf8')
-          written.push(path.relative(workspace, filePath).split(path.sep).join('/'))
+          written.push(path.relative(workspace, path.join(target, file.name)).split(path.sep).join('/'))
         }
       }
       const view = {
@@ -686,6 +698,12 @@ export function buildTools(deps) {
         const result = getExample(args.id)
         if (result.found !== true) return answer({ action, status: 'missing', ...result }, result.message + '\n' + (result.ids ?? []).slice(0, 20).join(', '))
         const includeSource = args.includeSource !== false
+        if (result.kind === 'reference') {
+          const view = { action, status: 'ok', kind: 'reference', id: result.id, title: result.title, source: result.source, bytes: result.bytes, ...(includeSource ? { text: result.sourceText } : {}) }
+          const lines = [result.id + ' — ' + result.title, 'a written reference from the shader-skills corpus (' + String(result.bytes) + ' bytes). Read it for technique; it is prose, not a shader, so it has no dialect and nothing to compile.']
+          if (includeSource) lines.push('', result.sourceText)
+          return answer(view, lines.join('\n'))
+        }
         const view = {
           action,
           status: 'ok',

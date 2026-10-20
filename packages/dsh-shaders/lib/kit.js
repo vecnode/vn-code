@@ -127,6 +127,9 @@ export function listExamples(options = {}) {
     for (const entry of skills.modules) {
       out.push({ id: 'module/' + entry.id, source: 'skills', title: entry.summary === '' ? entry.id : entry.summary, technique: 'module', dialect: 'module', params: [], sources: 1, hasPage: false })
     }
+    for (const entry of skills.references) {
+      out.push({ id: 'reference/' + entry.id, source: 'skills', title: entry.title === '' ? entry.id : entry.title, technique: 'reference', dialect: null, params: [], sources: 0, hasPage: false })
+    }
   }
   return out
 }
@@ -186,13 +189,29 @@ export function getExample(id, options = {}) {
       note: primary === null ? entry.unreadableReason ?? 'this page has no extractable fragment source' : null,
     }
   }
-  if (kind === 'gallery' || kind === 'module' || kind === 'template') {
+  if (kind === 'gallery' || kind === 'module' || kind === 'template' || kind === 'reference') {
     const catalog = catalogOf('skills')
     if (catalog === null) return { found: false, message: 'the shader-skills corpus is not installed in this package' }
-    const list = kind === 'gallery' ? catalog.gallery : kind === 'module' ? catalog.modules : catalog.templates
+    const list = kind === 'gallery' ? catalog.gallery : kind === 'module' ? catalog.modules : kind === 'template' ? catalog.templates : catalog.references
     const entry = list.find((candidate) => candidate.id === name)
     if (entry === undefined) return notFound(value, list.map((candidate) => kind + '/' + candidate.id))
     const sourceText = vendoredFile('skills', entry.file)
+    // A written reference is prose, not GLSL: it is returned as text with no
+    // dialect, because claiming one would be inventing a fact about a document.
+    if (kind === 'reference') {
+      return {
+        found: true,
+        id: value,
+        source: 'skills',
+        kind: 'reference',
+        title: entry.title === '' ? entry.id : entry.title,
+        dialect: null,
+        sourceText,
+        file: entry.file,
+        bytes: entry.bytes,
+        license: catalog.source,
+      }
+    }
     const result = {
       found: true,
       id: value,
@@ -227,7 +246,7 @@ export function getExample(id, options = {}) {
     }
     return result
   }
-  return notFound(value, ['radiant/<id>', 'gallery/<id>', 'module/<id>', 'template/<id>'])
+  return notFound(value, ['radiant/<id>', 'gallery/<id>', 'module/<id>', 'template/<id>', 'reference/<id>'])
 }
 
 function notFound(id, ids) {

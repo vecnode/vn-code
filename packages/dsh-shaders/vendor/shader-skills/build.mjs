@@ -301,9 +301,15 @@ function derive(tree) {
     }
   }
 
-  // ---- the prose and the licences travel too ----
+  // ---- the licence and its credits travel with the GLSL; nothing else does.
+  //
+  // The corpus's own `SKILL.md` is deliberately NOT vendored: it is a second,
+  // unreachable copy of guidance this package already ships as five skills, and
+  // shipping prose nothing can read is exactly the dead weight a catalogue should
+  // not carry. `CREDITS.md` is not optional - it is where that corpus records that
+  // every technique came from published work and that no Shadertoy source was
+  // copied - and `LICENSE` is the grant.
   for (const [relative, upstream] of [
-    ['SKILL.md', path.join(skillsRoot, 'SKILL.md')],
     ['CREDITS.md', path.join(tree, 'CREDITS.md')],
     ['LICENSE', path.join(tree, 'LICENSE')],
   ]) {

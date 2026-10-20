@@ -16,7 +16,7 @@
  * v4-measured - and an answer always says which rung it reached.
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -280,12 +280,20 @@ export function buildRoutes(deps) {
       if (found.found !== true || found.page === undefined || found.page === null) {
         return json({ ok: false, error: { code: 'NOT_FOUND', message: 'no vendored page called ' + id } }, 404)
       }
-      const file = path.join(deps.vendorRoot ?? path.join(path.dirname(fileURLToPath(import.meta.url)), 'vendor'), 'radiant', found.page)
-      const root = path.join(deps.vendorRoot ?? path.join(path.dirname(fileURLToPath(import.meta.url)), 'vendor'), 'radiant')
-      const within = path.relative(root, file)
-      if (within.startsWith('..') || path.isAbsolute(within)) return badRequest('BAD_REQUEST', 'that page is outside the vendored tree')
-      if (!existsSync(file)) return json({ ok: false, error: { code: 'NOT_FOUND', message: 'the page is missing from this install' } }, 404)
-      const html = readFileSync(file, 'utf8')
+      const root = path.resolve(deps.vendorRoot ?? path.join(path.dirname(fileURLToPath(import.meta.url)), 'vendor'), 'radiant')
+      const file = path.resolve(root, found.page)
+      // realpath containment, as SECURITY.md requires: a vendored tree is not
+      // allowed to smuggle a symlink that points out of it.
+      const realRoot = realpathSync(root)
+      let realFile
+      try {
+        realFile = realpathSync(file)
+      } catch (err) {
+        return json({ ok: false, error: { code: 'NOT_FOUND', message: 'the page is missing from this install' } }, 404)
+      }
+      const within = path.relative(realRoot, realFile)
+      if (within.startsWith('..') || path.isAbsolute(within)) return badRequest('BAD_REQUEST', 'that page resolves outside the vendored tree')
+      const html = readFileSync(realFile, 'utf8')
       return new Response(html, {
         status: 200,
         headers: {
@@ -305,10 +313,13 @@ export function buildRoutes(deps) {
     async fetch(request) {
       const name = new URL(request.url).searchParams.get('name') ?? ''
       if (!/^[0-9a-f]{32}\.png$/.test(name)) return badRequest('BAD_REQUEST', 'an artifact name is a 32-character sha256 prefix plus .png')
-      const file = path.join(deps.artifactDir, name)
-      const within = path.relative(deps.artifactDir, file)
+      const dir = deps.artifactDir
+      const file = path.resolve(dir, name)
+      const within = path.relative(path.resolve(dir), file)
       if (within.startsWith('..') || path.isAbsolute(within)) return badRequest('BAD_REQUEST', 'that name is outside the artifact cache')
       if (!existsSync(file)) return json({ ok: false, error: { code: 'NOT_FOUND', message: 'no such frame' } }, 404)
+      // The name is a content hash, so a symlink here can only be an attack.
+      if (!realpathSync(file).startsWith(realpathSync(dir) + path.sep)) return badRequest('BAD_REQUEST', 'that name resolves outside the artifact cache')
       const bytes = await fsp.readFile(file)
       return new Response(request.method === 'HEAD' ? null : bytes, {
         status: 200,

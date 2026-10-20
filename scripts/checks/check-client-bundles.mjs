@@ -6960,11 +6960,11 @@ if (coreThemeBundle === null) {
     logger: { debug() {}, warn() {} },
   })
 
-  check('shaders: two tab types are registered', tabTypes.map((entry) => entry.kind).sort().join(','), 'shader,shaders')
-  check('shaders: the viewer answers both address shapes', JSON.stringify(tabTypes.find((entry) => entry.kind === 'shader').patterns), JSON.stringify(['dsh-resource://shader/session/**', 'dsh-resource://shader/library/**']))
-  check('shaders: the index carries a guide entry', Array.isArray(tabTypes.find((entry) => entry.kind === 'shaders').guide))
+  check('shaders: ONE tab type is registered', tabTypes.map((entry) => entry.kind).join(','), 'shader')
+  check('shaders: the tab answers both address shapes', JSON.stringify(tabTypes[0].patterns), JSON.stringify(['dsh-resource://shader/session/**', 'dsh-resource://shader/library/**']))
+  check('shaders: it is a support tab, not a page with a guide entry', tabTypes[0].guide === undefined, true)
   check('shaders: four tool cards are registered', slotRegistrations.filter((entry) => entry.registration.name === 'tool.call.toolview').map((entry) => entry.registration.key).sort().join(','), 'shader_kit,shader_render,shader_verify,shader_write')
-  check('shaders: both tab bodies and both titles are registered', slotRegistrations.filter((entry) => entry.registration.name === 'sidebar.right.pane.tab').length, 2)
+  check('shaders: exactly one tab body and one title are registered', slotRegistrations.filter((entry) => entry.registration.name === 'sidebar.right.pane.tab').length, 1)
   check('shaders: it injects the slots it registers into', injected.includes('sidebar.right.pane.tab') && injected.includes('tool.call.toolview'))
 
   const internals = shaded.exports.__internals
@@ -6996,12 +6996,9 @@ if (coreThemeBundle === null) {
 
   const viewer = slotRegistrations.find((entry) => entry.registration.name === 'sidebar.right.pane.tab' && entry.registration.key === internals.VIEWER_ID)
   const viewerMarkup = viewer === undefined ? '' : renderToStaticMarkup(h(viewer.component, { address: 'dsh-resource://shader/session/session-bundle/rings' }))
-  check('shaders: the viewer pane server-renders', viewerMarkup.length > 0)
-  check('shaders: the viewer pane needs no canvas to render', /Loading the shader|No shader|Could not read/.test(viewerMarkup))
-
-  const index = slotRegistrations.find((entry) => entry.registration.name === 'sidebar.right.pane.tab' && entry.registration.key === internals.INDEX_ID)
-  const indexMarkup = index === undefined ? '' : renderToStaticMarkup(h(index.component, { address: 'sidebar://shaders' }))
-  check('shaders: the index pane server-renders', indexMarkup.length > 0)
+  check('shaders: the support tab server-renders', viewerMarkup.length > 0)
+  check('shaders: the tab needs no canvas to render', /Loading|No shaders|No conversation|Could not read/.test(viewerMarkup))
+  check('shaders: the tab has no corpus browser in it', /corpus|gallery|search/i.test(viewerMarkup), false)
 }
 
 console.log('')

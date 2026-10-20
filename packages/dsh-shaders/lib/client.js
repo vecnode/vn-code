@@ -1,25 +1,22 @@
 /**
  * dsh-shaders — browser half.
  *
- * Three surfaces, and one rule that shapes all of them: **the renderer is a live
- * WebGL context in the pane, not an iframe**. A shader you are editing has to show
- * the picture the browser in front of you produces, with sliders wired to its own
- * uniforms, because that is the half a compile cannot answer.
+ * ONE support tab, deliberately small: pick a shader from this conversation, see a
+ * preview of it drawn by THIS browser, move its parameters, read the verdict. It is
+ * not a corpus browser and not a second editor — the corpus is `shader_kit`'s job in
+ * the conversation, and the source itself belongs to the editor tab. A bar tab that
+ * grew a gallery, a search and a file tree would be a worse editor, not a better
+ * plugin.
  *
- *   1. the `shader` tab - canvas, transport (play/pause/step), resolution, one
- *      slider per `@param`, a status line naming the rung, and the source;
- *   2. the `shaders` tab - this conversation's shaders and the vendored corpus,
- *      with a search over techniques;
- *   3. one `tool.call.toolview` card per rendering tool, so a shader and its
- *      diagnostics appear inline in the conversation.
+ * The one thing it does that nothing else can: it draws the shader with the local
+ * GPU and reports whether THAT browser produced a picture. That is rung three of the
+ * ladder (`v3-drawn`), and only a browser in front of a person can answer it.
  *
- * Everything canvas-shaped lives inside `useEffect`, and every component renders
- * without a DOM: the client-bundle check mounts all of it with a server renderer,
- * and a tab that touches `document` at import time would fail there rather than
- * here. The pane also renders a plain sentence when `getContext` returns null,
- * because a module tab in a browser with WebGL disabled must say so.
+ * Everything canvas-shaped lives inside `useEffect`, and the pane renders a sentence
+ * where a canvas would be, so the client-bundle check can mount it with a server
+ * renderer and no WebGL.
  */
-/* global window, document, fetch, URL, devicePixelRatio, requestAnimationFrame, cancelAnimationFrame, matchMedia, performance, WebGLRenderingContext */
+/* global window, document, fetch, URL, devicePixelRatio, performance, WebGLRenderingContext */
 window.__ModuleLoader__.load({
   id: 'dsh-shaders',
   factory: (require) => {
@@ -34,11 +31,8 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     // Constants
     // ---------------------------------------------------------------------
-    /** This implementation's identity in the tab system. */
     const VIEWER_ID = 'dsh-shaders-viewer'
     const VIEWER_KIND = 'shader'
-    const INDEX_ID = 'dsh-shaders-index'
-    const INDEX_KIND = 'shaders'
     /** Address grammar, kept in step with lib/tools.js `addressOf`. */
     const SESSION_PREFIX = 'dsh-resource://shader/session/'
     const LIBRARY_PREFIX = 'dsh-resource://shader/library/'
@@ -47,25 +41,23 @@ window.__ModuleLoader__.load({
     const SHADER_ROUTE = '/api/dsh-shaders/shader'
     const ARTIFACT_ROUTE = '/api/dsh-shaders/artifact'
     const REPORT_ROUTE = '/api/dsh-shaders/render-report'
-    /** The tools whose results get a card. */
+    /** The tools whose results get an inline card. */
     const TOOL_NAMES = ['shader_write', 'shader_verify', 'shader_render', 'shader_kit']
 
-    /** The full-screen triangle every fragment here is drawn with. */
     const VERTEX_ES100 = 'attribute vec2 a_position;\nvoid main() { gl_Position = vec4(a_position, 0.0, 1.0); }'
     const VERTEX_ES300 = '#version 300 es\nin vec2 a_position;\nvoid main() { gl_Position = vec4(a_position, 0.0, 1.0); }'
 
     /**
      * Wrap a stored source the way the host does.
      *
-     * The pane needs the same assembly the compiler uses, in the browser, without
-     * the host: a Shadertoy source gets its uniforms and `main()`, an ES 1.00
-     * source is drawn as written. Any drift between this and `lib/verify.js` shows
-     * up as a pane that fails where `shader_verify` passed, which is why both are
-     * written from the same contract rather than the same code.
+     * Both sides are written from the same contract so a pane that fails where
+     * `shader_verify` passed is a bug in one of them, not a difference of opinion.
      */
     function assembleInPane(source, dialect) {
       const text = String(source ?? '')
-      if (dialect === 'es100' || dialect === 'es300' || dialect === 'desktop') return { text, context: dialect === 'es300' ? 'webgl2' : 'webgl', vertex: dialect === 'es300' ? VERTEX_ES300 : VERTEX_ES100 }
+      if (dialect === 'es100' || dialect === 'es300' || dialect === 'desktop') {
+        return { text, context: dialect === 'es300' ? 'webgl2' : 'webgl', vertex: dialect === 'es300' ? VERTEX_ES300 : VERTEX_ES100 }
+      }
       const header = [
         '#version 300 es',
         'precision highp float;',
@@ -90,9 +82,6 @@ window.__ModuleLoader__.load({
     let stylesInjected = false
     function injectStyles() {
       if (stylesInjected || typeof document === 'undefined' || document === null) return
-      // Every DOM touch is guarded: a host that hands this bundle a minimal document
-      // (the client-bundle check does exactly that) must still get a working tab,
-      // and a stylesheet that cannot be added is a cosmetic loss, not a failure.
       try {
         if (typeof document.getElementById === 'function' && document.getElementById('dsh-shaders-styles') !== null) {
           stylesInjected = true
@@ -103,39 +92,38 @@ window.__ModuleLoader__.load({
         style.id = 'dsh-shaders-styles'
         style.textContent = `
 .dss-root { display: flex; flex-direction: column; height: 100%; min-height: 0; font-size: 12px; color: var(--dsh-text, #e7e3dd); }
-.dss-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: .5px solid var(--dsh-hairline, rgba(255,255,255,.12)); flex-wrap: wrap; }
-.dss-bar button { font: inherit; padding: 2px 8px; border-radius: 4px; border: .5px solid var(--dsh-hairline, rgba(255,255,255,.18)); background: transparent; color: inherit; cursor: pointer; }
+.dss-bar { display: flex; align-items: center; gap: 6px; padding: 5px 9px; border-bottom: .5px solid var(--dsh-hairline, rgba(255,255,255,.12)); flex-wrap: wrap; }
+.dss-bar button { font: inherit; font-size: 11px; padding: 2px 7px; border-radius: 4px; border: .5px solid var(--dsh-hairline, rgba(255,255,255,.18)); background: transparent; color: inherit; cursor: pointer; }
 .dss-bar button:hover { background: rgba(255,255,255,.07); }
-.dss-bar button[disabled] { opacity: .45; cursor: default; }
-.dss-bar input[type=range] { width: 84px; }
 .dss-spacer { flex: 1; }
-.dss-canvasWrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #0a0a0a; overflow: hidden; }
-.dss-canvasWrap canvas { display: block; max-width: 100%; max-height: 100%; }
-.dss-status { padding: 4px 10px; font-family: ui-monospace, monospace; font-size: 11px; border-top: .5px solid var(--dsh-hairline, rgba(255,255,255,.12)); white-space: pre-wrap; max-height: 24%; overflow: auto; }
+.dss-canvas { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #0a0a0a; overflow: hidden; }
+.dss-canvas canvas { display: block; max-width: 100%; max-height: 100%; }
+.dss-status { padding: 4px 9px; font-family: ui-monospace, monospace; font-size: 11px; border-top: .5px solid var(--dsh-hairline, rgba(255,255,255,.12)); white-space: pre-wrap; max-height: 22%; overflow: auto; }
 .dss-status[data-state=failed] { color: #ffb4a8; }
 .dss-status[data-state=drawn] { color: #9ed6a8; }
 .dss-status[data-state=pending] { color: var(--dsh-muted, #9a938c); }
-.dss-sliders { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border-top: .5px solid var(--dsh-hairline, rgba(255,255,255,.12)); }
-.dss-slider { display: grid; grid-template-columns: 92px 1fr 52px; gap: 8px; align-items: center; font-family: ui-monospace, monospace; font-size: 11px; }
-.dss-source { margin: 0; padding: 8px 10px; overflow: auto; max-height: 34%; font-family: ui-monospace, monospace; font-size: 11px; white-space: pre; }
-.dss-list { overflow: auto; flex: 1; min-height: 0; }
-.dss-row { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px; border-bottom: .5px solid rgba(255,255,255,.07); cursor: pointer; }
+.dss-sliders { display: flex; flex-direction: column; gap: 1px; padding: 4px 9px; border-top: .5px solid var(--dsh-hairline, rgba(255,255,255,.12)); }
+.dss-slider { display: grid; grid-template-columns: 84px 1fr 46px; gap: 6px; align-items: center; font-family: ui-monospace, monospace; font-size: 11px; }
+.dss-slider input { width: 100%; }
+.dss-list { overflow: auto; max-height: 40%; border-bottom: .5px solid var(--dsh-hairline, rgba(255,255,255,.12)); }
+.dss-row { display: flex; gap: 6px; align-items: baseline; padding: 3px 9px; cursor: pointer; }
 .dss-row:hover { background: rgba(255,255,255,.05); }
-.dss-rowId { font-family: ui-monospace, monospace; font-size: 11px; opacity: .75; }
+.dss-row[data-active=true] { background: rgba(255,255,255,.09); }
+.dss-rowId { font-family: ui-monospace, monospace; font-size: 10px; opacity: .7; }
 .dss-rowTitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dss-pill { font-family: ui-monospace, monospace; font-size: 10px; padding: 1px 6px; border-radius: 999px; border: .5px solid currentColor; opacity: .85; }
+.dss-pill { font-family: ui-monospace, monospace; font-size: 10px; padding: 1px 5px; border-radius: 999px; border: .5px solid currentColor; opacity: .85; }
 .dss-pill[data-state=ok], .dss-pill[data-state=drawn] { color: #9ed6a8; }
 .dss-pill[data-state=error], .dss-pill[data-state=failed] { color: #ffb4a8; }
 .dss-pill[data-state=stale], .dss-pill[data-state=pending] { color: #d9c48a; }
-.dss-empty { padding: 14px 12px; color: var(--dsh-muted, #9a938c); line-height: 1.6; }
+.dss-empty { padding: 12px 10px; color: var(--dsh-muted, #9a938c); line-height: 1.6; }
 .dss-card { border: .5px solid var(--dsh-hairline, rgba(255,255,255,.14)); border-radius: 8px; margin: 8px 0; overflow: hidden; }
-.dss-cardTop { display: flex; gap: 8px; align-items: center; padding: 7px 10px; font-size: 12px; }
-.dss-cardBody { border-top: .5px solid var(--dsh-hairline, rgba(255,255,255,.12)); padding: 8px 10px; }
+.dss-cardTop { display: flex; gap: 8px; align-items: center; padding: 6px 9px; font-size: 12px; }
+.dss-cardBody { border-top: .5px solid var(--dsh-hairline, rgba(255,255,255,.12)); padding: 7px 9px; }
 .dss-diag { font-family: ui-monospace, monospace; font-size: 11px; white-space: pre-wrap; color: #ffb4a8; }
 .dss-thumb { max-width: 100%; border-radius: 4px; }
 .dss-note { font-size: 11px; color: var(--dsh-muted, #9a938c); line-height: 1.55; }
 `
-      document.head.appendChild(style)
+        document.head.appendChild(style)
         stylesInjected = true
       } catch (err) {
         /* a document without a head: the tab still works, unstyled */
@@ -145,13 +133,12 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     // Session and data
     // ---------------------------------------------------------------------
-    /** The tab's address, from whatever the framework hands a body. */
     function addressOf(props) {
       if (props === null || props === undefined) return ''
       return String(props.address ?? props.tab?.address ?? props.tabAddress ?? '')
     }
 
-    /** Where a shader lives, parsed. Never throws: an unparseable address is `session` and empty. */
+    /** Where a shader lives, parsed. Never throws. */
     function parseAddress(address) {
       const value = String(address ?? '')
       if (value.startsWith(LIBRARY_PREFIX)) return { scope: 'library', sessionId: '', shaderId: value.slice(LIBRARY_PREFIX.length) }
@@ -163,13 +150,11 @@ window.__ModuleLoader__.load({
       return { scope: 'session', sessionId: '', shaderId: '' }
     }
 
-    /** The session this pane belongs to: the plugin context carries it. */
     let pluginCtx = null
     function currentSessionId() {
-      const session = pluginCtx?.get?.('sessions')
-      const id = session?.current?.()?.id ?? session?.activeId
-      if (typeof id === 'string' && id !== '') return id
-      return ''
+      const sessions = pluginCtx?.get?.('sessions')
+      const id = sessions?.current?.()?.id ?? sessions?.activeId
+      return typeof id === 'string' ? id : ''
     }
 
     async function readState(sessionId) {
@@ -190,79 +175,42 @@ window.__ModuleLoader__.load({
         await fetch(REPORT_ROUTE, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ session: sessionId, id, ok, error: error ?? null, phase: ok ? 'render' : 'render' }),
+          body: JSON.stringify({ session: sessionId, id, ok, error: error ?? null }),
         })
       } catch (err) {
-        /* the report is a courtesy; the pane already shows the truth */
+        /* a courtesy: the pane already shows the truth */
       }
     }
 
-    /** A hook that loads a shader and its conversation state. */
-    function useShader(sessionId, shaderId) {
-      const [state, setState] = useState(null)
-      const [shader, setShader] = useState(null)
-      const [error, setError] = useState(null)
-      const reload = useCallback(async () => {
-        if (sessionId === '') return
-        try {
-          const next = await readState(sessionId)
-          setState(next)
-          if (shaderId !== '') {
-            const one = await readShader(sessionId, shaderId)
-            setShader(one.shader ?? null)
-          }
-          setError(null)
-        } catch (err) {
-          setError(String(err && err.message ? err.message : err))
-        }
-      }, [sessionId, shaderId])
-      useEffect(() => {
-        let live = true
-        reload().catch(() => {})
-        return () => {
-          live = false
-        }
-      }, [reload])
-      return { state, shader, error, reload }
-    }
-
-    // ---------------------------------------------------------------------
-    // The renderer
-    // ---------------------------------------------------------------------
     /**
-     * Draw one shader into a canvas, for as long as the component is mounted.
+     * Draw one shader into a canvas for as long as the component is mounted.
      *
-     * It stops on a hidden document and on unmount, caps the pixel ratio at 2, and
-     * reports a compile failure to the page AND to the host - the browser's own
-     * verdict is the second rung of the ladder, and a pane that only showed the
-     * error locally would leave the host believing the shader was never checked.
+     * A compile failure is reported to the page AND to the host - the browser's own
+     * verdict is a rung, and a pane that only complained locally would leave the
+     * host believing the shader was never checked.
      */
-    function ShaderCanvas({ source, dialect, params, time, running, width, height, onVerdict, onFrame }) {
+    function ShaderPreview({ source, dialect, params, values, time, size, onVerdict }) {
       const canvasRef = useRef(null)
       const glRef = useRef(null)
-      const programRef = useRef(null)
-      const uniformsRef = useRef({})
-      const paramRef = useRef({})
-      const [localError, setLocalError] = useState(null)
+      const [problem, setProblem] = useState(null)
       const [unsupported, setUnsupported] = useState(false)
 
-      paramRef.current = useMemo(() => {
+      const paramValues = useMemo(() => {
         const out = {}
         for (const param of params ?? []) {
           if (param?.uniform === undefined) continue
-          out[param.uniform] = param.default === null || param.default === undefined ? 0 : param.default
+          out[param.uniform] = values?.[param.uniform] ?? (param.default ?? 0)
         }
         return out
-      }, [JSON.stringify(params ?? [])])
+      }, [JSON.stringify(params ?? []), JSON.stringify(values ?? {})])
 
       useEffect(() => {
         const canvas = canvasRef.current
         if (canvas === null || typeof window === 'undefined') return undefined
         const assembled = assembleInPane(source, dialect)
-        const context = assembled.context
         let gl = null
         try {
-          gl = canvas.getContext(context, { alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: true })
+          gl = canvas.getContext(assembled.context, { alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: true })
         } catch (err) {
           gl = null
         }
@@ -275,11 +223,11 @@ window.__ModuleLoader__.load({
           try {
             gl.getExtension(name)
           } catch (err) {
-            /* not offered */
+            /* not offered on this driver */
           }
         }
         const fail = (message) => {
-          setLocalError(message)
+          setProblem(message)
           if (typeof onVerdict === 'function') onVerdict(false, message)
         }
         const compile = (type, text, label) => {
@@ -287,8 +235,7 @@ window.__ModuleLoader__.load({
           gl.shaderSource(shader, text)
           gl.compileShader(shader)
           if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) !== true) {
-            const log = String(gl.getShaderInfoLog(shader) ?? '')
-            fail(label + ' shader: ' + log)
+            fail(label + ': ' + String(gl.getShaderInfoLog(shader) ?? ''))
             return null
           }
           return shader
@@ -314,14 +261,8 @@ window.__ModuleLoader__.load({
           gl.enableVertexAttribArray(attribute)
           gl.vertexAttribPointer(attribute, 2, gl.FLOAT, false, 0, 0)
         }
-        const locations = {}
-        for (const name of ['u_time', 'u_resolution', 'u_res', 'u_mouse', 'u_frame', 'iTime', 'iResolution', 'iMouse', 'iFrame', ...Object.keys(paramRef.current)]) {
-          locations[name] = gl.getUniformLocation(program, name)
-        }
-        glRef.current = gl
-        programRef.current = program
-        uniformsRef.current = locations
-        setLocalError(null)
+        glRef.current = { gl, program }
+        setProblem(null)
         if (typeof onVerdict === 'function') onVerdict(true, null)
         return () => {
           gl.deleteProgram(program)
@@ -329,26 +270,24 @@ window.__ModuleLoader__.load({
           gl.deleteShader(fragment)
           gl.deleteBuffer(buffer)
           glRef.current = null
-          programRef.current = null
         }
       }, [source, dialect])
 
-      // The draw loop, and it is the ONLY place the clock advances.
       useEffect(() => {
         const canvas = canvasRef.current
-        const gl = glRef.current
-        const program = programRef.current
-        if (canvas === null || gl === null || program === null) return undefined
-        const drawWidth = Math.max(1, Math.round(width))
-        const drawHeight = Math.max(1, Math.round(height))
-        if (canvas.width !== drawWidth || canvas.height !== drawHeight) {
-          canvas.width = drawWidth
-          canvas.height = drawHeight
+        const bound = glRef.current
+        if (canvas === null || bound === null) return undefined
+        const { gl, program } = bound
+        gl.useProgram(program)
+        const side = Math.max(1, Math.round(size))
+        if (canvas.width !== side || canvas.height !== side) {
+          canvas.width = side
+          canvas.height = side
         }
-        gl.viewport(0, 0, drawWidth, drawHeight)
+        gl.viewport(0, 0, side, side)
         const set = (name, value) => {
-          const location = uniformsRef.current[name]
-          if (location === null || location === undefined) return
+          const location = gl.getUniformLocation(program, name)
+          if (location === null) return
           if (Array.isArray(value)) {
             if (value.length === 2) gl.uniform2f(location, value[0], value[1])
             else if (value.length === 3) gl.uniform3f(location, value[0], value[1], value[2])
@@ -359,66 +298,91 @@ window.__ModuleLoader__.load({
           else gl.uniform1f(location, value)
         }
         set('u_time', time)
-        set('u_resolution', [drawWidth, drawHeight])
-        set('u_res', [drawWidth, drawHeight])
+        set('u_resolution', [side, side])
+        set('u_res', [side, side])
         set('u_mouse', [0, 0])
         set('u_frame', 0)
         set('iTime', time)
-        set('iResolution', [drawWidth, drawHeight, 1])
+        set('iResolution', [side, side, 1])
         set('iMouse', [0, 0, 0, 0])
         set('iFrame', 0)
-        for (const [name, value] of Object.entries(paramRef.current)) set(name, value)
+        for (const [name, value] of Object.entries(paramValues)) set(name, value)
         gl.drawArrays(gl.TRIANGLES, 0, 3)
-        if (typeof onFrame === 'function') onFrame({ width: drawWidth, height: drawHeight, running })
         return undefined
-      }, [time, running, width, height, source, dialect])
+      }, [time, size, JSON.stringify(paramValues), source, dialect])
 
-      if (unsupported) {
-        return h('div', { className: 'dss-empty' }, 'This browser has no WebGL context, so the shader cannot be drawn here. `shader_render` can still draw it on the host and hand back a PNG.')
-      }
+      if (unsupported) return h('div', { className: 'dss-empty' }, 'This browser has no WebGL, so nothing can be drawn here. `shader_render` can still draw it on the host and hand back a PNG.')
       return h(
         'div',
-        { className: 'dss-canvasWrap' },
-        h('canvas', { ref: canvasRef, width: width, height: height }),
-        localError === null ? null : h('pre', { className: 'dss-status', 'data-state': 'failed' }, localError),
+        { className: 'dss-canvas' },
+        h('canvas', { ref: canvasRef, width: size, height: size }),
+        problem === null ? null : h('pre', { className: 'dss-status', 'data-state': 'failed' }, problem),
       )
     }
 
     // ---------------------------------------------------------------------
-    // The viewer tab
+    // The tab
     // ---------------------------------------------------------------------
     function Slider({ param, value, onChange }) {
       const min = Number.isFinite(Number(param.min)) ? Number(param.min) : 0
       const max = Number.isFinite(Number(param.max)) ? Number(param.max) : 1
-      const step = param.type === 'int' ? 1 : (max - min) / 200 || 0.01
       return h(
         'label',
-        { className: 'dss-slider' },
-        h('span', { title: param.description ?? '' }, param.name),
-        h('input', { type: 'range', min: min, max: max, step: step, value: value, onChange: (event) => onChange(Number(event.target.value)) }),
+        { className: 'dss-slider', title: param.description ?? '' },
+        h('span', null, param.name),
+        h('input', { type: 'range', min: min, max: max, step: param.type === 'int' ? 1 : (max - min) / 200 || 0.01, value: value, onChange: (event) => onChange(Number(event.target.value)) }),
         h('span', null, String(value)),
       )
     }
 
     function ViewerBody(props) {
       const parsed = parseAddress(addressOf(props))
-      const sessionId = parsed.sessionId !== '' ? parsed.sessionId : currentSessionId()
-      const { state, shader, error } = useShader(sessionId, parsed.scope === 'session' ? parsed.shaderId : '')
+      const [sessionId, setSessionId] = useState(parsed.sessionId)
+      const [selected, setSelected] = useState(parsed.shaderId)
+      const [state, setState] = useState(null)
+      const [shader, setShader] = useState(null)
+      const [error, setError] = useState(null)
       const [running, setRunning] = useState(true)
       const [time, setTime] = useState(0)
-      const [size, setSize] = useState(512)
+      const [size, setSize] = useState(320)
+      const [values, setValues] = useState({})
       const [verdict, setVerdict] = useState(null)
       const clock = useRef(0)
 
+      const reload = useCallback(async () => {
+        try {
+          const next = await readState(sessionId)
+          setState(next)
+          const id = selected !== '' ? selected : next.shaders?.[0]?.id ?? ''
+          if (id !== '' && id !== selected) setSelected(id)
+          if (id !== '') setShader((await readShader(sessionId, id)).shader ?? null)
+          setError(null)
+        } catch (err) {
+          setError(String(err && err.message ? err.message : err))
+        }
+      }, [sessionId, selected])
+
+      useEffect(() => {
+        if (sessionId !== '') return undefined
+        const active = currentSessionId()
+        if (active !== '') setSessionId(active)
+        return undefined
+      }, [sessionId])
+
+      useEffect(() => {
+        if (sessionId === '') return undefined
+        reload().catch(() => {})
+        return undefined
+      }, [reload])
+
       const params = (shader?.params ?? []).filter((param) => param?.uniform !== undefined)
-      const [values, setValues] = useState({})
       useEffect(() => {
         const next = {}
         for (const param of params) next[param.uniform] = param.default ?? 0
         setValues(next)
+        setVerdict(null)
       }, [JSON.stringify(params.map((param) => param.uniform))])
 
-      // The clock: one interval, so a paused pane really is paused.
       useEffect(() => {
         if (!running || typeof window === 'undefined') return undefined
         const started = performance.now() - clock.current * 1000
@@ -427,69 +391,74 @@ window.__ModuleLoader__.load({
           setTime(clock.current)
         }, 33)
         return () => window.clearInterval(timer)
-      }, [running])
+      }, [running, selected])
 
       const onVerdict = useCallback(
         (ok, message) => {
           setVerdict({ ok, message })
-          if (sessionId !== '' && parsed.shaderId !== '') reportRender(sessionId, parsed.shaderId, ok, message)
+          if (sessionId !== '' && selected !== '') reportRender(sessionId, selected, ok, message)
         },
-        [sessionId, parsed.shaderId],
+        [sessionId, selected],
       )
 
-      if (sessionId === '') {
-        return h('div', { className: 'dss-empty' }, 'No conversation is open, so there is no shader to show. Open a chat and write one with `shader_write`.')
-      }
+      if (sessionId === '') return h('div', { className: 'dss-empty' }, 'No conversation is open. Write a shader with `shader_write` and it appears here.')
       if (error !== null) return h('div', { className: 'dss-empty' }, 'Could not read this conversation\'s shaders: ' + error)
-      if (shader === null) return h('div', { className: 'dss-empty' }, 'Loading the shader…')
+      if (state === null) return h('div', { className: 'dss-empty' }, 'Loading…')
 
-      const verification = shader.verification ?? { state: 'pending' }
-      const stateName = verdict === null ? verification.state : verdict.ok ? 'drawn' : 'failed'
+      const shaders = state.shaders ?? []
+      if (shaders.length === 0) {
+        return h('div', { className: 'dss-empty' }, 'No shaders in this conversation yet. `shader_write` stores one and verifies it; `shader_kit action=example` starts from a known-good one.')
+      }
+      const list = h(
+        'div',
+        { className: 'dss-list' },
+        shaders.map((entry) =>
+          h(
+            'div',
+            {
+              key: entry.id,
+              className: 'dss-row',
+              'data-active': entry.id === selected ? 'true' : 'false',
+              onClick: () => {
+                setSelected(entry.id)
+                setRunning(true)
+                clock.current = 0
+                setTime(0)
+              },
+            },
+            h('span', { className: 'dss-rowTitle' }, entry.title || entry.id),
+            h('span', { className: 'dss-rowId' }, entry.dialect + ' · r' + String(entry.revision)),
+            h('span', { className: 'dss-pill', 'data-state': entry.verification?.state ?? 'pending' }, entry.verification?.state ?? 'pending'),
+          ),
+        ),
+      )
+
+      if (shader === null) return h('div', { className: 'dss-root' }, list, h('div', { className: 'dss-empty' }, 'Reading the shader…'))
+
+      const stateName = verdict === null ? shader.verification?.state ?? 'pending' : verdict.ok ? 'drawn' : 'failed'
       const statusText =
         stateName === 'drawn'
-          ? 'drawn in this browser — ' + String(size) + '×' + String(size) + ' at t=' + time.toFixed(2) + 's'
+          ? 'drawn by this browser at ' + String(size) + '×' + String(size) + ', t=' + time.toFixed(2) + 's'
           : stateName === 'failed'
             ? 'this browser could not draw it' + (verdict?.message ? '\n' + verdict.message : '')
-            : 'not reported by this browser yet'
+            : 'not reported by this browser yet — `shader_verify` is the host-side answer'
 
       return h(
         'div',
         { className: 'dss-root' },
+        list,
         h(
           'div',
           { className: 'dss-bar' },
           h('button', { type: 'button', onClick: () => setRunning((value) => !value) }, running ? 'Pause' : 'Play'),
           h('button', { type: 'button', onClick: () => { clock.current = 0; setTime(0); setRunning(false) } }, 'Reset'),
-          h('button', { type: 'button', onClick: () => setSize((value) => (value === 512 ? 256 : value === 256 ? 1024 : 512)) }, String(size) + 'px'),
+          h('button', { type: 'button', onClick: () => setSize((value) => (value === 320 ? 256 : value === 256 ? 512 : 320)) }, String(size) + 'px'),
           h('span', { className: 'dss-spacer' }),
           h('span', { className: 'dss-pill', 'data-state': stateName }, shader.dialect),
         ),
-        h(ShaderCanvas, {
-          source: shader.source,
-          dialect: shader.dialect,
-          params,
-          time,
-          running,
-          width: size,
-          height: size,
-          onVerdict,
-        }),
+        h(ShaderPreview, { source: shader.source, dialect: shader.dialect, params, values, time, size, onVerdict }),
         h('div', { className: 'dss-status', 'data-state': stateName }, statusText),
-        params.length === 0
-          ? null
-          : h(
-              'div',
-              { className: 'dss-sliders' },
-              params.map((param) =>
-                h(Slider, {
-                  key: param.uniform,
-                  param,
-                  value: Number(values[param.uniform] ?? 0),
-                  onChange: (value) => setValues((current) => ({ ...current, [param.uniform]: value })),
-                }),
-              ),
-            ),
-        h('pre', { className: 'dss-source' }, shader.source),
+        params.length === 0 ? null : h('div', { className: 'dss-sliders' }, params.map((param) => h(Slider, { key: param.uniform, param, value: Number(values[param.uniform] ?? 0), onChange: (value) => setValues((current) => ({ ...current, [param.uniform]: value })) }))),
       )
     }
 
@@ -499,176 +468,46 @@ window.__ModuleLoader__.load({
     }
 
     // ---------------------------------------------------------------------
-    // The index tab
-    // ---------------------------------------------------------------------
-    function IndexBody(props) {
-      const sessionId = parsedSessionId(props)
-      const [state, setState] = useState(null)
-      const [error, setError] = useState(null)
-      const [query, setQuery] = useState('')
-      const [tab, setTab] = useState('mine')
-      useEffect(() => {
-        if (sessionId === '') return
-        readState(sessionId)
-          .then((next) => setState(next))
-          .catch((err) => setError(String(err && err.message ? err.message : err)))
-      }, [sessionId])
-
-      if (sessionId === '') return h('div', { className: 'dss-empty' }, 'Open a conversation to see its shaders.')
-      if (error !== null) return h('div', { className: 'dss-empty' }, 'Could not read the shaders: ' + error)
-      if (state === null) return h('div', { className: 'dss-empty' }, 'Loading…')
-
-      const kit = state.capabilities?.kit ?? {}
-      const shaders = (state.shaders ?? []).filter((entry) => query === '' || (entry.id + ' ' + entry.title).toLowerCase().includes(query.toLowerCase()))
-
-      return h(
-        'div',
-        { className: 'dss-root' },
-        h(
-          'div',
-          { className: 'dss-bar' },
-          h('button', { type: 'button', onClick: () => setTab('mine') }, 'This conversation'),
-          h('button', { type: 'button', onClick: () => setTab('corpus') }, 'Corpus'),
-          h('span', { className: 'dss-spacer' }),
-          h('input', { type: 'search', value: query, placeholder: 'filter…', onChange: (event) => setQuery(event.target.value), style: { width: '120px', font: 'inherit' } }),
-        ),
-        tab === 'mine'
-          ? shaders.length === 0
-            ? h('div', { className: 'dss-empty' }, 'No shaders in this conversation yet. Ask for one, or call `shader_kit action=example` to start from a known-good one.')
-            : h(
-                'div',
-                { className: 'dss-list' },
-                shaders.map((entry) =>
-                  h(
-                    'div',
-                    {
-                      key: entry.id,
-                      className: 'dss-row',
-                      onClick: () => {
-                        const api = pluginCtx?.get?.('sidebarRight')
-                        if (api !== undefined && typeof api.open === 'function') api.open(SESSION_PREFIX + sessionId + '/' + entry.id)
-                      },
-                    },
-                    h('span', { className: 'dss-rowTitle' }, entry.title || entry.id),
-                    h('span', { className: 'dss-rowId' }, entry.id),
-                    h('span', { className: 'dss-pill', 'data-state': entry.verification?.state ?? 'pending' }, entry.dialect),
-                  ),
-                ),
-              )
-          : h(CorpusBody, { kit, query }),
-      )
-    }
-
-    function parsedSessionId(props) {
-      const parsed = parseAddress(addressOf(props))
-      return parsed.sessionId !== '' ? parsed.sessionId : currentSessionId()
-    }
-
-    function CorpusBody({ kit, query }) {
-      const radiant = kit?.radiant ?? null
-      const skills = kit?.skills ?? null
-      const links = kit?.links ?? null
-      if (radiant === null && skills === null) return h('div', { className: 'dss-empty' }, 'The vendored corpus is not installed in this build.')
-      return h(
-        'div',
-        { className: 'dss-list' },
-        radiant === null
-          ? null
-          : h(
-              'div',
-              { className: 'dss-card' },
-              h('div', { className: 'dss-cardTop' }, h('span', { className: 'dss-pill' }, 'radiant'), h('span', { className: 'dss-rowTitle' }, String(radiant.pages) + ' pages · ' + String(radiant.sources) + ' fragment sources'), h('span', { className: 'dss-rowId' }, String(radiant.commit).slice(0, 8))),
-              h('div', { className: 'dss-cardBody dss-note' }, 'Ask for one with `shader_kit action=example id=radiant/<page>`. Techniques: ' + Object.entries(radiant.byTechnique ?? {}).map(([name, count]) => name + ' ' + String(count)).join(', ')),
-            ),
-        skills === null
-          ? null
-          : h(
-              'div',
-              { className: 'dss-card' },
-              h('div', { className: 'dss-cardTop' }, h('span', { className: 'dss-pill' }, 'shader-skills'), h('span', { className: 'dss-rowTitle' }, String(skills.modules) + ' modules · ' + String(skills.templates) + ' templates · ' + String(skills.gallery) + ' pieces'), h('span', { className: 'dss-rowId' }, String(skills.commit).slice(0, 8))),
-              h('div', { className: 'dss-cardBody dss-note' }, 'Reusable GLSL: `shader_kit action=example id=module/noise`, `… id=template/terrain` (which names its own dependencies), `… id=gallery/ocean` (a finished piece the check compiles and draws).'),
-            ),
-        links === null
-          ? null
-          : h(
-              'div',
-              { className: 'dss-card' },
-              h('div', { className: 'dss-cardTop' }, h('span', { className: 'dss-pill' }, 'links'), h('span', { className: 'dss-rowTitle' }, String(links.links) + ' curated links in ' + String((links.categories ?? []).length) + ' categories')),
-              h('div', { className: 'dss-cardBody dss-note' }, 'Where to learn more, curated rather than invented: `shader_kit action=links query=raymarching`.'),
-            ),
-        query === '' ? null : h('div', { className: 'dss-note', style: { padding: '8px 10px' } }, 'Filtering the corpus needs `shader_kit action=search` from the conversation — this pane only shows the counts.'),
-      )
-    }
-
-    function IndexTitle() {
-      return h('span', null, 'Shaders')
-    }
-
-    // ---------------------------------------------------------------------
     // Tool cards
     // ---------------------------------------------------------------------
-    function StatusPill({ status }) {
-      return h('span', { className: 'dss-pill', 'data-state': status }, status)
-    }
-
-    function Diagnostics({ list }) {
-      if (!Array.isArray(list) || list.length === 0) return null
-      return h(
-        'div',
-        { className: 'dss-diag' },
-        list.slice(0, 8).map((entry, index) => h('div', { key: index }, 'line ' + String(entry.line) + (entry.include ? ' [' + entry.include + ']' : '') + ' — ' + entry.message)),
-      )
-    }
-
-    /** The card every shader_* tool renders into the conversation. */
     function ToolCard(props) {
       const view = props?.view ?? props?.result?.view ?? null
       const running = props?.running === true || props?.status === 'running'
       const openTab = useCallback(() => {
-        if (view === null || view === undefined) return
         const api = pluginCtx?.get?.('sidebarRight')
-        if (api === undefined || typeof api.open !== 'function') return
-        if (typeof view.address === 'string' && view.address !== '') api.open(view.address)
+        if (view !== null && view !== undefined && typeof view.address === 'string' && view.address !== '' && typeof api?.open === 'function') api.open(view.address)
       }, [view])
 
       if (running) return h('div', { className: 'dss-card' }, h('div', { className: 'dss-cardTop' }, h('span', { className: 'dss-note' }, 'Working on the shader…')))
       if (view === null || view === undefined) return h('div', { className: 'dss-card' }, h('div', { className: 'dss-cardTop' }, h('span', { className: 'dss-note' }, 'No shader result yet.')))
 
       const diagnostics = view.diagnostics ?? []
-      const warnings = view.warnings ?? []
-      const rung = view.rung ?? null
-      const status = view.status ?? 'unknown'
       return h(
         'div',
         { className: 'dss-card' },
         h(
           'div',
           { className: 'dss-cardTop' },
-          h(StatusPill, { status }),
+          h('span', { className: 'dss-pill', 'data-state': view.status ?? 'unknown' }, view.rung ?? view.status ?? 'unknown'),
           h('span', { className: 'dss-rowTitle' }, view.title ?? view.id ?? 'shader'),
-          rung === null ? null : h('span', { className: 'dss-rowId' }, rung),
-          view.dialect === undefined ? null : h('span', { className: 'dss-pill' }, view.dialect),
+          view.dialect === undefined || view.dialect === null ? null : h('span', { className: 'dss-rowId' }, view.dialect),
           h('span', { className: 'dss-spacer' }),
           typeof view.address === 'string' && view.address !== '' ? h('button', { type: 'button', onClick: openTab }, 'Open tab') : null,
         ),
         h(
           'div',
           { className: 'dss-cardBody' },
-          view.frame !== undefined && view.frame !== null
-            ? h('div', { className: 'dss-note' }, String(view.frame.width) + '×' + String(view.frame.height) + ' · ' + String(view.frame.distinctColors) + ' colours · signature ' + String(view.frame.signature) + (view.animated ? ' · animated' : ''))
-            : null,
-          view.artifact !== undefined && view.artifact !== null && view.artifact !== ''
-            ? h('img', { className: 'dss-thumb', src: ARTIFACT_ROUTE + '?name=' + encodeURIComponent(view.artifact), alt: 'Rendered frame' })
-            : null,
-          h(Diagnostics, { list: diagnostics }),
-          warnings.length === 0 ? null : h('div', { className: 'dss-note' }, String(warnings.length) + ' advisory warning(s) — see the tool answer.'),
-          view.action === 'catalog' && view.radiant !== undefined ? h('div', { className: 'dss-note' }, 'corpus: ' + JSON.stringify({ radiant: view.radiant?.pages, sources: view.radiant?.sources, modules: view.skills?.modules, gallery: view.skills?.gallery, links: view.links?.links })) : null,
+          view.frame !== undefined && view.frame !== null ? h('div', { className: 'dss-note' }, String(view.frame.width) + '×' + String(view.frame.height) + ' · ' + String(view.frame.distinctColors) + ' colours · signature ' + String(view.frame.signature) + (view.animated ? ' · animated' : '')) : null,
+          view.artifact !== undefined && view.artifact !== null && view.artifact !== '' ? h('img', { className: 'dss-thumb', src: ARTIFACT_ROUTE + '?name=' + encodeURIComponent(view.artifact), alt: 'Rendered frame' }) : null,
+          diagnostics.length === 0 ? null : h('div', { className: 'dss-diag' }, diagnostics.slice(0, 6).map((entry, index) => h('div', { key: index }, 'line ' + String(entry.line) + (entry.include ? ' [' + entry.include + ']' : '') + ' — ' + entry.message))),
+          Array.isArray(view.warnings) && view.warnings.length > 0 ? h('div', { className: 'dss-note' }, String(view.warnings.length) + ' advisory warning(s) — see the tool answer.') : null,
+          view.action === 'catalog' && view.radiant !== undefined ? h('div', { className: 'dss-note' }, 'corpus: radiant ' + String(view.radiant?.pages ?? 0) + ' pages · sources ' + String(view.radiant?.sources ?? 0) + ' · modules ' + String(view.skills?.modules ?? 0) + ' · gallery ' + String(view.skills?.gallery ?? 0) + ' · links ' + String(view.links?.links ?? 0)) : null,
         ),
       )
     }
 
     // ---------------------------------------------------------------------
-    // Tab-type definitions
+    // Plugin entry
     // ---------------------------------------------------------------------
     function viewerDefinition() {
       return {
@@ -683,26 +522,6 @@ window.__ModuleLoader__.load({
       }
     }
 
-    function indexDefinition() {
-      return {
-        id: INDEX_ID,
-        kind: INDEX_KIND,
-        priority: 'builtin',
-        title: () => 'Shaders',
-        guide: [
-          {
-            order: 41,
-            title: () => 'Shaders',
-            description: () => 'GLSL compiled for real: fragments, sources and the vendored corpus',
-            icon: null,
-          },
-        ],
-      }
-    }
-
-    // ---------------------------------------------------------------------
-    // Plugin entry
-    // ---------------------------------------------------------------------
     const inject = ['slots', 'sidebarRightTabs']
 
     function apply(ctx) {
@@ -710,7 +529,6 @@ window.__ModuleLoader__.load({
       injectStyles()
       try {
         ctx.effect(() => ctx.sidebarRightTabs.register(viewerDefinition()), 'dsh-shaders: shader tab type')
-        ctx.effect(() => ctx.sidebarRightTabs.register(indexDefinition()), 'dsh-shaders: shaders page type')
         ctx.effect(
           () => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: VIEWER_ID, inject: () => ({}) }, ViewerBody)),
           'dsh-shaders: shader tab body',
@@ -719,14 +537,6 @@ window.__ModuleLoader__.load({
           () => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({ name: 'sidebar.right.pane.tab.title', key: VIEWER_ID }, ViewerTitle)),
           'dsh-shaders: shader tab title',
         )
-        ctx.effect(
-          () => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: INDEX_ID, inject: () => ({}) }, IndexBody)),
-          'dsh-shaders: index tab body',
-        )
-        ctx.effect(
-          () => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({ name: 'sidebar.right.pane.tab.title', key: INDEX_ID }, IndexTitle)),
-          'dsh-shaders: index tab title',
-        )
         for (const toolName of TOOL_NAMES) {
           ctx.effect(
             () => ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({ name: 'tool.call.toolview', key: toolName }, ToolCard)),
@@ -734,8 +544,7 @@ window.__ModuleLoader__.load({
           )
         }
       } catch (err) {
-        // A profile without the right bar still gets the tool cards: the surfaces
-        // that need the bar fail one at a time, and the rest of the row stands.
+        // A profile without the right bar still gets the tool cards.
         if (typeof console !== 'undefined') console.warn('[dsh-shaders] a surface could not be registered: ' + String(err && err.message ? err.message : err))
       }
     }
@@ -744,7 +553,7 @@ window.__ModuleLoader__.load({
     exports.inject = inject
     exports.apply = apply
     /** The pure parts a check drives directly: no DOM is touched by any of them. */
-    exports.__internals = { assembleInPane, parseAddress, viewerDefinition, indexDefinition, TOOL_NAMES, VIEWER_ID, INDEX_ID, SESSION_PREFIX, LIBRARY_PREFIX }
+    exports.__internals = { assembleInPane, parseAddress, viewerDefinition, TOOL_NAMES, VIEWER_ID, SESSION_PREFIX, LIBRARY_PREFIX }
     return module.exports
   },
 })

@@ -2,11 +2,16 @@
 
 GLSL that **compiles for real**, on a machine with no GPU, and says how far it got.
 
-Seven `shader_*` tools, a Shaders tab with a live WebGL preview, five skills, and a
-vendored corpus of **106 Radiant pages (79 fragment sources)** plus
-**shader-skills' 20 GLSL modules, 11 templates, 11 finished pieces and 14
+Seven `shader_*` tools, one small **support tab** with a live WebGL preview, five
+skills, and a vendored corpus of **106 Radiant pages (79 fragment sources)** plus
+**shader-skills' 20 GLSL modules, 11 templates, 11 finished pieces and 14 written
 references**, and a curated index of 48 links. Zero npm dependencies, no network at
 install or run.
+
+The tab is deliberately not a browser: it lists this conversation's shaders, draws
+the selected one with the local GPU, moves its `@param`s and says whether *that*
+browser produced a picture. Browsing the corpus is `shader_kit`'s job in the
+conversation, where a search result can become an answer.
 
 ## Why it exists
 
@@ -56,7 +61,7 @@ overloaded function found` - measured, and asserted by the check.
 | `shader_read` | one shader or the conversation index, with the browser's own verdict |
 | `shader_publish` | copy to the shared library (`dsh-resource://shader/library/<id>`) |
 | `shader_target` | emit `web` (a standalone page) · `frag` · `isf` · `ffgl` (a scaffold) · `shadertoy` |
-| `shader_kit` | the corpus: `catalog`, `example`, `search`, `links` |
+| `shader_kit` | the corpus: `catalog`, `example`, `search`, `links` — examples are `radiant/<id>`, `gallery/<id>`, `module/<id>`, `template/<id>`, and the 14 written references are `reference/<id>` |
 
 Parameters are declared in the source and become sliders everywhere:
 
