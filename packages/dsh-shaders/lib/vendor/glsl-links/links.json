@@ -1,0 +1,315 @@
+{
+  "source": {
+    "repo": "vanrez-nez/awesome-glsl",
+    "commit": "287c2ea4983626be157b094eeba3e36313a3c2ab",
+    "url": "https://github.com/vanrez-nez/awesome-glsl",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2017 Iván Juárez Núñez",
+    "note": "A curated LINK INDEX, not shader code: README.md (7,217 bytes) and LICENSE, vendored verbatim, plus links.json derived from the markdown."
+  },
+  "generatedBy": "packages/dsh-shaders/vendor/glsl-links/build.mjs",
+  "counts": {
+    "links": 48,
+    "categories": 7
+  },
+  "readmeSha256": "e1b8a2cee707b969c0256682eea7daa2fcf14b7db8ad50ef70026699c38f3b54",
+  "categories": [
+    "Tutorials",
+    "Sites",
+    "Editors",
+    "Articles",
+    "Tools",
+    "People",
+    "Related Lists"
+  ],
+  "links": [
+    {
+      "category": "Tutorials",
+      "title": "The book of Shaders",
+      "url": "https://thebookofshaders.com/",
+      "description": "Gentle step-by-step guide through the abstract and complex universe of Fragment Shaders."
+    },
+    {
+      "category": "Tutorials",
+      "title": "An introduction to Shader Art Coding",
+      "url": "https://youtu.be/f4s1h2YETNY",
+      "description": "Video tutuorial showing the basics of creating art with shaders."
+    },
+    {
+      "category": "Tutorials",
+      "title": "CG from Scratch!",
+      "url": "http://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-shading/",
+      "description": "Learn Computer Graphics From."
+    },
+    {
+      "category": "Tutorials",
+      "title": "Tutorial inside Shadertoy",
+      "url": "https://www.shadertoy.com/view/Md23DV",
+      "description": "Tutorial Series made inside Shadertoy GLSL editor"
+    },
+    {
+      "category": "Tutorials",
+      "title": "Shader School",
+      "url": "https://github.com/stackgl/shader-school",
+      "description": "A workshopper for GLSL shaders and graphics programming"
+    },
+    {
+      "category": "Tutorials",
+      "title": "Shaders Chapter",
+      "url": "http://antongerdelan.net/opengl/shaders.html",
+      "description": "Chapter that focuses on shaders with OpenGL"
+    },
+    {
+      "category": "Tutorials",
+      "title": "TyphoonLabs",
+      "url": "https://www.opengl.org/sdk/docs/tutorials/TyphoonLabs/",
+      "description": "5 PDF chapters from Jacobo Rodriguez Villar that go from history to advanced topics."
+    },
+    {
+      "category": "Tutorials",
+      "title": "Shaders with lwjgl",
+      "url": "https://github.com/mattdesl/lwjgl-basics/wiki/Shaders",
+      "description": "6 brief but comprehensive lessons by Matt DesLauriers"
+    },
+    {
+      "category": "Tutorials",
+      "title": "TutsPlus Series",
+      "url": "https://gamedevelopment.tutsplus.com/categories/shaders",
+      "description": "A series of articles featuring implementations with WebGL and live code examples."
+    },
+    {
+      "category": "Tutorials",
+      "title": "3D Game Shaders For Beginners",
+      "url": "https://github.com/lettier/3d-game-shaders-for-beginners",
+      "description": "A step-by-step guide on how to implement SSAO, depth of field, lighting, normal mapping, and more for your 3D game."
+    },
+    {
+      "category": "Sites",
+      "title": "Khronos wiki reference",
+      "url": "https://www.khronos.org/opengl/wiki/OpenGL_Shading_Language",
+      "description": "The official wiki that describes in a very formal way how GLSL works."
+    },
+    {
+      "category": "Sites",
+      "title": "Stack.gl",
+      "url": "http://stack.gl/",
+      "description": "Site that approaches Shaders from WebGL"
+    },
+    {
+      "category": "Sites",
+      "title": "Reddit Beautiful Shaders",
+      "url": "https://www.reddit.com/r/shaders/",
+      "description": "General discussion and showcase for shaders."
+    },
+    {
+      "category": "Sites",
+      "title": "Reddit Two Triangles",
+      "url": "https://www.reddit.com/r/twotriangles/",
+      "description": "General discussion and showcase for shaders."
+    },
+    {
+      "category": "Editors",
+      "title": "Shadertoy",
+      "url": "http://shadertoy.com",
+      "description": "Build and share your best shaders with the world and get inspired."
+    },
+    {
+      "category": "Editors",
+      "title": "GLSL Sandbox",
+      "url": "http://glslsandbox.com",
+      "description": "Fullscreen editor with preview as the background and galleries."
+    },
+    {
+      "category": "Editors",
+      "title": "GLSLbin",
+      "url": "http://glslb.in",
+      "description": "A fragment shader sandbox."
+    },
+    {
+      "category": "Editors",
+      "title": "Vertex Shader Art",
+      "url": "https://www.vertexshaderart.com",
+      "description": "Vertex shader's gallery and coding playground."
+    },
+    {
+      "category": "Editors",
+      "title": "ShaderFrog",
+      "url": "https://shaderfrog.com/",
+      "description": "Design shaders without writing code."
+    },
+    {
+      "category": "Editors",
+      "title": "Babylon CYOS",
+      "url": "https://cyos.babylonjs.com/",
+      "description": "Create Your Own Shader."
+    },
+    {
+      "category": "Editors",
+      "title": "Fragment",
+      "url": "http://www.syedrezaali.com/store/fragment-osx-app",
+      "description": "Desktop Application that utilizes GLSL and live coding to allow anyone to create spectacular imagery with math(s)! (No longer available)"
+    },
+    {
+      "category": "Editors",
+      "title": "Shdr",
+      "url": "http://shdr.bkcore.com/",
+      "description": "An online ESSL (GLSL) shader editor, viewer and validator powered by WebGL."
+    },
+    {
+      "category": "Editors",
+      "title": "PixelShaders",
+      "url": "http://pixelshaders.com/",
+      "description": "An Interactive Introduction to Graphics Programming."
+    },
+    {
+      "category": "Editors",
+      "title": "The Force",
+      "url": "https://shawnlawson.github.io/The_Force/",
+      "description": "Open Source IDE by Shawn Lawson"
+    },
+    {
+      "category": "Editors",
+      "title": "Kick.js Shader Editor",
+      "url": "http://www.kickjs.org/tool/shader_editor/shader_editor.html",
+      "description": "Formal Tool the WebGL engine Kick.js"
+    },
+    {
+      "category": "Editors",
+      "title": "Shader Gif",
+      "url": "https://shadergif.com",
+      "description": "ShaderGif is a free and open source home for art made with code. Make sure not to miss the [gallery](https://shadergif.com/feed)."
+    },
+    {
+      "category": "Editors",
+      "title": "KodeLife",
+      "url": "https://hexler.net/kodelife",
+      "description": "Desktop and mobile GLSL real-time editor."
+    },
+    {
+      "category": "Editors",
+      "title": "Vertex Shader Art",
+      "url": "https://www.vertexshaderart.com/",
+      "description": "Vertex Shader online gallery and editor."
+    },
+    {
+      "category": "Articles",
+      "title": "Intro Three.js",
+      "url": "https://www.airtightinteractive.com/2013/02/intro-to-pixel-shaders-in-three-js/",
+      "description": "Introduction to Shaders in Three.js"
+    },
+    {
+      "category": "Articles",
+      "title": "Primer:Shaders",
+      "url": "https://notes.underscorediscovery.com/shaders-a-primer/",
+      "description": "Brief and comprehensible introduction to shaders."
+    },
+    {
+      "category": "Articles",
+      "title": "WebGL Shaders Intro",
+      "url": "https://gamedevelopment.tutsplus.com/tutorials/getting-started-in-webgl-part-1-introduction-to-shaders--cms-26208",
+      "description": "A fliendly introduction."
+    },
+    {
+      "category": "Articles",
+      "title": "WebGL Image Processing",
+      "url": "https://maximmcnair.com/webgl-image-processing",
+      "description": "Covers a range of _Image Processing_ algorithms in WebGL such as Color Correction, Blend Modes, Thresholding, Dithering, Convolution and Film Grain."
+    },
+    {
+      "category": "Tools",
+      "title": "RenderDoc",
+      "url": "https://renderdoc.org/builds",
+      "description": "Stand-alone graphics debugger."
+    },
+    {
+      "category": "Tools",
+      "title": "Shader Designer",
+      "url": "https://www.opengl.org/sdk/tools/ShaderDesigner/",
+      "description": "TyphoonLabs' OpenGL Shader Designer"
+    },
+    {
+      "category": "Tools",
+      "title": "Synthclipse",
+      "url": "http://synthclipse.sourceforge.net/index.html",
+      "description": "Synthclipse is a GLSL shader prototyping tool."
+    },
+    {
+      "category": "Tools",
+      "title": "GLSLViewer",
+      "url": "https://github.com/patriciogonzalezvivo/glslViewer",
+      "description": "Live GLSL coding render for MacOS and Linux."
+    },
+    {
+      "category": "Tools",
+      "title": "GLSLScene",
+      "url": "https://github.com/jwurzer/glslScene",
+      "description": "Provides an environment for testing and developing GLSL shader programs (Windows)."
+    },
+    {
+      "category": "Tools",
+      "title": "Greg Tatum",
+      "url": "https://www.youtube.com/playlist?list=PLxaZqnd-OQM7Y0lfe7h2cjlQAm5O9_6UL",
+      "description": "5 videos explaining how to implement lighting from scratch in WebGL."
+    },
+    {
+      "category": "Tools",
+      "title": "Steven Wittens",
+      "url": "https://www.youtube.com/watch?v=4NkjLWAkYZ8",
+      "description": "Full Stack Fest 2015: The Pixel Factory (Great visuals to gain insights into what's going on with concepts such as UV's, and Rastering)"
+    },
+    {
+      "category": "People",
+      "title": "Patricio Gonzales Vivo",
+      "url": "http://patriciogonzalezvivo.com/",
+      "description": "Main contributor for the magnificent learning site \"The book of shaders\""
+    },
+    {
+      "category": "People",
+      "title": "Íñigo Quílez",
+      "url": "http://iquilezles.org/index.html",
+      "description": "Hardcore math applied to computer graphics, one of the best shader makers out there. [ST Profile](https://www.shadertoy.com/user/iq)"
+    },
+    {
+      "category": "People",
+      "title": "Anatole Drupat (XT95)",
+      "url": "http://www.aduprat.com/",
+      "description": "Recognized shader artist with a big trajectory [ST Profile](https://www.shadertoy.com/user/XT95)"
+    },
+    {
+      "category": "Related Lists",
+      "title": "awesome-webgl",
+      "url": "https://github.com/sjfricke/awesome-webgl",
+      "description": "A curated list of awesome WebGL libraries, resources and much more."
+    },
+    {
+      "category": "Related Lists",
+      "title": "awesome-opengl",
+      "url": "https://github.com/eug/awesome-opengl",
+      "description": "A curated list of awesome OpenGL libraries, debuggers and resources."
+    },
+    {
+      "category": "Related Lists",
+      "title": "awesome-computer-vision",
+      "url": "https://github.com/jbhuang0604/awesome-computer-vision",
+      "description": "A curated list of awesome computer vision resources."
+    },
+    {
+      "category": "Related Lists",
+      "title": "awesome-vulkan",
+      "url": "https://github.com/vinjn/awesome-vulkan",
+      "description": "A curated list of awesome Vulkan projects and ecosystem."
+    },
+    {
+      "category": "Related Lists",
+      "title": "gamedev",
+      "url": "https://github.com/ellisonleao/magictools",
+      "description": "A awesome list about game development."
+    },
+    {
+      "category": "Related Lists",
+      "title": "graphics-resources",
+      "url": "https://github.com/mattdesl/graphics-resources",
+      "description": "A list of graphic programming resources."
+    }
+  ]
+}

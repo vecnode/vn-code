@@ -1,0 +1,2369 @@
+{
+  "source": {
+    "repo": "pbakaus/radiant",
+    "commit": "59e9f48c0ad9a3db2fbeb8898b4390d5a1eabb40",
+    "url": "https://github.com/pbakaus/radiant",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2025 Paul Bakaus",
+    "note": "Pages are stored byte-identical. Fragment sources are extracted from them, and the derivation is re-run by --check."
+  },
+  "generatedBy": "packages/dsh-shaders/vendor/radiant/build.mjs",
+  "counts": {
+    "pages": 106,
+    "pagesWithSource": 69,
+    "sources": 79,
+    "byTechnique": {
+      "canvas2d": 34,
+      "webgl1": 63,
+      "hybrid": 7,
+      "webgl2": 1,
+      "unknown": 1
+    }
+  },
+  "examples": [
+    {
+      "id": "analog-drift",
+      "title": "Analog Drift",
+      "page": "examples/analog-drift.html",
+      "pageBytes": 13871,
+      "pageSha256": "685aa834afbf093cdb648a6a28b25daa84fcd964510723b41adcb1998e877c91",
+      "technique": "canvas2d",
+      "params": [
+        "CENTER_X",
+        "CENTER_Y",
+        "DRIFT_SPEED",
+        "SCALE",
+        "TRAIL_LENGTH"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "artpop-iridescence",
+      "title": "Artpop Iridescence",
+      "page": "examples/artpop-iridescence.html",
+      "pageBytes": 15314,
+      "pageSha256": "9d981413be481def56a382d02f20e2f2f95045b21efb15e1b624d786f0493df7",
+      "technique": "webgl1",
+      "params": [
+        "CENTER_X",
+        "CENTER_Y",
+        "FILM_THICKNESS",
+        "FLOW_SPEED",
+        "SCALE"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/artpop-iridescence.frag",
+          "bytes": 8285,
+          "sha256": "fa95777660333b5943c09cfc02d521e3ddb3653d713ea75806b55be4cfa3fbcc"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "aurora-curtain",
+      "title": "Aurora Curtain",
+      "page": "examples/aurora-curtain.html",
+      "pageBytes": 9620,
+      "pageSha256": "96d0c174a036ca61d712e17f1e3dc121582039f36c6be2e94aff652bb8dbefc7",
+      "technique": "webgl1",
+      "params": [
+        "AMPLITUDE",
+        "LINE_COUNT",
+        "ROTATION",
+        "WAVE_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/aurora-curtain.frag",
+          "bytes": 2730,
+          "sha256": "5dc10ea462fd128d67f16522dbf3be736ac4c06f85a967a0039704c55d939ced"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "aurora-veil",
+      "title": "Aurora Veil",
+      "page": "examples/aurora-veil.html",
+      "pageBytes": 17976,
+      "pageSha256": "59ac137ebf40cb6225843012afdf26c40e67afe7bcd4cb4df92cddacd4d25acf",
+      "technique": "webgl1",
+      "params": [
+        "AURORA_INTENSITY",
+        "AURORA_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/aurora-veil.frag",
+          "bytes": 10598,
+          "sha256": "159233d973842509f1d5a920d93b6ab94b3d0524fb89ecd40b0de80529966098"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "bass-ripple",
+      "title": "Bass Ripple",
+      "page": "examples/bass-ripple.html",
+      "pageBytes": 22055,
+      "pageSha256": "7812edf0c399f004d87044b045cedf7597e2dae0bcae13cd92bdc0357a24354c",
+      "technique": "webgl1",
+      "params": [
+        "BASS_FREQ",
+        "BASS_INTENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/bass-ripple.frag",
+          "bytes": 14955,
+          "sha256": "a453c73312b7c5dffaf75dd603a3a3310cba395370a2e22c945a4fd6ae161333"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "bioluminescence",
+      "title": "Bioluminescence",
+      "page": "examples/bioluminescence.html",
+      "pageBytes": 16624,
+      "pageSha256": "934fe9a40aa2c16b50de6064a5f545564108e9a52dc2ed0f7ba1323d29b22aeb",
+      "technique": "webgl1",
+      "params": [
+        "GLOW_INTENSITY",
+        "WAVE_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/bioluminescence.frag",
+          "bytes": 9568,
+          "sha256": "62596e76bee0c89c045185eb3cae373c09d7253093c604f6b91574b6ef3d23f3"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "burning-film",
+      "title": "Burning Film",
+      "page": "examples/burning-film.html",
+      "pageBytes": 16554,
+      "pageSha256": "1c3585670b8e3863071a17e9e5309e04377e4795b83a7bef48f4c5f24234c1bc",
+      "technique": "webgl1",
+      "params": [
+        "BURN_SPEED",
+        "EMBER_GLOW"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/burning-film.frag",
+          "bytes": 9409,
+          "sha256": "c323fa121db5c5808f6564f7ee3d9dbc3cd6beabc006e46b32582355f355d1ab"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "champagne-fizz",
+      "title": "Champagne Fizz",
+      "page": "examples/champagne-fizz.html",
+      "pageBytes": 15174,
+      "pageSha256": "f64e819d652547d341de843d1e013801960f6f8692c49a204a26a9e46b8c6e33",
+      "technique": "canvas2d",
+      "params": [
+        "BUBBLE_RATE",
+        "RISE_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "chladni-resonance",
+      "title": "Chladni Resonance",
+      "page": "examples/chladni-resonance.html",
+      "pageBytes": 8387,
+      "pageSha256": "d5b09cd04109404be7f052a5473898082b998307489b6e6e098e2a239c118b4d",
+      "technique": "webgl1",
+      "params": [
+        "COMPLEXITY",
+        "MODE_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/chladni-resonance.frag",
+          "bytes": 3016,
+          "sha256": "827e3c758b002fc711c0b8c9eb41411f285b1e3f2507a620ce85bf4d10d0984f"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "chromatic-bloom",
+      "title": "Chromatic Bloom",
+      "page": "examples/chromatic-bloom.html",
+      "pageBytes": 13193,
+      "pageSha256": "bf0f2f2581b449b1b8b7bce975a3a7960837955469100d5e9610db652a128721",
+      "technique": "webgl1",
+      "params": [
+        "DRIFT_SPEED",
+        "GRAIN_AMOUNT"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/chromatic-bloom.frag",
+          "bytes": 6717,
+          "sha256": "99648bd4b92ab829d1a94153357043e33fee3e8bb2567851b9f36efe153d4589"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "clockwork-mind",
+      "title": "Clockwork Mind",
+      "page": "examples/clockwork-mind.html",
+      "pageBytes": 34368,
+      "pageSha256": "20cdfacff212b2a9efd2136925aed7bba0ddb1dc5398783086c56bc9eca74499",
+      "technique": "canvas2d",
+      "params": [
+        "CENTER_X",
+        "CENTER_Y",
+        "GEAR_DETAIL",
+        "ROTATION_SPEED",
+        "SCALE"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "crystal-lattice",
+      "title": "Crystal Lattice",
+      "page": "examples/crystal-lattice.html",
+      "pageBytes": 27448,
+      "pageSha256": "0df8af54c304c64a33075c4a3d6828a4616efe3260c79c4a91180f2c528f612b",
+      "technique": "webgl1",
+      "params": [
+        "CENTER_X",
+        "CENTER_Y",
+        "GROWTH_SPEED",
+        "REFRACTION",
+        "SCALE",
+        "TILT_X",
+        "TILT_Y"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/crystal-lattice.frag",
+          "bytes": 17527,
+          "sha256": "8dcbfe62c5eab04802c2c9842f9b10f1dc7068f42ff8859868d8b5f375bae50d"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "diamond-caustics",
+      "title": "Diamond Caustics",
+      "page": "examples/diamond-caustics.html",
+      "pageBytes": 22937,
+      "pageSha256": "f34d906646c9ee0441d3f7afc02f739afcfcfc610aacaf3ba15b496529350517",
+      "technique": "webgl1",
+      "params": [
+        "BRILLIANCE",
+        "ROTATION_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/diamond-caustics.frag",
+          "bytes": 15176,
+          "sha256": "705c41cd570077ef3a824e3b1a4ec060d3a3baea8ab337500f4a3aac40a96e5b"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "digital-rain",
+      "title": "Digital Rain",
+      "page": "examples/digital-rain.html",
+      "pageBytes": 18057,
+      "pageSha256": "b9c7cc25840171ae506811ba72f87375fc8f4b9d2d27a4f53c5f34d7ac222673",
+      "technique": "canvas2d",
+      "params": [
+        "COLUMN_DENSITY",
+        "FALL_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "dither-gradient",
+      "title": "Dither Gradient",
+      "page": "examples/dither-gradient.html",
+      "pageBytes": 20150,
+      "pageSha256": "79661354b980ec4c19013260ed48adfce5e20a5692a0f2caaf2c613979d6015c",
+      "technique": "webgl1",
+      "params": [
+        "BIT_DEPTH",
+        "DITHER_SCALE"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/dither-gradient.frag",
+          "bytes": 12005,
+          "sha256": "29fc367187c06634780c093934d77830216a26c614722ed615f84aea862d14c8"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "eclipse-glow",
+      "title": "Eclipse Glow",
+      "page": "examples/eclipse-glow.html",
+      "pageBytes": 15126,
+      "pageSha256": "355aa5bab1b6b225e35c1ec8042104be3df196aa7339c1f7c4b38e28a99d034b",
+      "technique": "webgl1",
+      "params": [
+        "CORONA_SIZE",
+        "RAY_INTENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/eclipse-glow.frag",
+          "bytes": 8074,
+          "sha256": "61c7a25324a3a5842d4f6b70033f32d035b35d400d124d1c825e64e7a5ebbbe9"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "edge-of-chaos",
+      "title": "Edge of Chaos",
+      "page": "examples/edge-of-chaos.html",
+      "pageBytes": 32907,
+      "pageSha256": "8c77d672483c58cfb72aea57c85ccd05d08b383a5b23a75857f63f4c77f1b640",
+      "technique": "webgl1",
+      "params": [
+        "PATTERN_SPEED",
+        "POP_RATE",
+        "WARMTH"
+      ],
+      "sources": [
+        {
+          "name": "blurFragSrc",
+          "shape": "array",
+          "file": "glsl/edge-of-chaos--blurfragsrc.frag",
+          "bytes": 1121,
+          "sha256": "5dc6549f87c1ae7ae5a77a4779e7adcc743a246dfaefab23ef763f485f6ba87f"
+        },
+        {
+          "name": "brightFragSrc",
+          "shape": "array",
+          "file": "glsl/edge-of-chaos--brightfragsrc.frag",
+          "bytes": 417,
+          "sha256": "16eae46624daa93128734ec125f4ed8f23c0223ff4f957ff3aced8450fd25577"
+        },
+        {
+          "name": "displayFragSrc",
+          "shape": "array",
+          "file": "glsl/edge-of-chaos--displayfragsrc.frag",
+          "bytes": 4341,
+          "sha256": "cb610480da7f24cea00f483f8b75001baa9a64f97530f2e7c76c94c218d76760"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "displayFragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "event-horizon",
+      "title": "Event Horizon",
+      "page": "examples/event-horizon.html",
+      "pageBytes": 21954,
+      "pageSha256": "6eb05925d6297cbcb51629b3068b25f7b5d3ad798666b498b53c7c4ba7b43c20",
+      "technique": "webgl1",
+      "params": [
+        "BH_CENTER_X",
+        "BH_CENTER_Y",
+        "BH_SCALE",
+        "CHROMATIC",
+        "DISK_INTENSITY",
+        "ROTATE",
+        "ROTATION_SPEED",
+        "STARS_ONLY",
+        "TILT"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/event-horizon.frag",
+          "bytes": 15304,
+          "sha256": "d2019585154159664729d71df3febe07cbbb6d07516d4c28b8f2a7712cd65c1b"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "feedback-loop",
+      "title": "Feedback Loop",
+      "page": "examples/feedback-loop.html",
+      "pageBytes": 22802,
+      "pageSha256": "05c1dcc8e050f6aef7e6784eb49ef493d14f3e3f0c07cdfec6864cc8430a867d",
+      "technique": "webgl1",
+      "params": [
+        "ROTATION_SPEED",
+        "ZOOM_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "feedbackFragSrc",
+          "shape": "array",
+          "file": "glsl/feedback-loop--feedbackfragsrc.frag",
+          "bytes": 6962,
+          "sha256": "5ee810fd380c3339dc6684a18942ca0a8bf10e1225e5864ea47c1b6017ad9447"
+        },
+        {
+          "name": "displayFragSrc",
+          "shape": "array",
+          "file": "glsl/feedback-loop--displayfragsrc.frag",
+          "bytes": 2990,
+          "sha256": "2809978caf70056665ab5ddd3440cea3af5905b487765aa697e451488f4198fb"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "displayFragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "flow-field",
+      "title": "Flow Field with Particle Trails",
+      "page": "examples/flow-field.html",
+      "pageBytes": 10086,
+      "pageSha256": "00f057ed9b4dc425218a17405543b821836ee49a02cf0f78769564a2a24a3bdd",
+      "technique": "canvas2d",
+      "params": [
+        "NOISE_SCALE",
+        "SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "fluid-amber",
+      "title": "Fluid Amber",
+      "page": "examples/fluid-amber.html",
+      "pageBytes": 7784,
+      "pageSha256": "c0f376497e67b7fb4845eb87592d465771f746ee647787723ed0896839814f46",
+      "technique": "webgl1",
+      "params": [],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/fluid-amber.frag",
+          "bytes": 2606,
+          "sha256": "016d9c4c4082866c4d7ac742330eab7b0cb37e1111c2504fedafa0741a8b6a04"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "generative-tree",
+      "title": "Generative Branching Tree",
+      "page": "examples/generative-tree.html",
+      "pageBytes": 19743,
+      "pageSha256": "d8d512f3b5674581d101dd36f309d4bb562c70deddee952786344f9b3a8eded7",
+      "technique": "canvas2d",
+      "params": [
+        "GROWTH_SPEED_BASE",
+        "MAX_DEPTH"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "gilded-fracture",
+      "title": "Gilded Fracture",
+      "page": "examples/gilded-fracture.html",
+      "pageBytes": 35071,
+      "pageSha256": "6734be61fb3c9963cdf1e063034c29881b53d82fcb66feb6e4748d5408a9c89c",
+      "technique": "webgl1",
+      "params": [
+        "CRACK_SPEED",
+        "GLOW_INTENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/gilded-fracture.frag",
+          "bytes": 27189,
+          "sha256": "c2cf1d1e40c89ab611c5598580d95811d1394ee66a6c3896206ddd03945be5d7"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "gilt-mosaic",
+      "title": "Gilt Mosaic",
+      "page": "examples/gilt-mosaic.html",
+      "pageBytes": 21120,
+      "pageSha256": "ecca9fbde028e3e60e7c49dd3aee073f1d681bab9f77dc55e51fbec9a2f2133d",
+      "technique": "webgl1",
+      "params": [
+        "ANIM_MODE",
+        "LIGHT_SPEED",
+        "TILE_SCALE",
+        "WAVE_DELAY",
+        "WAVE_DIR",
+        "WAVE_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/gilt-mosaic.frag",
+          "bytes": 12214,
+          "sha256": "7571a905a6a1a50a4ce1776217ee2928f0a45f52b45f03753d5325da10661159"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "gilt-thread",
+      "title": "Gilt Thread",
+      "page": "examples/gilt-thread.html",
+      "pageBytes": 13739,
+      "pageSha256": "73d26b215703e537985d9990a501e76cd30fc069a5d422ce5f27f6c8d9626f71",
+      "technique": "canvas2d",
+      "params": [
+        "DRAW_SPEED",
+        "SHAPE",
+        "THREAD_COUNT"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "glitter-storm",
+      "title": "Glitter Storm",
+      "page": "examples/glitter-storm.html",
+      "pageBytes": 13844,
+      "pageSha256": "dc8ca37d38da71f57baf21184f62a2a54153382f8ed87091450ef6de104947fc",
+      "technique": "canvas2d",
+      "params": [
+        "DENSITY",
+        "SPARKLE_RATE"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "golden-throne",
+      "title": "Golden Throne",
+      "page": "examples/golden-throne.html",
+      "pageBytes": 15581,
+      "pageSha256": "5527403cd06e3e3fee7607ce63f8cce2a307f92af56fb499c04bfe839d35cc76",
+      "technique": "webgl1",
+      "params": [
+        "COMPLEXITY",
+        "ROTATION_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/golden-throne.frag",
+          "bytes": 8661,
+          "sha256": "8728eed2d0f16efe425ccccd0a9ee97133b027353c65ff2d94dded31971b4530"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "gothic-filigree",
+      "title": "Gothic Filigree",
+      "page": "examples/gothic-filigree.html",
+      "pageBytes": 17676,
+      "pageSha256": "25ed22c6dafec6502e5ecc4ff1fc6382231e8d2dccd972cc65fd655bba874223",
+      "technique": "webgl1",
+      "params": [],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/gothic-filigree.frag",
+          "bytes": 10687,
+          "sha256": "93e3e296bbf0a4d62b9ab8ca6d19b5ff90447ca5c0b9df7b7b5657d67c8ccbdf"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "hologram-glitch",
+      "title": "Hologram Glitch",
+      "page": "examples/hologram-glitch.html",
+      "pageBytes": 18938,
+      "pageSha256": "766b673252d1468e0dd9f3e25bb69fe9a088498297d47c4a381ef4cfe073c3f5",
+      "technique": "webgl1",
+      "params": [
+        "GLITCH_INTENSITY",
+        "SCAN_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/hologram-glitch.frag",
+          "bytes": 10836,
+          "sha256": "930515a240e33632c21700a993d67a4009a66ca526e6777463b51ca4a991b187"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "ink-calligraphy",
+      "title": "Ink Calligraphy",
+      "page": "examples/ink-calligraphy.html",
+      "pageBytes": 21398,
+      "pageSha256": "115d4a51e2d03212ad131ee191aa8aaf3c1ebde33a2dbdb73101db0f5082e8ef",
+      "technique": "canvas2d",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "ink-dissolve",
+      "title": "Ink Dissolve",
+      "page": "examples/ink-dissolve.html",
+      "pageBytes": 13626,
+      "pageSha256": "f75aab9cc745d44d59c44674017c54e0809ff54109307af54a1cc182634cb517",
+      "technique": "webgl1",
+      "params": [
+        "SPREAD_SPEED",
+        "TENDRIL_DETAIL"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/ink-dissolve.frag",
+          "bytes": 6630,
+          "sha256": "2e966277b93f1c56efd9ca804a91aef37ff7ea6fe48bcdfd96c2b823ac70daeb"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "jazz-chaos",
+      "title": "Jazz Chaos",
+      "page": "examples/jazz-chaos.html",
+      "pageBytes": 23219,
+      "pageSha256": "8a5262a72cb61663edf85c6c0999d03524b8ff2777340c0f5ed5255ff0c5ab27",
+      "technique": "canvas2d",
+      "params": [
+        "SWING",
+        "TEMPO"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "kaleidoscope-runway",
+      "title": "Kaleidoscope Runway",
+      "page": "examples/kaleidoscope-runway.html",
+      "pageBytes": 14652,
+      "pageSha256": "97b102a36109fcc1be92bb58315f2fe726af8d80a2869d1f48c5f2b819296507",
+      "technique": "webgl1",
+      "params": [
+        "PATTERN_SPEED",
+        "SYMMETRY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/kaleidoscope-runway.frag",
+          "bytes": 7901,
+          "sha256": "e03aa1dbe41a495ac70730af2a3d76c96d7e7b1e70727a79413d6266f88bbc60"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "kinetic-grid",
+      "title": "Kinetic Grid",
+      "page": "examples/kinetic-grid.html",
+      "pageBytes": 19056,
+      "pageSha256": "04bb95487a10b1a4d0a2d2aa6fbc92ce951621d45cf2d3f70c376e509b57109f",
+      "technique": "canvas2d",
+      "params": [
+        "DAMPING",
+        "IMPULSE_RATE",
+        "IMPULSE_STRENGTH",
+        "RETURN_FORCE",
+        "SPRING_TENSION"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "laser-labyrinth",
+      "title": "Laser Labyrinth",
+      "page": "examples/laser-labyrinth.html",
+      "pageBytes": 17067,
+      "pageSha256": "237bd4a42afa0e267b1155f070fad17b3eef1191067c1184ce478de69bc6b402",
+      "technique": "webgl1",
+      "params": [
+        "BEAM_INTENSITY",
+        "SWEEP_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/laser-labyrinth.frag",
+          "bytes": 9720,
+          "sha256": "e4e7cb233e0633aa00b44e7b472199080fca14ab86847b072611b7a2c8a26678"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "laser-precision",
+      "title": "Laser Precision",
+      "page": "examples/laser-precision.html",
+      "pageBytes": 28397,
+      "pageSha256": "03e7b4b08d70fbd538809039b1956216239461212f6afbbbe9a7da110128cf42",
+      "technique": "canvas2d",
+      "params": [
+        "BRIGHTNESS",
+        "CENTER_X",
+        "CENTER_Y",
+        "DRAW_SPEED",
+        "SCALE",
+        "SHAPE"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "learn-analog-drift-01-phosphor-trail",
+      "title": "Step 01 — Phosphor Trail",
+      "page": "examples/learn-analog-drift-01-phosphor-trail.html",
+      "pageBytes": 3662,
+      "pageSha256": "82489a16450c8b1294d2b12ab63cb7c5bce7a47047a49fbedd35353b891070ab",
+      "technique": "canvas2d",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "learn-analog-drift-02-velocity-thickness",
+      "title": "Step 02 — Velocity Thickness",
+      "page": "examples/learn-analog-drift-02-velocity-thickness.html",
+      "pageBytes": 4681,
+      "pageSha256": "babc3fb75fc5a8bbf70839995f12beaafb89b5e4d6fc81a75c81becb2cc78dcb",
+      "technique": "canvas2d",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "learn-analog-drift-03-drift",
+      "title": "Step 03 — Waypoint Drift",
+      "page": "examples/learn-analog-drift-03-drift.html",
+      "pageBytes": 5183,
+      "pageSha256": "edd15bc68851d2de50e7ef699afb396e2831de0a58c332738d2ef528c6ab7186",
+      "technique": "canvas2d",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "learn-analog-drift-04-harmonics",
+      "title": "Step 04 — Harmonics",
+      "page": "examples/learn-analog-drift-04-harmonics.html",
+      "pageBytes": 4162,
+      "pageSha256": "7b962dc6f790facabc8022bf1be44acf387b91d5bb6adbbcb7c882fdf2bb0ac2",
+      "technique": "canvas2d",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "learn-analog-drift-05-final",
+      "title": "Step 05 — Final Assembly",
+      "page": "examples/learn-analog-drift-05-final.html",
+      "pageBytes": 8477,
+      "pageSha256": "c3bc0e79429d062d54dc732d965b570e91079ccd5700f2d1851b1bca141233cb",
+      "technique": "canvas2d",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "learn-event-horizon-01-rays",
+      "title": "Step 01 — Straight Rays",
+      "page": "examples/learn-event-horizon-01-rays.html",
+      "pageBytes": 9458,
+      "pageSha256": "8b382a3ce41f3a3fb2c3fa95bf954d93455b51981ca137abd0f80e03473ee812",
+      "technique": "webgl1",
+      "params": [
+        "NEBULA",
+        "ROTATE_SPEED",
+        "TILT"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/learn-event-horizon-01-rays.frag",
+          "bytes": 4151,
+          "sha256": "ba73c456fe9cd67dba9c74e637cf587d3bd0fe2ab41e47ff1f7ce4d48d33a7f7"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "learn-event-horizon-02-bending",
+      "title": "Step 02 — Bending Light",
+      "page": "examples/learn-event-horizon-02-bending.html",
+      "pageBytes": 8818,
+      "pageSha256": "01637d10bfc77d27c75300258296d0ced32dcf97097930b094412dac6529038d",
+      "technique": "webgl1",
+      "params": [
+        "MASS",
+        "ROTATE_SPEED",
+        "SHOW_GRID",
+        "STEPS",
+        "TILT"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/learn-event-horizon-02-bending.frag",
+          "bytes": 3652,
+          "sha256": "0ff0ddf641a05d7230976eafb23755404f13d8a74ae220de30fbdb9235ed6b96"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "learn-event-horizon-03-disk-flat",
+      "title": "Step 03 — The Disk (flat)",
+      "page": "examples/learn-event-horizon-03-disk-flat.html",
+      "pageBytes": 7432,
+      "pageSha256": "cef412f26c0044b3ee260c2d65e67d95baf48bcd5509eca7d5f4c93d68653b25",
+      "technique": "webgl1",
+      "params": [
+        "INNER",
+        "ISCO",
+        "OUTER",
+        "RINGS",
+        "SPEED",
+        "TURBULENCE"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/learn-event-horizon-03-disk-flat.frag",
+          "bytes": 3330,
+          "sha256": "7ce03c6a39835ebd5c19b3e5566ee79aabe408582b89751ca805d358c8c5720f"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "learn-event-horizon-04-disk-lensed",
+      "title": "Step 04 — Disk + Lensing",
+      "page": "examples/learn-event-horizon-04-disk-lensed.html",
+      "pageBytes": 10232,
+      "pageSha256": "515f9e549c6803a79c4c75af9a5c25d3b1e9c1b915db8c11b5bba9de80af34d6",
+      "technique": "webgl1",
+      "params": [
+        "DISK_INTENSITY",
+        "ROTATE",
+        "ROTATION_SPEED",
+        "TILT"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/learn-event-horizon-04-disk-lensed.frag",
+          "bytes": 5343,
+          "sha256": "491d907d8b996dcdcd8c6a6569382ee9ba918725041b4f90518f348303909248"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "learn-event-horizon-05-doppler",
+      "title": "Step 05 — Doppler Beaming",
+      "page": "examples/learn-event-horizon-05-doppler.html",
+      "pageBytes": 10444,
+      "pageSha256": "45fb9ef1bbe040f63ce7af1e481b548cdde5b7e4a1cb1477faf2fc5c19b48185",
+      "technique": "webgl1",
+      "params": [
+        "DISK_INTENSITY",
+        "DOPPLER",
+        "ROTATE",
+        "ROTATION_SPEED",
+        "TILT"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/learn-event-horizon-05-doppler.frag",
+          "bytes": 5404,
+          "sha256": "93858fa5c2846e3719b3c5494ba4bce7c2e055ed2befea659bfc874da0854c65"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "learn-event-horizon-geodesic-2d",
+      "title": "Geodesic 2D",
+      "page": "examples/learn-event-horizon-geodesic-2d.html",
+      "pageBytes": 10875,
+      "pageSha256": "672a8ff153821e12c46d9416b90daeda493dd4b3712962b0b76cae17aa239c4c",
+      "technique": "canvas2d",
+      "params": [
+        "FIELD",
+        "MASS",
+        "RESEED",
+        "RESET"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "learn-rain-on-glass-01-single-drop",
+      "title": "Step 01 — A Single Drop",
+      "page": "examples/learn-rain-on-glass-01-single-drop.html",
+      "pageBytes": 11393,
+      "pageSha256": "3541bde543bdb3a4e1f57d34d7a716eb10ea7d0b19a9cc7834b3d6bd594a0ad1",
+      "technique": "hybrid",
+      "params": [
+        "DROP_SIZE",
+        "REFRACTION",
+        "SHOW_NORMAL_MAP"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/learn-rain-on-glass-01-single-drop.frag",
+          "bytes": 1421,
+          "sha256": "41eb91e5de0181fb9ea25a8e57538be9fb4f30633b688b7f08d52861cd1531b9"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "learn-rain-on-glass-02-normal-map",
+      "title": "Step 02 — The Drop Normal Map",
+      "page": "examples/learn-rain-on-glass-02-normal-map.html",
+      "pageBytes": 5769,
+      "pageSha256": "70ea5e8dab85bc108ad993d0750a71d71172405d470a2b8be9ba8ce07132c2ed",
+      "technique": "canvas2d",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "learn-rain-on-glass-03-static-field",
+      "title": "Step 03 — A Static Field of Drops",
+      "page": "examples/learn-rain-on-glass-03-static-field.html",
+      "pageBytes": 9479,
+      "pageSha256": "19da2d135d0995b07185a7f69af07fd1e3f39a171fefcb75ab06cceeb1ad4c64",
+      "technique": "hybrid",
+      "params": [
+        "DROP_COUNT",
+        "DROP_SIZE_MAX",
+        "DROP_SIZE_MIN",
+        "REFRACTION",
+        "RESHUFFLE"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/learn-rain-on-glass-03-static-field.frag",
+          "bytes": 613,
+          "sha256": "983f1cb07d526738518d05d62afee8c92c3910b98f2e965326814363a39a4e9e"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "learn-rain-on-glass-04-rolling-drop",
+      "title": "Step 04 — A Rolling Drop",
+      "page": "examples/learn-rain-on-glass-04-rolling-drop.html",
+      "pageBytes": 12304,
+      "pageSha256": "398f03291db9eff017e28ccb672868f04b5f2ddf59c6516a04928cdc24f2fd89",
+      "technique": "hybrid",
+      "params": [
+        "GRAVITY",
+        "REFRACTION",
+        "RESET",
+        "RESPAWN",
+        "SURFACE_TENSION",
+        "TRAIL_RATE"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/learn-rain-on-glass-04-rolling-drop.frag",
+          "bytes": 585,
+          "sha256": "e518adb156b9ec995adba72c91b973ce22b093227fce1e53fffbaf893eb028ec"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "learn-rain-on-glass-05-merging-field",
+      "title": "Step 05 — Drops That Merge",
+      "page": "examples/learn-rain-on-glass-05-merging-field.html",
+      "pageBytes": 12807,
+      "pageSha256": "193133587a5b44be9bc9952b717f82344800ee019dbdb0b41c53f107a0a17c5e",
+      "technique": "hybrid",
+      "params": [
+        "CLEAR",
+        "COLLISION_RADIUS",
+        "REFRACTION",
+        "RESET",
+        "SPAWN_RATE"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "template",
+          "file": "glsl/learn-rain-on-glass-05-merging-field.frag",
+          "bytes": 585,
+          "sha256": "e518adb156b9ec995adba72c91b973ce22b093227fce1e53fffbaf893eb028ec"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "learn-rain-on-glass-06-wet-glass",
+      "title": "Step 06 — Wet Glass",
+      "page": "examples/learn-rain-on-glass-06-wet-glass.html",
+      "pageBytes": 29418,
+      "pageSha256": "c408cfc35cedb370825d454dbc1fc105812b6110e6f9f7dc6021a0d65b641a4c",
+      "technique": "hybrid",
+      "params": [],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/learn-rain-on-glass-06-wet-glass.frag",
+          "bytes": 1798,
+          "sha256": "14114d2e3d07dee1fda4679be2c035514dab83e50e12dceb4f2243ae51825b00"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "lens-whisper",
+      "title": "Lens Whisper",
+      "page": "examples/lens-whisper.html",
+      "pageBytes": 14510,
+      "pageSha256": "b4643b7226de18fdbe45b426ffbbba1d022cb239a93018b16ff470a3238c5cd7",
+      "technique": "webgl1",
+      "params": [
+        "DRIFT_SPEED",
+        "FLARE_SPREAD"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/lens-whisper.frag",
+          "bytes": 7653,
+          "sha256": "c66dc9c3a11da9d492df933fac6121786b54cc12892faff8012f8e19b581ddc3"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "lipstick-smear",
+      "title": "Lipstick Smear",
+      "page": "examples/lipstick-smear.html",
+      "pageBytes": 26788,
+      "pageSha256": "bcff8c9dde210b4305bc59f3f5b322a36bdd17a82bd34074a58f17b12a734df0",
+      "technique": "webgl1",
+      "params": [],
+      "sources": [
+        {
+          "name": "FS_ADVECT",
+          "shape": "array",
+          "file": "glsl/lipstick-smear--fs_advect.frag",
+          "bytes": 378,
+          "sha256": "d678c888f6ce31a86778aa0584dd40b72b69e6a4a446c516b95c58e94a876839"
+        },
+        {
+          "name": "FS_DIV",
+          "shape": "array",
+          "file": "glsl/lipstick-smear--fs_div.frag",
+          "bytes": 399,
+          "sha256": "9e481cc28abbd7e905ed6a4313c96ee094ba9c8c2b6b4bd9e84144d41e9a8a9f"
+        },
+        {
+          "name": "FS_PRESSURE",
+          "shape": "array",
+          "file": "glsl/lipstick-smear--fs_pressure.frag",
+          "bytes": 472,
+          "sha256": "7686f1a42018c3823284f3d933ea0039ea9f15157d8c03e90015af12df3f4472"
+        },
+        {
+          "name": "FS_GRAD",
+          "shape": "array",
+          "file": "glsl/lipstick-smear--fs_grad.frag",
+          "bytes": 469,
+          "sha256": "0be45ed35979534bdcb63555fc50d91f93c04cab76aa94ca10f988a1ad08fe23"
+        },
+        {
+          "name": "FS_VORT",
+          "shape": "array",
+          "file": "glsl/lipstick-smear--fs_vort.frag",
+          "bytes": 401,
+          "sha256": "000d75a51d649ea886f8af1267e3fc76a981f34ff4f805ef9c62409363554535"
+        },
+        {
+          "name": "FS_VORTF",
+          "shape": "array",
+          "file": "glsl/lipstick-smear--fs_vortf.frag",
+          "bytes": 656,
+          "sha256": "8c4e5b170c83b0d6b87c48f76d0841aca9546286f3913f4dd9c0613941e45768"
+        },
+        {
+          "name": "FS_SPLAT",
+          "shape": "array",
+          "file": "glsl/lipstick-smear--fs_splat.frag",
+          "bytes": 337,
+          "sha256": "15d3031dbef35c5a126c5a1341f06d98c7a79702d696df298488bb9bcda601cc"
+        },
+        {
+          "name": "FS_DISPLAY",
+          "shape": "array",
+          "file": "glsl/lipstick-smear--fs_display.frag",
+          "bytes": 1538,
+          "sha256": "15b7a8e4e7d1f6701d75f3d377755066e19068e4e88d0bb459840405d821b0c3"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "FS_DISPLAY",
+      "compile": "expected"
+    },
+    {
+      "id": "liquid-gold",
+      "title": "Liquid Gold",
+      "page": "examples/liquid-gold.html",
+      "pageBytes": 14084,
+      "pageSha256": "69f4cf062ccfb3817357cc0f90f8e273460bae50c4343773f469622ebdbaf62f",
+      "technique": "webgl1",
+      "params": [
+        "FLOW_SPEED",
+        "VISCOSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/liquid-gold.frag",
+          "bytes": 7514,
+          "sha256": "d7193dda5ab089a2795065734f4115fa1d455f4fbb5237d375d3a0b59e6941ac"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "luminous-silt",
+      "title": "Luminous Silt",
+      "page": "examples/luminous-silt.html",
+      "pageBytes": 12607,
+      "pageSha256": "5cf56e23a23d10cdb458d71751c96b8b768ccd7649df54c7e830df251af3bb8f",
+      "technique": "canvas2d",
+      "params": [
+        "DENSITY",
+        "DRIFT_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "magma-core",
+      "title": "Magma Core",
+      "page": "examples/magma-core.html",
+      "pageBytes": 16973,
+      "pageSha256": "6a014e01ada784ef37359f908b3d86069928517e4e2c25e844a02634c9cf339e",
+      "technique": "webgl1",
+      "params": [
+        "CRUST_AMOUNT",
+        "INTENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/magma-core.frag",
+          "bytes": 9972,
+          "sha256": "6bcfc575974386e0b61d173b57f82bdc5fda9dfffaa44e18fffc56f2be27d39d"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "magnetic-field",
+      "title": "Magnetic Field",
+      "page": "examples/magnetic-field.html",
+      "pageBytes": 9747,
+      "pageSha256": "55a84513c16946633cd775d94bf307f105a12e879f06141a357f1c4da7209ada",
+      "technique": "webgl1",
+      "params": [
+        "LINE_COUNT",
+        "WAVE_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/magnetic-field.frag",
+          "bytes": 3688,
+          "sha256": "2ac24197b64c5e384e872e61afe26b2cde68cec3c2ef40529c7e40c10299e835"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "magnetic-sand",
+      "title": "Magnetic Sand",
+      "page": "examples/magnetic-sand.html",
+      "pageBytes": 14511,
+      "pageSha256": "b3914fd1ce10b94461c1983f1f9d3cbf35a12f3c20f8e9c85144c60d0083c685",
+      "technique": "canvas2d",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "metamorphosis",
+      "title": "Metamorphosis",
+      "page": "examples/metamorphosis.html",
+      "pageBytes": 15692,
+      "pageSha256": "e2deec14cf011271b97c6a0f1cd1d7478a3c80b18e39b207876195c3c5f00f04",
+      "technique": "webgl1",
+      "params": [
+        "BLOB_COUNT",
+        "MORPH_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/metamorphosis.frag",
+          "bytes": 9175,
+          "sha256": "826cb89c7f4067ca7ba17d2a7340c85441af7eacce02d04f5b192240009c42e3"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "moire-interference",
+      "title": "Moiré Interference",
+      "page": "examples/moire-interference.html",
+      "pageBytes": 10458,
+      "pageSha256": "7fb51eccbdaa27738972966586468f91380994c98d17d55a37372d9c81765d69",
+      "technique": "webgl1",
+      "params": [
+        "DRIFT_SPEED",
+        "RING_DENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/moire-interference.frag",
+          "bytes": 4635,
+          "sha256": "0ca0556b35cc9940f625e4d930c0cd006d4322b11f9ed06cf9b6f7339a768972"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "moonlit-ripple",
+      "title": "Moonlit Ripple",
+      "page": "examples/moonlit-ripple.html",
+      "pageBytes": 11875,
+      "pageSha256": "5bb56ae846518e3065aa42ce33b9e9117d081b41cbc485284fd52172444ccbf3",
+      "technique": "webgl1",
+      "params": [
+        "CAMERA_TILT",
+        "MOON_GLOW",
+        "RIPPLE_SPEED",
+        "WAVE_INTENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/moonlit-ripple.frag",
+          "bytes": 5619,
+          "sha256": "93018d1184136e4f3ae9e10362c4477b8750435d82c56806facc45cfa7fea4dc"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "murmuration",
+      "title": "Murmuration",
+      "page": "examples/murmuration.html",
+      "pageBytes": 21823,
+      "pageSha256": "bba38f9b71e9c5a4da0e56b9131e1febd35a742e62f52c419289429e7b96d1e9",
+      "technique": "canvas2d",
+      "params": [
+        "COHESION",
+        "FLOCK_SIZE",
+        "PALETTE"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "navier-stokes",
+      "title": "Navier–Stokes",
+      "page": "examples/navier-stokes.html",
+      "pageBytes": 17363,
+      "pageSha256": "642fb11f1dbc37a7c2c4c2b9ffe8e2356d830d4d0b08cf79955b9a1be928bf7a",
+      "technique": "webgl2",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none",
+      "unreadableReason": "the fragment source is composed at run time, so no static literal exists to extract"
+    },
+    {
+      "id": "neon-drip",
+      "title": "Neon Drip",
+      "page": "examples/neon-drip.html",
+      "pageBytes": 14627,
+      "pageSha256": "1693f25c7f0873a53a5360f6fdcb52fb89d28b4a9203e1e42ca8f52cd0927ebe",
+      "technique": "webgl1",
+      "params": [
+        "BLOB_COUNT",
+        "DRIP_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/neon-drip.frag",
+          "bytes": 8217,
+          "sha256": "4250927e1f6590238ebe50db29a946897b166720d41d0a87972e598d61e1b7b7"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "neon-drive",
+      "title": "Neon Drive",
+      "page": "examples/neon-drive.html",
+      "pageBytes": 19503,
+      "pageSha256": "bf78a33854d012b7dfc888f0eef1282181307f61e879814e21d7e5c9f7211840",
+      "technique": "webgl1",
+      "params": [],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/neon-drive.frag",
+          "bytes": 11976,
+          "sha256": "8ac10990b8a37804075d73363a6a5b4b9245ce9fecc7fabb19d5c3849dce395b"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "neon-revival",
+      "title": "Neon Revival",
+      "page": "examples/neon-revival.html",
+      "pageBytes": 36106,
+      "pageSha256": "9a02b5fd939361badf8718e9faf5be0398b803b9807e73df2b24cae37b958bbf",
+      "technique": "webgl1",
+      "params": [
+        "CENTER_X",
+        "CENTER_Y",
+        "FLICKER_RATE",
+        "GLOW_INTENSITY",
+        "SCALE",
+        "SHAPE"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/neon-revival.frag",
+          "bytes": 24919,
+          "sha256": "e6deb0696fc0dbf298aca5ce93af8a51012ea81da4afe0f821fa839bcb2c711d"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "painted-strata",
+      "title": "Painted Strata",
+      "page": "examples/painted-strata.html",
+      "pageBytes": 16981,
+      "pageSha256": "e7e59dd5ad8c2be3de1ad5d843e894a55bda08efc347f27492cb044ad9dd243a",
+      "technique": "webgl1",
+      "params": [
+        "FOLD_SPEED",
+        "LAYER_COUNT"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/painted-strata.frag",
+          "bytes": 9716,
+          "sha256": "c313a8d7355f90c1c343eefa3f2164b40fdda8ea16ef20237d54ee5941e849f7"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "pendulum-wave",
+      "title": "Pendulum Wave",
+      "page": "examples/pendulum-wave.html",
+      "pageBytes": 11141,
+      "pageSha256": "877eb88b1b97234a15823b47953c158e769e51c6b7ffbf04d01eb03ba389212c",
+      "technique": "canvas2d",
+      "params": [
+        "CYCLE_DURATION",
+        "NUM_PENDULUMS"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "phase-transition",
+      "title": "Phase Transition",
+      "page": "examples/phase-transition.html",
+      "pageBytes": 23021,
+      "pageSha256": "415ff8af7304663e3a93384d7ca6c05372c6a15e4604fc53a3f781fc7fc29563",
+      "technique": "canvas2d",
+      "params": [
+        "PARTICLE_DENSITY",
+        "WAVE_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "phyllotaxis",
+      "title": "Phyllotaxis Spiral",
+      "page": "examples/phyllotaxis.html",
+      "pageBytes": 10672,
+      "pageSha256": "1f89946473e38b56c423843601f864e07ebf6842930bf993ea47174e4b5141b0",
+      "technique": "canvas2d",
+      "params": [
+        "MAX_POINTS",
+        "SPREAD"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "polaroid-burn",
+      "title": "Polaroid Burn",
+      "page": "examples/polaroid-burn.html",
+      "pageBytes": 15707,
+      "pageSha256": "f7ca76481de24781a2c3bde6f33ffbaefbb62b1fac7e131e1d65cd26d78034ce",
+      "technique": "webgl1",
+      "params": [
+        "BURN_SPEED",
+        "PHOTO_COUNT"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/polaroid-burn.frag",
+          "bytes": 8559,
+          "sha256": "64e8eccfde60d0c2d888b0dca042ce7874673a1bf1cfb9130df4d72f3cd7ae71"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "radiant-geometry",
+      "title": "Radiant Geometry",
+      "page": "examples/radiant-geometry.html",
+      "pageBytes": 25212,
+      "pageSha256": "dc9c1a5768a830dddc4a5fa48f80348f7e333383ef30e2bd92f760d562ce993e",
+      "technique": "webgl1",
+      "params": [
+        "PATTERN",
+        "PATTERN_COMPLEXITY",
+        "ROTATION_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/radiant-geometry.frag",
+          "bytes": 16540,
+          "sha256": "d8949837c4960d91f92a5ca2f54bb21728e37dfce0b9ef55e7178713ffa443ec"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "rain-on-glass",
+      "title": "Rain on Glass",
+      "page": "examples/rain-on-glass.html",
+      "pageBytes": 37654,
+      "pageSha256": "e52a5da24beed56c8485af730b63c763c44601831786e4fcb8f58d25aa37f3a2",
+      "technique": "hybrid",
+      "params": [],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/rain-on-glass.frag",
+          "bytes": 3076,
+          "sha256": "e640feb25c3c23f6237e8fb902940348a58822e8b48af174050f675710774454"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "rain-umbrella",
+      "title": "Rain on Umbrella",
+      "page": "examples/rain-umbrella.html",
+      "pageBytes": 45796,
+      "pageSha256": "19ce91d33face6fd9651ba50b1d473cfcb3a5b1d91a9983983a7570ad5ec4d87",
+      "technique": "hybrid",
+      "params": [],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/rain-umbrella.frag",
+          "bytes": 5452,
+          "sha256": "28dacc1a477743d4ffa7507a6b39a45efaa2f6b582215371c57d683a7b23776d"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "resonant-strings",
+      "title": "Resonant Strings",
+      "page": "examples/resonant-strings.html",
+      "pageBytes": 11402,
+      "pageSha256": "3ef28ab268589dff561ad8e53d2848433e3a8c949f2f4a03d9ed6365cf269797",
+      "technique": "canvas2d",
+      "params": [
+        "HARMONIC_COUNT",
+        "VIBRATION_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "rubber-reality",
+      "title": "Rubber Reality",
+      "page": "examples/rubber-reality.html",
+      "pageBytes": 12886,
+      "pageSha256": "35e20db2095af249f42c5bd32469ad2e4c29b1b99a5d0bf4a4458cdac80564f3",
+      "technique": "webgl1",
+      "params": [],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/rubber-reality.frag",
+          "bytes": 5983,
+          "sha256": "82a1f0bf0e6cf629319a16d01703218c365ca11ff9cdaa558e4628fc5632c1ce"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "sacred-strange",
+      "title": "Radiant Geometry",
+      "page": "examples/sacred-strange.html",
+      "pageBytes": 26296,
+      "pageSha256": "f783892e6acee8f80de6f3d02d07afd58d5d4149355e59390ee7c911f9e9a36a",
+      "technique": "webgl1",
+      "params": [
+        "PATTERN",
+        "PATTERN_COMPLEXITY",
+        "ROTATION_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/sacred-strange.frag",
+          "bytes": 17919,
+          "sha256": "97ceb9d3b80866d0c7f9988d8f83d7ef2dc564936dbaa577c7c6d42949b15600"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "scream-wave",
+      "title": "Scream Wave",
+      "page": "examples/scream-wave.html",
+      "pageBytes": 19340,
+      "pageSha256": "a4aa483ff18f9ea143ebbc3ac59cf9e5ba319a901c1e17cffdf44c06eedf6381",
+      "technique": "webgl1",
+      "params": [
+        "INTENSITY",
+        "WAVE_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/scream-wave.frag",
+          "bytes": 11642,
+          "sha256": "3a555ff28cb8bb0d2961659876b0743c4cc561f47c023109a400e477072fc79a"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "sequin-wave",
+      "title": "Sequin Wave",
+      "page": "examples/sequin-wave.html",
+      "pageBytes": 14638,
+      "pageSha256": "058060120b0fb89ebaa66787cae4bb584c0a52628e436fcc683088cae7dd88af",
+      "technique": "webgl1",
+      "params": [
+        "SPARKLE_INTENSITY",
+        "WAVE_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/sequin-wave.frag",
+          "bytes": 7520,
+          "sha256": "11ae718eb699f50b2bc3d6893bae28fada428808f1ddf0cd173e628a0e1bc0ea"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "shattered-plains",
+      "title": "Shattered Plains",
+      "page": "examples/shattered-plains.html",
+      "pageBytes": 14262,
+      "pageSha256": "b8764fc7cfabec2557dc46ccc55f1116f57a9ccf193537beb4ef0c7bf3b2c34c",
+      "technique": "webgl1",
+      "params": [
+        "CHANNEL_DEPTH",
+        "CHANNEL_SPEED",
+        "GRAIN"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "unreadable"
+    },
+    {
+      "id": "shifting-veils",
+      "title": "Shifting Veils",
+      "page": "examples/shifting-veils.html",
+      "pageBytes": 12493,
+      "pageSha256": "8f8a64699c87f2454ac68b3120b347765383d3b76da8bf66ddcb5eb70d2ca5ca",
+      "technique": "webgl1",
+      "params": [
+        "LAYER_COUNT",
+        "LAYER_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/shifting-veils.frag",
+          "bytes": 6039,
+          "sha256": "c1c702bfac975e5b554c9d9a8b45a2e2cf6f3450b8edd80fac6e5d0f4f01dfea"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "signal-decay",
+      "title": "Signal Decay",
+      "page": "examples/signal-decay.html",
+      "pageBytes": 16702,
+      "pageSha256": "50e6681c25a438edf3056f0b384cdaf3dd1303adaee5e2b6577cd054ab7f6481",
+      "technique": "webgl1",
+      "params": [
+        "DECAY_INTENSITY",
+        "SIGNAL_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/signal-decay.frag",
+          "bytes": 9509,
+          "sha256": "4ec1681d1b5894dfe3f9f42c3f7e2de9bafc534ca464031288358eba21fdba79"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "silk-cascade",
+      "title": "Silk Cascade",
+      "page": "examples/silk-cascade.html",
+      "pageBytes": 14292,
+      "pageSha256": "9d0c7d5a37dbd7a948f933347dac5f5e5f91a0e4f7b05113990ce92b4bd08fea",
+      "technique": "webgl1",
+      "params": [
+        "FLOW_SPEED",
+        "SHEEN_INTENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/silk-cascade.frag",
+          "bytes": 7466,
+          "sha256": "83d86915133ca36cdfd2080537573c36f926fbe4637f3f550e414f4b301df7e6"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "silk-groove",
+      "title": "Silk Groove",
+      "page": "examples/silk-groove.html",
+      "pageBytes": 13431,
+      "pageSha256": "f1de8e39254ea5011a3033eaf2522265bf2c2b877da229f68cc8f981b0dbc957",
+      "technique": "webgl1",
+      "params": [
+        "FLOW_SPEED",
+        "FOLD_DEPTH"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/silk-groove.frag",
+          "bytes": 7126,
+          "sha256": "a670decb8fa4be01c2f0d7d3f10167661c0b53342966114cf05cac7994cbc235"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "smolder",
+      "title": "Slow Burn",
+      "page": "examples/smolder.html",
+      "pageBytes": 21597,
+      "pageSha256": "eb2e6c91117a23d2572f6967169e41bc13bb6a101e0b276a2818f8c75183e603",
+      "technique": "webgl1",
+      "params": [
+        "CENTER_X",
+        "CENTER_Y",
+        "HEAT_INTENSITY",
+        "SCALE",
+        "TURBULENCE"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/smolder.frag",
+          "bytes": 12995,
+          "sha256": "3ba7896c73a32866589c8b992cc8fc02afaecab3ce0839cbacef1badc0294b94"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "spark-chamber",
+      "title": "Spark Chamber",
+      "page": "examples/spark-chamber.html",
+      "pageBytes": 15714,
+      "pageSha256": "d9fd7129e772ec3bd45ede6fdc51a2e3e33e163478c9c002e6a624f25e691c9b",
+      "technique": "canvas2d",
+      "params": [
+        "EMISSION_RATE",
+        "FIELD_STRENGTH"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "stardust-veil",
+      "title": "Stardust Veil",
+      "page": "examples/stardust-veil.html",
+      "pageBytes": 22307,
+      "pageSha256": "50496737eaa1cd1d938bcafeb0897cfaaa2d12448dad3d3886ded5e24f92011c",
+      "technique": "webgl1",
+      "params": [
+        "DRIFT_SPEED",
+        "STAR_DENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/stardust-veil.frag",
+          "bytes": 14380,
+          "sha256": "ce93b38ee4466de820c04282757f48bc1620e4b220a4e44da6ca5826d17215b0"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "strange-attractor",
+      "title": "Strange Attractor (Lorenz)",
+      "page": "examples/strange-attractor.html",
+      "pageBytes": 8693,
+      "pageSha256": "3c0dab92d29a57b6818dac2591bb922e760e790503182de38b68fd269fcb726b",
+      "technique": "canvas2d",
+      "params": [
+        "RHO",
+        "STEPS_PER_FRAME",
+        "TRAIL_LENGTH"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "strobe-geometry",
+      "title": "Strobe Geometry",
+      "page": "examples/strobe-geometry.html",
+      "pageBytes": 21323,
+      "pageSha256": "7090af381d14730f7ae6bbf7119944a1aebafadf739d41f2c1052d1a735281e3",
+      "technique": "webgl1",
+      "params": [
+        "FLASH_RATE",
+        "GLOW_INTENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/strobe-geometry.frag",
+          "bytes": 13376,
+          "sha256": "6da67c5857e2abfa9fc19b6f9dee0812fd3784a230eaa3657891b260b29277e5"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "sugar-glass",
+      "title": "Sugar Glass",
+      "page": "examples/sugar-glass.html",
+      "pageBytes": 19634,
+      "pageSha256": "d15bdbda17d9c78ee295929d1cd7f2c5756bc2e00a03c16d499182db3ae9e02b",
+      "technique": "webgl1",
+      "params": [
+        "CRACK_SPEED",
+        "LIGHT_BLEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/sugar-glass.frag",
+          "bytes": 12947,
+          "sha256": "c4979532e2cb20d4f15b00478bdc2625e09c9f1d7496c6daeb973ebfee9a7de7"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "synth-ribbon",
+      "title": "Synth Ribbon",
+      "page": "examples/synth-ribbon.html",
+      "pageBytes": 15405,
+      "pageSha256": "869f84ccfe5ad9014c6fee68cd37d1d20dbf149e3081f07dda6506fd60830741",
+      "technique": "canvas2d",
+      "params": [
+        "RIBBON_COUNT",
+        "TWIST_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "tesseract-shadow",
+      "title": "Tesseract Shadow",
+      "page": "examples/tesseract-shadow.html",
+      "pageBytes": 21537,
+      "pageSha256": "ed055e94447e01e7a94733e6fd533ac5174a618ebd5f8f6c49a02dbbbf477641",
+      "technique": "canvas2d",
+      "params": [
+        "CENTER_X",
+        "CENTER_Y",
+        "PROJECTION_DEPTH",
+        "ROTATION_SPEED",
+        "SCALE"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "thunder-sermon",
+      "title": "Thunder Sermon",
+      "page": "examples/thunder-sermon.html",
+      "pageBytes": 17893,
+      "pageSha256": "f1e816ccad17a88a2837a9166dd198805ea972a1610966bf7b95d1db85c53b1f",
+      "technique": "webgl1",
+      "params": [
+        "FLASH_INTENSITY",
+        "STRIKE_INTERVAL"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/thunder-sermon.frag",
+          "bytes": 10344,
+          "sha256": "6d8036931d323bbc1dff07a4c6ce15be473cd6a1bc77ac50539cac5ae5b20b2f"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "topographic",
+      "title": "Topographic Contour Map",
+      "page": "examples/topographic.html",
+      "pageBytes": 16179,
+      "pageSha256": "666a68c4e70b57125bd7a73b7b9ae8ef3158f628662c6041fb79e57589bddada",
+      "technique": "canvas2d",
+      "params": [
+        "NUM_CONTOURS",
+        "TIME_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "torn-paper",
+      "title": "Torn Paper",
+      "page": "examples/torn-paper.html",
+      "pageBytes": 23899,
+      "pageSha256": "23dadd59cafdead7c79b4fbfca23ebce15c9cf8e29a93913c9d09a386048e215",
+      "technique": "webgl1",
+      "params": [
+        "GLOW_INTENSITY",
+        "TEAR_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/torn-paper.frag",
+          "bytes": 15006,
+          "sha256": "bbd59434f5a76c5b300d8196d5832ce993cd837e3aed7a886d0ea4526f77cd36"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "tropical-heat",
+      "title": "Tropical Heat",
+      "page": "examples/tropical-heat.html",
+      "pageBytes": 15167,
+      "pageSha256": "a45768eb7a038acb93e4e12cabc71b48007bd2307c7c6f7bf28b484988acb04e",
+      "technique": "webgl1",
+      "params": [
+        "COLOR_VIBRANCY",
+        "HEAT_INTENSITY"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/tropical-heat.frag",
+          "bytes": 8566,
+          "sha256": "582e0ce8c3ff5764825782ffffd3dfa71fd6996a0be8a8fbec2ac45c552ca411"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "velvet-spotlight",
+      "title": "Velvet Spotlight",
+      "page": "examples/velvet-spotlight.html",
+      "pageBytes": 20666,
+      "pageSha256": "dd82118c9cb1f5e340fc560df26f054e964224a46a93d2aca3bca41ba5430356",
+      "technique": "canvas2d",
+      "params": [
+        "DUST_DENSITY",
+        "SWEEP_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "vertigo",
+      "title": "Vertigo",
+      "page": "examples/vertigo.html",
+      "pageBytes": 12354,
+      "pageSha256": "24037378248afc77aaec979556829887ba58596ea05770272825a7bd18fba45d",
+      "technique": "webgl1",
+      "params": [
+        "SPIRAL_INTENSITY",
+        "TUNNEL_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/vertigo.frag",
+          "bytes": 6134,
+          "sha256": "fa68ab8bb098912ac9092aae17f82b93875d208ad29e22acd2cb5cf49bcc90ce"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "video-outro",
+      "title": "Radiant Outro",
+      "page": "examples/video-outro.html",
+      "pageBytes": 4483,
+      "pageSha256": "a99680a2c58c7e9a9fe6e7d2bb976f125ee922837075952da66a8c7008d02388",
+      "technique": "unknown",
+      "params": [],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "vintage-static",
+      "title": "Vintage Static",
+      "page": "examples/vintage-static.html",
+      "pageBytes": 16470,
+      "pageSha256": "f4d27a4996e0f97a7039f210c6edacd0afc332f9582716aa2883a3a2850556b4",
+      "technique": "canvas2d",
+      "params": [
+        "GLITCH_INTENSITY",
+        "MELT_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    },
+    {
+      "id": "vinyl-grooves",
+      "title": "Vinyl Grooves",
+      "page": "examples/vinyl-grooves.html",
+      "pageBytes": 19435,
+      "pageSha256": "8262c7f5d081de16f806bb17e2778b9b55b9adb74cb4b05517d2005b6015ef28",
+      "technique": "webgl1",
+      "params": [
+        "GROOVE_DENSITY",
+        "ROTATION_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/vinyl-grooves.frag",
+          "bytes": 12103,
+          "sha256": "e02e05c942f53b2a5668832e795bbf5b668669b156a82a5e87f3f5632ab61c8c"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "voltage-arc",
+      "title": "Voltage Arc",
+      "page": "examples/voltage-arc.html",
+      "pageBytes": 17578,
+      "pageSha256": "c0c9f1673d0c9cbfb804e6dcd9f04593caa695a01e4217da7128e54356f0fd6b",
+      "technique": "webgl1",
+      "params": [
+        "ARC_INTENSITY",
+        "CRACKLE_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/voltage-arc.frag",
+          "bytes": 9539,
+          "sha256": "b8adf56c91b27a15fe91c6da38c6dc0aecbc2caa08da9814b41dbcbddf8ae089"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "vortex",
+      "title": "Vortex",
+      "page": "examples/vortex.html",
+      "pageBytes": 8999,
+      "pageSha256": "46e3799aae4b18183bfecb17ea714b5ce659520c75e3042dbb0f908fd53b1e24",
+      "technique": "webgl1",
+      "params": [
+        "LINE_COUNT",
+        "WAVE_SPEED"
+      ],
+      "sources": [
+        {
+          "name": "fragSrc",
+          "shape": "array",
+          "file": "glsl/vortex.frag",
+          "bytes": 3048,
+          "sha256": "f2e30cea744c189a0042048ad35234609880e1d43b1214c554dd65700cf0edc6"
+        }
+      ],
+      "dialect": "es100",
+      "primary": "fragSrc",
+      "compile": "expected"
+    },
+    {
+      "id": "woven-radiance",
+      "title": "Woven Radiance",
+      "page": "examples/woven-radiance.html",
+      "pageBytes": 17526,
+      "pageSha256": "b91fe15990691e11e3c3213778b72c4402a8dc5ea1ed314c9138b4c9058d2222",
+      "technique": "canvas2d",
+      "params": [
+        "COLOR_RICHNESS",
+        "WEAVE_SPEED"
+      ],
+      "sources": [],
+      "dialect": null,
+      "primary": null,
+      "compile": "none"
+    }
+  ]
+}

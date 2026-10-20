@@ -84,7 +84,15 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   at a pinned commit plus its 61-rule detector built to WebAssembly inside the
   package, five `fe_*` tools including a headless-browser render that measures
   contrast/tap targets/overflow, one Frontend tab — no network, no install, no
-  engine download), `dsh-pdf`,
+  engine download), `dsh-shaders` (GLSL that compiles for real: seven `shader_*`
+  tools over the machine's own browser through ANGLE/SwiftShader, a rung ladder
+  that is always stated — `v1-static` / `v2-compiled` / `v3-drawn` /
+  `v4-measured` — with diagnostics mapped onto the author's line numbers, five
+  dialects kept apart because they are not interchangeable, emit for web / `.frag`
+  / ISF / an FFGL **scaffold** / Shadertoy, a Shaders tab with a live WebGL preview
+  and `@param` sliders, five skills whose every example a check compiles, and 106
+  vendored Radiant pages plus 20 GLSL modules, 11 templates, 11 pieces and a
+  48-link index, each re-derivable offline), `dsh-pdf`,
   `dsh-wsl` (the POSIX half testable on Windows: `wsl_status` / `wsl_run` /
   `wsl_path` over the machine's own WSL — one argv array, no shell string, a
   deadline with a tree kill, the launcher's UTF-16 table decoded, and the

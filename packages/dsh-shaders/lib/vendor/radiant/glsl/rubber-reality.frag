@@ -1,0 +1,166 @@
+#extension GL_OES_standard_derivatives : enable
+precision highp float;
+uniform float u_time;
+uniform vec2 u_res;
+uniform vec2 u_mouse;
+uniform float u_mouseActive;
+uniform float u_speed;
+uniform float u_amplitude;
+
+// --- Simplex noise ---
+vec3 mod289(vec3 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+vec2 mod289v2(vec2 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+vec3 permute(vec3 x) { return mod289(((x * 34.0) + 1.0) * x); }
+
+float snoise(vec2 v) {
+  const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                     -0.577350269189626, 0.024390243902439);
+  vec2 i = floor(v + dot(v, C.yy));
+  vec2 x0 = v - i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod289v2(i);
+  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+  vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+  m = m*m; m = m*m;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+  vec3 g;
+  g.x = a0.x * x0.x + h.x * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+
+// Smooth membrane height - very low frequency, gentle
+float membrane(vec2 p, float t) {
+  float val = 0.0;
+  // Layer 1: very large, very slow breathing
+  val += 0.6 * snoise(p * 0.8 + vec2(t * 0.08, t * 0.06));
+  // Layer 2: medium scale, slow drift
+  val += 0.25 * snoise(p * 1.6 + vec2(-t * 0.05, t * 0.09));
+  // Layer 3: subtle texture (very gentle)
+  val += 0.08 * snoise(p * 3.2 + vec2(t * 0.07, -t * 0.04));
+  return val;
+}
+
+void main() {
+  vec2 p = (gl_FragCoord.xy - u_res * 0.5) / min(u_res.x, u_res.y);
+
+  float t = u_time * u_speed;
+
+  // ── Surface height - gentle, broad undulations ──
+  float amp = u_amplitude;
+  float ht = membrane(p, t) * amp;
+
+  // ── Mouse interaction: press into the rubber surface ──
+  float mouseDeform = 0.0;
+  if (u_mouseActive > 0.5) {
+    vec2 mp = (u_mouse - u_res * 0.5) / min(u_res.x, u_res.y);
+    float md = length(p - mp);
+    // Deep depression with raised rim (like pressing a finger into rubber)
+    float press = exp(-md * md * 8.0);
+    float rim = exp(-pow(md - 0.18, 2.0) * 30.0) * 0.4;
+    mouseDeform = (-press + rim) * 0.6 * amp;
+    ht += mouseDeform;
+  }
+
+  // ── Compute surface normal via finite differences (includes mouse deform) ──
+  float eps = 0.01;
+  float hx = membrane(p + vec2(eps, 0.0), t) * amp;
+  float hy = membrane(p + vec2(0.0, eps), t) * amp;
+  if (u_mouseActive > 0.5) {
+    vec2 mp = (u_mouse - u_res * 0.5) / min(u_res.x, u_res.y);
+    float mdx = length(p + vec2(eps, 0.0) - mp);
+    float mdy = length(p + vec2(0.0, eps) - mp);
+    float px = exp(-mdx*mdx*8.0); float rx = exp(-pow(mdx-0.18,2.0)*30.0)*0.4;
+    float py = exp(-mdy*mdy*8.0); float ry = exp(-pow(mdy-0.18,2.0)*30.0)*0.4;
+    hx += (-px + rx) * 0.6 * amp;
+    hy += (-py + ry) * 0.6 * amp;
+  }
+  // Surface gradient for lighting (full strength for shading)
+  vec3 normal = normalize(vec3((ht - hx) / eps, (ht - hy) / eps, 3.0));
+
+  // ── Grid coordinates ──
+  float gridScale = 10.0;
+  vec2 gp = p * gridScale;
+
+  // Deformation - displacement uses height directly, not normal
+  float dx = membrane(p + vec2(0.02, 0.0), t) - membrane(p - vec2(0.02, 0.0), t);
+  float dy = membrane(p + vec2(0.0, 0.02), t) - membrane(p - vec2(0.0, 0.02), t);
+  vec2 deformedGP = gp + vec2(dx, dy) * 1.8;
+
+  // ── Mouse: warp the grid toward/away from cursor ──
+  if (u_mouseActive > 0.5) {
+    vec2 mp = (u_mouse - u_res * 0.5) / min(u_res.x, u_res.y);
+    vec2 toMouse = p - mp;
+    float md = length(toMouse);
+    float warp = exp(-md * md * 6.0) * 1.5;
+    deformedGP += toMouse * gridScale * warp;
+  }
+
+  // ── Anti-aliased grid lines ──
+  vec2 grid = abs(fract(deformedGP) - 0.5);
+  float lw = 0.035;
+  float aaW = fwidth(deformedGP.x) * 1.5;
+
+  float lineH = smoothstep(lw + aaW, lw - aaW, grid.x);
+  float lineV = smoothstep(lw + aaW, lw - aaW, grid.y);
+  float gridLine = max(lineH, lineV);
+
+  // Intersection nodes
+  vec2 nearCenter = abs(fract(deformedGP) - 0.5);
+  float nodeDist = length(nearCenter);
+  float nodeDot = smoothstep(0.14 + aaW, 0.09, nodeDist);
+
+  // ── Lighting ──
+  vec3 lightDir = normalize(vec3(0.3, 0.5, 1.0));
+  float diffuse = max(dot(normal, lightDir), 0.0);
+  float ambient = 0.3;
+  float lighting = ambient + diffuse * 0.7;
+
+  // Specular - soft rubber sheen
+  vec3 viewDir = vec3(0.0, 0.0, 1.0);
+  vec3 halfDir = normalize(lightDir + viewDir);
+  float spec = pow(max(dot(normal, halfDir), 0.0), 30.0);
+
+  // ── Color palette ──
+  vec3 bgColor = vec3(0.035, 0.028, 0.022);
+  vec3 amberDark  = vec3(0.35, 0.22, 0.08);
+  vec3 amberMid   = vec3(0.70, 0.50, 0.20);
+  vec3 amberBright = vec3(1.0, 0.82, 0.48);
+
+  // Height-based color mapping
+  float htNorm = clamp(ht * 0.5 + 0.5, 0.0, 1.0);
+  vec3 gridColor = mix(amberDark, amberMid, smoothstep(0.25, 0.5, htNorm));
+  gridColor = mix(gridColor, amberBright, smoothstep(0.6, 0.85, htNorm));
+  gridColor *= lighting;
+  gridColor += vec3(1.0, 0.9, 0.65) * spec * 0.4;
+
+  // ── Compose ──
+  // Subtle surface shading beneath the grid
+  vec3 surfaceColor = bgColor + vec3(0.05, 0.03, 0.012) * (htNorm * lighting);
+
+  // Blend grid onto surface
+  float gridAlpha = gridLine * (0.35 + 0.45 * lighting);
+  vec3 col = mix(surfaceColor, gridColor, gridAlpha);
+
+  // Node highlights
+  col = mix(col, amberBright * lighting * 1.1, nodeDot * 0.5);
+
+  // ── Warm subsurface glow in deformed areas ──
+  float deformGlow = smoothstep(0.05, 0.5, abs(ht));
+  col += vec3(0.4, 0.22, 0.06) * deformGlow * 0.15 * (1.0 - gridAlpha);
+
+  // ── Vignette ──
+  float vig = 1.0 - smoothstep(0.35, 1.2, length(p));
+  col *= 0.55 + 0.45 * vig;
+
+  // Warmth adjustment
+  col = pow(col, vec3(0.95, 1.0, 1.08));
+
+  gl_FragColor = vec4(col, 1.0);
+}

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radiant Outro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
+
+  .outro {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    animation: fadeIn 1.2s ease-out both;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Warm radial glow */
+  .glow {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center 45%, rgba(200, 149, 108, 0.07) 0%, rgba(200, 149, 108, 0.02) 40%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Animated accent lines */
+  .lines {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .lines .line {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1px;
+    height: 80px;
+    background: linear-gradient(to bottom, transparent, rgba(200, 149, 108, 0.06), transparent);
+    transform-origin: top center;
+    animation: rotateLine 20s linear infinite;
+  }
+
+  @keyframes rotateLine {
+    from { transform: rotate(var(--angle)) translateY(40px); }
+    to { transform: rotate(calc(var(--angle) + 360deg)) translateY(40px); }
+  }
+
+  .wordmark {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    font-size: clamp(36px, 6vw, 80px);
+    font-weight: 300;
+    letter-spacing: 0.05em;
+    color: #c8956c;
+  }
+
+  .divider {
+    width: min(200px, 30vw);
+    height: 1px;
+    background: rgba(200, 149, 108, 0.25);
+  }
+
+  .shader-name {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    font-size: clamp(14px, 2.5vw, 24px);
+    font-weight: 300;
+    color: rgba(232, 224, 216, 0.7);
+    letter-spacing: 0.05em;
+  }
+
+  .shader-url {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    font-size: clamp(10px, 1.6vw, 16px);
+    font-weight: 400;
+    color: rgba(200, 149, 108, 0.5);
+    letter-spacing: 0.03em;
+    margin-top: 12px;
+    animation: fadeIn 1s ease-out 0.5s both;
+  }
+
+  /* Floating particles via CSS */
+  .particles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .particle {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: rgba(200, 149, 108, 0.4);
+    animation: float linear infinite;
+  }
+  @keyframes float {
+    from { transform: translateY(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    to { transform: translateY(-100vh); opacity: 0; }
+  }
+
+  /* Vignette */
+  .vignette {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.5) 100%);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<div class="lines" id="lines"></div>
+
+<div class="particles" id="particles"></div>
+
+<div class="outro">
+  <div class="wordmark">Radiant</div>
+  <div class="divider"></div>
+  <div class="shader-name" id="shader-name"></div>
+  <div class="shader-url" id="shader-url"></div>
+</div>
+
+<div class="vignette"></div>
+
+<script>
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var name = params.get('name') || 'Radiant';
+  var url = params.get('url') || 'radiant-shaders.com';
+
+  document.getElementById('shader-name').textContent = name;
+  document.getElementById('shader-url').textContent = url;
+
+  // Generate accent lines
+  var linesEl = document.getElementById('lines');
+  for (var i = 0; i < 12; i++) {
+    var line = document.createElement('div');
+    line.className = 'line';
+    line.style.setProperty('--angle', (i * 30) + 'deg');
+    line.style.animationDelay = (-i * 1.7) + 's';
+    linesEl.appendChild(line);
+  }
+
+  // Generate particles
+  var particlesEl = document.getElementById('particles');
+  for (var i = 0; i < 30; i++) {
+    var p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = (Math.random() * 100) + '%';
+    p.style.top = (Math.random() * 100) + '%';
+    p.style.animationDuration = (8 + Math.random() * 12) + 's';
+    p.style.animationDelay = (-Math.random() * 15) + 's';
+    p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+    p.style.opacity = String(0.2 + Math.random() * 0.4);
+    particlesEl.appendChild(p);
+  }
+})();
+</script>
+</body>
+</html>

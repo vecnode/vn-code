@@ -1,0 +1,8 @@
+{
+  "repo": "pbakaus/radiant",
+  "commit": "59e9f48c0ad9a3db2fbeb8898b4390d5a1eabb40",
+  "url": "https://github.com/pbakaus/radiant",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2025 Paul Bakaus",
+  "note": "Pages are stored byte-identical. Fragment sources are extracted from them, and the derivation is re-run by --check."
+}

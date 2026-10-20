@@ -1,0 +1,23 @@
+# dsh-shaders bundle layer (alpha).
+#
+# One extra row ('shaders') owns the whole plugin: its Node half registers the
+# seven shader_* tools (write/verify/render/read/publish/target/kit), the five
+# bundled skills, the per-conversation shader store, the content-addressed
+# render cache and the authenticated /api/dsh-shaders/* routes, and therefore
+# ships its browser half (dsh.client) with the Loader entry.
+#
+# Nothing shipped is patched and no core row is disabled: this package adds
+# surface - two tab types registered into the pack's own right bar (the
+# `sidebarRightTabs` registry `dsh-rightbar` provides) and one keyed
+# `tool.call.toolview` entry per rendering tool. There is therefore no
+# `disabled: true` here and nothing for scripts/tools/sync-vendored.ps1: the
+# vendored corpora are GENERATED from pinned upstream tarballs by
+# vendor/*/build.mjs, never forked from core.
+#
+# The row starts NO process at boot and reaches NO network at any time. The one
+# child process it can start is a headless Chromium the user already has, argv-
+# only, in a throwaway profile, with every name resolved to NOTFOUND except
+# loopback - and only when a tool asks for a compile.
+- insert:
+    - id: shaders
+      name: 'dsh-shaders'

@@ -6924,6 +6924,83 @@ if (coreThemeBundle === null) {
   check('no two bundles define the same class', shared.length === 0 ? 'ok' : shared.join(' | '), 'ok')
 }
 
+// ------------------------------------------------------------- dsh-shaders
+// The Shaders tab and its four cards. What is under test here is the WIRING and the
+// SSR safety: this check renders every component with a server renderer and no
+// canvas, which is exactly the situation a module tab must survive - so a pane that
+// touched `document` at import time, or a component that threw without a WebGL
+// context, would fail here rather than in the app.
+{
+  const shaded = loadBundle('packages/dsh-shaders/lib/client.js', {})
+  check('shaders: the bundle exports its name', shaded.exports.name, 'dsh-shaders')
+  check('shaders: it waits for the two registries it needs', JSON.stringify(shaded.exports.inject), JSON.stringify(['slots', 'sidebarRightTabs']))
+
+  const tabTypes = []
+  const slotRegistrations = []
+  const injected = []
+  shaded.exports.apply({
+    get: (name) => (name === 'sessions' ? { current: () => ({ id: 'session-bundle' }) } : undefined),
+    effect: (fn) => fn(),
+    slots: {
+      inject: (name, fn) => {
+        injected.push(name)
+        return fn()
+      },
+      register: (registration, component) => {
+        slotRegistrations.push({ registration, component })
+        return () => {}
+      },
+    },
+    sidebarRightTabs: {
+      register: (definition) => {
+        tabTypes.push(definition)
+        return () => {}
+      },
+    },
+    logger: { debug() {}, warn() {} },
+  })
+
+  check('shaders: ONE tab type is registered', tabTypes.map((entry) => entry.kind).join(','), 'shader')
+  check('shaders: the tab answers both address shapes', JSON.stringify(tabTypes[0].patterns), JSON.stringify(['dsh-resource://shader/session/**', 'dsh-resource://shader/library/**']))
+  check('shaders: it is a support tab, not a page with a guide entry', tabTypes[0].guide === undefined, true)
+  check('shaders: four tool cards are registered', slotRegistrations.filter((entry) => entry.registration.name === 'tool.call.toolview').map((entry) => entry.registration.key).sort().join(','), 'shader_kit,shader_render,shader_verify,shader_write')
+  check('shaders: exactly one tab body and one title are registered', slotRegistrations.filter((entry) => entry.registration.name === 'sidebar.right.pane.tab').length, 1)
+  check('shaders: it injects the slots it registers into', injected.includes('sidebar.right.pane.tab') && injected.includes('tool.call.toolview'))
+
+  const internals = shaded.exports.__internals
+  check('shaders: it exports the pure parts', typeof internals?.assembleInPane === 'function' && typeof internals?.parseAddress === 'function')
+
+  // Address parsing is the thing a tab gets wrong silently.
+  const sessionAddress = internals.parseAddress('dsh-resource://shader/session/session-bundle/rings')
+  check('shaders: a session address parses', sessionAddress.scope + '|' + sessionAddress.sessionId + '|' + sessionAddress.shaderId, 'session|session-bundle|rings')
+  const libraryAddress = internals.parseAddress('dsh-resource://shader/library/rings')
+  check('shaders: a library address parses', libraryAddress.scope + '|' + libraryAddress.shaderId, 'library|rings')
+  check('shaders: an unknown address does not throw', internals.parseAddress('nonsense').scope, 'session')
+
+  // The pane assembles what the host assembles: a Shadertoy source gets the header
+  // and an entry point, an ES 1.00 source is drawn as written.
+  const toy = internals.assembleInPane('void mainImage(out vec4 c, in vec2 p){ c = vec4(p, 0.0, 1.0); }', 'shader-skills')
+  check('shaders: the pane wraps a mainImage source', /#version 300 es/.test(toy.text) && /out vec4 dshFragColor;/.test(toy.text))
+  check('shaders: and appends the entry point', /mainImage\(dshColor, gl_FragCoord\.xy\)/.test(toy.text))
+  check('shaders: the pane uses webgl2 for a wrapped source', toy.context, 'webgl2')
+  const plain = internals.assembleInPane('precision highp float;\nvoid main(){ gl_FragColor = vec4(1.0); }', 'es100')
+  check('shaders: the pane leaves an es100 source alone', plain.text, 'precision highp float;\nvoid main(){ gl_FragColor = vec4(1.0); }')
+  check('shaders: and uses webgl1 for it', plain.context, 'webgl')
+
+  // Server-render every card and both panes. No canvas, no fetch: the components
+  // must render their empty state rather than reach for either.
+  const card = slotRegistrations.find((entry) => entry.registration.name === 'tool.call.toolview' && entry.registration.key === 'shader_write')
+  const cardMarkup = card === undefined ? '' : renderToStaticMarkup(h(card.component, { view: { id: 'rings', status: 'ok', rung: 'v3-drawn', dialect: 'es100', diagnostics: [{ line: 3, message: "'x' : undeclared identifier" }], warnings: [], frame: { width: 64, height: 64, distinctColors: 120, signature: '0f57ab0d' }, address: 'dsh-resource://shader/session/session-bundle/rings' } }))
+  check('shaders: a tool card renders its verdict', /v3-drawn/.test(cardMarkup) && /64×64/.test(cardMarkup))
+  check('shaders: a tool card renders a diagnostic', /undeclared identifier/.test(cardMarkup))
+
+  const viewer = slotRegistrations.find((entry) => entry.registration.name === 'sidebar.right.pane.tab' && entry.registration.key === internals.VIEWER_ID)
+  const viewerMarkup = viewer === undefined ? '' : renderToStaticMarkup(h(viewer.component, { address: 'dsh-resource://shader/session/session-bundle/rings' }))
+  check('shaders: the support tab server-renders', viewerMarkup.length > 0)
+  check('shaders: the tab needs no canvas to render', /Loading|No shaders|No conversation|Could not read/.test(viewerMarkup))
+  check('shaders: the tab has no corpus browser in it', /corpus|gallery|search/i.test(viewerMarkup), false)
+}
+
 console.log('')
 console.log(failures === 0 ? 'all client-bundle checks passed' : failures + ' check(s) FAILED')
 process.exitCode = failures === 0 ? 0 : 1

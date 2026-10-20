@@ -1,0 +1,37 @@
+{
+  "name": "dsh-shaders",
+  "version": "0.1.0-alpha.1",
+  "description": "Shaders: seven `shader_*` tools that compile GLSL for real in a disposable headless browser and name the rung they reached - fragment/vertex sources in ES 1.00, ES 3.00, Shadertoy and desktop dialects, a corpus of 106 Radiant shaders and 56 shader-skills GLSL files, emit for web/.frag/ISF/FFGL/Shadertoy, a Shaders tab with live WebGL preview, and five skills whose every example a check compiles.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-shaders.mjs && node checks/check-shaders-render.mjs",
+    "vendor:check": "node vendor/radiant/build.mjs --check && node vendor/shader-skills/build.mjs --check && node vendor/glsl-links/build.mjs --check"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-tool",
+        "dsh-rightbar"
+      ]
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

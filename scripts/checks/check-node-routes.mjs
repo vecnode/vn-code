@@ -2133,6 +2133,142 @@ try {
   }
 }
 
+// ------------------------------------------------------------- dsh-shaders
+// One row owns the tools, the conversation store, the artifact cache and the six
+// routes. DSH_HOME points at a temp folder so nothing touches a real home, and the
+// tool bodies are driven directly - the same seam the agent loop uses. The compile
+// ladder itself is proved in packages/dsh-shaders/checks/check-shaders-render.mjs,
+// because it needs a browser; here the wiring, the store and the routes are what is
+// under test, and a machine without a browser must still pass this block.
+{
+  const shadersHome = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-shaders-routes-'))
+  const shadersWorkspace = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-shaders-ws-'))
+  const previousDshHome = process.env.DSH_HOME
+  process.env.DSH_HOME = shadersHome
+  try {
+    const shadersModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-shaders/lib/index.js')).href)
+    const routes = new Map()
+    const registered = []
+    const shadersRegistered = []
+    shadersModule.apply({
+      get(name) {
+        if (name === 'connection') {
+          return {
+            fetch: {
+              register(route) {
+                routes.set(route.path, route)
+                return () => {}
+              },
+            },
+          }
+        }
+        if (name === 'sessions') return { get: (id) => (id === 'session-shaders' ? { header: { cwd: shadersWorkspace } } : undefined) }
+        if (name === 'skills') return { register: (skill) => (shadersRegistered.push(skill), () => {}) }
+        return undefined
+      },
+      tools: { register: (tool) => (registered.push(tool), () => {}) },
+      effect: (fn) => fn(),
+      logger: { debug() {}, info() {}, warn() {} },
+    })
+
+    check('shaders: route set', [...routes.keys()].sort().join(','), [
+      '/api/dsh-shaders/artifact',
+      '/api/dsh-shaders/example',
+      '/api/dsh-shaders/health',
+      '/api/dsh-shaders/render-report',
+      '/api/dsh-shaders/shader',
+      '/api/dsh-shaders/state',
+    ].join(','))
+    check('shaders: tools registered', registered.map((tool) => tool.name).sort().join(','), 'shader_kit,shader_publish,shader_read,shader_render,shader_target,shader_verify,shader_write')
+    check('shaders: five skills registered', shadersRegistered.length, 5)
+    check(
+      'shaders: every tool declares a JSON-schema surface',
+      registered.every(
+        (tool) =>
+          tool.parameters &&
+          tool.parameters.type === 'object' &&
+          (tool.parameters.required ?? []).every((key) => Object.hasOwn(tool.parameters.properties ?? {}, key)) &&
+          tool.output &&
+          tool.output.schema &&
+          typeof tool.output.render === 'function' &&
+          typeof tool.execute === 'function',
+      ),
+    )
+    check('shaders: methods stay inside the registry vocabulary', [...routes.values()].every((route) => route.methods.every((method) => ['GET', 'HEAD', 'POST'].includes(method))))
+
+    const call = (routePath, request) => routes.get(routePath).fetch(request)
+    const tool = (toolName) => registered.find((entry) => entry.name === toolName)
+    const exec = { agent: { session: { id: 'session-shaders' } }, signal: new AbortController().signal }
+    const post = (routePath, body) =>
+      call(routePath, new Request('http://x' + routePath, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }))
+
+    // The static-only path: `compile: false` never starts a browser, so this block
+    // passes on a machine that has none.
+    const written = await tool('shader_write').execute({ title: 'Route Rings', source: '// @param SPEED float 0.1..2.0 default 0.5 "Spin"\nprecision highp float;\nuniform float u_time;\nuniform float u_speed;\nvoid main(){ gl_FragColor = vec4(vec3(0.5 + 0.5 * sin(u_time * u_speed)), 1.0); }', verify: false }, exec)
+    check('shaders: a write is stored', written.view.status, 'ok')
+    check('shaders: a static-only write reaches v1', written.view.rung, 'v1-static')
+    check('shaders: the write names a tab address', written.view.address, 'dsh-resource://shader/session/session-shaders/route-rings')
+    check('shaders: the param is recorded', (written.view.params ?? []).map((param) => param.uniform).join(','), 'u_speed')
+
+    const state = await call('/api/dsh-shaders/state', new Request('http://x/api/dsh-shaders/state?session=session-shaders'))
+    const stateBody = await state.json()
+    check('shaders: state answers', state.status, 200)
+    check('shaders: state lists the shader', (stateBody.shaders ?? []).length, 1)
+    check('shaders: state carries the corpus counts', stateBody.capabilities.kit.radiant.pages, 106)
+    check('shaders: state refuses no session', (await call('/api/dsh-shaders/state', new Request('http://x/api/dsh-shaders/state'))).status, 400)
+
+    const one = await call('/api/dsh-shaders/shader', new Request('http://x/api/dsh-shaders/shader?session=session-shaders&id=route-rings'))
+    check('shaders: shader route reads it back', (await one.json()).shader.id, 'route-rings')
+
+    const page = await call('/api/dsh-shaders/example', new Request('http://x/api/dsh-shaders/example?id=event-horizon'))
+    check('shaders: example route serves a vendored page', page.headers.get('content-type'), 'text/html; charset=utf-8')
+    check('shaders: example route refuses everything but itself', /default-src 'none'/.test(page.headers.get('content-security-policy') ?? ''))
+
+    check('shaders: artifact route refuses a traversing name', (await call('/api/dsh-shaders/artifact', new Request('http://x/api/dsh-shaders/artifact?name=....png'))).status, 400)
+    check('shaders: artifact route refuses a short name', (await call('/api/dsh-shaders/artifact', new Request('http://x/api/dsh-shaders/artifact?name=abc.png'))).status, 400)
+
+    const reported = await post('/api/dsh-shaders/render-report', { session: 'session-shaders', id: 'route-rings', ok: true, ms: 12 })
+    check('shaders: a render report is stored', (await reported.json()).stored, true)
+    const afterReport = await tool('shader_read').execute({ id: 'route-rings', includeSource: false }, exec)
+    check('shaders: the browser verdict reaches shader_read', afterReport.view.verification.state, 'drawn')
+    check('shaders: a report with no id is refused', (await post('/api/dsh-shaders/render-report', { session: 'session-shaders' })).status, 400)
+
+    const health = await call('/api/dsh-shaders/health', new Request('http://x/api/dsh-shaders/health'))
+    check('shaders: health answers', (await health.json()).ok, true)
+
+    // The emitters are pure, so the web page and the FFGL scaffold are proved here
+    // without a compiler.
+    const web = await tool('shader_target').execute({ id: 'route-rings', target: 'web' }, exec)
+    check('shaders: the web target emits a page', /^[a-z0-9-]+\.html$/.test(web.view.files[0].name))
+    check('shaders: the web page reaches no network', /(src|href)\s*=\s*["'](https?:)?\/\//i.test(web.view.files[0].text ?? ''), false)
+    const ffgl = await tool('shader_target').execute({ id: 'route-rings', target: 'ffgl' }, exec)
+    check('shaders: the ffgl target says it is a scaffold', /NOT A BUILDABLE PLUGIN/.test(ffgl.view.files[0].text ?? ''))
+
+    const out = await tool('shader_target').execute({ id: 'route-rings', target: 'frag', out: 'glsl' }, exec)
+    check('shaders: a target writes inside the workspace', (out.view.written ?? []).join(','), 'glsl/route-rings.frag,glsl/route-rings.vert')
+    check(
+      'shaders: a target refuses to escape the workspace',
+      await tool('shader_target')
+        .execute({ id: 'route-rings', target: 'frag', out: '../outside' }, exec)
+        .then(() => 'no error')
+        .catch((err) => err.code),
+      'BAD_REQUEST',
+    )
+
+    const kit = await tool('shader_kit').execute({ action: 'catalog' }, exec)
+    check('shaders: the kit reports the corpus', kit.view.radiant.pages, 106)
+    const example = await tool('shader_kit').execute({ action: 'example', id: 'radiant/event-horizon', includeSource: false }, exec)
+    check('shaders: an example resolves', example.view.status, 'ok')
+    const missing = await tool('shader_kit').execute({ action: 'example', id: 'radiant/not-a-page' }, exec)
+    check('shaders: a missing example is honest', missing.view.status, 'missing')
+  } finally {
+    if (previousDshHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousDshHome
+    await fsp.rm(shadersHome, { recursive: true, force: true })
+    await fsp.rm(shadersWorkspace, { recursive: true, force: true })
+  }
+}
+
 console.log('')
 console.log(failures === 0 ? 'all node-route checks passed' : failures + ' check(s) FAILED')
 process.exitCode = failures === 0 ? 0 : 1

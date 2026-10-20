@@ -1,0 +1,8 @@
+{
+  "repo": "gokayfem/shader-skills",
+  "commit": "e09bc993bf04201f26c03c87c89210e9b472f526",
+  "url": "https://github.com/gokayfem/shader-skills",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 gokayfem",
+  "note": "GLSL stored byte-identical. Its dialect is the corpus harness, where iFrame is an int - see lib/verify.js."
+}

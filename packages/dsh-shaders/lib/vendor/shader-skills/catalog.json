@@ -1,0 +1,1107 @@
+{
+  "source": {
+    "repo": "gokayfem/shader-skills",
+    "commit": "e09bc993bf04201f26c03c87c89210e9b472f526",
+    "url": "https://github.com/gokayfem/shader-skills",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2026 gokayfem",
+    "note": "GLSL stored byte-identical. Its dialect is the corpus harness, where iFrame is an int - see lib/verify.js."
+  },
+  "generatedBy": "packages/dsh-shaders/vendor/shader-skills/build.mjs",
+  "counts": {
+    "modules": 20,
+    "templates": 11,
+    "gallery": 11,
+    "references": 14
+  },
+  "modules": [
+    {
+      "id": "architecture",
+      "file": "modules/architecture.glsl",
+      "bytes": 1826,
+      "sha256": "f5ca3e1e8153f9dac5e978c23a34e36b21edb6743ede3295cfb126d0bdc9dfed",
+      "summary": "architecture: stable building parameters and filtered facade fields. These are massing/material helpers,",
+      "exports": [
+        "buildingProfile",
+        "facadeWindowMask"
+      ],
+      "requires": [
+        "hash"
+      ]
+    },
+    {
+      "id": "atmosphere",
+      "file": "modules/atmosphere.glsl",
+      "bytes": 4743,
+      "sha256": "a7e8d2bef28a2da951917ba67d70f6c4b0540fc74de278d8fc78c483c6cfbc83",
+      "summary": "atmosphere: skies and sun. simpleSky is a cheap artistic gradient. atmosphereSky is physically based single",
+      "exports": [
+        "ATMOSPHERE_GROUND_KM",
+        "ATMOSPHERE_TOP_KM",
+        "LIGHT_STEPS",
+        "VIEW_STEPS",
+        "atmosphereDensity",
+        "atmosphereExtinction",
+        "atmosphereSky",
+        "simpleSky",
+        "sunDisk"
+      ],
+      "requires": [
+        "intersect",
+        "common",
+        "volume"
+      ]
+    },
+    {
+      "id": "camera",
+      "file": "modules/camera.glsl",
+      "bytes": 2118,
+      "sha256": "93ba1ced553cf25d85ed6c5f8a65af5052540a94b9ee04dd5b86b10017b55eb1",
+      "summary": "camera: look-at frames, primary rays, field of view, thin-lens depth of field.",
+      "exports": [
+        "cameraMatrix",
+        "cameraRay",
+        "fovToFocal",
+        "orthoRay",
+        "thinLensRay"
+      ],
+      "requires": [
+        "common"
+      ]
+    },
+    {
+      "id": "color",
+      "file": "modules/color.glsl",
+      "bytes": 4771,
+      "sha256": "46899ba727d82cf5e584bfee032dcc67a21672d90af2ffca89a6cc18c9b34887",
+      "summary": "color: transfer functions, perceptual color (Oklab / OkLCh), palettes, luminance, blackbody light colors.",
+      "exports": [
+        "T",
+        "blackbody",
+        "cosinePalette",
+        "linearSrgbToOklab",
+        "linearToSrgb",
+        "luminance",
+        "mixOklab",
+        "oklabToLinearSrgb",
+        "oklchToLinearSrgb",
+        "saturation",
+        "srgbToLinear"
+      ],
+      "requires": [
+        "common"
+      ]
+    },
+    {
+      "id": "common",
+      "file": "modules/common.glsl",
+      "bytes": 2747,
+      "sha256": "5f9ddd147cab635dbfb9ec2b80ce76deaa79477cb71a419cf6c01c17b714e512",
+      "summary": "common: constants, rotation, remapping and shaping functions.",
+      "exports": [
+        "PI",
+        "TAU",
+        "almostIdentity",
+        "cubicPulse",
+        "dot2",
+        "expImpulse",
+        "gain",
+        "linearstep",
+        "parabola",
+        "remap",
+        "rot2",
+        "saturate"
+      ],
+      "requires": []
+    },
+    {
+      "id": "debug",
+      "file": "modules/debug.glsl",
+      "bytes": 1405,
+      "sha256": "b06ba3c04c5c1f07f0c9a0ec2920f17ad97a55018ef236274cb9106a61e85a5f",
+      "summary": "debug: visualize intermediate fields. The pack's DEBUG_MODE convention:",
+      "exports": [
+        "debugDistance",
+        "debugHeat",
+        "debugIdColor",
+        "debugNormal"
+      ],
+      "requires": [
+        "common"
+      ]
+    },
+    {
+      "id": "domain",
+      "file": "modules/domain.glsl",
+      "bytes": 4871,
+      "sha256": "aaa55797bef7244e804166001c63db8ecbfe9a8eec06e3bdf431c38ff2cdc557",
+      "summary": "domain: transform the point BEFORE evaluating a distance (repetition, mirroring, polar sectors, folds,",
+      "exports": [
+        "domBend",
+        "domFold",
+        "domPolar",
+        "domPolarId",
+        "domPolarPair",
+        "domPolarSector",
+        "domRepeat",
+        "domRepeatId",
+        "domRepeatLimited",
+        "domRepeatMirror",
+        "domTwist"
+      ],
+      "requires": [
+        "common"
+      ]
+    },
+    {
+      "id": "hash",
+      "file": "modules/hash.glsl",
+      "bytes": 4194,
+      "sha256": "7709d29a2f707bf7214f95fcab36c486f5cb007f5c5ad5ae8f2e65dd39a35e74",
+      "summary": "hash: integer hashes and float wrappers for lattice ids.",
+      "exports": [
+        "hash11",
+        "hash12",
+        "hash13",
+        "hash22",
+        "hash32",
+        "hash33",
+        "hash44",
+        "pcg3d",
+        "pcg4d",
+        "pcgHash",
+        "uintToUnit"
+      ],
+      "requires": []
+    },
+    {
+      "id": "intersect",
+      "file": "modules/intersect.glsl",
+      "bytes": 1749,
+      "sha256": "07f3f5c48e2be7f58360209a020bd388bd43ed477245735c9212d4953e9900df",
+      "summary": "intersect: analytic ray-primitive intersections. Rays are ro + t * rd with unit rd.",
+      "exports": [
+        "iBox",
+        "iPlane",
+        "iSphere"
+      ],
+      "requires": []
+    },
+    {
+      "id": "noise",
+      "file": "modules/noise.glsl",
+      "bytes": 21779,
+      "sha256": "c5d97008887ea722fdbaf0e5e72e8bf57d03e409f8747d9492047d2692ca2afb",
+      "summary": "noise: value, gradient and simplex noise (2D/3D, analytic derivatives), fBm, turbulence and billow, domain warping,",
+      "exports": [
+        "FBM_MAX_OCTAVES",
+        "SKEW",
+        "UNSKEW",
+        "billowFbm",
+        "curlNoise",
+        "erodedFbm",
+        "fbm",
+        "gradientNoise",
+        "gradientNoiseD",
+        "hybridTerrainHeight",
+        "interleavedGradientNoise",
+        "latticeGradDot",
+        "latticeGradient",
+        "quinticFade",
+        "quinticFadeDeriv",
+        "r2Dither",
+        "ridgedFbm",
+        "simplexNoise",
+        "simplexNoiseD",
+        "smoothVoronoi",
+        "turbulence",
+        "valueNoise",
+        "valueNoiseD",
+        "voronoi",
+        "voronoiBorder",
+        "warpedFbm"
+      ],
+      "requires": [
+        "common",
+        "hash"
+      ]
+    },
+    {
+      "id": "operators",
+      "file": "modules/operators.glsl",
+      "bytes": 5401,
+      "sha256": "aa792dfcc5db34cdf8e491881456a8d0a0b7235410743a6fbcdb938f47b9161c",
+      "summary": "operators: combine distances (booleans, smooth blends, chamfers, stairs) and reshape them (round, onion,",
+      "exports": [
+        "opChamferUnion",
+        "opElongate",
+        "opEngrave",
+        "opExtrude",
+        "opIntersect",
+        "opOnion",
+        "opRevolve",
+        "opRound",
+        "opStairsUnion",
+        "opSubtract",
+        "opUnion",
+        "smax",
+        "smin",
+        "sminBlend",
+        "sminCubic",
+        "smoothSubtract"
+      ],
+      "requires": []
+    },
+    {
+      "id": "pattern",
+      "file": "modules/pattern.glsl",
+      "bytes": 3169,
+      "sha256": "e5e55e452df55f8a7d0ba9827a3167a5866f81e6af2cc514790dccc87cf9abcc",
+      "summary": "pattern: tilings and antialiased procedural patterns. The filtered versions integrate the pattern over the",
+      "exports": [
+        "filteredChecker",
+        "filteredGrid",
+        "filteredStripes",
+        "hexEdgeDistance",
+        "hexGrid",
+        "triangleWave",
+        "truchetArcs"
+      ],
+      "requires": [
+        "hash"
+      ]
+    },
+    {
+      "id": "post",
+      "file": "modules/post.glsl",
+      "bytes": 2617,
+      "sha256": "d9449c2d01058c9194bd66785684c856bf3fb10886404a01d05ac6640ac31268",
+      "summary": "post: antialiasing helpers, supersampling offsets, lens effects, grain and dithering, all single-pass.",
+      "exports": [
+        "aaOffset",
+        "ditherTPDF",
+        "fillAA",
+        "filmGrain",
+        "strokeAA",
+        "vignette"
+      ],
+      "requires": [
+        "hash"
+      ]
+    },
+    {
+      "id": "raymarch",
+      "file": "modules/raymarch.glsl",
+      "bytes": 4132,
+      "sha256": "415323ff39f34bec409ddefbddb249262f50c583d1904a6c3d5830789bcce0e6",
+      "summary": "raymarch: sphere tracing, normals, soft shadows and ambient occlusion for SDF scenes.",
+      "exports": [
+        "RAYMARCH_MAX_STEPS",
+        "ZERO",
+        "calcAO",
+        "calcNormal",
+        "map",
+        "raymarch",
+        "sdfThickness",
+        "softShadow"
+      ],
+      "requires": []
+    },
+    {
+      "id": "sdf2d",
+      "file": "modules/sdf2d.glsl",
+      "bytes": 11931,
+      "sha256": "7c99b2aba09720935edc012230f32d3cce16b92da064b8d4b35770f313adfc7b",
+      "summary": "sdf2d: 2D signed distance primitives for posters, icons, UI, motion graphics, and as profiles for",
+      "exports": [
+        "P",
+        "Q",
+        "sdArc",
+        "sdBox",
+        "sdCircle",
+        "sdEgg",
+        "sdEllipse",
+        "sdEquilateralTriangle",
+        "sdHeart",
+        "sdHorseshoe",
+        "sdMoon",
+        "sdParabolaSegment",
+        "sdPie",
+        "sdQuadraticBezier",
+        "sdRegularPolygon",
+        "sdRhombus",
+        "sdRoundedBox",
+        "sdSegment",
+        "sdStar",
+        "sdTriangle",
+        "sdUnevenCapsule",
+        "sdVesica"
+      ],
+      "requires": [
+        "common",
+        "sdf3d"
+      ]
+    },
+    {
+      "id": "sdf3d",
+      "file": "modules/sdf3d.glsl",
+      "bytes": 10280,
+      "sha256": "194734d9fd9a5472a96a90e4da846a85482fbeed35bc16309453973802ba1dc7",
+      "summary": "sdf3d: 3D signed distance primitives. Each one is centered at the origin unless noted. Move or rotate the",
+      "exports": [
+        "sdBox",
+        "sdBoxFrame",
+        "sdCappedCone",
+        "sdCappedTorus",
+        "sdCapsule",
+        "sdCone",
+        "sdCutHollowSphere",
+        "sdCutSphere",
+        "sdCylinder",
+        "sdDeathStar",
+        "sdEllipsoid",
+        "sdGyroid",
+        "sdHexPrism",
+        "sdLink",
+        "sdOctahedron",
+        "sdPlane",
+        "sdQuadraticBezier",
+        "sdRoundBox",
+        "sdRoundCone",
+        "sdSphere",
+        "sdTorus",
+        "sdVerticalCapsule"
+      ],
+      "requires": [
+        "common",
+        "sdf2d"
+      ]
+    },
+    {
+      "id": "shading",
+      "file": "modules/shading.glsl",
+      "bytes": 4669,
+      "sha256": "19d859327dbff2fcc88edb732531d61daa9536474feaa5484486e48f50957b41",
+      "summary": "shading: BRDF terms and practical lighting models. Vectors are unit length: n = normal, v = toward the viewer",
+      "exports": [
+        "F",
+        "distributionGGX",
+        "envBRDFApprox",
+        "fresnelSchlick",
+        "hemisphereLight",
+        "rimLight",
+        "shadePBR",
+        "specularGGX",
+        "translucency",
+        "visibilitySmithGGX",
+        "wrapDiffuse"
+      ],
+      "requires": [
+        "common"
+      ]
+    },
+    {
+      "id": "tonemap",
+      "file": "modules/tonemap.glsl",
+      "bytes": 4911,
+      "sha256": "47bf372507e8b8cdb9a3b00371971b1cede5090062827837525ed2c0d666699e",
+      "summary": "tonemap: map scene-linear HDR to display range. Every function here takes linear input (after exposure) and",
+      "exports": [
+        "tonemapACES",
+        "tonemapAgX",
+        "tonemapAgXPunchy",
+        "tonemapNeutral",
+        "tonemapReinhard"
+      ],
+      "requires": []
+    },
+    {
+      "id": "volume",
+      "file": "modules/volume.glsl",
+      "bytes": 3434,
+      "sha256": "feaeefdab9e9dfd90d5387a24f76c5c0c152d97937f534d09d535f1cd93b0d93",
+      "summary": "volume: participating media (fog, smoke, clouds, haze). mu = dot(rd, l): the cosine between the view ray and",
+      "exports": [
+        "beerPowder",
+        "distanceFog",
+        "heightFog",
+        "phaseCornetteShanks",
+        "phaseDualHG",
+        "phaseHG",
+        "phaseIsotropic",
+        "phaseRayleigh",
+        "volumeStep"
+      ],
+      "requires": [
+        "common"
+      ]
+    },
+    {
+      "id": "water",
+      "file": "modules/water.glsl",
+      "bytes": 3195,
+      "sha256": "aa71afeca9d4ec7b4478b54c2ccee7f05b795dc2fd9061ca0332002d72436c2d",
+      "summary": "water: finite-depth wave dispersion, analytic wave derivatives, exact dielectric Fresnel and RGB attenuation.",
+      "exports": [
+        "beerTransmittance",
+        "fresnelDielectric",
+        "waterDispersion",
+        "waterWaveD"
+      ],
+      "requires": [
+        "common"
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "id": "alpine-valley",
+      "file": "templates/alpine-valley.glsl",
+      "bytes": 3961,
+      "sha256": "831460ec94b57b64099b8eefdbba68f0f79971f29a76b7265f900ddc181950e8",
+      "title": "Alpine valley",
+      "requires": [
+        "intersect",
+        "common",
+        "volume",
+        "atmosphere",
+        "camera",
+        "color",
+        "debug",
+        "hash",
+        "noise",
+        "post",
+        "raymarch",
+        "shading",
+        "tonemap"
+      ],
+      "direct": [
+        "atmosphere",
+        "camera",
+        "color",
+        "debug",
+        "noise",
+        "post",
+        "raymarch",
+        "shading",
+        "tonemap",
+        "volume"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:alpine-valley",
+      "bodyInGallery": true,
+      "renderTime": 0,
+      "variants": [
+        "DEBUG_MODE=1",
+        "DEBUG_MODE=2",
+        "DEBUG_MODE=3",
+        "DEBUG_MODE=4"
+      ]
+    },
+    {
+      "id": "coastal-water",
+      "file": "templates/coastal-water.glsl",
+      "bytes": 7746,
+      "sha256": "7e291191949e3d508ae4fecef34ddc285f2ada707796de56ad618ee7eeb0afd6",
+      "title": "Coastal water",
+      "requires": [
+        "intersect",
+        "common",
+        "volume",
+        "atmosphere",
+        "camera",
+        "color",
+        "debug",
+        "hash",
+        "noise",
+        "post",
+        "shading",
+        "tonemap",
+        "water"
+      ],
+      "direct": [
+        "atmosphere",
+        "camera",
+        "color",
+        "debug",
+        "noise",
+        "post",
+        "shading",
+        "tonemap",
+        "water"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:coastal-water",
+      "bodyInGallery": true,
+      "renderTime": 5,
+      "variants": [
+        "QUALITY=1",
+        "QUALITY=3",
+        "DEBUG_MODE=1",
+        "DEBUG_MODE=2",
+        "DEBUG_MODE=3",
+        "DEBUG_MODE=4",
+        "DEBUG_MODE=5",
+        "DEBUG_MODE=6"
+      ]
+    },
+    {
+      "id": "noise-progression",
+      "file": "templates/noise-progression.glsl",
+      "bytes": 2310,
+      "sha256": "db380ff85b70ac3ef762cea435712d27820ef60e6c31ae7301b4c10e8a22d1bf",
+      "title": "Top row, left to right",
+      "requires": [
+        "common",
+        "color",
+        "hash",
+        "noise",
+        "post"
+      ],
+      "direct": [
+        "color",
+        "common",
+        "noise",
+        "post"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:noise-progression",
+      "bodyInGallery": true,
+      "renderTime": 2,
+      "variants": []
+    },
+    {
+      "id": "noise-terrain-map",
+      "file": "templates/noise-terrain-map.glsl",
+      "bytes": 2206,
+      "sha256": "71b6ea2f0f3519e2a5c6dfc12f672349d015ff890961f155c313efd69f133578",
+      "title": "Putting noise together",
+      "requires": [
+        "common",
+        "color",
+        "hash",
+        "noise",
+        "post",
+        "tonemap"
+      ],
+      "direct": [
+        "color",
+        "noise",
+        "post",
+        "tonemap"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:noise-terrain-map",
+      "bodyInGallery": true,
+      "renderTime": 2,
+      "variants": []
+    },
+    {
+      "id": "ocean",
+      "file": "templates/ocean.glsl",
+      "bytes": 13416,
+      "sha256": "443b532dba3f1de8bbc304d5a46702abd46f698a514319f35b980c97d2952f10",
+      "title": "Shows",
+      "requires": [
+        "intersect",
+        "common",
+        "volume",
+        "atmosphere",
+        "camera",
+        "color",
+        "debug",
+        "hash",
+        "noise",
+        "post",
+        "raymarch",
+        "shading",
+        "tonemap"
+      ],
+      "direct": [
+        "atmosphere",
+        "camera",
+        "color",
+        "common",
+        "debug",
+        "hash",
+        "intersect",
+        "noise",
+        "post",
+        "raymarch",
+        "shading",
+        "tonemap"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:ocean",
+      "bodyInGallery": true,
+      "renderTime": 12.5,
+      "variants": []
+    },
+    {
+      "id": "pattern-swatches",
+      "file": "templates/pattern-swatches.glsl",
+      "bytes": 3698,
+      "sha256": "97a179c45261680abb9d5d47870ae3691074f1652ac6fdfabea3219e415dbc28",
+      "title": "Procedural material swatches",
+      "requires": [
+        "common",
+        "color",
+        "debug",
+        "hash",
+        "noise",
+        "pattern",
+        "post"
+      ],
+      "direct": [
+        "color",
+        "common",
+        "debug",
+        "hash",
+        "noise",
+        "pattern",
+        "post"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:pattern-swatches",
+      "bodyInGallery": true,
+      "renderTime": 2,
+      "variants": []
+    },
+    {
+      "id": "procedural-city",
+      "file": "templates/procedural-city.glsl",
+      "bytes": 4630,
+      "sha256": "1ec7d132345cf03e0f8d1f55e39ed9b4239af1912dbc186259b873f398415c39",
+      "title": "Parcel -> mass -> setback -> roof -> facade. Original texture-free city at blue hour.",
+      "requires": [
+        "hash",
+        "architecture",
+        "common",
+        "camera",
+        "color",
+        "debug",
+        "domain",
+        "pattern",
+        "post",
+        "raymarch",
+        "sdf3d",
+        "sdf2d",
+        "shading",
+        "tonemap",
+        "volume"
+      ],
+      "direct": [
+        "architecture",
+        "camera",
+        "color",
+        "debug",
+        "domain",
+        "hash",
+        "pattern",
+        "post",
+        "raymarch",
+        "sdf2d",
+        "sdf3d",
+        "shading",
+        "tonemap",
+        "volume"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:procedural-city",
+      "bodyInGallery": true,
+      "renderTime": 4,
+      "variants": [
+        "DEBUG_MODE=2",
+        "DEBUG_MODE=3",
+        "DEBUG_MODE=4",
+        "DEBUG_MODE=5"
+      ]
+    },
+    {
+      "id": "raymarch-sdf",
+      "file": "templates/raymarch-sdf.glsl",
+      "bytes": 5417,
+      "sha256": "2d83f9f95b7afed09c47e34aee10e17728a3a36d96d15f20afa5a4dd20832928",
+      "title": "Studio still life",
+      "requires": [
+        "intersect",
+        "common",
+        "volume",
+        "atmosphere",
+        "camera",
+        "color",
+        "debug",
+        "operators",
+        "hash",
+        "pattern",
+        "post",
+        "raymarch",
+        "sdf2d",
+        "sdf3d",
+        "shading",
+        "tonemap"
+      ],
+      "direct": [
+        "atmosphere",
+        "camera",
+        "color",
+        "common",
+        "debug",
+        "operators",
+        "pattern",
+        "post",
+        "raymarch",
+        "sdf3d",
+        "shading",
+        "tonemap",
+        "volume"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:raymarch-sdf",
+      "bodyInGallery": true,
+      "renderTime": 1.2,
+      "variants": []
+    },
+    {
+      "id": "sdf-2d-poster",
+      "file": "templates/sdf-2d-poster.glsl",
+      "bytes": 3818,
+      "sha256": "23bcfdf4f592799da793ac7897749b7c371d2b7012b297f7b745132e7a6a6609",
+      "title": "Flat-graphic poster",
+      "requires": [
+        "common",
+        "color",
+        "debug",
+        "domain",
+        "hash",
+        "noise",
+        "pattern",
+        "post",
+        "sdf3d",
+        "sdf2d",
+        "tonemap"
+      ],
+      "direct": [
+        "color",
+        "debug",
+        "domain",
+        "hash",
+        "noise",
+        "pattern",
+        "post",
+        "sdf2d",
+        "sdf3d",
+        "tonemap"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:sdf-2d-poster",
+      "bodyInGallery": true,
+      "renderTime": 3,
+      "variants": []
+    },
+    {
+      "id": "terrain",
+      "file": "templates/terrain.glsl",
+      "bytes": 4774,
+      "sha256": "1e0d896abfe01fe1cbb779dd00a2bbe08947e45a8d8acbc48bba3279f608f325",
+      "title": "Shows",
+      "requires": [
+        "intersect",
+        "common",
+        "volume",
+        "atmosphere",
+        "camera",
+        "color",
+        "debug",
+        "hash",
+        "noise",
+        "post",
+        "raymarch",
+        "tonemap"
+      ],
+      "direct": [
+        "atmosphere",
+        "camera",
+        "color",
+        "debug",
+        "intersect",
+        "noise",
+        "post",
+        "raymarch",
+        "tonemap"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:terrain",
+      "bodyInGallery": true,
+      "renderTime": 0,
+      "variants": []
+    },
+    {
+      "id": "volumetric-clouds",
+      "file": "templates/volumetric-clouds.glsl",
+      "bytes": 3973,
+      "sha256": "6102d37a3a9af3434d53926b3267f848db93f303dce5ddad9fa6ce86ab5e0e98",
+      "title": "Shows",
+      "requires": [
+        "intersect",
+        "common",
+        "volume",
+        "atmosphere",
+        "camera",
+        "color",
+        "debug",
+        "hash",
+        "noise",
+        "post",
+        "tonemap"
+      ],
+      "direct": [
+        "atmosphere",
+        "camera",
+        "color",
+        "common",
+        "debug",
+        "noise",
+        "post",
+        "tonemap",
+        "volume"
+      ],
+      "requiresConfidence": "best-effort: assembled by the corpus own glsl_tools.py bundle, not by this package",
+      "gallery": "gallery:volumetric-clouds",
+      "bodyInGallery": true,
+      "renderTime": 4,
+      "variants": []
+    }
+  ],
+  "gallery": [
+    {
+      "id": "alpine-valley",
+      "file": "gallery/alpine-valley.glsl",
+      "bytes": 20461,
+      "sha256": "0868e6c24f2c154239f64b5ccb8cd9e623b9e9cdffe7e4555405b57d1c96bdde",
+      "title": "Alpine valley",
+      "dialect": "shader-skills",
+      "renderTime": 0,
+      "variants": [
+        "DEBUG_MODE=1",
+        "DEBUG_MODE=2",
+        "DEBUG_MODE=3",
+        "DEBUG_MODE=4"
+      ]
+    },
+    {
+      "id": "coastal-water",
+      "file": "gallery/coastal-water.glsl",
+      "bytes": 23100,
+      "sha256": "feccfae5b986645fcabd87a60e62103944242caefd9ed9d671e6ef896cf3ec78",
+      "title": "Coastal water",
+      "dialect": "shader-skills",
+      "renderTime": 5,
+      "variants": [
+        "QUALITY=1",
+        "QUALITY=3",
+        "DEBUG_MODE=1",
+        "DEBUG_MODE=2",
+        "DEBUG_MODE=3",
+        "DEBUG_MODE=4",
+        "DEBUG_MODE=5",
+        "DEBUG_MODE=6"
+      ]
+    },
+    {
+      "id": "noise-progression",
+      "file": "gallery/noise-progression.glsl",
+      "bytes": 19182,
+      "sha256": "f70e4368c0a4e7ef440dd6d2e418e2fa49fc9752f9efb026a2e6f2e0af5e8689",
+      "title": "Top row, left to right",
+      "dialect": "shader-skills",
+      "renderTime": 2,
+      "variants": []
+    },
+    {
+      "id": "noise-terrain-map",
+      "file": "gallery/noise-terrain-map.glsl",
+      "bytes": 14151,
+      "sha256": "81f7a2af47cf5786e1a602b619a5e5916ce16401189c868cfebfcf1a32c0aa44",
+      "title": "Putting noise together",
+      "dialect": "shader-skills",
+      "renderTime": 2,
+      "variants": []
+    },
+    {
+      "id": "ocean",
+      "file": "gallery/ocean.glsl",
+      "bytes": 33759,
+      "sha256": "73254dbe4dff4610c90ea4ae03e276257c6e1ac93cc2fb1f7bba9ef2d26ed2c0",
+      "title": "Shows",
+      "dialect": "shader-skills",
+      "renderTime": 12.5,
+      "variants": []
+    },
+    {
+      "id": "pattern-swatches",
+      "file": "gallery/pattern-swatches.glsl",
+      "bytes": 18512,
+      "sha256": "f25f68f02ddcaad4943bfbcf85d1640bc3b5587ee6b21f1b249e002319ab4404",
+      "title": "Procedural material swatches",
+      "dialect": "shader-skills",
+      "renderTime": 2,
+      "variants": []
+    },
+    {
+      "id": "procedural-city",
+      "file": "gallery/procedural-city.glsl",
+      "bytes": 18247,
+      "sha256": "f6d5763b0a73b6e21db5b6fa2792c6440e4687317f756e274fceb9045b2536cb",
+      "title": "Library code below is bundled from shader-skills (MIT)",
+      "dialect": "shader-skills",
+      "renderTime": 4,
+      "variants": [
+        "DEBUG_MODE=2",
+        "DEBUG_MODE=3",
+        "DEBUG_MODE=4",
+        "DEBUG_MODE=5"
+      ]
+    },
+    {
+      "id": "raymarch-sdf",
+      "file": "gallery/raymarch-sdf.glsl",
+      "bytes": 20407,
+      "sha256": "3227b1e86a952f83acacafb6f4c8f0bf3a5ea23585552e8169a8e72e460ad6cb",
+      "title": "Studio still life",
+      "dialect": "shader-skills",
+      "renderTime": 1.2,
+      "variants": []
+    },
+    {
+      "id": "sdf-2d-poster",
+      "file": "gallery/sdf-2d-poster.glsl",
+      "bytes": 20992,
+      "sha256": "04870fbbe98c6f1795afe99a321dcbdd7243cb2a21825af075bdaf363a014890",
+      "title": "Flat-graphic poster",
+      "dialect": "shader-skills",
+      "renderTime": 3,
+      "variants": []
+    },
+    {
+      "id": "terrain",
+      "file": "gallery/terrain.glsl",
+      "bytes": 23121,
+      "sha256": "5c2efae645cf3318ea57b6f67be5db96fcbd96525daf1f8e61b82b9bfc1619ca",
+      "title": "Shows",
+      "dialect": "shader-skills",
+      "renderTime": 0,
+      "variants": []
+    },
+    {
+      "id": "volumetric-clouds",
+      "file": "gallery/volumetric-clouds.glsl",
+      "bytes": 18080,
+      "sha256": "1b4c3b8618f52b8e96857a146cd4ba041dd72d15a711fde973e1177eda4f78af",
+      "title": "Shows",
+      "dialect": "shader-skills",
+      "renderTime": 4,
+      "variants": []
+    }
+  ],
+  "references": [
+    {
+      "id": "composition-and-debugging",
+      "file": "references/composition-and-debugging.md",
+      "bytes": 5309,
+      "sha256": "bd38608727740eef89c2292834944eec4fe3082e60e53bcb4edf9c71027b11cf",
+      "title": "Composition and Debugging"
+    },
+    {
+      "id": "formula-code-couples-materials",
+      "file": "references/formula-code-couples-materials.md",
+      "bytes": 15882,
+      "sha256": "9d6c3aca82c11dcebf044ca25840da22c5be2a60231964749f19a662179f2992",
+      "title": "Formula-Code Couples: Materials, Color, Composition, and Polish"
+    },
+    {
+      "id": "formula-code-couples-sdf",
+      "file": "references/formula-code-couples-sdf.md",
+      "bytes": 20970,
+      "sha256": "f3a6ef439eb63e7bb3aa22ec0927abaf931d5cb12312e48a96d9043ee08aa454",
+      "title": "Formula-Code Couples: Implicit Geometry and SDF Operators"
+    },
+    {
+      "id": "formula-code-couples-terrain",
+      "file": "references/formula-code-couples-terrain.md",
+      "bytes": 17558,
+      "sha256": "00f23d5a71de914d623852ea81ad1709ec1af807d69b44337688405569eb0886",
+      "title": "Formula-Code Couples: Heightfields, Density Fields, and Atmosphere"
+    },
+    {
+      "id": "formula-cookbook",
+      "file": "references/formula-cookbook.md",
+      "bytes": 19409,
+      "sha256": "b74443de7ba22704e62e5147fa848d44edcaa20d9a73ad0acb24b50fb5c3847d",
+      "title": "Formula Cookbook"
+    },
+    {
+      "id": "library-index",
+      "file": "references/library-index.md",
+      "bytes": 57563,
+      "sha256": "8dc04d76e7ad39cd39b2687b4b74f076ddd4a1ca32a53082dcf6dba59b44b3c4",
+      "title": "GLSL Library Index"
+    },
+    {
+      "id": "noise-use-cases",
+      "file": "references/noise-use-cases.md",
+      "bytes": 17521,
+      "sha256": "fb015fc52fda89133caea61773edbefa1e1785b64499c7ad2ea53fca421e8e0c",
+      "title": "Noise learning progression and use cases"
+    },
+    {
+      "id": "procedural-buildings",
+      "file": "references/procedural-buildings.md",
+      "bytes": 7672,
+      "sha256": "6f3337646c0da600de5561562f258de85c353c8a649cb0c31d629d97ea3a355e",
+      "title": "Procedural buildings and cities"
+    },
+    {
+      "id": "rendering-pipeline",
+      "file": "references/rendering-pipeline.md",
+      "bytes": 8572,
+      "sha256": "6a89df0aeb020ddb23025536fa87c93aba5d33e626b334e6d841acc064a94019",
+      "title": "Rendering Pipeline"
+    },
+    {
+      "id": "sdf-library-guide",
+      "file": "references/sdf-library-guide.md",
+      "bytes": 10647,
+      "sha256": "74d2580a2066aed841e869ffb089f8e2f3de1f9643135861dd9681175b1a4290",
+      "title": "Modeling With the GLSL Library"
+    },
+    {
+      "id": "shader-workflow",
+      "file": "references/shader-workflow.md",
+      "bytes": 3559,
+      "sha256": "3bd4db85f0c90aba82b4892cae593d413f4d106d86ee868091b31e348c91d56f",
+      "title": "Shader Workflow"
+    },
+    {
+      "id": "subject-routing",
+      "file": "references/subject-routing.md",
+      "bytes": 9939,
+      "sha256": "35793458f9f26c7731b71f3a1442732f993f9e24b4a6d7b8378cfa873cb54084",
+      "title": "Subject Routing"
+    },
+    {
+      "id": "terrain-production",
+      "file": "references/terrain-production.md",
+      "bytes": 7434,
+      "sha256": "78109237194303089e17026f7cb355a60b41c79376c4a203938655acceb5b1ed",
+      "title": "Procedural terrain: silhouette to production"
+    },
+    {
+      "id": "water-quality",
+      "file": "references/water-quality.md",
+      "bytes": 10861,
+      "sha256": "72d5d3d137b486a4ac60805162b662069465c2fe00d2a9005d9fe15bb1d15bbe",
+      "title": "High-quality water: surface, optics and integration"
+    }
+  ]
+}
