@@ -15,6 +15,7 @@ node scripts/checks/check-scripts.mjs          # the scripts tree, the console c
 node scripts/checks/check-media-node.mjs        # dsh-media: tools, routes, the ffmpeg pin
 node scripts/checks/check-pdf-node.mjs          # dsh-pdf: the five tools and the routes
 node scripts/checks/check-skill-examples.mjs    # every fenced example in the shipped skills
+node scripts/checks/check-shader-examples.mjs   # every fenced GLSL in the shader skills, COMPILED
 node scripts/checks/check-media-examples.mjs    # every media/PDF example, shaped and really RUN
 node scripts/checks/check-browser-node.mjs      # dsh-browser: the host renderer and its policy
 node scripts/checks/check-shell.mjs            # the app, DRIVEN: verbs, the bridge, the child env
@@ -34,6 +35,7 @@ Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-r
 | `check-media-node.mjs` | `dsh-media`'s pin against a **synthetic archive** built and served over loopback (download, hash verification, mismatch refusal, atomic install, resolution order), plus the ffmpeg-dependent half, which skips loudly without ffmpeg |
 | `check-pdf-node.mjs` | the five `pdf_*` tools and the PDF routes against documents the check builds itself, including the engine's buffer semantics |
 | `check-skill-examples.mjs` | every fenced example in the shipped skills parses or compiles (Mermaid, TikZ) |
+| `check-shader-examples.mjs` | every fenced **GLSL** example in `dsh-shaders`' five skills is COMPILED by a real headless browser, with vertex shaders recognised and a deliberately-broken example marked `no-check`; skips loudly on a host with no browser |
 | `check-media-examples.mjs` | every media/PDF example is a well-formed tool call and, where this host can run one, actually runs |
 | `check-browser-node.mjs` | `dsh-browser`'s host half: the disposable sandboxed renderer and the fetch policy in front of it |
 | `check-shell.mjs` | the app, **driven rather than read**: `-Version` and `-Help` answer; `-Mode embed` - the flag the deleted web view used to answer - is refused BY NAME; the binary is kept under a size ceiling a GUI stack cannot sneak past; and `start` is run against a **throwaway tree with stub scripts**, so the whole bridge is exercised without starting node: a home with no pack makes it run `scripts/setup/install.*` first, the launcher is handed `-DshHome` and, on Windows, `-NoTerminal`, both children's own environments are read back to prove `DSH_HOME` was composed and that the app's root and the console markers were REMOVED, no key file is written when there is no terminal to ask at, and `status` names the same home. It also proves `scripts/run-web.* -Help` answers with nothing but the web half present. Fixtures live under `.scratch/`, never in a temp directory the host may deny, and it runs `cargo test --workspace` with a scratch root it controls |
@@ -41,8 +43,8 @@ Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-r
 ## The checks that live inside a package
 
 `dsh-docker`, `dsh-wsl`, `dsh-ocr`, `dsh-diagrams`, `dsh-frontend-craft`,
-`dsh-research`, `dsh-supercollider`, `dsh-proto-lab` and `dsh-ollama` each ship
-their own under
+`dsh-shaders`, `dsh-research`, `dsh-supercollider`, `dsh-proto-lab` and
+`dsh-ollama` each ship their own under
 `packages/<name>/checks/`, run with `npm run check` in that folder. They are
 additional to the list above, never a replacement for it: a host half's fixtures
 and its live skips belong beside the package (see

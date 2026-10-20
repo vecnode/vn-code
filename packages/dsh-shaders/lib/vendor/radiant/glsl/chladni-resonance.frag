@@ -1,0 +1,111 @@
+precision highp float;
+uniform float u_time;
+uniform vec2 u_res;
+uniform float u_modeSpeed;
+uniform float u_complexity;
+uniform vec2 u_mouse;
+
+float hash(vec2 p){
+  vec3 p3=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973));
+  p3+=dot(p3,p3.yzx+33.33);
+  return fract((p3.x+p3.y)*p3.z);
+}
+
+float chladni(vec2 p, float n, float m){
+  float pi=3.14159265;
+  return cos(n*pi*p.x)*cos(m*pi*p.y) - cos(m*pi*p.x)*cos(n*pi*p.y);
+}
+
+// Get mode pair using time — no arrays needed
+vec2 getMode(float idx){
+  // 6 beautiful Chladni mode pairs
+  if(idx<1.0) return vec2(1.0,2.0);
+  if(idx<2.0) return vec2(2.0,3.0);
+  if(idx<3.0) return vec2(3.0,5.0);
+  if(idx<4.0) return vec2(1.0,4.0);
+  if(idx<5.0) return vec2(2.0,5.0);
+  return vec2(3.0,4.0);
+}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy-u_res*0.5)/min(u_res.x,u_res.y);
+  float t=u_time*u_modeSpeed;
+
+  vec2 p=uv*2.0;
+
+  // Mouse-driven node shift
+  if (u_mouse.x > 0.0) {
+    vec2 mouseNorm = (u_mouse - u_res * 0.5) / min(u_res.x, u_res.y);
+    p += mouseNorm * 1.5;
+  }
+
+  // Circular plate
+  float plateDist=length(uv);
+  float plateMask=smoothstep(0.52,0.47,plateDist);
+
+  // Cycle through modes
+  float modeTime=t*0.15;
+  float modeIdx=mod(modeTime,6.0);
+  float idx0=floor(modeIdx);
+  float idx1=mod(idx0+1.0,6.0);
+  float blend=fract(modeIdx);
+  blend=blend*blend*(3.0-2.0*blend);
+
+  vec2 mode0=getMode(idx0);
+  vec2 mode1=getMode(idx1);
+
+  float cScale=u_complexity/5.0;
+
+  float c0=chladni(p,mode0.x*cScale,mode0.y*cScale);
+  float c1=chladni(p,mode1.x*cScale,mode1.y*cScale);
+  float c=mix(c0,c1,blend);
+
+  // Secondary pattern for richness
+  float cb0=chladni(p+0.03,mode0.x*cScale+0.5,mode0.y*cScale+0.5);
+  float cb1=chladni(p+0.03,mode1.x*cScale+0.5,mode1.y*cScale+0.5);
+  float cb=mix(cb0,cb1,blend);
+
+  // Sand on nodal lines — use smoothstep for wide, visible lines
+  float w=0.3+0.1*sin(t*0.5);
+  float sand=1.0-smoothstep(0.0,w,abs(c));
+  float sand2=(1.0-smoothstep(0.0,w*1.3,abs(cb)))*0.35;
+  sand=max(sand,sand2);
+  sand=pow(sand,0.6);
+
+  // Grain texture
+  float grain=hash(gl_FragCoord.xy+fract(t*0.1)*100.0);
+  float grainMask=smoothstep(0.1,0.4,sand);
+  sand*=0.8+0.2*grain*grainMask;
+
+  // Color
+  vec3 plate=vec3(0.03,0.025,0.02);
+  vec3 sandCol=mix(vec3(0.65,0.45,0.22),vec3(0.95,0.78,0.40),sand);
+
+  // Bloom
+  float bloom=1.0-smoothstep(0.0,w*2.5,abs(c));
+
+  vec3 col=mix(plate,sandCol,sand);
+  col+=vec3(0.25,0.17,0.07)*bloom*0.4;
+
+  // Plate reflection
+  float reflAngle=atan(uv.y,uv.x)+t*0.05;
+  float refl=0.02*(0.5+0.5*sin(reflAngle*3.0))*smoothstep(0.55,0.2,plateDist);
+  col+=vec3(0.12,0.10,0.06)*refl*(1.0-sand);
+
+  // Edge glow
+  float edge=smoothstep(0.5,0.43,plateDist)*smoothstep(0.38,0.46,plateDist);
+  col+=vec3(0.10,0.07,0.03)*edge;
+
+  col*=plateMask;
+  col+=vec3(0.008,0.006,0.004)*(1.0-plateMask);
+
+  // Vignette
+  float vig=1.0-smoothstep(0.3,0.85,plateDist);
+  col*=0.75+0.25*vig;
+
+  // Grain
+  col+=(hash(gl_FragCoord.xy+t*73.0)-0.5)*0.012;
+  col=pow(max(col,0.0),vec3(0.95));
+
+  gl_FragColor=vec4(clamp(col,0.0,1.0),1.0);
+}

@@ -21,6 +21,9 @@ notice, not a replacement for the files it names.
 | **p5.js** 1.11.13 | `packages/dsh-proto-lab/lib/vendor/p5.min.js` | **LGPL-2.1** | shipped **unmodified**, with upstream's `LICENSE` beside the bytes and its source pointer in `VERSION.json`. Under LGPL-2.1 §6 you may obtain the corresponding source from <https://github.com/processing/p5.js> at the tag recorded there, or from this repository's `vendor/` build, which copies the file byte for byte |
 | **CodeMirror 6** and `@codemirror/legacy-modes` | `packages/dsh-editor/lib/vendor/cm6.min.js` | MIT | built here from the pinned packages with the MIT notices kept in the generated banner |
 | **Forked harness client bundles** — `@deepseek-ai/dsh-client-ui-sidebar-right`, `…-sidebar-files`, `…-open-in-app` | `packages/dsh-rightbar`, `dsh-rightbar-files`, `dsh-open-in-app` | MIT (DeepSeek) | generated forks carry a banner naming the upstream package, the pinned harness line and every patch; `scripts/tools/sync-vendored.ps1 -Check` proves the copy |
+| **Radiant** @ `59e9f48c` (106 pages, 79 extracted fragment sources) | `packages/dsh-shaders/lib/vendor/radiant/` | MIT | upstream `LICENSE` beside the tree; pages stored byte-identical, fragment sources extracted from them, and `catalog.json` records every file's bytes and sha256. `vendor/radiant/build.mjs --check` re-derives the catalogue from the committed pages **offline**. The 91 gallery previews (22.6 MB) are not vendored |
+| **shader-skills** @ `e09bc99` (20 GLSL modules, 11 templates, 11 gallery pieces, 14 references) | `packages/dsh-shaders/lib/vendor/shader-skills/` | MIT | upstream `LICENSE` **and `CREDITS.md`** beside the tree, the latter stating that all GLSL is an original implementation with techniques credited to their published sources. `vendor/shader-skills/build.mjs --check` re-derives the dependency closure offline. The gallery `.png` previews are not vendored |
+| **awesome-glsl** @ `287c2ea` (a curated link index) | `packages/dsh-shaders/lib/vendor/glsl-links/` | MIT | `README.md` and `LICENSE` verbatim, plus `links.json` derived from the markdown and checked against it. This tree contains **no shader code**: it is a list of links |
 
 ## Downloaded at run time, never committed
 
@@ -31,8 +34,8 @@ notice, not a replacement for the files it names.
 ## Installed on the machine, not shipped
 
 `SuperCollider` (`dsh-supercollider`), a TeX engine (`dsh-diagrams`), a
-Chromium-family browser (`dsh-frontend-craft`, `dsh-browser`, and the lab's render
-tier), `git` (`dsh-gittree`), `tesseract` or the OCR engine Windows ships
+Chromium-family browser (`dsh-frontend-craft`, `dsh-browser`, `dsh-shaders`, and the
+lab's render tier), `git` (`dsh-gittree`), `tesseract` or the OCR engine Windows ships
 (`dsh-ocr`), and poppler/mutool/Ghostscript (`dsh-pdf`). None of these is
 redistributed here; the user installs them, and their licenses are their own.
 

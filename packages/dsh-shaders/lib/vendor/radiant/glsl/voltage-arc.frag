@@ -1,0 +1,296 @@
+precision highp float;
+uniform float u_time;
+uniform vec2 u_res;
+uniform float u_arcIntensity;
+uniform float u_crackleSpeed;
+uniform vec2 u_mouse;
+
+#define PI 3.14159265359
+#define NUM_CONDUCTORS 4
+#define NUM_ARCS 5
+
+// ── Hash for noise ──
+float hash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+// ── Value noise ──
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+    f.y
+  );
+}
+
+// ── Layered noise for arc displacement (2-3 octaves) ──
+float arcNoise(vec2 p) {
+  float v = vnoise(p) * 0.6;
+  v += vnoise(p * 2.3 + 17.1) * 0.3;
+  v += vnoise(p * 5.7 + 43.2) * 0.1;
+  return v;
+}
+
+// ── Conductor positions — slowly orbiting points ──
+vec2 conductor(int idx, float t) {
+  float fi = float(idx);
+  float angle = fi * 1.571 + t * (0.12 + fi * 0.03);
+  float rx = 0.25 + fi * 0.05;
+  float ry = 0.18 + fi * 0.04;
+  float offx = sin(fi * 2.7 + 0.5) * 0.1;
+  float offy = cos(fi * 1.9 + 1.3) * 0.08;
+  return vec2(
+    offx + cos(angle) * rx + sin(t * 0.07 + fi * 3.1) * 0.06,
+    offy + sin(angle * 1.3 + fi * 0.8) * ry + cos(t * 0.09 + fi * 2.3) * 0.05
+  );
+}
+
+// ── Compute single electric arc contribution ──
+// Returns glow intensity for a pixel relative to an arc between two points
+float electricArc(vec2 uv, vec2 a, vec2 b, float t, float seed) {
+  vec2 ab = b - a;
+  float len = length(ab);
+  if (len < 0.001) return 0.0;
+  vec2 dir = ab / len;
+  vec2 perp = vec2(-dir.y, dir.x);
+
+  // Project point onto line segment
+  vec2 ap = uv - a;
+  float proj = dot(ap, dir);
+  float param = clamp(proj / len, 0.0, 1.0);
+
+  // Noise displacement perpendicular to the arc path
+  // Use fast-changing noise offset for crackling effect
+  float noiseT = t * u_crackleSpeed * 8.0 + seed * 100.0;
+  float noiseX = param * 6.0 + seed * 37.0;
+
+  // Main bolt displacement — large jagged strokes
+  float disp = (arcNoise(vec2(noiseX, noiseT)) - 0.5) * 0.12;
+  // Taper displacement at endpoints so arcs connect cleanly
+  float taper = param * (1.0 - param) * 4.0;
+  taper = min(taper, 1.0);
+  disp *= taper;
+
+  // Fine crackle detail — higher frequency jitter
+  float fine = (arcNoise(vec2(noiseX * 3.0 + 91.0, noiseT * 1.7 + 53.0)) - 0.5) * 0.03;
+  fine *= taper;
+
+  // Point on the displaced arc centerline
+  vec2 arcPoint = a + dir * (param * len) + perp * (disp + fine);
+
+  // Distance from pixel to displaced arc
+  float d = length(uv - arcPoint);
+
+  // Intensity pulse — arcs periodically intensify
+  float pulse = 0.7 + 0.3 * sin(t * 1.5 + seed * 5.0);
+  pulse *= 0.8 + 0.2 * sin(t * 3.7 + seed * 11.0);
+
+  // Flicker — rapid random intensity variation
+  float flicker = 0.85 + 0.15 * sin(noiseT * 13.0 + param * 20.0);
+
+  // Core brightness (sharp, bright center)
+  float core = 0.004 / (d * d + 0.00006);
+  core = min(core, 12.0);
+
+  // Inner glow (tight)
+  float inner = 0.002 / (d + 0.005);
+  inner = min(inner, 1.5);
+
+  // Outer glow (very narrow)
+  float outer = 0.003 / (d + 0.03);
+  outer = min(outer, 0.4);
+
+  float total = (core * 0.5 + inner * 0.15 + outer * 0.05) * pulse * flicker * taper;
+
+  return total;
+}
+
+// ── Branch arc — smaller secondary bolt that forks off ──
+float branchArc(vec2 uv, vec2 a, vec2 b, float t, float seed) {
+  vec2 ab = b - a;
+  float len = length(ab);
+  if (len < 0.001) return 0.0;
+  vec2 dir = ab / len;
+  vec2 perp = vec2(-dir.y, dir.x);
+
+  vec2 ap = uv - a;
+  float proj = dot(ap, dir);
+  float param = clamp(proj / len, 0.0, 1.0);
+
+  float noiseT = t * u_crackleSpeed * 10.0 + seed * 200.0;
+  float noiseX = param * 4.0 + seed * 53.0;
+
+  float disp = (arcNoise(vec2(noiseX, noiseT)) - 0.5) * 0.06;
+  float taper = sqrt(param) * pow(1.0 - param, 2.0) * 6.75;
+  taper = min(taper, 1.0);
+  disp *= taper;
+
+  vec2 arcPoint = a + dir * (param * len) + perp * disp;
+  float d = length(uv - arcPoint);
+
+  float flicker = 0.5 + 0.5 * sin(noiseT * 17.0 + param * 30.0);
+
+  float core = 0.001 / (d * d + 0.0002);
+  core = min(core, 4.0);
+  float glow = 0.002 / (d + 0.012);
+  glow = min(glow, 0.8);
+
+  return (core * 0.4 + glow * 0.1) * flicker * taper;
+}
+
+// ── Conductor point glow ──
+float conductorGlow(vec2 uv, vec2 pos) {
+  float d = length(uv - pos);
+  float core = 0.0006 / (d * d + 0.00005);
+  core = min(core, 6.0);
+  float glow = 0.002 / (d + 0.01);
+  glow = min(glow, 1.0);
+  float halo = 0.003 / (d + 0.06);
+  halo = min(halo, 0.2);
+  return core * 0.3 + glow * 0.15 + halo * 0.05;
+}
+
+void main() {
+  vec2 uv = (gl_FragCoord.xy - u_res * 0.5) / min(u_res.x, u_res.y);
+  float t = u_time;
+  float intensity = u_arcIntensity;
+
+  // ── Background — very dark warm ──
+  vec3 bg = vec3(0.031, 0.024, 0.016);
+
+  // Subtle ambient noise in background
+  float bgNoise = vnoise(uv * 3.0 + t * 0.05) * 0.008;
+  bg += vec3(bgNoise * 0.8, bgNoise * 0.5, bgNoise * 0.3);
+
+  // ── Compute conductor positions ──
+  vec2 c0 = conductor(0, t);
+  vec2 c1 = conductor(1, t);
+  vec2 c2 = conductor(2, t);
+  vec2 c3 = conductor(3, t);
+
+  // ── Mouse: cursor becomes a 5th conductor ──
+  vec2 c4 = vec2(-10.0);
+  if (u_mouse.x >= 0.0) {
+    c4 = (u_mouse - u_res * 0.5) / min(u_res.x, u_res.y);
+  }
+
+  // ── Color layers ──
+  vec3 coreColor  = vec3(3.0, 2.8, 2.4);
+  vec3 innerColor = vec3(1.8, 1.2, 0.55);
+  vec3 outerColor = vec3(1.0, 0.6, 0.2);
+
+  // ── Accumulate arc contributions ──
+  float totalArc = 0.0;
+  float totalBranch = 0.0;
+
+  // Arc 0: c0 -> c1
+  totalArc += electricArc(uv, c0, c1, t, 1.0);
+  // Arc 1: c1 -> c2
+  totalArc += electricArc(uv, c1, c2, t, 2.7);
+  // Arc 2: c2 -> c3
+  totalArc += electricArc(uv, c2, c3, t, 4.3);
+  // Arc 3: c3 -> c0 (completing the circuit)
+  totalArc += electricArc(uv, c3, c0, t, 6.1);
+  // Arc 4: c0 -> c2 (diagonal, with intermittent activity)
+  float diagPulse = smoothstep(0.3, 0.7, sin(t * 0.4 + 1.0) * 0.5 + 0.5);
+  totalArc += electricArc(uv, c0, c2, t, 8.5) * diagPulse;
+
+  // ── Mouse arcs: arcs from cursor to nearest conductors ──
+  if (c4.x > -5.0) {
+    totalArc += electricArc(uv, c4, c0, t, 20.0) * 1.2;
+    totalArc += electricArc(uv, c4, c1, t, 22.0) * 1.2;
+    totalArc += electricArc(uv, c4, c2, t, 24.0) * 0.8;
+    totalArc += electricArc(uv, c4, c3, t, 26.0) * 0.8;
+  }
+
+  // ── Branch arcs — small forks off main arcs ──
+  // Branch from midpoint of arc 0
+  vec2 mid01 = (c0 + c1) * 0.5 + vec2(
+    sin(t * 2.3) * 0.02,
+    cos(t * 1.9) * 0.02
+  );
+  vec2 branchEnd1 = mid01 + vec2(
+    sin(t * 0.7 + 3.0) * 0.12,
+    cos(t * 0.5 + 1.0) * 0.08
+  );
+  float branchActive1 = smoothstep(0.4, 0.6, sin(t * 0.8 + 2.0) * 0.5 + 0.5);
+  totalBranch += branchArc(uv, mid01, branchEnd1, t, 11.0) * branchActive1;
+
+  // Branch from midpoint of arc 2
+  vec2 mid23 = (c2 + c3) * 0.5 + vec2(
+    cos(t * 1.8) * 0.02,
+    sin(t * 2.1) * 0.02
+  );
+  vec2 branchEnd2 = mid23 + vec2(
+    cos(t * 0.6 + 5.0) * 0.10,
+    sin(t * 0.8 + 3.0) * 0.10
+  );
+  float branchActive2 = smoothstep(0.4, 0.6, sin(t * 0.6 + 4.0) * 0.5 + 0.5);
+  totalBranch += branchArc(uv, mid23, branchEnd2, t, 15.0) * branchActive2;
+
+  // ── Composite arc color ──
+  float arcVal = totalArc * intensity;
+  float branchVal = totalBranch * intensity * 0.85;
+
+  // Three-layer coloring: outer glow -> inner glow -> bright core
+  vec3 arcColor = outerColor * smoothstep(0.0, 0.3, arcVal) * 0.3;
+  arcColor += innerColor * smoothstep(0.2, 1.0, arcVal) * 0.5;
+  arcColor += coreColor * smoothstep(0.8, 2.0, arcVal) * 0.8;
+  // Hot white at peak intensity
+  arcColor += vec3(2.5, 2.3, 2.0) * smoothstep(2.0, 4.0, arcVal) * 0.5;
+
+  // Branch coloring (similar but dimmer)
+  vec3 branchColor = outerColor * smoothstep(0.0, 0.2, branchVal) * 0.35;
+  branchColor += innerColor * smoothstep(0.15, 0.5, branchVal) * 0.5;
+  branchColor += coreColor * smoothstep(0.4, 1.2, branchVal) * 0.7;
+
+  // ── Conductor point rendering ──
+  float condGlow = 0.0;
+  condGlow += conductorGlow(uv, c0);
+  condGlow += conductorGlow(uv, c1);
+  condGlow += conductorGlow(uv, c2);
+  condGlow += conductorGlow(uv, c3);
+  if (c4.x > -5.0) condGlow += conductorGlow(uv, c4);
+
+  vec3 condColor = vec3(0.0);
+  condColor += coreColor * smoothstep(0.0, 0.5, condGlow) * 0.25;
+  condColor += innerColor * smoothstep(0.4, 1.5, condGlow) * 0.3;
+  condColor += vec3(2.0, 1.8, 1.5) * smoothstep(1.5, 3.5, condGlow) * 0.4;
+
+  // ── Ambient electric haze — very subtle field glow ──
+  float haze = 0.0;
+  haze += 0.005 / (length(uv - c0) + 0.4);
+  haze += 0.005 / (length(uv - c1) + 0.4);
+  haze += 0.005 / (length(uv - c2) + 0.4);
+  haze += 0.005 / (length(uv - c3) + 0.4);
+  vec3 hazeColor = outerColor * haze * intensity * 0.12;
+
+  // ── Combine all layers (additive blending) ──
+  vec3 col = bg;
+  col += hazeColor;
+  col += arcColor;
+  col += branchColor;
+  col += condColor;
+
+  // ── Film grain ──
+  float grain = (hash(gl_FragCoord.xy + fract(t * 43.0) * 1000.0) - 0.5) * 0.015;
+  col += grain;
+
+  // ── Vignette ──
+  float vig = length(uv * vec2(0.9, 1.0));
+  float vignette = 1.0 - smoothstep(0.5, 1.2, vig);
+  col *= 0.75 + vignette * 0.25;
+
+  // ── Tone mapping — ACES filmic for bright HDR punch ──
+  col = col * (2.51 * col + 0.03) / (col * (2.43 * col + 0.59) + 0.14);
+  col = pow(col, vec3(0.92, 0.97, 1.05));
+
+  col = max(col, vec3(0.0));
+
+  gl_FragColor = vec4(col, 1.0);
+}
