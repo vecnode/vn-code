@@ -12,7 +12,7 @@
 //  count, two list rows, and "Node application." where "No core patches." was.
 //
 //  Run:
-//    node scripts/tools/logo/banner.mjs              write assets/vncode-banner3.png
+//    node scripts/tools/logo/banner.mjs              write assets/vncode-banner4.png
 //    node scripts/tools/logo/banner.mjs --check      verify the file on disk
 //    node scripts/tools/logo/banner.mjs --chrome <p> use this browser binary
 //    npm run banner                                  the first one
@@ -27,7 +27,7 @@ import { readHeader } from './png.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.resolve(here, '..', '..', '..')
-const out = path.join(repo, 'assets', 'vncode-banner3.png')
+const out = path.join(repo, 'assets', 'vncode-banner4.png')
 
 const INK = '#05060A'
 const SIZE = { width: 1280, height: 320 }
@@ -110,7 +110,7 @@ const explicit = chromeAt >= 0 ? argv[chromeAt + 1] : undefined
 
 try {
   if (check) {
-    if (!fs.existsSync(out)) throw new Error('assets/vncode-banner3.png is missing')
+    if (!fs.existsSync(out)) throw new Error('assets/vncode-banner4.png is missing')
     const header = readHeader(fs.readFileSync(out))
     if (header.width !== SIZE.width || header.height !== SIZE.height) {
       throw new Error(`the banner is ${header.width}x${header.height}, not ${SIZE.width}x${SIZE.height}`)

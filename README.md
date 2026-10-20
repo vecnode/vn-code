@@ -20,7 +20,7 @@
 
 </div>
 
-![vncode: the plugin pack, a Node application - the vncode README header](./assets/vncode-banner3.png)
+![vncode: the plugin pack, a Node application - the vncode README header](./assets/vncode-banner4.png)
 
 Cross-platform Node ADE with core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design: every plugin is **Node.js** (plain JavaScript bundles, zero npm dependencies), while **Rust** is only the small front-door installer binary that composes the harness home and runs the launcher. The launchers run on **Windows, macOS and Linux**.
 
