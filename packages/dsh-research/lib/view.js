@@ -21,6 +21,8 @@ import { ResearchError, projectView } from './run.js'
 import { claimStatusOf, readClaims, readSources } from './ledger.js'
 import { assembleDocument, scanDocument, validateStructure, wordCount } from './doc.js'
 import { locatorLabel } from './syntax.js'
+import fsp from 'node:fs/promises'
+import path from 'node:path'
 
 /** How many rows of each ledger the panel receives. */
 export const MAX_PANEL_CLAIMS = 200
@@ -85,6 +87,64 @@ export function sourceView(record) {
 }
 
 /**
+ * The plan, as the panel needs it: the question in one paragraph, the method
+ * record's own counts, and whether a disclosure exists.
+ *
+ * The QUESTION travels because a frame gate asks "is this the question?" and a
+ * person who cannot see the question is answering blind. Before this, the column
+ * showed the gates, the outline, the claims and the sources and never the one
+ * sentence all of them are about.
+ */
+async function readPlan(dir) {
+  const read = (file) => fsp.readFile(path.join(dir, file), 'utf8').catch(() => null)
+  const rq = await read('plan/rq.md')
+  const methodText = await read('plan/method.json')
+  const disclosureText = await read('plan/disclosure.json')
+
+  let method = null
+  if (methodText !== null) {
+    try {
+      const record = JSON.parse(methodText)
+      const screening = record.screening ?? {}
+      method = {
+        databases: Array.isArray(record.databases) ? record.databases.length : 0,
+        accessed: String(record.accessed ?? ''),
+        identified: Number(screening.identified ?? 0),
+        screened: Number(screening.screened ?? 0),
+        included: Number(screening.included ?? 0),
+      }
+    } catch {
+      method = null
+    }
+  }
+
+  let authors = 0
+  let disclosureOk = false
+  if (disclosureText !== null) {
+    try {
+      const record = JSON.parse(disclosureText)
+      authors = Array.isArray(record.authors) ? record.authors.length : 0
+      disclosureOk = true
+    } catch {
+      disclosureOk = false
+    }
+  }
+
+  // The question is prose and prose is compared by a person, not by a parser:
+  // whitespace is collapsed so a hard-wrapped rq.md is one paragraph on screen,
+  // and the text is capped because a panel is a preview, never the document.
+  const question = String(rq ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return {
+    rq: cut(question, 900),
+    method,
+    disclosure: { exists: disclosureOk, authors },
+  }
+}
+
+/**
  * One run, as the panel reads it: the run, its gates, its passport, its files, its
  * two ledgers (bounded), its outline, and whether the document and the ledgers
  * currently agree.
@@ -111,6 +171,8 @@ export async function projectDetail(options) {
 
   if (claims.length > MAX_PANEL_CLAIMS) notes.push('the panel shows the first ' + MAX_PANEL_CLAIMS + ' of ' + claims.length + ' claims')
   if (sources.length > MAX_PANEL_SOURCES) notes.push('the panel shows the first ' + MAX_PANEL_SOURCES + ' of ' + sources.length + ' sources')
+
+  const plan = await readPlan(dir)
 
   return {
     ...base,
@@ -147,6 +209,7 @@ export async function projectDetail(options) {
       codes: [...new Set(structure.problems.map((problem) => problem.code))],
     },
     document: { source: document.source, words: wordCount(document.text) },
+    plan,
     notes,
   }
 }

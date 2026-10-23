@@ -174,9 +174,23 @@ function reference(source, ctx) {
   if (authors.length > 0) runs.push(run(referenceAuthors(authors) + ', '))
 
   const title = titleOf(source)
-  if (kind === 'journal-article') {
+  if (kind === 'journal-article' || kind === 'preprint') {
+    // A preprint is cited by the same shape as a periodical: quoted title, italic
+    // repository, and the DOI tail. Without this branch an arXiv entry printed its
+    // title and its year and nothing else, so the one field a reader needs to get
+    // the paper (the DOI) was the field the entry dropped.
     if (title !== '') runs.push(run('"' + title + '," '))
     runs.push(...periodicalRuns(source))
+  } else if (kind === 'conference-paper') {
+    // IEEE sets a conference paper as `"Title," in <Proceedings>, pp. x-y, year,
+    // doi: ...`. The container IS the venue, so it has to be printed and italicised:
+    // a branch that fell through to the book shape would name the publisher and
+    // drop the conference, which is the one field a reader searches for.
+    if (title !== '') runs.push(run('"' + title + '," '))
+    const container = containerOf(source)
+    if (container !== '') runs.push(run('in '), italic(container))
+    const tail = tailParts(source)
+    if (tail.length > 0) runs.push(run((runs.length > 0 ? ', ' : '') + tail.join(', ') + '.'))
   } else if (kind === 'web') {
     runs.push(...webRuns(source))
   } else {

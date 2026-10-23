@@ -400,14 +400,19 @@ export function renderBody(options) {
       // keeps a report readable rather than throwing inside a text transform.
       return '(' + items.map((item) => item.source.key).join('; ') + ')'
     }
+    // `numberFor` reads `ctx.numbers` as an ARRAY indexed by position in the group,
+    // not as the key->number map this function holds. Handing it the map produced a
+    // group of zeros, and an IEEE citation printed as `[]`: the number was assigned
+    // correctly and then never reached the style.
+    const itemNumbers = items.map((item) => numbers.get(item.source.key) ?? 0)
     if (typeof style.note === 'function') {
-      const note = style.note(items, { numbers })
+      const note = style.note(items, { numbers: itemNumbers })
       if (typeof note === 'string' && note !== '') {
         footnotes.push(note)
         return '[^' + footnotes.length + ']'
       }
     }
-    return style.group(items, { numbers })
+    return style.group(items, { numbers: itemNumbers })
   }
 
   // Replace from the END so every earlier index stays valid while we work.
@@ -466,6 +471,12 @@ export function renderReferences(options) {
   const order = style !== null && style !== undefined ? style.order : 'alphabetical'
   if (order !== 'citation') {
     entries.sort((left, right) => left.plain.toLowerCase().localeCompare(right.plain.toLowerCase()))
+  } else {
+    // A citation-order list is numbered by first appearance, and `usedKeys` is
+    // collected while citations are replaced BACKWARDS, so its order is the reverse
+    // of the reading order. Sorting on the number is what makes `[1]` the first
+    // source a reader meets rather than the last.
+    entries.sort((left, right) => left.number - right.number)
   }
   return { heading, entries, order }
 }

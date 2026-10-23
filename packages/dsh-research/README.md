@@ -212,15 +212,22 @@ the **record** first.
   know what your prose reveals"); and the run's `figures/` copied beside them.
   It is **gated like a clean build whatever `draft` says**, because a submission is
   the artifact that must not carry a claim nothing has checked.
-- **The Research tab, and it is editable.** The run list with a "waiting" badge;
-  the pending gates as a form (question, options, a box for your words, a reason
-  box for an override, Submit); answered gates as a timeline; the passport's
-  provenance quoted untruncated; the files. **A `.md` file under `doc/` or `plan/`
-  opens in an editor in the panel**: the save goes to disk — so it is there in
-  every session and in any editor — and the route answers with the structure
-  verdict the panel shows immediately, naming `span-unrecorded` or `unknown-source`
-  on the spot rather than at the next build. The tab re-reads the run every 1.5 s
-  while it is visible, and stops the moment it is hidden.
+- **The Research tab, and it is editable.** One run at a time, under a status strip
+  (stage, decisions waiting, claims supported, sources, whether the document agrees
+  with its ledger) and six COLLAPSIBLE FAMILIES in the order a run is worked on:
+  **Frame** (the pending gates as a form — question, options, a box for your words, a
+  reason box for an override, Submit — and the answered gates as a timeline, open by
+  default only while something is waiting); **Plan** (the research question itself,
+  the method record's own counts, the disclosure state, the outline with words and
+  claims per section); **Document** (the structure verdict, the files, and the
+  editor); **Evidence** (claims with their status and bindings, sources with whether
+  they can be checked at all); **Build**; and **Provenance** (the passport, quoted
+  untruncated). A family a person closes stays closed across the 1.5 s poll. **A
+  `.md` file under `doc/` or `plan/` opens in an editor in the panel**: the save goes
+  to disk — so it is there in every session and in any editor — and the route answers
+  with the structure verdict the panel shows immediately, naming `span-unrecorded` or
+  `unknown-source` on the spot rather than at the next build. The tab re-reads the
+  run every 1.5 s while it is visible, and stops the moment it is hidden.
 
 ## How it plugs in
 

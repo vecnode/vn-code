@@ -204,6 +204,24 @@ window.__ModuleLoader__.load({
 .dsr-buildRow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
 .dsr-buildOut{margin-top:4px;font-size:11px;color:var(--dsw-alias-label-secondary,#666)}
 .dsr-buildOut code{font-family:var(--dsw-font-mono,ui-monospace,'Cascadia Code',Consolas,monospace)}
+.dsr-statusbar{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 4px}
+.dsr-stat{border:.5px solid var(--dsw-alias-border-secondary,rgba(128,128,128,.28));border-radius:5px;padding:0 6px;font-size:10.5px;line-height:18px;color:var(--dsw-alias-label-secondary,#666);white-space:nowrap}
+.dsr-stat[data-tone="ok"]{background:var(--dsw-alias-state-success-bg,rgba(46,160,67,.14));color:var(--dsw-alias-state-success-primary,#1a7f37);border-color:transparent}
+.dsr-stat[data-tone="warn"]{background:var(--dsw-alias-state-warning-bg,rgba(214,158,46,.18));color:var(--dsw-alias-state-warning-primary,#8a6d1f);border-color:transparent}
+.dsr-stat[data-tone="bad"]{background:var(--dsw-alias-state-error-bg,rgba(192,57,43,.16));color:var(--dsw-alias-state-error-primary,#c0392b);border-color:transparent}
+.dsr-group{margin-top:8px;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.18));border-radius:8px;background:var(--dsw-alias-bg-l1,rgba(127,127,127,.03));overflow:hidden}
+.dsr-groupHead{display:flex;align-items:baseline;gap:6px;padding:5px 8px;cursor:pointer;list-style:none;font-size:11.5px;-webkit-user-select:none;user-select:none}
+.dsr-groupHead::-webkit-details-marker{display:none}
+.dsr-groupHead::before{content:'▸';flex:none;color:var(--dsw-alias-label-tertiary,#8f8f8f);font-size:9px;line-height:1}
+.dsr-group[data-open="true"]>.dsr-groupHead::before{content:'▾'}
+.dsr-groupTitle{flex:none;font-weight:600;color:var(--dsw-alias-label-primary,#1f1f1f)}
+.dsr-groupMeta{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#8f8f8f);font-size:10.5px}
+.dsr-groupTone{flex:none;border-radius:5px;padding:0 5px;font-size:10.5px}
+.dsr-groupTone[data-tone="warn"]{background:var(--dsw-alias-state-warning-bg,rgba(214,158,46,.18));color:var(--dsw-alias-state-warning-primary,#8a6d1f)}
+.dsr-groupTone[data-tone="ok"]{background:var(--dsw-alias-state-success-bg,rgba(46,160,67,.14));color:var(--dsw-alias-state-success-primary,#1a7f37)}
+.dsr-groupBody{padding:0 8px 8px;border-top:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.14))}
+.dsr-groupBody>.dsr-section:first-child{margin-top:8px}
+.dsr-rq{font-size:11.5px}
 `
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
       const tag = document.createElement('style')
@@ -551,6 +569,77 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsr-section', 'data-dsr-section': props.name }, h('div', { className: 'dsr-sectionTitle' }, props.title), props.children)
     }
 
+    /**
+     * One FAMILY of the column: a collapsible group with a title, a one-line
+     * summary and its own body.
+     *
+     * The column used to be one flat stack, so "what is waiting on me", "what the
+     * document says" and "what it rests on" carried the same visual weight and the
+     * only way to find anything was to scroll. A family is the unit a person
+     * navigates by, and its header answers the question they opened the tab with:
+     * how many decisions are waiting, how many words, how many sources, whether the
+     * build is sound. `open` is a real state rather than an attribute, so a group a
+     * person closed stays closed through the 1500 ms poll that replaces the project
+     * object under it.
+     */
+    function Group(props) {
+      const [open, setOpen] = React.useState(props.defaultOpen === true)
+      return h(
+        'details',
+        {
+          className: 'dsr-group',
+          'data-dsr-group': props.name,
+          'data-open': open ? 'true' : 'false',
+          open,
+          onToggle: (event) => setOpen(event.currentTarget.open === true),
+        },
+        h(
+          'summary',
+          { className: 'dsr-groupHead' },
+          h('span', { className: 'dsr-groupTitle' }, props.title),
+          props.meta === '' || props.meta === null || props.meta === undefined ? null : h('span', { className: 'dsr-groupMeta' }, props.meta),
+          props.tone === null || props.tone === undefined ? null : h('span', { className: 'dsr-groupTone', 'data-tone': props.tone }, props.toneLabel ?? props.tone),
+        ),
+        h('div', { className: 'dsr-groupBody' }, props.children),
+      )
+    }
+
+    /** One `label` chip in the status strip under the run header. */
+    function Stat(props) {
+      return h('span', { className: 'dsr-stat', 'data-tone': props.tone === undefined ? 'plain' : props.tone, title: props.title === undefined ? '' : props.title }, props.label)
+    }
+
+    /**
+     * The question and the plan behind it.
+     *
+     * The research question is the one sentence the whole run is about, and it is
+     * drawn FIRST in its family because a person checking a gate has to be able to
+     * read it. The method record and the disclosure follow it as one line each:
+     * enough to see whether the search and the ethics statement exist, without a
+     * second screen.
+     */
+    function PlanSection(props) {
+      const plan = props.plan
+      if (plan === null || plan === undefined) return null
+      const method = plan.method
+      const disclosure = plan.disclosure
+      return h(
+        Section,
+        { name: 'plan', title: 'Question and plan' },
+        plan.rq === '' ? h('div', { className: 'dsr-note' }, 'No research question written yet. `rs_plan part=rq` writes one.') : h('blockquote', { className: 'dsr-quote dsr-rq', 'data-dsr-rq': '1' }, h('div', { className: 'dsr-quoteText' }, plan.rq)),
+        method === null
+          ? h('div', { className: 'dsr-note', 'data-dsr-method': 'none' }, 'No method record: the search behind this evidence is not written down.')
+          : h(
+              'div',
+              { className: 'dsr-note', 'data-dsr-method': 'record' },
+              method.databases + ' database(s), accessed ' + (method.accessed === '' ? 'not recorded' : method.accessed) + ' · ' + method.identified + ' identified, ' + method.screened + ' screened, ' + method.included + ' included',
+            ),
+        disclosure !== undefined && disclosure.exists
+          ? h('div', { className: 'dsr-note', 'data-dsr-disclosure': 'recorded' }, 'Disclosure recorded for ' + disclosure.authors + ' author(s): ethics, funding, conflicts, data, AI use.')
+          : h('div', { className: 'dsr-note', 'data-dsr-disclosure': 'none' }, 'No disclosure record: authorship, ethics, funding, conflicts, data availability and AI use are unwritten.'),
+      )
+    }
+
     /** One `label · value` chip in a header line. */
     function Chip(props) {
       return h('span', { className: 'dsr-chip' }, props.label)
@@ -591,14 +680,12 @@ window.__ModuleLoader__.load({
       if (run.language) bits.push(String(run.language))
       if (run.style) bits.push(String(run.style))
       if (run.structure) bits.push(String(run.structure))
-      const stage = stageLabel(run.stage)
       const root = typeof run.root === 'string' ? run.root : ''
       return h(
         'div',
         { className: 'dsr-head', 'data-dsr-head': String(run.slug) },
         h('div', { className: 'dsr-headTitle' }, runLabel(run)),
         h('div', { className: 'dsr-headMeta' }, ...bits.map((bit, index) => h(Chip, { key: 'bit-' + index, label: bit }))),
-        stage === '' ? null : h('div', { className: 'dsr-stage' }, 'stage: ' + stage),
         // Truncated by CSS, never by the string: `title` carries the whole path,
         // because a path whose tail is gone is not a path anybody can check.
         root === '' ? null : h('div', { className: 'dsr-root', title: root }, root),
@@ -1418,46 +1505,101 @@ window.__ModuleLoader__.load({
       } else {
         const structure = structureOf(project)
         const readyFormats = payload === null || payload.capabilities === undefined || payload.capabilities === null ? [] : listOf(payload.capabilities.formats)
+        // The strip's own numbers, computed once: the families below group the
+        // same data, and a second count would be a second truth.
+        const claimRows = claimsOf(project)
+        const sourceRows = sourcesOf(project)
+        const roll = statusRoll(claimRows)
+        const supported = Number(roll['supported'] ?? 0)
+        const waitingCount = pending.length
+        const stageText = stageLabel(head === null || head === undefined ? '' : head.stage)
+        const statusStrip = h(
+          'div',
+          { className: 'dsr-statusbar', 'data-dsr-statusbar': '1' },
+          h(Stat, { label: 'stage: ' + (stageText === '' ? 'framed' : stageText) }),
+          h(Stat, { label: waitingCount === 0 ? 'no decision waiting' : waitingCount + ' waiting on you', tone: waitingCount === 0 ? 'ok' : 'warn' }),
+          h(Stat, { label: supported + '/' + claimRows.length + ' supported', tone: claimRows.length > 0 && supported === claimRows.length ? 'ok' : undefined }),
+          h(Stat, { label: sourceRows.length + ' source(s)' }),
+          h(Stat, { label: structure.ok ? 'document agrees' : structure.errors + ' structure error(s)', tone: structure.ok ? 'ok' : 'bad' }),
+        )
         panel = h(
           'div',
           { className: 'dsr-detail', 'data-dsr-detail': selected === null ? '' : selected },
           h(RunHeader, { run: head }),
-          // The one-line answer to "is this document currently sound?", which is
-          // what a person wants before they touch anything: whether the prose and
-          // the ledger still agree, and by which codes if they do not.
-          h(
-            'div',
-            { className: 'dsr-note', 'data-dsr-structure': structure.ok ? 'ok' : 'problems' },
-            structure.ok
-              ? 'The document agrees with its ledger' + (structure.warnings > 0 ? ' (' + structure.warnings + ' warning(s): ' + structure.codes.join(', ') + ')' : '')
-              : structure.errors + ' structure error(s): ' + structure.codes.join(', ') + ' - a draft still builds; a clean one will not',
-          ),
+          statusStrip,
           projectNotes.length === 0 ? null : h('div', { className: 'dsr-notes' }, ...projectNotes.map((line, index) => h('div', { key: 'note-' + index, className: 'dsr-note' }, String(line)))),
           projectProblem === null ? null : h('div', { className: 'dsr-err', 'data-dsr-problem': 'project' }, projectProblem),
-          // GATES FIRST. A pending gate is the whole reason this column is open,
-          // so it outranks everything below it.
+          // Six families, in the order a run is actually worked on: the frame a
+          // person answered, the plan they agreed to, the document as it stands, the
+          // evidence under it, the build, and the record of how it all came to be.
+          // Only the frame opens by itself, and only while it is waiting on somebody.
           h(
-            Section,
-            { name: 'gates', title: pending.length > 0 ? 'Waiting on you (' + pending.length + ')' : 'Gates' },
-            pending.length === 0
-              ? h('div', { className: 'dsr-note' }, answered.length > 0 ? 'Nothing is waiting on you.' : 'This run has no gate yet.')
-              : h('div', { 'data-dsr-pending': String(pending.length) }, ...pending.map((gate) => h(GateForm, { key: String(gate.id), gate, onSubmit: submitGate }))),
+            Group,
+            {
+              name: 'frame',
+              title: '1 · Frame',
+              meta: waitingCount > 0 ? waitingCount + ' waiting · ' + answered.length + ' answered' : answered.length + ' answered',
+              tone: waitingCount > 0 ? 'warn' : 'ok',
+              toneLabel: waitingCount > 0 ? 'needs you' : 'settled',
+              defaultOpen: waitingCount > 0,
+            },
+            h(
+              Section,
+              { name: 'gates', title: waitingCount > 0 ? 'Waiting on you (' + waitingCount + ')' : 'Gates' },
+              waitingCount === 0
+                ? h('div', { className: 'dsr-note' }, answered.length > 0 ? 'Nothing is waiting on you.' : 'This run has no gate yet.')
+                : h('div', { 'data-dsr-pending': String(waitingCount) }, ...pending.map((gate) => h(GateForm, { key: String(gate.id), gate, onSubmit: submitGate }))),
+            ),
+            h(AnsweredTimeline, { gates: answered }),
           ),
-          h(AnsweredTimeline, { gates: answered }),
-          // Then the document as it stands, then what it rests on, then the files
-          // (which is where an edit starts), then the build, and the provenance last
-          // - it is the record of how all of the above came to be.
-          h(OutlineSection, { project }),
-          h(ClaimsSection, { claims: claimsOf(project) }),
-          h(SourcesSection, { sources: sourcesOf(project) }),
-          h(FileList, { files: project.files, onEdit: openFile, openPath: editing }),
-          editing === null
-            ? null
-            : editingText === null
-              ? h('div', { className: 'dsr-note', 'data-dsr-editor': 'reading' }, 'Reading ' + editing + '…')
-              : h(FileEditor, { key: editing, file: editing, text: editingText, verdict, onSave: saveFile, onClose: closeFile }),
-          h(BuildSection, { ready: readyFormats, onBuild: buildNow }),
-          h(PassportBlock, { passport: project.passport }),
+          h(
+            Group,
+            {
+              name: 'plan',
+              title: '2 · Plan',
+              meta: (project.outline === null || project.outline === undefined ? 0 : project.outline.sections.length) + ' section(s)',
+              defaultOpen: false,
+            },
+            h(PlanSection, { plan: project.plan }),
+            h(OutlineSection, { project }),
+          ),
+          h(
+            Group,
+            {
+              name: 'document',
+              title: '3 · Document',
+              meta: (project.document === null || project.document === undefined ? 0 : project.document.words) + ' words',
+              tone: structure.ok ? 'ok' : 'bad',
+              toneLabel: structure.ok ? 'agrees' : 'conflict',
+              defaultOpen: true,
+            },
+            h(
+              'div',
+              { className: 'dsr-note', 'data-dsr-structure': structure.ok ? 'ok' : 'problems' },
+              structure.ok
+                ? 'The document agrees with its ledger' + (structure.warnings > 0 ? ' (' + structure.warnings + ' warning(s): ' + structure.codes.join(', ') + ')' : '')
+                : structure.errors + ' structure error(s): ' + structure.codes.join(', ') + ' - a draft still builds; a clean one will not',
+            ),
+            h(FileList, { files: project.files, onEdit: openFile, openPath: editing }),
+            editing === null
+              ? null
+              : editingText === null
+                ? h('div', { className: 'dsr-note', 'data-dsr-editor': 'reading' }, 'Reading ' + editing + '…')
+                : h(FileEditor, { key: editing, file: editing, text: editingText, verdict, onSave: saveFile, onClose: closeFile }),
+          ),
+          h(
+            Group,
+            {
+              name: 'evidence',
+              title: '4 · Evidence',
+              meta: claimRows.length + ' claim(s) · ' + sourceRows.length + ' source(s)',
+              defaultOpen: false,
+            },
+            h(ClaimsSection, { claims: claimRows }),
+            h(SourcesSection, { sources: sourceRows }),
+          ),
+          h(Group, { name: 'build', title: '5 · Build', meta: readyFormats.length + ' format(s) ready', defaultOpen: false }, h(BuildSection, { ready: readyFormats, onBuild: buildNow })),
+          h(Group, { name: 'provenance', title: '6 · Provenance', meta: 'instructions and receipts', defaultOpen: false }, h(PassportBlock, { passport: project.passport })),
         )
       }
 

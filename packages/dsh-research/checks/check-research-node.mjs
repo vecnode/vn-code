@@ -1750,7 +1750,7 @@ const INSTRUCTION = 'I want to write a paper on AI and quality assurance in high
   check(
     'the panel payload carries EXACTLY the keys the client was pinned to',
     Object.keys(detail).sort().join(','),
-    'claims,document,files,gates,ledger,notes,outline,passport,run,sources,structure',
+    'claims,document,files,gates,ledger,notes,outline,passport,plan,run,sources,structure',
   )
   check('it carries the current claims, not the revisions', detail.claims.length, 2)
   check('and ledger keeps its null-means-absent meaning', typeof detail.ledger.claims === 'number' && detail.ledger.current.claims === detail.claims.length, true)

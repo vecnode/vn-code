@@ -222,7 +222,12 @@ export function buildTexReport(options) {
     '\\documentclass[' + descriptor.size + ']{article}',
     '\\usepackage[T1]{fontenc}',
     '\\usepackage[utf8]{inputenc}',
-    '\\usepackage[' + descriptor.margin + ']{geometry}',
+    // Latin Modern is Type 1. Without it, T1 with Computer Modern embeds Type 3
+    // BITMAP fonts (600 dpi PK glyphs): a PDF that looks pixelated on screen and
+    // cannot be selected reliably, which is what a reader reports as a bad
+    // renderer rather than as a font problem.
+    '\\usepackage{lmodern}',
+    '\\usepackage[margin=' + descriptor.margin + ']{geometry}',
     '\\usepackage{graphicx}',
     '\\usepackage{hyperref}',
     '\\usepackage{setspace}',
