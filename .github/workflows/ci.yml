@@ -3,7 +3,7 @@ name: CI
 # Three operating systems, and none of them on a push.
 #
 # A push to main starts NOTHING here: the owner commits and pushes freely, and CI is a
-# thing that runs at the boundaries instead - a pull request, the Monday schedule, a
+# thing that runs at the boundaries instead - a pull request, a
 # manual dispatch, and - through `workflow_call` - the gate a release passes before it
 # publishes anything. The check that must never be skipped is the one at the cut, and the
 # cut is what pays for it. (Before this, every push to main ran one job, on the platform a
@@ -26,11 +26,6 @@ on:
       - '**.md'
       - 'docs/**'
       - 'assets/**'
-  schedule:
-    # Monday, 04:17 UTC. Early enough in the week that a platform-only break has six days
-    # to be found before the next one, and off the hour so it does not join the queue of
-    # every other project's nightly.
-    - cron: '17 4 * * 1'
   workflow_dispatch:
   workflow_call:
 
