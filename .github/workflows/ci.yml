@@ -3,8 +3,8 @@ name: CI
 # Three operating systems, and none of them on a push.
 #
 # A push to main starts NOTHING here: the owner commits and pushes freely, and CI is a
-# thing that runs at the boundaries instead - a pull request, a
-# manual dispatch, and - through `workflow_call` - the gate a release passes before it
+# thing that runs at the boundaries instead - a pull request, a manual dispatch, and -
+# through `workflow_call` - the gate a release passes before it
 # publishes anything. The check that must never be skipped is the one at the cut, and the
 # cut is what pays for it. (Before this, every push to main ran one job, on the platform a
 # Windows development machine cannot check for itself; that job now waits for the release.)
