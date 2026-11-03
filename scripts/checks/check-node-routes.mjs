@@ -1690,11 +1690,11 @@ try {
 }
 
 // ------------------------------------------- every runtime skill registration
-// Seven rows register a skill into the harness's own registry at activation
-// (dsh-media's two, dsh-diagrams' two, dsh-pdf's one, dsh-supercollider's five,
-// dsh-proto-lab's three, dsh-research's one and dsh-frontend-craft's one), and
-// each of them must name the FILE it read and its SOURCE BUCKET. The source is
-// not cosmetic:
+// Every row that registers a skill into the harness's own registry at activation
+// (dsh-media, dsh-diagrams, dsh-pdf, dsh-supercollider, dsh-proto-lab,
+// dsh-research, dsh-frontend-craft, dsh-ollama, dsh-sql-server and
+// dsh-image-upscale) must name the FILE it read and its SOURCE BUCKET. The source
+// is not cosmetic:
 // `ctx.skills.get()` - what the `skill` tool calls to LOAD a skill, as opposed to
 // listing it - validates the definition it gets back and requires a STRING
 // `source`, so a runtime registration without one is unloadable wherever it is
@@ -1710,7 +1710,7 @@ try {
 // whose registration nothing pinned. It is here now.
 {
   const registrations = []
-  for (const packageName of ['dsh-media', 'dsh-diagrams', 'dsh-pdf', 'dsh-supercollider', 'dsh-proto-lab', 'dsh-research', 'dsh-frontend-craft', 'dsh-ollama']) {
+  for (const packageName of ['dsh-media', 'dsh-diagrams', 'dsh-pdf', 'dsh-supercollider', 'dsh-proto-lab', 'dsh-research', 'dsh-frontend-craft', 'dsh-ollama', 'dsh-sql-server', 'dsh-image-upscale']) {
     registrations.push({
       packageName,
       source: await fsp.readFile(path.join(repo, 'packages', packageName, 'lib', 'index.js'), 'utf8'),
@@ -1720,7 +1720,7 @@ try {
   check(
     'every bundled-skill registration names its file and source bucket',
     named.map((entry) => entry.packageName).join(','),
-    'dsh-media,dsh-diagrams,dsh-pdf,dsh-supercollider,dsh-proto-lab,dsh-research,dsh-frontend-craft,dsh-ollama',
+    'dsh-media,dsh-diagrams,dsh-pdf,dsh-supercollider,dsh-proto-lab,dsh-research,dsh-frontend-craft,dsh-ollama,dsh-sql-server,dsh-image-upscale',
   )
 }
 
@@ -1981,6 +1981,60 @@ try {
   const healthBody = await healthAnswer.json()
   check('docker: the health route answers without a daemon', healthAnswer.status, 200)
   check('docker: ...and names what is deliberately absent', healthBody.notBuilt.includes('exec') && healthBody.tools.length, 9)
+}
+
+// ---------------------------------------------------------- dsh-sql-server
+// The database row is host-only: seven tools, NO route, two skills. The four-way
+// distinction it exists for (a server, a client, a listening port, an ODBC driver)
+// is pinned here as surface; its arithmetic and every refusal are the package's own
+// check (packages/dsh-sql-server/checks/check-sqlserver-node.mjs). What this block
+// adds is the one contract a package check cannot: that the row is registered like
+// every other row in the pack, and that an install WITHOUT consent spawns nothing -
+// a machine-wide driver install is the one thing in this pack that needs a human.
+{
+  const sqlModule = await import('../../packages/dsh-sql-server/lib/index.js')
+  const seen = { tools: [], routes: 0 }
+  sqlModule.apply({
+    get: (name) => (name === 'connection' ? { fetch: { register: () => (seen.routes += 1, () => {}) } } : undefined),
+    tools: { register: (tool) => (seen.tools.push(tool), () => {}) },
+    effect: (fn) => fn(),
+    logger: { info() {}, warn() {} },
+  })
+  check('sqlserver: the row registers seven tools', seen.tools.length, 7)
+  check(
+    'sqlserver: ...named for the surface the README promises',
+    seen.tools.map((tool) => tool.name).join(','),
+    'sql_status,sql_server,sql_driver,sql_query,sql_script,sql_database,sql_restore',
+  )
+  check(
+    'sqlserver: ...each with a closed schema and an execute',
+    seen.tools.every((tool) => tool.parameters && tool.parameters.type === 'object' && tool.parameters.additionalProperties === false && typeof tool.execute === 'function' && tool.output && tool.output.schema),
+    true,
+  )
+  check('sqlserver: ...and NO route, because the row is host-only', seen.routes, 0)
+  check('sqlserver: the skill registration is the one this check drives', sqlModule.SKILL_FILES.length, 2)
+  check('sqlserver: the version is the one package.json declares', sqlModule.PLUGIN_VERSION, JSON.parse(await fsp.readFile(path.join(repo, 'packages/dsh-sql-server/package.json'), 'utf8')).version)
+
+  // An install without consent must be refused BEFORE the runner is reached.
+  let spawned = 0
+  const sqlDeps = sqlModule.__internals.createDeps(
+    { logger: { info() {}, warn() {} }, get: () => undefined, effect: (fn) => fn() },
+    {
+      env: {},
+      platform: 'win32',
+      runner: async () => {
+        spawned += 1
+        return { code: 0, stdout: '', stderr: '', error: '', timedOut: false, truncated: false, elapsedMs: 1, argv: [] }
+      },
+      odbcDrivers: async () => ({ found: true, names: ['SQL Server'], source: 'registry', detail: '' }),
+    },
+  )
+  const refused = await sqlModule.__internals
+    .buildTools(sqlDeps)
+    .find((tool) => tool.name === 'sql_driver')
+    .execute({ action: 'install' }, {})
+  check('sqlserver: an ODBC install without consent is refused', refused.view.code, 'NO_CONSENT')
+  check('sqlserver: ...and nothing was spawned', spawned, 0)
 }
 
 // ------------------------------------------------------------- dsh-ollama

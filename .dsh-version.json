@@ -86,6 +86,26 @@
         "@deepseek-ai/dsh-api-workspace-files (the workspaceFiles remote)"
       ]
     },
+    "dsh-image-upscale": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "image-upscale"
+      ],
+      "rowOverrides": [],
+      "role": "Image upscaling as a measured surface: four `upscale_*` tools (info, image, batch, fetch_weights) that run a REAL super-resolution model - Real-ESRGAN, `realesr-general-x4v3` by default - through the Python and torch the machine already has. `upscale_info` answers whether a Python can load torch, whether CUDA is there and which models are on disk, and never writes or touches the network; `upscale_image` writes a NEW file (the original is refused twice, here and in the runner), reduces the model's own 4x with LANCZOS to the `scale` or `target_width` asked for, and answers with the model, device, milliseconds and bytes; `upscale_batch` takes a JSON manifest and is a DRY RUN by default, skipping rather than replacing an existing output and summarising what it wrote, skipped and why; `upscale_fetch_weights` is the only call that reaches the network, answers with the size and URL, and downloads nothing until `confirm` repeats the model's exact name. Host-only: one row, no route, no browser half, zero npm dependencies, no bundled engine, and the one bundled skill is copied into $DSH_HOME/skills by both installers. See packages/dsh-image-upscale/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the four tools are registered into)",
+        "@deepseek-ai/dsh-skill (ctx.skills, resolved lazily; the image-upscale skill is also copied into $DSH_HOME/skills by both installers)",
+        "the machine's own Python with torch and basicsr (probed once per boot; DSH_PYTHON pins an interpreter PATH does not carry)"
+      ],
+      "requires": [
+        "a Python that can import torch, and basicsr for the architectures - with neither, upscale_info says what is missing instead of failing",
+        "the weights on disk for an upscale; `upscale_fetch_weights` fetches one 4.7 MB model only after its name is repeated back"
+      ],
+      "vendors": [
+        "NOTHING is vendored, downloaded or installed by the package: the engine is the machine's own Python and torch, and lib/upscale.py is written here. No checksum is published upstream for the Real-ESRGAN weights and the fetch answer says so rather than implying a signature was verified"
+      ]
+    },
     "dsh-audio": {
       "version": "0.1.0-alpha.8",
       "rows": [
@@ -111,6 +131,31 @@
         "docker or podman on PATH (the engine this row drives; `DSH_DOCKER_CLI` pins a binary PATH does not cover)",
         "Docker Desktop, for `docker_start` on Windows and macOS (launched, then its daemon polled)"
       ]
+    },
+    "dsh-sql-server": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "sqlserver"
+      ],
+      "rowOverrides": [],
+      "role": "SQL Server as a surface: seven `sql_*` tools (status, server, driver, query, script, database, restore) over a container this row owns (mcr.microsoft.com/mssql/server:2022-latest, port 1433, named volume) or the `sqlcmd` already on the PATH, keeping apart the four facts that fail independently - a SERVER, a CLIENT, a LISTENING PORT, and the machine-wide ODBC DRIVER an application connects with - with a `sql_server` action=start that waits until the server ANSWERS a `SELECT 1` rather than until the container says running, a `sql_driver` that reports what is installed and runs the platform's own install (winget / brew / apt) only with `confirm: \"install\"`, and a `sql_script` that loads a dump through `sqlcmd -i` (measured: stdin loaded 0 of 23 rows and exited 0; -i loaded 23 of 23) with BOM-aware code pages for SSMS's UTF-16 and an optional streaming filter that drops the dump's CREATE/ALTER DATABASE header naming another machine's mdf paths. Host-only: one row, no route, no browser half, zero npm dependencies, no bundled engine. See packages/dsh-sql-server/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the seven tools are registered into)",
+        "@deepseek-ai/dsh-skill (ctx.skills, resolved lazily; the two skills are also copied into $DSH_HOME/skills by both installers)",
+        "docker or podman on PATH for the container this row starts (DSH_SQL_CONTAINER_CLI pins a binary PATH does not cover)",
+        "the ODBC driver already installed on the machine, for any APPLICATION that connects (the container cannot supply it)"
+      ],
+      "requires": [
+        "Docker Desktop (or Podman) for `sql_server` action=start; an existing instance is used as-is",
+        "DSH_SQL_SA_PASSWORD to create a container (8+ characters from three of upper/lower/digit/symbol)",
+        "an ODBC driver for pyodbc/SSMS/Excel to connect - `sql_driver` says which; installing one needs administrator rights"
+      ],
+      "caps": {
+        "maxRows": 2000,
+        "queryTimeoutMs": 120000,
+        "scriptTimeoutMs": 3600000,
+        "maxScriptTimeoutMs": 21600000
+      }
     },
     "dsh-ollama": {
       "version": "0.1.0-alpha.1",

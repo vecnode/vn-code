@@ -42,9 +42,9 @@ Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-r
 
 ## The checks that live inside a package
 
-`dsh-docker`, `dsh-wsl`, `dsh-ocr`, `dsh-diagrams`, `dsh-frontend-craft`,
-`dsh-shaders`, `dsh-research`, `dsh-supercollider`, `dsh-proto-lab` and
-`dsh-ollama` each ship their own under
+`dsh-docker`, `dsh-wsl`, `dsh-ocr`, `dsh-image-upscale`, `dsh-diagrams`,
+`dsh-frontend-craft`, `dsh-shaders`, `dsh-research`, `dsh-supercollider`,
+`dsh-proto-lab` and `dsh-ollama` each ship their own under
 `packages/<name>/checks/`, run with `npm run check` in that folder. They are
 additional to the list above, never a replacement for it: a host half's fixtures
 and its live skips belong beside the package (see

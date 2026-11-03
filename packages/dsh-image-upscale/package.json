@@ -1,0 +1,29 @@
+{
+  "name": "dsh-image-upscale",
+  "version": "0.1.0-alpha.1",
+  "description": "Upscale an image the way the web actually needs it: four `upscale_*` tools that run a REAL super-resolution model (Real-ESRGAN via the machine's own Python + torch), write a NEW file instead of replacing the original, and attach the numbers - model, device, milliseconds, bytes - to the answer. Zero npm dependencies, no engine bundled, no download without a confirmed model name.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "checks",
+    "skills",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-image-upscale-node.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

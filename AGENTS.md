@@ -75,7 +75,11 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 - `packages/<bundle>/` — one standalone bundle per plugin, each with its own
   one-page README: `dsh-vn-master` (final layer), `dsh-rightbar` +
   `dsh-rightbar-files` (the right bar and its Files tab), `dsh-editor`,
-  `dsh-gittree` (History), `dsh-image`, `dsh-audio`, `dsh-video`, `dsh-media`
+  `dsh-gittree` (History), `dsh-image`, `dsh-image-upscale` (Real-ESRGAN over the
+  Python and torch the machine already has: four `upscale_*` tools, a NEW file per
+  image and never the original, a manifest batch that is a dry run by default, and a
+  weight fetch that refuses without `confirm` — host-only, zero npm dependencies, no
+  bundled engine), `dsh-audio`, `dsh-video`, `dsh-media`
   (the only owner of ffmpeg), `dsh-supercollider` (SuperCollider: eleven `sc_*` tools
   over a warm `sclang` session and a hand-written OSC client, the `.schelp`
   reference indexed, five skills whose every example a check compiles, one small
@@ -104,6 +108,15 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   then waits for the **daemon**, and a Docker tab of containers and images with
   their logs; no `exec`, no `system prune`, no free-form `run`; zero npm
   dependencies and no bundled engine),
+  `dsh-sql-server` (SQL Server as a surface: seven `sql_*` tools over a container
+  this row owns or the `sqlcmd` already on the PATH, keeping apart the four facts
+  that fail independently - a server, a client, a listening port and the
+  machine-wide ODBC driver an application connects with; a `sql_server` start that
+  waits until the server ANSWERS a statement, a `sql_driver` whose machine-wide
+  install runs only with `confirm: "install"`, and a `sql_script` that loads a dump
+  through `sqlcmd -i` with BOM-aware code pages and an optional filter for the
+  dump's own `CREATE DATABASE` header; host-only, zero npm dependencies, no
+  bundled engine),
   `dsh-ollama` (Ollama as a measured surface: five `ollama_*` tools over the
   machine's own daemon - status that names `ollama serve` when nothing answers,
   one bounded inference with the daemon's token counts and nanosecond durations,
@@ -127,11 +140,11 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with
   `npm run check` in that folder. They travel with the package (which is what
   makes them useful outside this repository) and they are ADDITIONAL to
-  `scripts/checks/`, never a replacement for it: today nine packages ship their own
+  `scripts/checks/`, never a replacement for it: today ten packages ship their own
   (`dsh-supercollider` with four checks, `dsh-research` with seven, plus
   `dsh-diagrams`, `dsh-frontend-craft`, `dsh-proto-lab`, `dsh-ocr`, `dsh-wsl`,
-  `dsh-docker` and `dsh-ollama`), and the pack-wide checks still own the routes, the bundle and the
-  manifest.
+  `dsh-docker`, `dsh-ollama` and `dsh-image-upscale`), and the pack-wide checks
+  still own the routes, the bundle and the manifest.
 - `scripts/` — the launchers (`run-web.*`, `run-desktop.*`), and four folders:
   `console/` (the shared console layer), `setup/` (install and uninstall, which the
   app's verbs run), `tools/` (maintainer-only: the fork re-sync for the client bundles

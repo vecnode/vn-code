@@ -1,0 +1,22 @@
+# dsh-image-upscale bundle layer (alpha).
+#
+# One row ('image-upscale') owns the whole plugin: its Node half resolves the
+# Python on this machine that can load torch, probes CUDA once per boot, and
+# registers FOUR tools - `upscale_info`, `upscale_image`, `upscale_batch` and
+# `upscale_fetch_weights` - over Real-ESRGAN. Host-only: enlarging an image
+# produces a FILE, so there is no route to serve and no browser half to load; the
+# package declares no dsh.client, and the boot graph gains one row.
+#
+# Nothing shipped is patched and no core row is disabled. There is no core
+# upscaling row to sit in front of - `read_image` shows a picture to a model that
+# has eyes and changes nothing on disk - so this row adds a capability rather
+# than replacing a surface.
+#
+# Nothing for scripts/sync-vendored.ps1 either: no engine is vendored, forked or
+# bundled. The engine is the machine's own Python with torch, exactly as dsh-ocr
+# uses the machine's tesseract, and the only file this row ever downloads is a
+# model the caller explicitly confirms by name into
+# $DSH_HOME/dsh-image-upscale/weights/.
+- insert:
+    - id: image-upscale
+      name: 'dsh-image-upscale'

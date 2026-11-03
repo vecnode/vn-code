@@ -1,0 +1,29 @@
+{
+  "name": "dsh-sql-server",
+  "version": "0.1.0-alpha.1",
+  "description": "SQL Server as a surface: seven `sql_*` tools (status, server, driver, query, script, database, restore) over a container this row owns or the `sqlcmd` on the machine's PATH - the four facts a person needs kept apart (a server, a client, a listening port, and the machine-wide ODBC DRIVER an application connects with), a `sql_server` action=start that pulls the 2022 image, publishes 1433 and waits until the server ANSWERS a SELECT 1, a `sql_driver` that reports what is installed and runs the platform's own install only with `confirm: \"install\"`, and a `sql_script` that streams a multi-gigabyte dump into the client - BOM-aware (SSMS writes UTF-16), with an optional streaming filter that drops the dump's CREATE/ALTER DATABASE header naming ANOTHER machine's mdf paths. Host-only: one row, no route, no browser half, zero npm dependencies, no bundled engine.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-sqlserver-node.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

@@ -1,0 +1,19 @@
+# dsh-sql-server bundle layer (alpha).
+#
+# One row ('sqlserver') owns the whole plugin. Its Node half registers seven
+# `sql_*` tools; there is no browser half and no route, because "is there a SQL
+# Server here and which driver does the application use" is a host question whose
+# answer is prose - the same shape as dsh-ollama, dsh-wsl and dsh-ocr.
+#
+# Nothing shipped is patched and no core row is disabled: core DSH has no database
+# surface, and the `pwsh` / `bash` tools it does ship run a command string this row
+# deliberately does not accept (a `sqlcmd` that takes its password from argv is one
+# process listing away from a leaked credential).
+#
+# Nothing for scripts/sync-vendored.ps1 either: no server, no client and no driver
+# is vendored, forked or downloaded. The container image is pulled by the user's
+# own container CLI, and the ODBC driver is installed by the platform's own package
+# manager - both of which the tools report rather than hide.
+- insert:
+    - id: sqlserver
+      name: 'dsh-sql-server'

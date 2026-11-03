@@ -6,6 +6,11 @@ node_modules/
 # check-no-secrets caught three tracked files hidden by an ignore rule.
 /tools/
 .scratch/
+# One-off probe scripts written at the root while investigating a check. ANCHORED,
+# for the reason the /tools/ note above records: `packages/dsh-proto-lab/checks/.tmp/`
+# is a real directory (the browser profile that check builds) with its own rule
+# further down, and a bare `.tmp/` here would swallow it first.
+/.tmp/
 *.log
 
 # THE APP'S LAST-RESORT ROOT, beside the checkout. `$VNCODE_HOME` defaults to the
