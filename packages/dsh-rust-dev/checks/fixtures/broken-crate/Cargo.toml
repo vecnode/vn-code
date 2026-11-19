@@ -1,0 +1,11 @@
+# A crate that does not compile, on purpose: it is the INPUT the diagnostics
+# fixtures were captured from. Nothing builds it in CI; `check-rust-node.mjs`
+# drives it only on a host that has cargo, and skips loudly elsewhere.
+[package]
+name = "dsh-rust-dev-fixture-broken"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Its own workspace, so no parent workspace can absorb it.
+[workspace]

@@ -1,0 +1,9 @@
+# Compiles cleanly and has a failing test: the INPUT the cargo-test fixture was
+# captured from. Separate from broken-crate, which does not compile at all.
+[package]
+name = "dsh-rust-dev-fixture-tests"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]

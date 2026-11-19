@@ -1,0 +1,19 @@
+
+thread 'main' (17396) panicked at src\main.rs:5:9:
+the fixture panics here on purpose
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\core\src\panicking.rs:80
+   2: dsh_rust_dev_fixture_panic::inner
+             at .\src\main.rs:5
+   3: dsh_rust_dev_fixture_panic::inner
+             at .\src\main.rs:7
+   4: dsh_rust_dev_fixture_panic::inner
+             at .\src\main.rs:7
+   5: dsh_rust_dev_fixture_panic::main
+             at .\src\main.rs:11
+   6: core::ops::function::FnOnce::call_once<void (*)(),tuple$<> >
+             at C:\Users\luisarandas\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.

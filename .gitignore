@@ -52,6 +52,13 @@ id_ed25519*
 # zero npm dependencies); if you ever need a committed one, force-add it.
 .npmrc
 
+# A FIXTURE CRATE's build tree. `packages/dsh-rust-dev/checks/fixtures/*` holds
+# small cargo projects that the package's own check drives; the check points
+# CARGO_TARGET_DIR at a temp directory so nothing lands here, and this rule is the
+# belt for the run somebody does by hand. Scoped to the fixtures on purpose: this
+# repository ships no Rust of its own.
+packages/dsh-rust-dev/checks/fixtures/**/target/
+
 # The PROTOTYPING LAB (`dsh-proto-lab`) is a workshop, not an exhibit: `lab_new`
 # generates runs into `<workspace>/lab/` for the agent to try things in, and a
 # repository that accumulated every sketch anyone ever generated would stop being
