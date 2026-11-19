@@ -77,9 +77,8 @@
  *    magnifier button that drops a small menu holding the CURRENT level and two
  *    entries, `Zoom in` and `Zoom out` - the same act as the browser's own
  *    Ctrl+ / Ctrl- (and Ctrl+wheel) PAGE zoom, which is why the control exists:
- *    a Chrome tab has that keyboard gesture, and the native window the desktop
- *    launcher (`run-desktop.bat`, a Tauri shell over the very same `dsh web`)
- *    opens does not.
+ *    a Chrome tab has that keyboard gesture, but nothing that shows the level in
+ *    force, and the header control puts both in reach of the mouse.
  *
  *    HOW IT ZOOMS. `zoom` on the document element - one inline declaration on
  *    <html>, removed again at 100% so a page nobody has zoomed is byte-for-byte
@@ -1731,9 +1730,9 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
           MARK_ICON +
           '") center/contain no-repeat}',
         // The name: the pack's own product text, in the REPOSITORY'S OWN
-        // spelling - lowercase and hyphenated, the way the repo, the npm
-        // package and `run-desktop.bat` name it - not the title-case form the
-        // draw-strings used through alpha.13.
+        // spelling - lowercase and hyphenated, the way the repo and the npm
+        // package name it - not the title-case form the draw-strings used
+        // through alpha.13.
         'html .hHd-Xa_root .hHd-Xa_brandName::before{content:"vncode"}',
         // ...wearing the CHAT TITLE's type, not the shipped brand name's. The
         // conversation's own title - the current crumb in the header strip this
@@ -3318,11 +3317,10 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
     // The page-zoom control (alpha.15).
     //
     // WHAT IT IS FOR. A Chrome tab zooms the page itself with Ctrl+ / Ctrl- and
-    // Ctrl+wheel - the BROWSER's own page zoom, which no page can invoke. The
-    // native window the desktop launcher opens (`run-desktop.bat`, a Tauri shell
-    // over the very same `dsh web`) has no such gesture at all. So the pack
-    // draws the gesture: one magnifier button in the header that drops the level
-    // in force and the two steps, `+` and `-`.
+    // Ctrl+wheel - the BROWSER's own page zoom, which no page can invoke - and
+    // the keyboard gesture leaves no readout on the page. So the pack draws one:
+    // a magnifier button in the header that drops the level in force and the two
+    // steps, `+` and `-`.
     //
     // HOW A PAGE CAN ZOOM ITSELF. `zoom` on the document element. It is
     // engine-neutral CSS - Chromium and WebKit have carried it for years,

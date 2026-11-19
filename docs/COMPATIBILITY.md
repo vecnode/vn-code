@@ -1,15 +1,11 @@
 # Compatibility
 
 The pack targets the harness line DeepSeek ships to the raw web install
-(`npx @deepseek-ai/dsh web`). DSH Desktop is not supported: `app/` is a **front door**
-to that same pinned `dsh web` (it installs nothing on its own and writes no profile
-file - it runs `scripts/run-web.*`, the launcher a person would run). It is a small
-Rust console program with no window and no web view: it decides the root and the
-harness home, takes the key, installs the pack with the same entry point a person
-clicks, and then hands over to the launcher, which owns the harness, the ready line
-and the browser tab (Chrome first, every other browser reachable, the OS opener as
-the floor). There is no embedded browser and therefore no per-OS web-engine
-requirement: `wry` and its three engines left with the window.
+(`npx @deepseek-ai/dsh web`), and one install target only: the **web profile**. There is no
+desktop edition and no second edition to keep compatible - `scripts/run-web.*` runs that
+same pinned `dsh web`, so the browser, the harness and the pack are the whole product. That
+is also why there is no per-OS web-engine requirement to track: the page opens in the
+person's own browser, which the launcher finds (Chrome first, the OS opener as the floor).
 
 ## Current pin
 
@@ -19,7 +15,7 @@ requirement: `wry` and its three engines left with the window.
 | Forked from | the same `0.2.0-rc.2` line (`.dsh-version.json`'s `vendoredFrom`) |
 | Install target | the web profile only (`$DSH_HOME/profiles/web`; `$DSH_HOME` defaults to `~/.dsh`) |
 | Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell plus Node.js 22+ with npm/npx - never PowerShell) |
-| The app | one Rust binary per OS, no system library, no runtime to install; CI builds and checks it on all three |
+| Distribution | one artefact, `vncode-<version>.zip` - the repository at the tag. Nothing is compiled, so nothing is per-OS |
 | Plugin code | plain JavaScript and OS-neutral; the only per-OS code is a launcher choosing the host command |
 
 ## What the pack ships, per bundle

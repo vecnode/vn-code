@@ -10,7 +10,7 @@
 # vn-code
 
 <p>
-  <img alt="Language: JavaScript" src="https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black"> <img alt="Runtime: Node.js" src="https://img.shields.io/badge/runtime-Node.js-339933?logo=nodedotjs&logoColor=white"> <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-000000?logo=rust&logoColor=white"> <img alt="License: AGPL-3.0-only" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue"> <img alt="Platforms: Windows | macOS | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey"> <img alt="DeepSeek Harness 0.2.0-rc.2" src="https://img.shields.io/badge/dsh-0.2.0--rc.2-4f8cff">
+  <img alt="Language: JavaScript" src="https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black"> <img alt="Runtime: Node.js" src="https://img.shields.io/badge/runtime-Node.js-339933?logo=nodedotjs&logoColor=white"> <img alt="License: AGPL-3.0-only" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue"> <img alt="Platforms: Windows | macOS | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey"> <img alt="DeepSeek Harness 0.2.0-rc.2" src="https://img.shields.io/badge/dsh-0.2.0--rc.2-4f8cff">
 </p>
 
 <p>
@@ -22,37 +22,28 @@
 
 ![vncode: the plugin pack, a Node application - the vncode README header](./assets/vncode-banner5.png)
 
-Cross-platform Node ADE with core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design: every plugin is **Node.js** (plain JavaScript bundles, zero npm dependencies), while **Rust** is only the small front-door installer binary that composes the harness home and runs the launcher. The launchers run on **Windows, macOS and Linux**.
+Cross-platform Node ADE with core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design: every plugin is **Node.js** (plain JavaScript bundles, zero npm dependencies), and so is every launcher - there is no native code in this repository and nothing to compile. The launchers run on **Windows, macOS and Linux**.
 
 
 ## Run
 
-| | Windows | macOS / Linux |
-|---|---|---|
-| **The app** | `scripts\run-desktop.bat` | `./scripts/run-desktop.sh` |
-| **Browser tab only** | `scripts\run-web.bat` | `./scripts/run-web.sh` |
+| Windows | macOS / Linux |
+|---|---|
+| `scripts\run-web.bat` | `./scripts/run-web.sh` |
 
-`run-web` starts the pinned harness and opens the URL it prints in Chrome, falling back to
-your default browser. `run-desktop` builds `vncode` when there is none and runs it: it
-installs the pack if the home in use lacks it, asks for the DeepSeek key if there is none,
-and then runs that same `run-web` in the foreground.
+`run-web` starts the pinned harness (`npx @deepseek-ai/dsh@<pin> web --no-open`), watches for
+the `dsh web:` ready line and opens **that URL** in Google Chrome, falling back to your default
+browser. Chrome is looked for on PATH, in the standard install folders, and in the App Paths
+registry on Windows; `-DefaultBrowser` skips it and `-NoBrowser` opens nothing.
 
-`vncode` is a small Rust binary - about **0.5 MB per OS** - with **no window and no embedded
-browser**: the interface is the same web application, in the browser you already use. Its
-verbs are `start` (the default), `install`, `uninstall`, `status` and `key`; `-Help` lists
-the flags, and [`app/README.md`](app/README.md) is the whole app on one page.
+The harness runs in the **foreground** of that window: Ctrl+C stops it. A machine needs the
+pack installed once - `scripts\setup\install.bat` / `./scripts/setup/install.sh` - and every
+run after that is the one file above. `-Help` lists every flag, `-Port <n>` moves it off the
+default 3080, and `-DshHome <dir>` points one run at another harness home.
 
-```sh
-cd app
-cargo build --release --locked          # -> app/target/release/vncode (~0.5 MB)
-./target/release/vncode status          # the pin, the home, the pack, the key, the launcher
-./target/release/vncode                 # install if needed, key if needed, then run-web
-./target/release/vncode key             # write DEEPSEEK_API_KEY into <home>/.env
-./target/release/vncode -Help           # every verb and flag
-```
-
-`vncode` never runs node itself: it starts `scripts/run-web.*`, which does. Nothing it does
-needs a window, a port or a browser of its own.
+The DeepSeek key belongs to the harness, not to the launcher: it resolves `DEEPSEEK_API_KEY`
+from the environment, then a `.env` beside the launcher, then `<home>/.env`. Add one in the
+harness under **Settings > Models**, or put that line in `<home>/.env`.
 
 The URL is opened only when it names a **loopback** address, and the launch token is never
 written to a file - both rules are in [SECURITY.md](SECURITY.md).

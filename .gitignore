@@ -13,12 +13,11 @@ node_modules/
 /.tmp/
 *.log
 
-# THE APP'S LAST-RESORT ROOT, beside the checkout. `$VNCODE_HOME` defaults to the
-# platform's own per-user data directory and the harness home is `<root>/home`
-# inside it; `<tree>/.vncode` is only used when even that data root cannot be
-# written - which is exactly the workspace-scoped confinement this repository's own
-# checks run inside. It holds a whole harness home (sessions, credentials), so it
-# must never be committed. Anchored, for the reason the /tools/ rule above records.
+# THE PORTABLE HARNESS HOME, beside the checkout. A folder that is a portable
+# installation keeps its harness home - sessions, credentials, the installed
+# profile - at `<tree>/.vncode/home`, and `run-web.*` joins it when it is there. It
+# holds a whole harness home, so it must never be committed. Anchored, for the
+# reason the /tools/ rule above records.
 /.vncode/
 
 # A version bump unpacks a throwaway harness install and drives pnpm through a
@@ -52,13 +51,6 @@ id_ed25519*
 # An .npmrc can carry a registry token. Nothing in this pack needs one (it ships
 # zero npm dependencies); if you ever need a committed one, force-add it.
 .npmrc
-
-# The shell's Rust build tree (app/). Cargo writes hundreds of megabytes of
-# objects and binaries under app/target/, and none of it is content:
-# `run-desktop.*` rebuilds it, and a fresh clone builds it once. The rule is
-# written as a bare `target/` because a cargo WORKSPACE puts the directory at the
-# workspace root, and any crate added under app/crates/ keeps it there.
-target/
 
 # The PROTOTYPING LAB (`dsh-proto-lab`) is a workshop, not an exhibit: `lab_new`
 # generates runs into `<workspace>/lab/` for the agent to try things in, and a
