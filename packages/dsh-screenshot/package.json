@@ -1,0 +1,29 @@
+{
+  "name": "dsh-screenshot",
+  "version": "0.1.0-alpha.1",
+  "description": "Screenshots that are worth publishing: four tools that capture a page (loopback dev server, workspace file, or a public site with `remote: true`), an application window and the screen on Windows, and place the pictures in a repository at a deterministic name and a correct display width with the README `<img>`/`<picture>` block and its alt text. Host-only, zero npm dependencies, no bundled engine (the machine's own Chrome/Edge, its own PowerShell and GDI+), no git and no credential.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "checks",
+    "skills",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-screenshot-node.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

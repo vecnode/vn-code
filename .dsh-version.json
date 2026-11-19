@@ -490,6 +490,26 @@
         "@deepseek-ai/dsh-client-ui-open-in-app"
       ],
       "vendoredPatches": 2
+    },
+    "dsh-screenshot": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "screenshot"
+      ],
+      "rowOverrides": [],
+      "role": "Screenshots that are worth publishing: four tools over three surfaces and one placement pass. `shot_url` renders a page in a throwaway headless Chrome/Edge on the host - a loopback dev server, a workspace .html, or (only with `remote: true`) a public site - at a named viewport with a device scale, colour scheme, full page or one element's box, and reports the file's REAL size from its own IHDR. `shot_window` and `shot_screen` capture a real application window or the display on Windows through Win32 (PrintWindow with PW_RENDERFULLCONTENT, a screen fallback that names itself, and the window's own DPI as the scale); off Windows they answer with one sentence. `shot_place` writes the pictures into the repository at a deterministic `<slug>-<viewport>[-dark].png`, merges a manifest, and returns the README `<img>`/`<picture>` block with alt text required - a dry run by default, and it never runs git and holds no credential. Host-only, two routes for the Screenshots tab that comes later, no bundled engine. See packages/dsh-screenshot/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the four tools are registered into)",
+        "the machine's own Google Chrome / Microsoft Edge (resolved from the install folders or PATH, or DSH_SCREENSHOT_ENGINE) for `shot_url` - nothing is downloaded",
+        "on Windows: the machine's own PowerShell (7 if on PATH, else the 5.1 Windows always ships) and GDI+ through lib/native.js, which compiles its Win32 driver with Add-Type at the moment of the capture"
+      ],
+      "requires": [
+        "a Chromium-family browser for `shot_url` - without one the tool says which executable it looked for and points at `shot_window`/`shot_screen`, which do not need a browser",
+        "Windows for `shot_window` / `shot_screen` - elsewhere the refusal names the platform and writes nothing"
+      ],
+      "vendors": [
+        "NOTHING is vendored, downloaded or bundled: the engine is the machine's browser, the capture driver is compiled by the machine's own PowerShell, and lib/cdp.js is a minimal DevTools client written here (a bundle may not import another bundle's files, which is why it is not shared with dsh-browser or dsh-frontend-craft)"
+      ]
     }
   }
 }

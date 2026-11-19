@@ -1,0 +1,30 @@
+# dsh-screenshot bundle layer (alpha).
+#
+# One row ('screenshot') owns the whole plugin: its Node half registers FOUR
+# tools - `shot_url` (a page in a throwaway headless engine on this host),
+# `shot_window` and `shot_screen` (a real application window, and the display, on
+# Windows through Win32), and `shot_place` (the pictures into the repository at a
+# deterministic name, with the README block and its alt text). Host-only: a PNG
+# path and a markdown block are the answer, so there is no browser half to load
+# and the boot graph gains one row. The Screenshots tab is a later pass; the two
+# routes it will use (`/api/dsh-screenshot/state`, `/image`) are already here and
+# driven by the package's own check.
+#
+# Nothing shipped is patched and no core row is disabled: core DSH has no
+# screenshot surface, and the one it does ship is the browser tab this pack turned
+# off on purpose (`dsh-vn-master`). This package does not re-enable it: reading a
+# remote page and publishing a picture of a local app are different acts, with
+# different policies, and `dsh-browser`'s policy (https, 443, public destinations
+# only, loopback never resolves) is precisely wrong for screenshotting the app you
+# are building.
+#
+# Nothing for scripts/sync-vendored.ps1: no engine is vendored, forked or
+# downloaded. Chrome/Edge is the machine's, PowerShell is the machine's, and the
+# C# that drives Win32 is compiled by `Add-Type` at the moment of the capture.
+#
+# WHY THIS ROW IS NOT DISABLED IN THE MASTER LAYER: unlike the browser row, this
+# one is a build tool - it costs one row and one idle process, and it is the one
+# surface that turns "look at this" into a file a README can carry.
+- insert:
+    - id: screenshot
+      name: 'dsh-screenshot'

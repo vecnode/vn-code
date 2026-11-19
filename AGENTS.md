@@ -97,6 +97,19 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   and `@param` sliders, five skills whose every example a check compiles, and 106
   vendored Radiant pages plus 20 GLSL modules, 11 templates, 11 pieces and a
   48-link index, each re-derivable offline), `dsh-pdf`,
+  `dsh-screenshot` (screenshots that are worth publishing: four tools over three
+  surfaces and one placement pass - `shot_url` renders a page in a disposable
+  headless Chrome/Edge, a loopback dev server or a workspace file with every other
+  name resolved to `NOTFOUND` and a public site only with `remote: true`, at a
+  named viewport with dpr / dark / full page / an element clip, reporting the PNG's
+  own IHDR as its size; `shot_window` and `shot_screen` capture a real application
+  window or the display on Windows through Win32 `PrintWindow` plus a screen
+  fallback that names itself and `GetDpiForWindow` as the scale, and answer in one
+  sentence elsewhere; `shot_place` writes a deterministic
+  `<slug>-<viewport>[-dark].png` and a merged manifest and returns the README
+  `<img>`/`<picture>` block with alt text required, a dry run by default; it never
+  runs git and holds no credential, ships no engine, adds no dependency, and
+  carries three skills; host-only, two routes reserved for its tab),
   `dsh-wsl` (the POSIX half testable on Windows: `wsl_status` / `wsl_run` /
   `wsl_path` over the machine's own WSL — one argv array, no shell string, a
   deadline with a tree kill, the launcher's UTF-16 table decoded, and the

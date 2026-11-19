@@ -2093,6 +2093,84 @@ try {
   )
 }
 
+// ------------------------------------------------------------ dsh-screenshot
+// The screenshot row is host-only, with two routes reserved for the tab that
+// comes later. What is pinned HERE is the pack-wide contract: four tools with
+// closed schemas, the two exact-path routes, state naming what this host can
+// actually capture, and the policy that is the reason the package exists - a
+// public address refused BEFORE an engine is resolved, and a path outside the
+// workspace refused before anything is written. Every real capture and every
+// placement is the package's own check
+// (packages/dsh-screenshot/checks/check-screenshot-node.mjs), which drives a
+// live browser and a live window; this block needs neither.
+{
+  const shotModule = await import('../../packages/dsh-screenshot/lib/index.js')
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const seen = { tools: [], routes: [] }
+  const skills = []
+  shotModule.apply({
+    get: (name) => {
+      if (name === 'connection') return { fetch: { register: (route) => (seen.routes.push(route), () => {}) } }
+      if (name === 'skills') return { register: (skill) => (skills.push(skill), () => {}) }
+      return undefined
+    },
+    tools: { register: (tool) => (seen.tools.push(tool), () => {}) },
+    effect: (fn) => fn(),
+    logger: { info() {}, warn() {} },
+  })
+  check('screenshot: the row registers four tools', seen.tools.length, 4)
+  check('screenshot: ...named for the surface the README promises', seen.tools.map((tool) => tool.name).join(','), 'shot_url,shot_window,shot_screen,shot_place')
+  check(
+    'screenshot: ...each with a closed schema, an output schema and an execute',
+    seen.tools.every((tool) => tool.parameters && tool.parameters.type === 'object' && tool.parameters.additionalProperties === false && typeof tool.execute === 'function' && tool.output && tool.output.schema),
+    true,
+  )
+  check(
+    'screenshot: ...and two exact-path routes',
+    seen.routes.map((route) => route.path).sort().join(','),
+    [shotModule.STATE_ROUTE, shotModule.IMAGE_ROUTE].sort().join(','),
+  )
+  check('screenshot: the three bundled skills are registered', skills.map((skill) => skill.name).join(','), 'screenshot-surfaces,readme-media,app-tour')
+
+  const stateRoute = seen.routes.find((route) => route.path === shotModule.STATE_ROUTE)
+  const stateAnswer = await stateRoute.fetch(new Request('http://x' + shotModule.STATE_ROUTE))
+  const stateBody = await stateAnswer.json()
+  check('screenshot: state answers', stateAnswer.status, 200)
+  check('screenshot: ...naming the row and its version', stateBody.plugin + '@' + stateBody.version, 'dsh-screenshot@' + shotModule.PLUGIN_VERSION)
+  check('screenshot: ...and whether THIS host can capture a window', typeof stateBody.native.available, 'boolean')
+  check('screenshot: ...and the folder pictures are published into', stateBody.publish.imageDir, 'docs/assets/screenshots')
+
+  const imageRoute = seen.routes.find((route) => route.path === shotModule.IMAGE_ROUTE)
+  const traversing = await imageRoute.fetch(new Request('http://x' + shotModule.IMAGE_ROUTE + '?id=../../etc/passwd'))
+  check('screenshot: an id that is not 24 hex is a 400', traversing.status, 400)
+  const absent = await imageRoute.fetch(new Request('http://x' + shotModule.IMAGE_ROUTE + '?id=' + 'a'.repeat(24)))
+  check('screenshot: an id with no artifact is a 404', absent.status, 404)
+
+  // The policy, driven through the real tool against a stub workspace. Neither
+  // call may reach an engine, and neither may write a file.
+  const shotWorkspace = mkdtempSync(path.join(os.tmpdir(), 'dsh-shot-route-'))
+  writeFileSync(path.join(shotWorkspace, 'index.html'), '<!doctype html><title>t</title>', 'utf8')
+  const shotDeps = shotModule.createDeps(
+    {
+      get: (name) => (name === 'sessions' ? { get: () => ({ header: { cwd: shotWorkspace } }) } : undefined),
+      effect: (fn) => fn(),
+      logger: { info() {}, warn() {}, debug() {} },
+    },
+    { home: shotWorkspace, env: {} },
+  )
+  const shotUrl = shotModule.buildTools(shotDeps).find((tool) => tool.name === 'shot_url')
+  const shotExec = { agent: { session: { id: 'route-check' } } }
+  const remote = await shotUrl.execute({ url: 'https://example.com/' }, shotExec)
+  check('screenshot: a public address is refused without `remote`', remote.view.code, 'REMOTE_NOT_ALLOWED')
+  check('screenshot: ...and the refusal says how to mean it', remote.text.includes('remote: true'), true)
+  const escape = await shotUrl.execute({ url: 'index.html', out: '../../escape.png' }, shotExec)
+  check('screenshot: a write outside the workspace is refused', escape.view.code, 'OUTSIDE_WORKSPACE')
+  const notPng = await shotUrl.execute({ url: 'index.html', out: 'shot.jpg' }, shotExec)
+  check('screenshot: a capture that is not a .png is refused', notPng.view.code, 'BAD_EXTENSION')
+  check('screenshot: nothing was written for any of the three', readdirSync(shotWorkspace).join(','), 'index.html')
+  rmSync(shotWorkspace, { recursive: true, force: true })
+}
+
 // --------------------------------------------------------- the repo manifest
 // `.dsh-version.json` is documentation, but it is documentation a PERSON reads
 // to know what is installed and at which version, and nothing else keeps it

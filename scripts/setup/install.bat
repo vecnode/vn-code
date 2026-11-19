@@ -26,7 +26,7 @@ rem    -DshVersion <ver>  override the pinned dsh version
 rem    -Force             re-add even when the version is unchanged
 rem    -Resume            add what is missing and skip what the profile already
 rem                       lists - the flag the vncode panel passes, so a second
-rem                       press does not re-add all 24 bundles
+rem                       press does not re-add every bundle in this repo
 rem    -NoPause           never hold this window open
 rem    -NoTerminal        stay in this console; do not relaunch
 rem    -Help / -h / /?    print the help and stop
@@ -71,7 +71,7 @@ if defined VN_HELPREQ set "VNCODE_ARGS=-Help"
 rem -Resume asks for the worker's own default (add what is missing, skip what the
 rem profile already lists) INSTEAD of the -Force a double-click implies below. The
 rem vncode panel passes it, because the panel's Install button may be pressed again
-rem over a half-finished install and re-adding all 24 bundles costs a fresh npm
+rem over a half-finished install and re-adding every bundle costs a fresh npm
 rem resolution per bundle. It reaches the worker named - install-all.ps1 declares it,
 rem so PowerShell binds it - and all it does here is suppress the implied -Force.
 rem Two spellings are checked the way the -Force test is: a bare -Resume anywhere in

@@ -23,7 +23,7 @@
 #    -Force             re-add even when the version is unchanged
 #    -Resume            add what is missing and skip what the profile already
 #                       lists - the flag the vncode panel passes, so a second
-#                       press does not re-add all 24 bundles
+#                       press does not re-add every bundle in this repo
 #    -NoPause           never hold this window open
 #    -Help / -h / --help / /?   print the help and stop
 #
