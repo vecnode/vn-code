@@ -1,0 +1,67 @@
+
+thread 'main' (26148) panicked at src\main.rs:5:9:
+the fixture panics here on purpose
+stack backtrace:
+   0:     0x7ff6e3957c39 - std::backtrace_rs::backtrace::win64::trace
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+   1:     0x7ff6e3957c39 - std::backtrace_rs::backtrace::trace_unsynchronized
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+   2:     0x7ff6e3957c39 - std::sys::backtrace::_print_fmt
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\sys\backtrace.rs:74
+   3:     0x7ff6e3957c39 - std::sys::backtrace::impl$0::print::impl$0::fmt
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\sys\backtrace.rs:44
+   4:     0x7ff6e3962d7e - core::fmt::write
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\core\src\fmt\mod.rs:0
+   5:     0x7ff6e395aa54 - core::io::write::default_write_fmt
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\core\src\io\write.rs:402
+   6:     0x7ff6e395aa54 - core::io::write::Write::write_fmt<std::sys::stdio::windows::Stderr>
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\core\src\io\write.rs:335
+   7:     0x7ff6e3952465 - std::sys::backtrace::BacktraceLock::print
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\sys\backtrace.rs:47
+   8:     0x7ff6e3952465 - std::panicking::default_hook::closure$0
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\panicking.rs:292
+   9:     0x7ff6e395488a - std::panicking::default_hook
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\panicking.rs:319
+  10:     0x7ff6e3954a93 - std::panicking::panic_with_hook
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\panicking.rs:815
+  11:     0x7ff6e3952574 - std::panicking::panic_handler::closure$0
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\panicking.rs:681
+  12:     0x7ff6e395173f - std::sys::backtrace::__rust_end_short_backtrace<std::panicking::panic_handler::closure_env$0,never$>
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\sys\backtrace.rs:182
+  13:     0x7ff6e3952a3e - std::panicking::panic_handler
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\panicking.rs:679
+  14:     0x7ff6e396723d - core::panicking::panic_fmt
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\core\src\panicking.rs:80
+  15:     0x7ff6e39511b5 - dsh_rust_dev_fixture_panic::inner
+                               at C:\Users\luisarandas\Desktop\github\dsh-plugins\packages\dsh-rust-dev\checks\fixtures\panic-crate\src\main.rs:5
+  16:     0x7ff6e39511c0 - dsh_rust_dev_fixture_panic::inner
+                               at C:\Users\luisarandas\Desktop\github\dsh-plugins\packages\dsh-rust-dev\checks\fixtures\panic-crate\src\main.rs:7
+  17:     0x7ff6e39511c0 - dsh_rust_dev_fixture_panic::inner
+                               at C:\Users\luisarandas\Desktop\github\dsh-plugins\packages\dsh-rust-dev\checks\fixtures\panic-crate\src\main.rs:7
+  18:     0x7ff6e395111e - dsh_rust_dev_fixture_panic::main
+                               at C:\Users\luisarandas\Desktop\github\dsh-plugins\packages\dsh-rust-dev\checks\fixtures\panic-crate\src\main.rs:11
+  19:     0x7ff6e39510db - core::ops::function::FnOnce::call_once<void (*)(),tuple$<> >
+                               at C:\Users\luisarandas\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  20:     0x7ff6e395109e - std::sys::backtrace::__rust_begin_short_backtrace<void (*)(),tuple$<> >
+                               at C:\Users\luisarandas\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sys\backtrace.rs:166
+  21:     0x7ff6e3951071 - std::rt::lang_start::closure$0<tuple$<> >
+                               at C:\Users\luisarandas\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\rt.rs:206
+  22:     0x7ff6e3954020 - std::rt::lang_start_internal::closure$0
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\rt.rs:175
+  23:     0x7ff6e3954020 - std::panicking::catch_unwind::do_call
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\panicking.rs:576
+  24:     0x7ff6e3954020 - std::panicking::catch_unwind
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\panicking.rs:544
+  25:     0x7ff6e3954020 - std::panic::catch_unwind
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\panic.rs:359
+  26:     0x7ff6e3954020 - std::rt::lang_start_internal
+                               at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library\std\src\rt.rs:171
+  27:     0x7ff6e395105a - std::rt::lang_start<tuple$<> >
+                               at C:\Users\luisarandas\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\rt.rs:205
+  28:     0x7ff6e39511f9 - main
+  29:     0x7ff6e39656f0 - invoke_main
+                               at D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:78
+  30:     0x7ff6e39656f0 - __scrt_common_main_seh
+                               at D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:288
+  31:     0x7ffcf0a3dda7 - BaseThreadInitThunk
+  32:     0x7ffcf0eb9c5c - RtlUserThreadStart

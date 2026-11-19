@@ -1,0 +1,31 @@
+# dsh-rust-dev bundle layer (alpha).
+#
+# One row ('rust-dev') owns the whole plugin: its Node half registers SIX tools
+# over the machine's own Rust toolchain - `rust_status` (the four facts that fail
+# independently: toolchain, components, installed targets, the workspace),
+# `cargo_check` (diagnostics parsed from `--message-format=json`, with codes and
+# file:line:column, duplicates collapsed), `cargo_test` (the summary, the failing
+# names, the first failure's captured output), `cargo_build` (the artifact path
+# and its real size, and a binary run only when asked), `rust_deps` (duplicate
+# crate versions, the weight, and the feature chain that enabled one crate) and
+# `rust_backtrace` (demangled frames, classed into your code, a dependency or the
+# runtime) - plus four bundled skills: workspaces, diagnostics, debugging, and
+# egui/eframe/wgpu apps.
+#
+# Host-only: the answer is prose and numbers, so there is no route to serve and no
+# browser half to load - the package declares no dsh.client, and the boot graph
+# gains one row. Like dsh-sql-server and dsh-ollama, not like dsh-docker.
+#
+# Nothing shipped is patched and no core row is disabled: core DSH has no Rust
+# surface, and its `bash` / `pwsh` tools can run `cargo` but cannot tell a reader
+# which of six distinct diagnostics is behind eleven hundred lines, that a crate
+# is compiled twice, or which backtrace frames are the caller's own.
+#
+# Nothing for scripts/sync-vendored.ps1 either: no engine is vendored, forked or
+# downloaded. `cargo`, `rustc` and `rustup` are the user's own programs on PATH;
+# this package ships the parsers, the argv, and the triage order. Every cargo call
+# is `--offline` until the caller passes `fetch: true`, so the row starts no
+# network egress of its own.
+- insert:
+    - id: rust-dev
+      name: 'dsh-rust-dev'

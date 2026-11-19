@@ -1,0 +1,27 @@
+   Compiling dsh-rust-dev-fixture-tests v0.0.0 (C:\Users\luisarandas\Desktop\github\dsh-plugins\packages\dsh-rust-dev\checks\fixtures\failing-test-crate)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.31s
+     Running unittests src\lib.rs (C:\Users\LUISAR~1\AppData\Local\Temp\rustfix-414e9483e0d14f18af56a3dd95c02566\target-tests\debug\deps\dsh_rust_dev_fixture_tests-69dd7b7520b1a2d3.exe)
+
+running 3 tests
+test tests::ignored_one ... ignored
+test tests::passes ... ok
+test tests::fails ... FAILED
+
+failures:
+
+---- tests::fails stdout ----
+the fixture prints this line before failing
+
+thread 'tests::fails' (13632) panicked at src\lib.rs:19:9:
+assertion `left == right` failed: the fixture asserts the wrong sum on purpose
+  left: 4
+ right: 5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::fails
+
+test result: FAILED. 1 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

@@ -491,6 +491,28 @@
       ],
       "vendoredPatches": 2
     },
+    "dsh-rust-dev": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "rust-dev"
+      ],
+      "rowOverrides": [],
+      "role": "Rust development as a surface: six tools over the machine's own cargo, rustc and rustup - `rust_status` (the four facts that fail independently: toolchain, components, installed targets, the workspace, plus which notable crates it declares - eframe, egui, wgpu, tokio, tracing, serde, clap, tauri, bevy), `cargo_check` (diagnostics PARSED from `--message-format=json`, with rustc codes, file:line:column and one mistake repeated at forty call sites collapsed to one item with a count), `cargo_test` (the summary, the failing names, the first failure's captured output), `cargo_build` (the artefact path from cargo's own `compiler-artifact` events and its real size, and a binary run only when `run: true` is asked for), `rust_deps` (duplicate crate versions with their dependents, the most-depended-on crates, and the `-e features` chain that enabled one crate) and `rust_backtrace` (demangled symbols, frames classed as the caller's own / a dependency / the runtime, and which frame is the first in your code - the v0 mangling is refused rather than invented) - plus four bundled skills (workspaces, diagnostics, debugging, and egui/eframe/wgpu apps) whose every ```rust example a check compiles as a whole src/lib.rs. Every cargo call runs `--offline` unless the caller passes `fetch: true`; nothing installs a toolchain, a component or a crate; and a build is never presented as read-only, because build.rs and proc macros RUN. Host-only: one row, no route, no browser half. Zero npm dependencies, nothing bundled, no bundled engine. See packages/dsh-rust-dev/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the six tools are registered into)",
+        "@deepseek-ai/dsh-skill (ctx.skills, resolved lazily; the four bundled skills are also copied into $DSH_HOME/skills by both installers)",
+        "the machine's own `cargo`, `rustc` and `rustup` - the user's programs, never bundled"
+      ],
+      "requires": [
+        "a Rust toolchain on PATH for the driven answers (`rust_status` reports its absence as an ANSWER naming rustup, not as a failure)",
+        "a Cargo.toml at or above the directory inspected, for the workspace facts",
+        "`rustup component add clippy` (or `rustfmt`, or `rust-analyzer`) for the components that are missing - this row prints that command and never runs it",
+        "for a resolve that the lockfile and the local cache cannot answer, an explicit `fetch: true` on that one call"
+      ],
+      "vendors": [
+        "NOTHING is vendored, downloaded or installed: the toolchain is the user's own, and this package ships the JSON parsers, the demangler, the argv and the triage order"
+      ]
+    },
     "dsh-screenshot": {
       "version": "0.1.0-alpha.1",
       "rows": [

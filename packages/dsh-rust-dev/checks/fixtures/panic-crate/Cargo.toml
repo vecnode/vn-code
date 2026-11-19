@@ -1,0 +1,8 @@
+# A crate that builds and then panics, so a real backtrace can be captured.
+[package]
+name = "dsh-rust-dev-fixture-panic"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]

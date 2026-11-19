@@ -1,0 +1,29 @@
+{
+  "name": "dsh-rust-dev",
+  "version": "0.1.0-alpha.1",
+  "description": "Rust development as a surface: six tools over the machine's own toolchain - `rust_status` (the four facts that fail independently: toolchain, components, installed targets, the workspace), `cargo_check` (diagnostics parsed from `--message-format=json`, with codes and file:line:col), `cargo_test`, `cargo_build` (artifact path and real size), `rust_deps` (duplicate crate versions, features and the chain that enabled them) and `rust_backtrace` (demangled frames, separated into your workspace and dependencies) - plus four skills (workspaces, diagnostics, debugging, and egui/eframe/wgpu apps). Every cargo call is `--offline` by default, every answer names the command it ran, and nothing installs a toolchain or a crate. Host-only: one row, no route, no browser half, zero npm dependencies.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-rust-node.mjs && node checks/check-rust-examples.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

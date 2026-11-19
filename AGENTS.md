@@ -142,16 +142,25 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   that teach the tool surface, the method layer and the ethics layer, and a Research
   tab that also edits the document — host half plus UI, no socket, no vendored
   engine),
+  `dsh-rust-dev` (Rust as a surface: six tools over the machine's own `cargo`,
+  `rustc` and `rustup` — `rust_status` reports the four facts that fail
+  independently, `cargo_check` parses `--message-format=json` into codes and
+  `file:line:column` with duplicates collapsed, `cargo_test` / `cargo_build` /
+  `rust_deps` / `rust_backtrace` answer the rest, and four skills teach the triage
+  order including egui/eframe/wgpu apps; every cargo call is `--offline` unless
+  `fetch: true`, nothing is installed, and a build is never called read-only
+  because `build.rs` runs — host-only, zero npm dependencies),
   `dsh-browser`, `dsh-themes`, `dsh-cmdbar`, `dsh-modal`, `dsh-skills`,
   `dsh-ui-state`, `dsh-open-in-app`.
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with
   `npm run check` in that folder. They travel with the package (which is what
   makes them useful outside this repository) and they are ADDITIONAL to
-  `scripts/checks/`, never a replacement for it: today ten packages ship their own
-  (`dsh-supercollider` with four checks, `dsh-research` with seven, plus
-  `dsh-diagrams`, `dsh-frontend-craft`, `dsh-proto-lab`, `dsh-ocr`, `dsh-wsl`,
-  `dsh-docker`, `dsh-ollama` and `dsh-image-upscale`), and the pack-wide checks
-  still own the routes, the bundle and the manifest.
+  `scripts/checks/`, never a replacement for it: today eleven packages ship their
+  own (`dsh-supercollider` with four checks, `dsh-research` with seven,
+  `dsh-rust-dev` with two, plus `dsh-diagrams`, `dsh-frontend-craft`,
+  `dsh-proto-lab`, `dsh-ocr`, `dsh-wsl`, `dsh-docker`, `dsh-ollama` and
+  `dsh-image-upscale`), and the pack-wide checks still own the routes, the bundle
+  and the manifest.
 - `scripts/` — the launcher (`run-web.*`), and four folders: `console/` (the shared
   console layer), `setup/` (install and uninstall, which a fresh machine runs once),
   `tools/` (maintainer-only: the fork re-sync for the client bundles this pack vendors)
