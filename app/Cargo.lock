@@ -120,7 +120,7 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "vn-shell"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "rpassword",
  "vn-shell-core",
@@ -129,14 +129,14 @@ dependencies = [
 
 [[package]]
 name = "vn-shell-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "vn-shell-runtime"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde_json",
  "vn-shell-core",
