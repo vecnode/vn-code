@@ -10,11 +10,7 @@ rem  "npx @deepseek-ai/dsh@<pin> web --no-open", streams the app's
 rem  output, reads the "dsh web:" line it prints once the server is
 rem  listening and opens THAT url - launch token included - in
 rem  Google Chrome, falling back to the default browser. The
-rem  harness runs in the FOREGROUND of this window: Ctrl+C stops it.
-rem
-rem  The desktop window is the other half: scripts/run-desktop.bat starts
-rem  the very same harness and shows that same url in a native
-rem  window instead of a browser tab.
+rem  The harness runs in the FOREGROUND of this window: Ctrl+C stops it.
 rem
 rem  Why the split: a .bat is what Windows double-clicks, and a .bat
 rem  is also what carries no execution-policy question, while the

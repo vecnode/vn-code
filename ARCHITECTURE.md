@@ -3,13 +3,11 @@
 A plugin pack for **one install target**: the DeepSeek Harness **web** profile
 (`npx @deepseek-ai/dsh web`, profile `web` under `$DSH_HOME`, default `~/.dsh`).
 Every plugin here is a standard dsh **bundle**; nothing patches a harness file,
-and there is no desktop edition. (`app/` is a *front door*: a small Rust console
-program with no window and no web view that decides the root its harness home lives
-in — `$VNCODE_HOME`, with the harness's `DSH_HOME` at `<root>/home` unless `-DshHome`
-or a writable inherited `DSH_HOME` says otherwise — takes the key, installs the pack,
-and then runs `scripts/run-web.*`, the same launcher a person double-clicks. That
-launcher owns the harness, the ready line and the browser tab; the app owns none of
-them.)
+and there is no desktop edition and no native code. `scripts/run-web.*` is the whole
+front door: it decides the harness home (a portable `<tree>/.vncode/home`, else
+`$DSH_HOME`, else `~/.dsh`), runs the pinned `dsh web --no-open`, watches the ready line
+and opens that URL in Chrome. It owns the harness, the ready line and the browser tab,
+and it is plain Node, batch and POSIX shell — there is nothing to compile.
 
 The three planes below are the whole system — what npm ships, what the `web`
 profile boots, and what the page renders:
@@ -103,12 +101,11 @@ disable/replace a core row **in its own layer** — a later layer wins per row.
 - operations: `docs/INSTALL.md`, `docs/BUILD.md`, `docs/DEPLOY.md`,
   `docs/RELEASE.md`, `docs/PATHS.md`,
   `docs/COMPATIBILITY.md`;
-- the app: `app/README.md` (the verbs, the bridge to `scripts/run-web.*`, the app's own
-  root and the harness home inside it, and the three crates);
-- the port: `docs/RUST-PORT.md` (the boundary, the phases and their gates) and
-  `port/README.md` (that folder's rules). `port/` is a **second cargo workspace**,
-  deliberately separate from `app/` and building nothing that ships yet;
+- the launcher: `scripts/run-web.bat` / `run-web.ps1` / `run-web.sh` (the flags, the
+  home ladder, the ready line and the browser hand-off), and `check-scripts.mjs`, which
+  drives them;
 - security: `SECURITY.md`;
 - **the checks are the contract**: `scripts/checks/*.mjs` pin route registrations, bundle
   wiring, budgets, the launcher contract and the credential rules. They are run by hand;
-  CI runs the build, the tests and the size budget. `scripts/checks/README.md` lists them.
+  CI runs the two that need a runner (`check-no-secrets`, `check-scripts`) in a Node
+  container. `scripts/checks/README.md` lists them.

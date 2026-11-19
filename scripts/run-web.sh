@@ -242,23 +242,20 @@ if [ -n "$dsh_home_arg" ]; then
   step "DSH_HOME: $dsh_home_arg"
 fi
 
-# WHICH HOME THIS RUN USES - one rule, shared with the app and with run-web.ps1.
+# WHICH HOME THIS RUN USES - one rule, in both launchers.
 #
 #   1. -DshHome          the person named it for this run;
 #   2. an inherited DSH_HOME   a harness session that started this shell, which this run
 #                        JOINS;
 #   3. THE PORTABLE ROOT `<tree>/.vncode/home`, when this folder carries the `PORTABLE`
 #                        marker or already holds a home: a portable installation keeps the
-#                        pack, the sessions and the key inside the folder, and `run-web`
-#                        and the panel then start the SAME home. Two launchers pointing at
-#                        two homes is how a pack ends up installed in one and missing in
-#                        the other - measured: the panel reported 24 bundles while
-#                        `run-web` started `~/.dsh`.
+#                        pack, the sessions and the key inside the folder, so nothing lands
+#                        in the user's profile.
 #   4. ~/.dsh            the harness's own default, for a folder that is not portable.
 #
-# The portable test is the SAME rule `vn_shell_core::appdata::portable_root` applies. Keep
-# the three in step; a check reads this file and run-web.ps1 for the marker and the `home`
-# folder so the rule cannot drift out of one of them unnoticed.
+# The portable test is two facts - the marker, or a home already inside the root - and
+# `run-web.ps1` implements the same two. Keep the two in step; a check reads both files for
+# the marker and the `home` folder so the rule cannot drift out of one of them unnoticed.
 harness_home=${dsh_home_arg:-${DSH_HOME:-}}
 if [ -z "$harness_home" ]; then
   portable_root="$repo_root/.vncode"
@@ -266,9 +263,8 @@ if [ -z "$harness_home" ]; then
     harness_home="$portable_root/home"
     DSH_HOME=$harness_home
     export DSH_HOME
-    # The cache follows the home, for the same reason the app's does: npm writing into
-    # the user's shared cache is the one thing a portable folder still depended on. An
-    # explicit npm_config_cache always wins.
+    # The cache follows the home: npm writing into the user's shared cache is the one
+    # thing a portable folder still depended on. An explicit npm_config_cache always wins.
     if [ -z "${npm_config_cache:-}" ]; then
       npm_config_cache="$portable_root/npm-cache"
       export npm_config_cache

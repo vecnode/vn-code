@@ -1,94 +1,77 @@
 # Building vncode
 
-Two verbs, deliberately separate: `scripts\run-desktop.bat` (or
-`./scripts/run-desktop.sh`) is the developer loop - build the Rust app when it is missing
-and run it from the checkout, where the package folders are already live-linked into the
-profile; `scripts/checks/` is what says whether the change is sound.
+**There is nothing to build.** The repository is pure Node/TypeScript/JavaScript: no
+compiler, no build step, no native code, and zero npm dependencies in the packages it
+ships. The harness is run through `npx` and the pack is loaded from this folder as a live
+link, so a change is a file save.
 
-## No JavaScript build step
+That is the rule behind every other page here: a change is proved by RUNNING it, not by
+compiling it, and the only toolchain any machine needs is **Node.js >= 22**.
 
-There is no JavaScript/TypeScript build here; the packages are hand-written:
+The one exception is a vendored engine: each keeps its own `vendor/build.mjs` and the
+tracked hashes in its `lib/vendor/VERSION.json`. Regenerate those, never hand-edit them.
 
-- `packages/*/lib/client.js` is the shipped browser bundle, loaded by the harness as a live
-  link - which is what makes a plugin edit visible on a reload.
-- Vendored engines keep their own `vendor/build.mjs` and the tracked hashes in
-  `lib/vendor/VERSION.json`. Regenerate them, never hand-edit.
-- `app/` is a **cargo workspace** of three crates, each with its own `cargo test`, and
-  `scripts/checks/` is the build gate: a build that fails a check is not a build.
+## The two ways to run it
+
+| | what it does |
+|---|---|
+| `install`, once, then `run-web` | the everyday path. `scripts\setup\install.bat` / `./scripts/setup/install.sh` adds this folder's bundles to the `web` profile, and `scripts\run-web.bat` / `./scripts/run-web.sh` starts the pinned harness with the pack and opens it |
+| `npx --yes @deepseek-ai/dsh@<pin> web` | the harness alone: no pack and no launcher. Useful for telling a plugin bug from a launcher one |
+
+`run-web` never installs. It nags when the profile at the home in use does not list the
+pack, and the installer is its own entry point.
 
 ## The three entry points
 
 | | what it does |
 |---|---|
-| `scripts\run-web.bat` / `./scripts/run-web.sh` | starts the pinned harness and opens it in a browser tab. **The web half - it needs no `vncode` binary at all** |
-| `scripts\run-desktop.bat` / `./scripts/run-desktop.sh` | builds `vncode` when there is none and runs it: install the pack if this home lacks it, ask for the key if there is none, then run the web launcher |
-| `scripts\setup\install.bat` / `./scripts/setup/install.sh` | adds this folder's bundles to the `web` profile - and the same pair under `uninstall` takes them out again |
+| `scripts\run-web.bat` | the Windows double-click entry: it forwards every flag to the worker beside it and holds the window open on a double-clicked failure |
+| `scripts\run-web.ps1` | the Windows worker: the home ladder, `npx`, the ready line, the browser hand-off |
+| `scripts/run-web.sh` | macOS / Linux: the whole job in one file, in POSIX `sh`, never PowerShell |
 
-There is no distributer, no self-contained folder and no vendored runtime any more. The
-distribution is this repository plus (optionally) a built `vncode`, and the app installs
-the pack itself by running the two `setup/` entry points above.
+There are no other launchers and no forwarders. Both workers do the same work in the same
+order: run `npx --yes @deepseek-ai/dsh@<pin> web --no-open [--port <n>]`, watch stdout for
+the `dsh web: <url>` ready line, refuse a URL that is not loopback, and open THAT url in
+Google Chrome, falling back to the platform default browser. `-DefaultBrowser` skips
+Chrome; `-NoBrowser` opens nothing. The harness runs in the foreground and Ctrl+C stops it.
 
-## The app
+Install and uninstall are their own entry points one level down, in `scripts/setup/`:
+`install.bat` / `install.sh` and `uninstall.bat` / `uninstall.sh`, with the workers
+`install-all.*` / `uninstall-all.*` beside them.
 
-`cargo build --release --locked --manifest-path app/Cargo.toml` produces
-`app/target/release/vncode` (~0.5 MB). No GUI toolkit, no web engine, no linker surprises:
-the only dependencies are `serde_json` and `rpassword`, so nothing has to be installed
-before a build and nothing has to be installed beside the binary.
+## How to check a change
 
-The size is a **budget, not a result**: `.github/workflows/ci.yml` fails the build over
-6 MB, and `check-shell.mjs` fails over 12 MB. A dependency that draws a window - `eframe`,
-`egui`, `wgpu`, `winit` - or a web view - `wry` and its three OS engines - is the only way
-to get back over either line, and it is the change this project exists to prevent.
-
-## Runtime and launch path
-
-The app does not run node. It resolves the root, the home, the pin and the child's
-environment, and then it runs `scripts/run-web.*` **in the foreground** - the same file a
-person double-clicks, with `-DshHome <the home it chose>` so both halves agree, and with a
-composed environment (`vn_shell_runtime::env`): `DSH_HOME` set, the console markers and
-`VNCODE_HOME` removed, a writable npm cache and temp chosen by write probe.
-
-Everything about *which* harness runs lives in that launcher, not here: `npx --yes
-@deepseek-ai/dsh@<pin> web --no-open`, the ready line, the loopback check and the browser
-hand-off (Chrome first, the OS opener as the floor). `scripts\run-web.bat` is therefore the
-single source of truth for the harness command, and the app cannot disagree with it.
-
-## Signing, and Windows SmartScreen
-
-Authenticode covers the exact bytes of a file, so sign the binary you are about to publish
-and nothing else: `signtool` on `app/target/release/vncode.exe`, with a certificate named
-by the environment (never committed). Nothing in this repository signs anything, and there
-is no build step that appends a payload to a binary - the app is one file as cargo produced
-it.
-
-UAC is not a concern: nothing elevates and there is no installer. SmartScreen is: a
-downloaded `.exe` warns until that file or publisher has reputation, and a self-signed
-certificate fixes nothing for other people. Until a real certificate exists, the honest
-thing is to say so in the release notes and publish `SHA256SUMS.txt` beside the binary, so
-a reader who checks the hash is not relying on the warning being wrong.
-
-## CI
-
-`.github/workflows/ci.yml` runs clippy (`-D warnings`), the workspace tests, a release
-build, the size budget and a smoke run - on all three OSes for a pull request, the Monday
-schedule, a manual dispatch, and `release.yml`, which calls the same workflow as its gate.
-**A push to `main` runs no CI at all** - that trigger is deliberately absent, so commits
-and pushes are free and the checks that must not be skipped run at the boundaries. There is
-no per-package JavaScript build to run in CI; the checks in `scripts/checks/` remain the
-contract and are run by hand.
-
-## Checks
-
-Run the one that owns the area; a check that cannot run on this host skips loudly and exits
-0. [scripts/checks/README.md](../scripts/checks/README.md) lists them all.
+Run the check that owns the area. A check that cannot run on this host skips loudly and
+exits 0, and [scripts/checks/README.md](../scripts/checks/README.md) lists them all.
 
 ```sh
 node scripts/checks/check-no-secrets.mjs       # before anything is pushed
 node scripts/checks/check-scripts.mjs          # the scripts layout, the console contract, the two workflows
-node scripts/checks/check-node-routes.mjs      # every Node route, the manifest, the patches
+node scripts/checks/check-node-routes.mjs      # every Node route, tool, the manifest, the patches
 node scripts/checks/check-client-bundles.mjs   # every browser bundle, driven for real
 node scripts/checks/check-media-node.mjs       # dsh-media's host half and its ffmpeg pin
 node scripts/checks/check-pdf-node.mjs         # the five pdf tools and their routes
 node scripts/checks/check-skill-examples.mjs   # every example in the shipped skills
-node scripts/checks/check-shell.mjs            # the app, driven: verbs, the bridge, the env
 ```
+
+A plugin edit needs no restart: the host stat-polls each `client.js` every 500 ms and
+republishes it, so a reload shows the change. A `lib/index.js` change (routes, tools) or a
+row/profile change does need a host restart.
+
+## CI
+
+`.github/workflows/ci.yml` is ONE job on `ubuntu-latest` in a `node:22` container: it
+installs `git`, which `check-no-secrets.mjs` reads the repository with, and runs
+`check-no-secrets.mjs` and `check-scripts.mjs`. There is no compiler and no per-OS matrix,
+because there is nothing to compile and the files are the same on every platform.
+
+It stays callable through `workflow_call` and runs at the boundaries only - a pull request,
+a manual dispatch, and a release's gate. **A push to `main` starts no CI at all**, so
+commits and pushes are free and the checks that must not be skipped run where they matter.
+
+## How a release is cut
+
+One artefact: `vncode-<version>.zip`, a `git archive` of the repository at the tag. The zip
+IS the distribution - the pack, the launchers and the docs - and there is no second
+artefact and no ship list. [RELEASE.md](RELEASE.md) has the tag flow and what the gate
+refuses.

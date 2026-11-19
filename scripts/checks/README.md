@@ -2,10 +2,11 @@
 
 Standalone verification for everything this pack ships. No check needs a running
 harness, none is part of the installers, and all of them are written in Node and
-run the same way on Windows, macOS and Linux. Two assertions reach past Node on
-purpose and skip loudly when the tool is missing: `check-shell.mjs` needs `cargo`,
-and `check-client-bundles.mjs` drives the vendored-fork re-sync through PowerShell.
-Run the one that owns the area you touched, before you claim a fix.
+run the same way on Windows, macOS and Linux. A few reach past Node on purpose and
+skip loudly when the tool is missing: `check-client-bundles.mjs` drives the
+vendored-fork re-sync through PowerShell, `check-shader-examples.mjs` and
+`check-browser-node.mjs` need a real browser, and `check-media-node.mjs` needs
+ffmpeg. Run the one that owns the area you touched, before you claim a fix.
 
 ```sh
 node scripts/checks/check-no-secrets.mjs        # before anything is pushed
@@ -18,7 +19,6 @@ node scripts/checks/check-skill-examples.mjs    # every fenced example in the sh
 node scripts/checks/check-shader-examples.mjs   # every fenced GLSL in the shader skills, COMPILED
 node scripts/checks/check-media-examples.mjs    # every media/PDF example, shaped and really RUN
 node scripts/checks/check-browser-node.mjs      # dsh-browser: the host renderer and its policy
-node scripts/checks/check-shell.mjs            # the app, DRIVEN: verbs, the bridge, the child env
 DSH_CHECK_LAUNCH=1 node scripts/checks/check-node-routes.mjs   # also opens a real directory picker
 ```
 
@@ -31,14 +31,13 @@ Windows PowerShell: `$env:DSH_CHECK_LAUNCH='1'; node scripts/checks/check-node-r
 | `check-no-secrets.mjs` | nothing credential-shaped would be staged by `git add -A`; the `.gitignore` credential rules are present; the scanner fires on a synthetic key, hides the value and stays quiet on clean text |
 | `check-client-bundles.mjs` | every browser half loads through the real module table (`window.__ModuleLoader__.load`), activates against a stub cordis context, and is rendered/driven with a **real React runtime**; the exported `__internals` pure halves are driven directly (e.g. the audio/image byte decode in every shape a carrier could use); and it runs `scripts/tools/sync-vendored.ps1 -Check`, so each generated fork is proved to be what its patch list still produces (a host with no PowerShell skips that one assertion loudly) |
 | `check-node-routes.mjs` | every Node route and tool of every host half, the git routes against a real repository, the skills registry, the manifest ⇄ `package.json` agreement, and the master's pack-wide row patches |
-| `check-scripts.mjs` | the `scripts/` layout (`run-web.*` and `run-desktop.*` at the top, everything else in `console/`, `setup/`, `tools/`, `checks/`), the console contract every Windows entry point must hold, **`setup/install.bat -Help` and `setup/uninstall.bat -Help` really run** with the console variables cleared the way the app clears them (they must print their usage, exit 0, and change nothing), and that the two release workflows exist and name three OSes + a separate `vncode-web` artefact |
+| `check-scripts.mjs` | the `scripts/` layout (`run-web.*` at the top, everything else in `console/`, `setup/`, `tools/`, `checks/`), the console contract every Windows entry point must hold, that both `run-web` workers join the folder's own home when it is portable, and the entry points **really run in their `-Help` form**: `run-web.* -Help` must print its usage without starting the harness, and `setup/install.bat -Help` / `setup/uninstall.bat -Help` must print theirs, exit 0 and change nothing. It also asserts the two workflows exist, `ci.yml` callable through `workflow_call` and `release.yml` gating on it and publishing one artefact |
 | `check-media-node.mjs` | `dsh-media`'s pin against a **synthetic archive** built and served over loopback (download, hash verification, mismatch refusal, atomic install, resolution order), plus the ffmpeg-dependent half, which skips loudly without ffmpeg |
 | `check-pdf-node.mjs` | the five `pdf_*` tools and the PDF routes against documents the check builds itself, including the engine's buffer semantics |
 | `check-skill-examples.mjs` | every fenced example in the shipped skills parses or compiles (Mermaid, TikZ) |
 | `check-shader-examples.mjs` | every fenced **GLSL** example in `dsh-shaders`' five skills is COMPILED by a real headless browser, with vertex shaders recognised and a deliberately-broken example marked `no-check`; skips loudly on a host with no browser |
 | `check-media-examples.mjs` | every media/PDF example is a well-formed tool call and, where this host can run one, actually runs |
 | `check-browser-node.mjs` | `dsh-browser`'s host half: the disposable sandboxed renderer and the fetch policy in front of it |
-| `check-shell.mjs` | the app, **driven rather than read**: `-Version` and `-Help` answer; `-Mode embed` - the flag the deleted web view used to answer - is refused BY NAME; the binary is kept under a size ceiling a GUI stack cannot sneak past; and `start` is run against a **throwaway tree with stub scripts**, so the whole bridge is exercised without starting node: a home with no pack makes it run `scripts/setup/install.*` first, the launcher is handed `-DshHome` and, on Windows, `-NoTerminal`, both children's own environments are read back to prove `DSH_HOME` was composed and that the app's root and the console markers were REMOVED, no key file is written when there is no terminal to ask at, and `status` names the same home. It also proves `scripts/run-web.* -Help` answers with nothing but the web half present. Fixtures live under `.scratch/`, never in a temp directory the host may deny, and it runs `cargo test --workspace` with a scratch root it controls |
 
 ## The checks that live inside a package
 
@@ -80,9 +79,9 @@ run was checked is always stated with how deeply: `t0-structure` (always),
 4. **Never weaken a check to make a change fit.** Fix the code, or change the
    check deliberately and say why in the commit.
 
-**CI does not run these.** They are run by hand, because most of them need a browser, a
-SuperCollider, ffmpeg or TeX that a runner does not have. `.github/workflows/ci.yml` runs
-what a runner *can* own - clippy with warnings denied, the workspace tests, a release build
-and the size budget - and `release.yml` calls that same workflow as its gate, so a tag is
-checked on all three OSes before anything is published. `check-scripts.mjs` asserts both
-workflows exist, so a deleted release pipeline cannot come back silently either.
+**CI runs two of them.** `.github/workflows/ci.yml` is one job on `ubuntu-latest` in a
+`node:22` container - it installs `git` and runs `check-no-secrets.mjs` and
+`check-scripts.mjs`, the two that need nothing a bare container lacks. The rest are run by
+hand, because most of them need a browser, a SuperCollider, ffmpeg or a TeX engine that a
+runner does not have; `release.yml` calls that same workflow as its gate, so a tag is
+checked before anything is published.

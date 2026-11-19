@@ -1,79 +1,68 @@
 # Cutting a vncode release
 
-A release is **two artefacts**, because the project is two things:
-
-| artefact | what it is | built |
-|---|---|---|
-| `vncode-<ver>-<os>-<arch>.zip` / `.tar.gz` | the Rust app: the front door that installs the pack, takes the key and runs the web launcher. **One per OS** - the only per-OS artefact in the project | `release.yml`, one matrix leg each |
-| `vncode-web-<ver>.tar.gz` | the node/JS half: `packages/`, `scripts/`, the pin and the docs. **The same bytes on every platform** | `release.yml`, once, on Linux |
-
-The web half is the product and it stands alone: `scripts/run-web.bat` /
-`./scripts/run-web.sh` starts the harness and opens the tab with no `vncode` binary
-anywhere on the machine. The app is a front door that calls it. That is why only the Rust
-half is per-OS, and why one leg failing cannot withhold the other.
+**A release is one artefact.** `vncode-<version>.zip` is a `git archive` of the repository
+at the tag, and it is the whole distribution: the pack, the launchers, the docs and the pin.
+Nothing is compiled, so nothing is built per OS: unzipping the zip yields a working
+installation on Windows, macOS and Linux alike, with no second archive and no ship list.
 
 ## What publishing a tag does
 
 `.github/workflows/release.yml`, on `v*` (or `workflow_dispatch` with an existing tag):
 
-1. **gate** - calls `ci.yml`, the same workflow a pull request runs. Three OSes, clippy
-   with warnings denied, the tests, a release build, a 6 MB size ceiling, and a smoke run.
-   A red gate stops the release **before** a draft exists.
-2. **prepare** - creates the Release as a **draft**. Nothing is visible while it is half
-   built.
-3. **build** - the matrix: `windows-latest` (x86_64, static CRT so no redistributable is
-   needed), `ubuntu-22.04` (x86_64, for the glibc floor), `macos-latest` (arm64). Each leg
-   packages `vncode` + `README.md` + `LICENSE` and uploads it.
-4. **web** - packs the pack, the launchers and the pin into `vncode-web-<ver>.tar.gz`,
-   after checking that `scripts/run-web.sh -Help` answers *with no app involved*.
-5. **checksums** - waits for every upload, **re-downloads what was actually published**,
-   and writes `SHA256SUMS.txt`. A hash computed before the last upload is a lie.
-6. **publish** - flips the draft. The release becomes visible only with every artefact and
-   its checksums attached.
+1. **gate** - calls `ci.yml` through `workflow_call`, the same workflow a pull request
+   runs. One job, `ubuntu-latest`, a `node:22` container: `git` installed, then
+   `check-no-secrets.mjs` and `check-scripts.mjs`. A red gate stops the release **before**
+   anything is published.
+2. **archive** - the tag itself is archived into `vncode-<version>.zip` and attached. The
+   zip is the repository at the tag, not a file list somebody maintains, so it cannot fall
+   behind the tree.
+3. **publish** - the release becomes visible with its one artefact attached.
+
+A tag is the only thing that publishes. There is no separate packaging step to remember,
+and nothing that can fail for one platform while another succeeds.
 
 ## Cutting one by hand
 
 The workflow is the only ritual that ships. If it is unavailable, the same steps run
 locally:
 
-```powershell
+```sh
 git status --porcelain            # expect: empty
-Get-ChildItem scripts/checks/*.mjs | ForEach-Object { node $_.FullName }
-cargo build --release --locked --manifest-path app/Cargo.toml
+node scripts/checks/check-no-secrets.mjs
+node scripts/checks/check-scripts.mjs
 ```
 
-**Smoke it as a user would.** From a checkout, on each OS:
+**Smoke it as a user would.** From the checkout, on each OS:
 
-```powershell
-scripts\run-desktop.bat status    # the pin, the home, the pack, the key, the launcher
-scripts\run-desktop.bat           # install if needed, key if needed, then run-web
+```sh
+./scripts/setup/install.sh        # once, against the home in use
+./scripts/run-web.sh              # start the harness and open the tab
 ```
 
-`status` must name the home and the launcher and start nothing. `start` must reach a
-served page in a browser, and Ctrl+C must stop it. On a machine with no pack installed,
-the same run installs it first and says so.
+The install must add the bundles and change nothing else. The run must reach a served page
+in a browser, print the home it chose, and Ctrl+C must stop it. On Windows, the same two
+steps with `scripts\setup\install.bat` and `scripts\run-web.bat`.
 
 Then tag and push; the workflow does the rest:
 
-```powershell
-$v = node -p "require('./package.json').version"
+```sh
+v=$(node -p "require('./package.json').version")
 git add -A; git commit -m "release: vncode $v"
 git tag -a "v$v" -m "vncode $v"; git push origin main "v$v"
 ```
 
+The zip is cut from the tag itself, so a dirty tree cannot leak into a release.
+
 ## What NOT to do
 
-- **Do not label a binary for an OS it was not built on.** A renamed `.exe` is not a macOS
-  or Linux binary; each leg runs on its own runner.
-- **Do not publish the web half per platform.** It has no native modules of its own - one
-  artefact, three OSes, the same bytes.
-- **Do not re-cut a tag** once an archive has been handed to somebody.
-- **Do not attach an artefact after `checksums` has run** - `SHA256SUMS.txt` would no
-  longer describe the release. Re-run the workflow instead; it re-hashes what is there.
+- **Do not add a second artefact, for any platform.** The same files run everywhere, so a
+  second archive is only a second thing to keep in step.
+- **Do not hand-edit or re-zip the archive.** It is `git archive` of the tag; a release that
+  does not match its tag is not the release.
+- **Do not re-cut a tag** once its archive has been handed to somebody.
+- **Do not attach an artefact after the release is published** - regenerate it from the tag
+  instead.
 
-Signing is not wired up yet: an Authenticode or Developer ID certificate would cover the
-exact bytes of each binary, and the honest interim is the `SHA256SUMS.txt` above plus a
-note in the release notes (BUILD.md has the details).
-
-[BUILD.md](BUILD.md) is the build itself; [DEPLOY.md](DEPLOY.md) is what a distribution
-promises; [scripts/checks/README.md](../scripts/checks/README.md) lists every check.
+[BUILD.md](BUILD.md) is how it runs and how a change is checked; [DEPLOY.md](DEPLOY.md) is
+what a distribution promises; [scripts/checks/README.md](../scripts/checks/README.md) lists
+every check.

@@ -5,9 +5,8 @@ rem  in this repository.
 rem
 rem  WHY THIS FILE EXISTS
 rem  --------------------
-rem  scripts\setup\install.bat, scripts\setup\uninstall.bat, scripts\run-web.bat,
-rem  scripts\run-desktop.bat and scripts\setup\*.bat all have to answer the
-rem  same five questions before they do any work: which
+rem  scripts\setup\install.bat, scripts\setup\uninstall.bat and scripts\run-web.bat
+rem  all have to answer the same five questions before they do any work: which
 rem  window am I in, which PowerShell do I have, can this console show colour,
 rem  should I hold the window open at the end, and what were my real arguments?
 rem  Five batch files that each answered those themselves would drift, and the
@@ -95,11 +94,11 @@ rem appears even inside a branch that is skipped (measured).
 rem
 rem One space is the defined value that fixes it: it holds no flag, so every test
 rem below reads it exactly as it reads a flagged run, and it is harmless wherever
-rem it is forwarded - cmd and Rust both split argv on whitespace, so a lone space
-rem never arrives as an argument (measured: scripts\run-desktop.bat with none
-rem starts the shell normally). This file is the ONLY place that has to know,
+rem it is forwarded - cmd and PowerShell both split argv on whitespace, so a lone
+rem space never arrives as an argument (measured: a double-clicked run-web.bat
+rem starts the harness normally). This file is the ONLY place that has to know,
 rem because it must NOT setlocal - its decisions stay visible to the caller by
-rem design - so repairing both names here, once, covers all five entry points.
+rem design - so repairing both names here, once, covers every entry point.
 rem check-scripts.mjs asserts this normalisation is still here.
 if not defined VNCODE_ARGV set "VNCODE_ARGV= "
 set "VNCODE_ARGS=%VNCODE_ARGV%"

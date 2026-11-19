@@ -10,25 +10,26 @@
 //
 //  What this proves:
 //
-//   1. THE LAYOUT. `scripts/` holds the two entry points a person runs (run-web,
-//      run-desktop), each with the worker or twin it needs, and the three folders:
-//      `console/` (the shared console layer), `setup/` (install and uninstall) and
-//      `tools/` (maintainer-only). A file at the top level that is none of those is
-//      reported: the point of the layout is that a reader can tell "what I run"
+//   1. THE LAYOUT. `scripts/` holds the ONE entry point a person runs, `run-web`, in its
+//      three host spellings: the .bat double-click wrapper, the .ps1 worker beside it,
+//      and the POSIX .sh that does the whole job itself. Beside them are the four
+//      folders: `console/` (the shared console layer), `setup/` (install and uninstall),
+//      `tools/` (maintainer-only) and `checks/`. A file at the top level that is none of
+//      those is reported: the point of the layout is that a reader can tell "what I run"
 //      from "what it uses" at a glance.
 //   2. THE CONSOLE CONTRACT, still enforced because it is still load-bearing: every
 //      Windows entry point guards `VNCODE_ARGV` against a relaunch, calls the ONE
 //      console layer, forwards `VNCODE_ARGS` and never `%*`, and `adapt.cmd` does
 //      not `setlocal` (its decisions must stay visible to its caller).
-//   3. THE ENTRY POINTS REALLY RUN. `setup/install.bat -Help` and
-//      `setup/uninstall.bat -Help` are DRIVEN, with the console variables cleared
-//      exactly as the app clears them, and must print the worker's usage and exit
-//      0. That is the whole path the panel's buttons take: locate, spawn through
-//      the console layer, and read an exit code - and `-Help` installs nothing.
+//   3. THE ENTRY POINTS REALLY RUN. `run-web.bat -Help` (or `run-web.sh -Help` on a POSIX
+//      host), `setup/install.bat -Help` and `setup/uninstall.bat -Help` are DRIVEN, with
+//      the console variables cleared exactly as a fresh shell has them, and must print the
+//      script's own usage and exit 0. That covers both things a person does by hand -
+//      starting the harness and installing the pack - and `-Help` does neither.
 //   4. THE TWO WORKFLOWS. `.github/workflows/` must exist, and must do the one job CI is
-//      for here: `ci.yml` callable, `release.yml` building the Rust app on Windows, Linux
-//      and macOS and publishing the node/JS half as its own artefact. CI was deleted once
-//      on purpose; it is back for the release, and this is what keeps it honest.
+//      for here: `ci.yml` callable and running the pure-node checks in a Node container,
+//      `release.yml` publishing ONE artefact - a zip of this repository. CI was deleted
+//      once on purpose; it is back for the release, and this is what keeps it honest.
 //
 //  Run:  node scripts/checks/check-scripts.mjs
 //  POSIX entry points are checked for shape only; driving them needs a POSIX host,
@@ -55,13 +56,7 @@ const read = (relative) => {
 // ---------------------------------------------------------------------------
 // 1. The layout
 // ---------------------------------------------------------------------------
-const TOP_LEVEL_FILES = [
-  'run-web.bat',
-  'run-web.ps1',
-  'run-web.sh',
-  'run-desktop.bat',
-  'run-desktop.sh',
-]
+const TOP_LEVEL_FILES = ['run-web.bat', 'run-web.ps1', 'run-web.sh']
 const TOP_LEVEL_FOLDERS = ['checks', 'console', 'setup', 'tools']
 
 function checkLayout() {
@@ -85,7 +80,7 @@ function checkLayout() {
   for (const name of ['install-all.ps1', 'install-all.sh', 'uninstall-all.ps1', 'uninstall-all.sh']) {
     if (!fs.existsSync(path.join(scripts, 'setup', name))) fail(`scripts/setup/${name} is missing`)
   }
-  console.log('check-scripts: the layout - two entry points, four folders')
+  console.log('check-scripts: the layout - one entry point, four folders')
 }
 
 // ---------------------------------------------------------------------------
@@ -118,7 +113,7 @@ function checkEntryPoint(relative) {
 }
 
 function checkConsoleContract() {
-  for (const name of ['run-web.bat', 'run-desktop.bat']) checkEntryPoint(`scripts/${name}`)
+  checkEntryPoint('scripts/run-web.bat')
   for (const name of ['install.bat', 'uninstall.bat']) checkEntryPoint(`scripts/setup/${name}`)
 
   const adapt = read('scripts/console/adapt.cmd')
@@ -147,16 +142,15 @@ function checkConsoleContract() {
 // 2b. The portable root: ONE rule, in three places
 // ---------------------------------------------------------------------------
 /**
- * `run-web` and `run-desktop` must start the SAME home.
+ * Both `run-web` workers must join the folder's own home when it is portable.
  *
- * A folder that is a portable installation keeps everything inside itself, and the panel
- * has always used it; `run-web` used `~/.dsh`, so on a real machine the panel reported 24
- * bundles while `run-web` started a different home. The rule is two facts - the `PORTABLE`
- * marker, or a home already inside the root - and it is implemented three times (the
- * shell's `appdata::portable_root` in Rust, and once per launcher worker), because a
- * launcher cannot call into the app. Three copies of one rule drift unless something
- * reads them, and this is that something: both workers must test the marker AND the
- * `home` folder, and must send `DSH_HOME` into the root's own home.
+ * A folder that is a portable installation keeps everything inside itself - the pack, the
+ * sessions and the key - so nothing lands in the user's profile. The rule is two facts:
+ * the `PORTABLE` marker, or a home already inside the root. It is implemented twice, once
+ * per launcher worker, because the Windows half and the POSIX half cannot call into each
+ * other. Two copies of one rule drift unless something reads them, and this is that
+ * something: both workers must test the marker AND the `home` folder, and must export
+ * `DSH_HOME` into the root's own home.
  */
 function checkPortableRootRule() {
   for (const relative of ['scripts/run-web.ps1', 'scripts/run-web.sh']) {
@@ -241,16 +235,66 @@ function checkWindowsEntryPoints() {
 }
 
 // ---------------------------------------------------------------------------
+// 3b. The launcher answers -Help without starting anything
+// ---------------------------------------------------------------------------
+/**
+ * `run-web` is the only entry point, and asking it a question must not spawn `npx`, bind a
+ * port or open a tab: the answer comes from the script's own argument parser. A launch
+ * nobody can check by hand on every host is a launch that breaks quietly.
+ *
+ * The Windows entry is driven through cmd as a double-click would drive it, with
+ * -NoTerminal so `adapt.cmd` does not hand the run to Windows Terminal (which would exit 0
+ * having printed nothing); the POSIX twin is driven with `sh`, and says loudly when the
+ * host has none.
+ */
+function checkRunWebHelp() {
+  const windows = process.platform === 'win32'
+  const relative = windows ? 'scripts/run-web.bat' : 'scripts/run-web.sh'
+  const needle = windows ? 'Usage: scripts\\run-web.bat [flags]' : 'Usage: sh scripts/run-web.sh'
+  const run = windows
+    ? spawnSync('cmd', ['/c', path.join(scripts, 'run-web.bat'), '-NoTerminal', '-NoPause', '-Help'], {
+        cwd: repo,
+        encoding: 'utf8',
+        env: clearedEnvironment(),
+        // A -Help that starts the harness instead of answering would never exit, so the
+        // wait is bounded: the failure is then a timeout with a name, not a hung check.
+        timeout: 60000,
+      })
+    : spawnSync('sh', [path.join(scripts, 'run-web.sh'), '-Help'], {
+        cwd: repo,
+        encoding: 'utf8',
+        env: clearedEnvironment(),
+        timeout: 60000,
+      })
+  if (run.error) {
+    notes.push(`${relative} -Help could not be driven here (${run.error.code ?? run.error.message})`)
+    return
+  }
+  const output = `${run.stdout ?? ''}${run.stderr ?? ''}`
+  if (run.status !== 0) fail(`${relative} -Help exited ${run.status}`)
+  if (!output.includes(needle)) {
+    fail(`${relative} -Help did not print its usage (${needle}) - it started something else`)
+  }
+  // A help request that reached the harness would name the pin. It must not.
+  if (output.includes('Pinned dsh version')) {
+    fail(`${relative} -Help started the launcher instead of answering`)
+  }
+  console.log(`check-scripts: ${relative} answers -Help without starting the harness`)
+}
+
+// ---------------------------------------------------------------------------
 // 4. The two workflows, and what they promise
 // ---------------------------------------------------------------------------
 // CI was once deleted on purpose ("the checks are run by hand"). It is back for ONE job:
-// building the Rust app on the three operating systems and attaching the artefacts to a
-// tag. The assertion is inverted rather than dropped, because "CI exists" and "CI builds
-// what we ship" are different claims and only the second is worth having.
+// proving a tree that is about to be tagged, and attaching the zip a tag publishes. The
+// assertion is inverted rather than dropped, because "CI exists" and "CI proves what we
+// ship" are different claims and only the second is worth having. Half of this is
+// negative on purpose: there is no compiler in this repository any more, so a workflow
+// that reaches for one is exactly the change this is here to catch.
 function checkCi() {
   const workflows = path.join(repo, '.github', 'workflows')
   if (!fs.existsSync(workflows)) {
-    fail('.github/workflows is missing - the release builds the app for three OSes (docs/RELEASE.md)')
+    fail('.github/workflows is missing - the release gates on ci.yml and publishes the zip (docs/RELEASE.md)')
     return
   }
   const ci = path.join(workflows, 'ci.yml')
@@ -263,21 +307,37 @@ function checkCi() {
     if (!text.includes('workflow_call')) {
       fail('ci.yml is not callable - release.yml must run the same checks rather than a copy')
     }
+    // The two checks a boundary run is for. A workflow that runs neither is a badge.
+    for (const check of ['check-no-secrets.mjs', 'check-scripts.mjs']) {
+      if (!text.includes(check)) fail(`ci.yml does not run ${check}`)
+    }
+    // One runtime, and the one the pack declares. The container is what makes "one runner
+    // covers every platform" true rather than assumed: there is nothing per-OS to build.
+    if (!/container:\s*node:22/.test(text)) {
+      fail('ci.yml does not run in a node:22 container, so the runtime it proves is not the one package.json declares')
+    }
+    if (/cargo|rustup|clippy/.test(text)) {
+      fail('ci.yml reaches for a Rust toolchain - this repository has no native code to build')
+    }
   }
   if (fs.existsSync(release)) {
     const text = fs.readFileSync(release, 'utf8')
-    // The three operating systems, by name: this is what "the release is built on three
-    // platforms" means, and a matrix that quietly lost one is a release that does not run.
-    for (const os of ['windows-latest', 'ubuntu-22.04', 'macos-latest']) {
-      if (!text.includes(os)) fail(`release.yml does not build on ${os}`)
+    if (!text.includes('uses: ./.github/workflows/ci.yml')) {
+      fail('release.yml does not gate on ci.yml')
     }
-    // The node/JS half is a SEPARATE artefact, built once: it is the same bytes on every
-    // platform, and `scripts/run-web.*` must keep working without the app.
-    if (!text.includes('vncode-web')) {
-      fail('release.yml does not publish the node/JS half as its own artefact')
+    // ONE artefact, and it is the repository itself: the pack, the launchers, the checks
+    // and the docs. A second, per-OS file is the shape this release replaced.
+    if (!text.includes('NAME="${STEM}-${VERSION}"')) {
+      fail('release.yml does not name the artefact <stem>-<version>, so the release is not the repo itself')
+    }
+    if (!text.includes('git archive')) {
+      fail('release.yml does not build the archive with git archive, so the zip can drift from the tree')
+    }
+    if (/cargo|rustup|matrix\.target|vncode\.exe/.test(text)) {
+      fail('release.yml still builds or names a per-OS binary')
     }
   }
-  console.log('check-scripts: ci.yml and release.yml exist, and release.yml names three OSes')
+  console.log('check-scripts: ci.yml is a node:22 container, release.yml publishes the repo zip')
 }
 
 // ---------------------------------------------------------------------------
@@ -285,6 +345,7 @@ checkLayout()
 checkConsoleContract()
 checkPortableRootRule()
 checkWindowsEntryPoints()
+checkRunWebHelp()
 checkCi()
 
 console.log('check-scripts: the scripts tree, its console contract, and its entry points')

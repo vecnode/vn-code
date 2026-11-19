@@ -7,7 +7,7 @@ download below.
 
 ## The short version
 
-- **Loopback only.** The app binds `127.0.0.1`; the CLI refuses an all-interfaces
+- **Loopback only.** The harness binds `127.0.0.1`; the CLI refuses an all-interfaces
   bind. Never put it behind a proxy, tunnel, port forward or published container
   port — that turns an authenticated surface into network-exposed code execution.
 - **The printed URL is a password** (it carries the launch token). Never paste it
@@ -96,98 +96,72 @@ run.
 
 ![A sequence diagram of one authenticated call: the page exchanges the launch token for a session cookie, asks a pack route with that cookie, and the gates verify the cookie and the Host/Origin fence before dispatching anything; the alternate region shows the refusal - 401 without a session, 403 for a foreign authority or a cross-site fetch](./assets/security.svg)
 
-## The app's own root, the home inside it, and the browser
+## What the launcher touches, and the browser
 
-`app/` owns a root — `$VNCODE_HOME` (`%LOCALAPPDATA%\vncode` by default) — and hands
-the harness a home inside it, `<root>/home`, as `DSH_HOME`. It does **not** use `~/.dsh`
-as a default: that folder belongs to whichever harness used it first, and a home the app
-did not create is a home it cannot promise. A candidate is used only after a real write
-probe, the first rung of the ladder is a `-DshHome` the person typed (a refusal there
-ends the run rather than quietly using another path), and **the app never writes a
-note, a log or a record into a home it refused** — the one write it makes outside its own
-root is the probe file, created and deleted at the root of a home it is considering, because
-"a child can write here" is not knowable any other way.
+`scripts/run-web.*` is a launcher, not a supervisor, and its whole list is short: read the
+pin from `.dsh-version.json`, decide the harness home, run the pinned
+`npx @deepseek-ai/dsh@<pin> web --no-open` in the **foreground**, read the ready line from
+its stdout, and open one URL. It starts no second server, writes no file of its own and
+holds no credential.
 
-**Nothing outside this app's own root is ever the home it runs against.** The harness's own
-default, `~/.dsh`, is not a candidate: a folder that carries everything it needs must not reach
-into a person's profile to START. It survives as the SOURCE of a one-way **copy** — read, never
-written, never run against — offered while it can be read and there is something left to bring,
-and the copy's own credentials file is a byte copy behind a second click that this process never
-parses. Start installs the pack into the home in use, and the key row asks for the key, which is
-what that rung used to exist for.
+**The home ladder is four rungs**, in both workers, and the order is the reason: `-DshHome`
+(the person named it for this run), an inherited `DSH_HOME` (a harness session that started
+this shell), a portable `<tree>/.vncode/home` when the tree carries the `PORTABLE` marker or
+already holds a home, and `~/.dsh` - the harness's own default. A portable installation
+keeps the pack, the sessions and the key inside the folder, so nothing lands in the user's
+profile; `check-scripts.mjs` reads both workers for the marker and the `home` folder so the
+rule cannot drift out of one of them.
 
-Four hardening rules travel with those paths, and each is a `cargo test` case:
+**The environment is inherited, not composed.** The launcher hands the harness the
+environment it was started with, so an exported `DEEPSEEK_API_KEY` reaches it exactly as it
+would from a terminal. Nothing is copied between homes: a home outside this tree is only
+ever the harness's own default that the launcher falls back to, and no file is read to
+borrow a key from one.
 
-1. **A path is cleaned before it is used** (`userpath.rs`): `~` expanded, relative
-   resolved against a captured cwd, `.`/`..` folded lexically, a NUL or an empty value
-   refused by name, and the exported path is the REAL one with the Windows `\\?\` form
-   stripped. A path that means two things to two processes is how a write lands
-   somewhere nobody chose.
-2. **Only a directory this app CREATED is hardened** to `0700` on Unix — the home holds
-   `.credentials.yaml`, the root holds an npm cache that can hold registry credentials.
-   A home the app merely JOINED is never chmodded: it has an owner and a history, and
-   the probe reports `created` precisely so those two cases cannot be confused. On
-   Windows nothing is chmodded: the directories live under the user's profile and
-   inherit its ACL, and a half-written ACL is worse than an inherited one.
-3. **Nothing in the preferences can name a program.** `<root>/prefs.json` stores a
-   browser **id** the table already knows and a home path, both validated on read; a
-   record this build cannot vouch for (wrong version, unknown id, empty path) is
-   DISCARDED rather than repaired. This matters because the app runs a program for you:
-   a stored path would be an execution primitive.
-4. **The browser launch is checked at the last moment.** `browser::command` refuses any
-   URL that is not loopback — the ready line was already checked, and a rule that holds
-   at one end of a pipe is not a rule — starts a PROGRAM with the URL as exactly one
-   argv element, and never a shell. On Windows the platform opener is
-   `rundll32.exe url.dll,FileProtocolHandler`, which is a program rather than a shell;
-   `explorer.exe` was dropped because it silently did nothing from a child. The
-   Chrome-first table's last rung is the platform's own opener, so "a browser this build
-   has never heard of" is still the OS's business rather than a refusal. **The launcher is
-   the only process that ever hands the token to a browser** — once, in memory, as one argv
-   element, after the ready line has been checked. The app never holds it: `vncode` starts
-   the launcher and waits for its exit code.
+Three rules the launcher holds, each the fact a future editor must not break:
 
-**No home is ever read to borrow a key, and nothing is copied out of one.** The first-run
-COPY and the "use the existing home" rung left with the panel that offered them: a home
-outside this app's own root is now nothing more than the harness's own default that the
-launcher falls back to. What replaced them is one prompt.
+1. **The ready line is read, never guessed.** The harness prints one line, `dsh web: <url>`,
+   and the launcher takes the FIRST URL out of a line that names `dsh web:`, with ANSI
+   colour stripped first - so an unrelated URL in the output is never mistaken for the tab.
+   The token is read in memory: it is never written to a file, never echoed, and never put
+   in a child's environment.
+2. **Only a loopback URL is opened.** The check runs immediately before the browser starts,
+   on the parsed host - a rule that holds at one end of a pipe is not a rule - and a line
+   naming any other authority is refused rather than opened. That is what keeps a launch
+   token from being handed to a browser pointed at somebody else's machine.
+3. **The URL is one argv element, never a shell.** Chrome is started with the URL as a
+   single argument, and the default-browser fallback goes through the platform opener
+   (`ShellExecute`, `open`, `xdg-open`) with that same single argument. No shell is
+   involved, so nothing in a URL can be read as a metacharacter.
 
-**A key never has to come from the machine at all.** `vncode key` asks for it at the
-terminal — hidden input, no echo — and `keystate::write_env_key` puts
-`DEEPSEEK_API_KEY=<value>` into `<home>/.env` (`0600` on POSIX, atomic). That is a layer
-the harness's own resolution reads, it needs no machine credentials, and it keeps the
-secret inside the folder. Nothing is read on the way: the prompt is one-way, the value is
-not parsed back, not drawn and not logged, and the only thing the app learns afterwards is
-which layer a fresh `keystate::read` found a key in.
-
-Every child's environment is **composed rather than inherited**
-(`vn-shell-runtime`'s `env.rs`): `DSH_HOME` is set, the app's own `VNCODE_HOME` and the
-launcher's console markers are *removed* — an environment is inherited unless a variable
-is removed, a leak that was measured while this was written and is now read back out of
-the child by `check-shell.mjs` — and `TMP`/`TEMP`/`TMPDIR` point at `<app root>/tmp` when
-the machine's own temp refuses a child, which is the case a real log measured (the
-harness's spill store died on `mkdtemp`).
+**The key is the harness's, not the launcher's.** No command of this pack asks for it: the
+harness resolves `DEEPSEEK_API_KEY` from its own environment, then a `.env` beside the
+launcher, then `<home>/.env`, and the launcher inherits whatever the person's shell has.
+A key is added in the harness itself under **Settings > Models**, or by putting that line in
+`<home>/.env` - a layer the harness's own resolution reads, which keeps the secret inside
+the folder and out of this repository.
 
 ## There is no embedded engine
 
-The app draws no web view, and that is a security decision as much as a size one. `wry`,
-WebView2, WKWebView and WebKitGTK were all deleted with the pane, so:
+Nothing in this repository draws a page, and that is a security decision as much as a
+packaging one. The harness is a **web application**; the pack adds bundles to it and a
+launcher that opens it:
 
-- the launch token reaches **one program**: the browser the person already runs, as one
-  argv element, from the launcher — not an engine inside this process;
-- there is no engine profile under the app's root to keep a browsing record, because there
+- the launch token reaches **one program**: the browser the person already runs, as one argv
+  element, from the launcher - not an engine inside this process;
+- there is no engine profile anywhere in this tree to keep a browsing record, because there
   is no engine. A browser keeps its own history, in its own profile, where the person can
   see and manage it;
 - there is no IPC channel, no injected script, no download handler, no permission handler
   and no navigation handler to audit, because there is no page in this process to attach
   them to. The whole class of "the engine recorded the token" findings is gone rather than
-  mitigated: **measured**, after a single load of the harness a `wry` build had the full URL
-  — token and all — in `History`, `Favicons` and `Top Sites` inside its own profile;
-- the app's attack surface is the four things it does: write `.env`, run
-  `scripts/setup/install.*`, run `scripts/run-web.*`, and read the pin.
+  mitigated: **measured**, after a single load of the harness a web-view build had the full
+  URL - token and all - in `History`, `Favicons` and `Top Sites` inside its own profile;
+- the launcher's attack surface is the four things it does: read the pin, decide the home,
+  run `npx @deepseek-ai/dsh@<pin> web`, and open one loopback URL.
 
-The one rule that used to be about the pane survives, and now belongs to the launcher: only
-a **loopback** URL is ever opened, checked in the launcher immediately before the process
-starts.
+The one rule that outlived every pane: only a **loopback** URL is ever opened, checked in
+the launcher immediately before the browser starts.
 
 ## Code execution this pack adds on purpose
 
@@ -214,7 +188,7 @@ should be read as such:
 1. **Never expose the port.** No `--host`, no proxy, no tunnel, no published container
    port, no reverse proxy — this route is what makes "LAN-exposed" mean "remote code
    execution as you", not "someone can read my conversation".
-2. **Stop the app when you are done**, and treat the printed URL as a password (a leaked
+2. **Stop the harness when you are done**, and treat the printed URL as a password (a leaked
    URL buys a cookie, and a cookie buys `eval`).
 3. **Uninstall the package if you do not use SuperCollider** — a row you never open is
    still a route that is mounted.
@@ -227,13 +201,13 @@ should be read as such:
 1. **Keep it on loopback**: the pack's launcher or
    `npx @deepseek-ai/dsh@0.2.0-rc.2 web`, no `--host`, no `--trusted-host`. Loopback
    traffic does not cross a firewall, so no firewall rule "fixes" an exposed bind.
-2. **Treat the printed URL as a password**, and stop the app when you are not using
+2. **Treat the printed URL as a password**, and stop the harness when you are not using
    it.
-3. **Know what logs out**: stopping the app kills the launch token; deleting the
+3. **Know what logs out**: stopping the harness kills the launch token; deleting the
    site's cookies ends that browser's session; a **different port** invalidates
    cookies (name and audience derive from `host:port`); a plain restart does **not**
    log anyone out — the signing secret is durable.
-4. **Rotate the secret** to revoke every cookie at once: stop the app, delete
+4. **Rotate the secret** to revoke every cookie at once: stop the harness, delete
    **only** the `client-connection/browser-session` entry from
    `$DSH_HOME/.credentials.yaml` (it also holds your model keys), save, restart. To
    shorten sessions instead, set `cookieMaxAgeDays` on the `connection` row in
@@ -333,19 +307,13 @@ scanning and push protection as a second net.
 ## What the pack does not do
 
 - No API keys are read: `$DSH_HOME/.credentials.yaml` is touched for **presence**
-  only — a boolean, never a value. `vncode key` is the same rule from the other
-  side: a value the person TYPES at the prompt is written to `<home>/.env` as
-  `DEEPSEEK_API_KEY`, which the harness's own credential resolution reads as a documented
-  fallback layer (`@deepseek-ai/dsh-credentials-local`: the managed store first, then the
-  invoking project's `.env`, then the home's). The managed document is **never written by
-  this app** — it is a strict `CredentialRef`-to-string YAML the harness refuses to boot on
-  when it is malformed or readable beyond its owner. What the prompt guarantees, and what
-  `keystate::write_env_key` is: the value is hidden as it is typed, held in memory only while
-  the prompt is open, never parsed back, never held in a `KeyState`, never drawn, never
-  logged (the log line and the note name the FILE), written atomically with `0600` on Unix,
-  and every other line of an existing `.env` is preserved. A value that cannot be carried
-  unambiguously (a newline, a quote, a backslash) is refused by name, and the sentence
-  names the reason and never the value.
+  only — a boolean, never a value. The DeepSeek key is the harness's own business: it
+  resolves `DEEPSEEK_API_KEY` from its own environment, then a `.env` beside the
+  launcher, then `<home>/.env` (`@deepseek-ai/dsh-credentials-local`: the managed store
+  first, then the invoking project's `.env`, then the home's), and no command in this
+  repository prompts for one or writes one. The managed document is **never written by
+  this pack** — it is a strict `CredentialRef`-to-string YAML the harness refuses to boot
+  on when it is malformed or readable beyond its owner.
 - No way to weaken the harness's authentication, and no flag, setting or variable
   that turns the session check off.
 - No WebSocket upgrade and **no shell of its own** — the dock is a read-only

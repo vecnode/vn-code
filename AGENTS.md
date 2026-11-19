@@ -11,14 +11,12 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 ## Hard rules — do not break these
 
 1. **One install target.** The web profile only. No desktop edition, no
-   `-Target desktop`, no desktop detection, **no window and no web view**. `app/` is a
-   **front door** to the same pinned `dsh web`: it decides the root and the home, writes
-   the key, runs this pack's own installer (`scripts/setup/install.*`, given `-DshHome
-   <the home it chose>`) when that profile lacks the bundles, and then runs
-   `scripts/run-web.*` — the same launcher a person double-clicks — in the foreground.
-   It starts no node, binds no port, opens no tab and draws nothing: **the launcher owns
-   the harness, the ready line and the browser tab.** Launching only the web must keep
-   working on a machine with no `vncode` at all.
+   `-Target desktop`, no desktop detection, **no window and no web view** — and no
+   native code at all: this repository is Node/TS/JS, and a compiler is not among its
+   build dependencies. `scripts/run-web.*` IS the front door: it decides the home, runs
+   the pinned `dsh web --no-open`, watches the ready line and opens the tab in Chrome. It
+   starts no second server, holds no port of its own and draws nothing, and it must keep
+   working on a machine that has nothing but Node.js and npm.
 2. **Nothing patches core.** A row change is a new bundle layer.
    `dsh-vn-master` is the pack's final layer (it installs last), so pack-wide row
    patches belong there, and a package that *replaces* a row carries that row's
@@ -28,16 +26,14 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
    `$PSVersionTable`; never `$IsWindows` unguarded, never a hardcoded `npx.cmd`,
    `%USERPROFILE%` or `\`). macOS/Linux tooling is POSIX shell and must **never**
    require PowerShell — Node.js with npm/npx and nothing else.
-4. **Launchers.** Every entry point lives in `scripts/`, one per action per host
-   (`run-web.*`, `run-desktop.*`), and there are **no forwarders**. The install and
-   uninstall pairs live one level down in `scripts/setup/`, beside the workers they
-   call, and the app's `install` / `uninstall` verbs run those same entry points. Nothing
-   else sits at
-   the top level: `console/` is the shared console layer, `tools/` is
-   maintainer-only, `checks/` is the contract, and `check-scripts.mjs` fails on a
-   stray file. On Windows the entry point calls the PowerShell worker beside it (or
-   the console layer, for the setup pair) and gets its console behaviour from the one
-   shared layer:
+4. **Launchers.** Every entry point lives in `scripts/`, one per host (`run-web.bat`
+   and `run-web.ps1` on Windows, `run-web.sh` on macOS/Linux), and there are **no
+   forwarders**. The install and uninstall pairs live one level down in
+   `scripts/setup/`, beside the workers they call. Nothing else sits at the top level:
+   `console/` is the shared console layer, `tools/` is maintainer-only, `checks/` is the
+   contract, and `check-scripts.mjs` fails on a stray file. On Windows the entry point
+   calls the PowerShell worker beside it (or the console layer, for the setup pair) and
+   gets its console behaviour from the one shared layer:
 
        if not defined VNCODE_CONSOLE set "VNCODE_ARGV=%*"
        call "%~dp0console\adapt.cmd" "%~f0" "<window title>"
@@ -49,9 +45,8 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
    `theme.sh`.
 5. **The launch token is a live credential.** It is read in memory, never written
    to a file, echoed, or handed to a shell, and a URL that is not loopback is
-   refused rather than opened. It appears only in `scripts/run-web.ps1` /
-   `scripts/run-web.sh` — **never in `app/`**, which starts the launcher and reads its
-   exit code.
+   refused rather than opened. It appears in exactly two files, `scripts/run-web.ps1`
+   and `scripts/run-web.sh`, and nowhere else.
 6. **No secrets, ever.** Run `node scripts/checks/check-no-secrets.mjs` before
    pushing. A vendored bundle can ship its author's own credentials: redact them
    in the **build** (a patch under that engine's `vendor/<name>/patches/`, read
@@ -59,16 +54,15 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 7. **Zero npm dependencies** in shipped packages, and no network egress a plugin
    starts on its own. Engines are vendored under `lib/vendor/` or resolved from
    the harness already on disk.
-8. **CI builds the app; the checks prove it.** `.github/workflows/ci.yml` runs clippy
-   with warnings denied, the workspace tests, a release build, a **6 MB size ceiling**
-   and a smoke run - on all three OSes for a pull request, the Monday schedule, a manual
-   dispatch, and `release.yml`, which calls it as its gate. **A push to `main` starts no
-   CI at all**: commits and pushes are free, and CI runs at the boundaries (a PR, the
-   weekly run, or the cut). A release
-   publishes **two** artefacts: one `vncode` per OS, and one `vncode-web` for the
-   node/JS half, which is the same bytes everywhere. The checks in `scripts/checks/`
-   are still run by hand; they are the contract, and `scripts/checks/README.md` lists
-   them.
+8. **CI proves the tree; the checks prove the change.** `.github/workflows/ci.yml` is
+   one job in a `node:22` container - the runtime `package.json` declares - running
+   `check-no-secrets.mjs` and `check-scripts.mjs` behind a Node floor assertion. There is
+   no compiler, no build and no per-OS matrix, because nothing here is native. **A push
+   to `main` starts no CI at all**: commits and pushes are free, and CI runs at the
+   boundaries (a PR, a manual dispatch, or the cut). A release publishes **one**
+   artefact: `vncode-<version>.zip`, a zip of this repository at the tag, which is the
+   whole distribution. The checks in `scripts/checks/` are still run by hand; they are
+   the contract, and `scripts/checks/README.md` lists them.
 
 ## Layout
 
@@ -158,25 +152,13 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   `dsh-diagrams`, `dsh-frontend-craft`, `dsh-proto-lab`, `dsh-ocr`, `dsh-wsl`,
   `dsh-docker`, `dsh-ollama` and `dsh-image-upscale`), and the pack-wide checks
   still own the routes, the bundle and the manifest.
-- `scripts/` — the launchers (`run-web.*`, `run-desktop.*`), and four folders:
-  `console/` (the shared console layer), `setup/` (install and uninstall, which the
-  app's verbs run), `tools/` (maintainer-only: the fork re-sync for the client bundles
-  this pack vendors) and `checks/`.
-- `app/` — the Rust **front door**: a cargo workspace of three crates whose binary is
-  `vncode`, about 0.5 MB, with **no window and no web view**. It decides the root its
-  harness home lives in (`$VNCODE_HOME`, with `DSH_HOME` at `<root>/home` unless a
-  `-DshHome` or a writable inherited `DSH_HOME` says otherwise — **nothing outside its
-  own root is ever the home it runs against**), composes every child's environment
-  rather than inheriting one, cleans every path before it uses one, writes the DeepSeek
-  key into `<home>/.env` when asked, runs `scripts/setup/install.*` when the profile
-  lacks the pack, and then runs `scripts/run-web.*` in the foreground. Its verbs are
-  `start` (default), `install`, `uninstall`, `status` and `key`; `-Mode embed` is
-  refused **by name**, because there is no embedded browser to select.
-  `app/README.md` explains it. `check-shell.mjs` is what proves it, and it drives
-  the real binary.
+- `scripts/` — the launcher (`run-web.*`), and four folders: `console/` (the shared
+  console layer), `setup/` (install and uninstall, which a fresh machine runs once),
+  `tools/` (maintainer-only: the fork re-sync for the client bundles this pack vendors)
+  and `checks/`.
 - `docs/` — install, build, deploy, release, paths, compatibility. There is no
-  distributer and no ship list: the distribution is this
-  repository plus the binary, and the app installs the pack itself.
+  distributer and no ship list: the distribution is this repository, zipped at the tag,
+  and the pack installs itself with `scripts/setup/install.*`.
 - `.dsh-version.json` — the pinned harness line and the pack manifest
   (its versions must match every `package.json`; `check-node-routes.mjs` enforces
   that).
@@ -186,21 +168,14 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 Run the check that owns the area, and say which ones you ran:
 
 - `check-no-secrets.mjs` — before anything is pushed;
-- `check-scripts.mjs` — the `scripts/` layout, the console contract, and both setup
-  entry points driven with `-Help` (which installs nothing);
+- `check-scripts.mjs` — the `scripts/` layout, the console contract, `run-web.*` and both
+  setup entry points driven with `-Help` (which starts nothing and installs nothing), and
+  the two workflows;
 - `check-node-routes.mjs` — every Node route, the manifest, the pack-wide patches;
 - `check-client-bundles.mjs` — every browser bundle, loaded and driven for real;
 - `check-media-node.mjs`, `check-pdf-node.mjs`,
   `check-browser-node.mjs` — the tool
   and host halves;
-- `check-shell.mjs` — the app, **driven**: the verbs and `-Help`; `-Mode embed` refused
-  BY NAME (the flag the deleted web view used to answer); a size ceiling a GUI stack
-  cannot pass; and `start` run against **stub scripts** in a throwaway tree — the
-  installer is run because that home lacks the pack, the launcher is handed `-DshHome`
-  and `-NoTerminal` and a **composed** environment, the app's own root and the console
-  markers are absent from both children, no key file is written with no terminal to ask
-  at, and `status` names the same home. It also proves `scripts/run-web.* -Help` answers
-  with no binary involved, and it skips loudly with no cargo and no built binary;
 - `check-skill-examples.mjs`, `check-media-examples.mjs` — every fenced example in
   the shipped skills (parsed, compiled, or actually run);
 - `npm run check` **in a package folder that ships its own** — today

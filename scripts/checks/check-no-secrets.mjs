@@ -128,13 +128,10 @@ export const RULES = [
  * with the reason, so the check stays honest instead of being loosened for
  * everybody. Keep this list short and justified; an entry without a reason is a
  * bug, and "the check is inconvenient" is not a reason: change the fixture so it
- * is not key-shaped instead (see `keystate.rs`, whose test value carries a `/`
- * precisely so it cannot be confused with a credential).
+ * is not key-shaped instead - a value that carries a `/` or a word cannot be
+ * confused with a credential.
  *
  * Currently empty, and that is the goal.
- *
- *   { file: 'app/crates/vn-shell-core/src/readyline.rs', rule: 'launch-token-in-url',
- *     reason: 'the redaction fixture; its token is under the 16-char threshold' }
  */
 export const ALLOWLIST = []
 
