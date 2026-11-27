@@ -254,7 +254,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.34'
+    const PLUGIN_VERSION = '0.1.0-alpha.35'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -421,6 +421,13 @@ window.__ModuleLoader__.load({
 html .hHd-Xa_root.hHd-Xa_collapsed .dst-band{display:none}
 html:has([data-dsh-themes-band]) .hHd-Xa_panelList{display:none}
 html:has([data-dsh-themes-band]) .hHd-Xa_footArea [aria-haspopup="dialog"]{display:none}
+/* alpha.35: the band carries Settings, Feedback and Sign in now, so the foot's
+   settings block would be a second copy of the same three doors in the same
+   column. Hiding it does NOT break the band's clicks: a display:none control
+   still takes a programmatic click, and the band presses exactly those controls.
+   A profile without this row keeps the shipped block, because the rule is
+   gated on the band having mounted. */
+html:has([data-dsh-themes-band]) .hHd-Xa_settingsArea{display:none}
 /* The band's Skills button is the pack's ONE Skills entry point. dsh-skills also
    registers a book icon in the conversation header; with the band mounted that
    is a second door to the same dialog, so the header one is hidden - not
@@ -1802,7 +1809,7 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
     }
 
     // ---------------------------------------------------------------------
-    // The band's SECOND ROW: Settings | Plugins | Media (alpha.29).
+    // The band's SECOND ROW: Settings | Plugins | Media | Skills | Feedback | Sign in (alpha.35).
     //
     // THE HOLE. The left column's band is 76px (installLeftTopBar): the top 40px
     // carry the mark, the product text and the collapse toggle, the mid-band
@@ -1813,8 +1820,8 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
     // workspaces region and the foot, and the two at the top are single-occupant,
     // aria-hidden decoration this package already hides.
     //
-    // WHAT THIS DOES. The theme mounts its own strip into that row: FOUR icon
-    // buttons - Settings, Plugins, Media, Skills, in that order - and each one is
+    // WHAT THIS DOES. The theme mounts its own strip into that row: SIX icon
+    // buttons - Settings, Plugins, Media, Skills, Feedback, Sign in - and each one is
     // the SAME .dst-button the header's controls are (28x28, the same .5px
     // outline, a 15px glyph), so the app has ONE button size rather than a band
     // that invented a second. Each names itself in a tooltip on hover. The strip
@@ -1862,6 +1869,8 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
     const PluginsGlyph = glyphOf(['IconPluginPinwheelOutlineRegular', 'IconPluginPinwheelOutline16'])
     const MediaGlyph = glyphOf(['IconPlayOutlineRegular', 'IconPlayOutline16'])
     const SkillsGlyph = glyphOf(['IconSkillOutlineRegular', 'IconSkillOutline16'])
+    const FeedbackGlyph = glyphOf(['IconPaperPlaneOutlineRegular', 'IconPaperPlaneOutlineMedium', 'IconSendOutlineRegular'])
+    const SignInGlyph = glyphOf(['IconUserOutlineRegular', 'IconUserOutlineMedium'])
 
     /**
      * Resolve one CLIENT service, or null - never an import and never a hard
@@ -1952,9 +1961,15 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
       // The fourth element: the Skills browser the header carries, driven through
       // its own control so the dialog keeps the session it was opened for.
       items.push({ id: 'skills', label: 'Skills', icon: SkillsGlyph, onSelect: props.openSkills })
+      // Feedback and Sign in, in the same row (alpha.35). Both are rows of the
+      // shipped account menu; the band opens that menu and presses the row, so
+      // the action (the feedback form with its diagnostics, the sign-in flow) is
+      // still the account seat's own and nothing here re-implements it.
+      items.push({ id: 'feedback', label: 'Feedback', icon: FeedbackGlyph, onSelect: props.openFeedback })
+      items.push({ id: 'signin', label: 'Sign in', icon: SignInGlyph, onSelect: props.openSignIn })
       return h(
         'div',
-        { className: 'dst-band', role: 'group', 'aria-label': 'Settings, Plugins, Media, Skills' },
+        { className: 'dst-band', role: 'group', 'aria-label': 'Settings, Plugins, Media, Skills, Feedback, Sign in' },
         items.map((item) => h(BandAction, { key: item.id, ...item })),
       )
     }
@@ -1983,14 +1998,68 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
         try {
           const sidebar = document.querySelector('.' + SIDEBAR_CLASS + '_root')
           if (sidebar === null) return
-          // The shipped settings panel's trigger, scoped to THIS column: the one
-          // control in the sidebar that declares a dialog. Nothing else is clicked.
-          const trigger = sidebar.querySelector('[aria-haspopup="dialog"]')
+          // The shipped settings trigger lives in the settings AREA of the foot;
+          // scoping to it first is what keeps this click from landing on some
+          // other dialog opener the sidebar may carry earlier in the DOM (the
+          // 0.2.2 sidebar has more than one `aria-haspopup="dialog"`). The
+          // whole-column search stays as the fallback for a line that moved it.
+          const area = sidebar.querySelector('.' + SIDEBAR_CLASS + '_settingsArea')
+          const trigger = (area === null ? sidebar : area).querySelector('[aria-haspopup="dialog"]')
           if (trigger !== null && typeof trigger.click === 'function') trigger.click()
         } catch (err) {
           /* a shell that moved the trigger keeps a working row and no shortcut */
         }
       }
+
+      /**
+       * Press one row of the shipped account menu, which is where Feedback and
+       * Sign in live. The trigger and the rows are the account seat's own, so the
+       * actions (the feedback form with its diagnostics, the sign-in flow) are
+       * unchanged; this only routes the click.
+       *
+       * A menu that is already open is used as it is - clicking its trigger again
+       * would close it - and the row is matched on its visible label because the
+       * primitive renders rows with no stable per-row id. Both spellings are
+       * listed: the pack ships an English UI, and a Chinese locale would say the
+       * same thing in its own words.
+       * @param labels - the row labels to try, in order.
+       */
+      const openAccountRow = (labels) => {
+        const findRow = () => {
+          const rows = Array.from(document.querySelectorAll('[role="menuitem"]'))
+          const wanted = labels.map((label) => label.toLowerCase())
+          for (const row of rows) {
+            const text = String(row.textContent ?? '').trim().toLowerCase()
+            if (text !== '' && wanted.some((label) => text.includes(label))) return row
+          }
+          return null
+        }
+        try {
+          const open = findRow()
+          if (open !== null) {
+            open.click()
+            return
+          }
+          const sidebar = document.querySelector('.' + SIDEBAR_CLASS + '_root')
+          if (sidebar === null) return
+          const area = sidebar.querySelector('.' + SIDEBAR_CLASS + '_settingsArea')
+          const trigger = (area === null ? sidebar : area).querySelector('[aria-haspopup="menu"]')
+          if (trigger === null || typeof trigger.click !== 'function') return
+          trigger.click()
+          // The menu is portalled on the frame after the click.
+          const press = () => {
+            const row = findRow()
+            if (row !== null) row.click()
+          }
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(press)
+          else setTimeout(press, 16)
+        } catch (err) {
+          /* a control that moved is not worth an exception in a click handler */
+        }
+      }
+
+      const openFeedback = () => openAccountRow(['Feedback', '反馈', '反馈'])
+      const openSignIn = () => openAccountRow(['Sign in', 'Sign In', '登录', 'Signin'])
 
       const openSkills = () => {
         try {
@@ -2040,7 +2109,17 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
 
       const paint = () => {
         if (reactRoot === null) return
-        reactRoot.render(h(BandActions, { panels: declaredPanels(ctx), selectPanel, openSettings, openSkills, openMedia }))
+        reactRoot.render(
+          h(BandActions, {
+            panels: declaredPanels(ctx),
+            selectPanel,
+            openSettings,
+            openSkills,
+            openMedia,
+            openFeedback,
+            openSignIn,
+          }),
+        )
       }
 
       const ensure = () => {
