@@ -118,7 +118,7 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the toolbar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.14'
+    const PLUGIN_VERSION = '0.1.0-alpha.15'
     /** The client service dsh-modal provides; resolved lazily, never required. */
     const MODAL_SERVICE = 'modals'
     /** The client service @deepseek-ai/dsh-client-ui-theme provides; resolved lazily too. */
@@ -1617,8 +1617,22 @@ window.__ModuleLoader__.load({
      * The tab body dispatched by `sidebar.right.pane.tab`: a file address gets
      * that file's editor, and the tab's own page address gets a blank document.
      */
+    /**
+     * The pane seat's tab-info hook, whichever shape it arrived in: `useTabInfo`
+     * (the prop the 0.2.0 seat handed a body) or `hooks.tabInfo` (the hook the
+     * 0.2.1+ seat declares in its inject). A seat that gives neither yields null,
+     * which every body here already treats as "this pane has no tab".
+     */
+    function tabInfoHookOf(props) {
+      if (!props) return null
+      if (typeof props.useTabInfo === 'function') return props.useTabInfo
+      if (props.hooks && typeof props.hooks.tabInfo === 'function') return props.hooks.tabInfo
+      return null
+    }
+
     function EditorBody(props) {
-      const info = props.useTabInfo()
+      const useTabInfo = tabInfoHookOf(props)
+      const info = useTabInfo !== null ? useTabInfo() : null
       const tab = info.tab
       const parsed = parseFileAddress(tab.contentId)
       const file = parsed && parsed.scope === 'session' && parsed.path !== '' ? parsed : null
@@ -1636,7 +1650,8 @@ window.__ModuleLoader__.load({
 
     /** The chip title: the label this surface set, else the captured title, plus a dot while dirty. */
     function EditorTitle(props) {
-      const info = props.useTabInfo()
+      const useTabInfo = tabInfoHookOf(props)
+      const info = useTabInfo !== null ? useTabInfo() : null
       const tab = info.tab
       const state = React.useSyncExternalStore(subscribeTabState, () => tabStateOf(tab.id))
       const text = state.label === '' ? tab.title : state.label

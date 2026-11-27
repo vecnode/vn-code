@@ -87,7 +87,7 @@ window.__ModuleLoader__.load({
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the tool bar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.5'
+    const PLUGIN_VERSION = '0.1.0-alpha.6'
     /** The keyed seats every tab type occupies. */
     const TAB_SLOT = 'sidebar.right.pane.tab'
     const TITLE_SLOT = 'sidebar.right.pane.tab.title'
@@ -816,9 +816,23 @@ window.__ModuleLoader__.load({
      * while its token is the newest - so a re-render can never cancel an in-flight
      * request, and two racing answers cannot overwrite each other.
      */
+    /**
+     * The pane seat's tab-info hook, whichever shape it arrived in: `useTabInfo`
+     * (the prop the 0.2.0 seat handed a body) or `hooks.tabInfo` (the hook the
+     * 0.2.1+ seat declares in its inject). A seat that gives neither yields null,
+     * which this body already treats as "this pane has no tab".
+     */
+    function tabInfoHookOf(props) {
+      if (!props) return null
+      if (typeof props.useTabInfo === 'function') return props.useTabInfo
+      if (props.hooks && typeof props.hooks.tabInfo === 'function') return props.hooks.tabInfo
+      return null
+    }
+
     function GitTreeView(props) {
       const sessionId = typeof props.sessionId === 'string' ? props.sessionId : ''
-      const info = typeof props.useTabInfo === 'function' ? props.useTabInfo() : null
+      const useTabInfo = tabInfoHookOf(props)
+      const info = useTabInfo !== null ? useTabInfo() : null
       const tabActions = info && info.tab && info.tab.actions ? info.tab.actions : null
 
       const [summary, setSummary] = useState({ phase: 'loading', data: null, error: null })

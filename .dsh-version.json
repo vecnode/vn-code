@@ -42,7 +42,7 @@
       ]
     },
     "dsh-editor": {
-      "version": "0.1.0-alpha.14",
+      "version": "0.1.0-alpha.15",
       "rows": [
         "editor"
       ],
@@ -63,7 +63,7 @@
       ]
     },
     "dsh-gittree": {
-      "version": "0.1.0-alpha.5",
+      "version": "0.1.0-alpha.6",
       "rows": [
         "gittree"
       ],
@@ -75,7 +75,7 @@
       ]
     },
     "dsh-image": {
-      "version": "0.1.0-alpha.2",
+      "version": "0.1.0-alpha.3",
       "rows": [
         "image"
       ],
@@ -107,7 +107,7 @@
       ]
     },
     "dsh-audio": {
-      "version": "0.1.0-alpha.8",
+      "version": "0.1.0-alpha.9",
       "rows": [
         "audio"
       ],
@@ -213,7 +213,7 @@
       ]
     },
     "dsh-video": {
-      "version": "0.1.0-alpha.2",
+      "version": "0.1.0-alpha.3",
       "rows": [
         "video"
       ],
@@ -258,7 +258,7 @@
       "role": "Browser: the pack's own web surface, which fetches and renders a page on the HOST in a disposable sandboxed engine behind an egress gate instead of framing it remotely - three tools and three routes. Currently disabled by dsh-vn-master's `browser` row; re-enabling it is deleting those two lines. See packages/dsh-browser/README.md."
     },
     "dsh-diagrams": {
-      "version": "0.1.0-alpha.8",
+      "version": "0.1.0-alpha.9",
       "rows": [
         "diagrams"
       ],
@@ -296,7 +296,7 @@
       ]
     },
     "dsh-pdf": {
-      "version": "0.1.0-alpha.9",
+      "version": "0.1.0-alpha.10",
       "rows": [
         "pdf"
       ],

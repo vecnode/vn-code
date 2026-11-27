@@ -1,6 +1,6 @@
 {
   "name": "dsh-image",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Image: a viewer tab for PNG/JPEG/GIF/WebP/AVIF/BMP/ICO/SVG/TIFF that fits the pane on open, zooms by moving the LAYOUT (never a transform), pans by drag and reads the pixel under the pointer. Client-only: the bytes come from the harness's own `remote.workspaceFiles`.",
   "type": "module",
   "main": "lib/index.js",

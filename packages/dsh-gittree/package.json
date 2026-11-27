@@ -1,6 +1,6 @@
 {
   "name": "dsh-gittree",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "description": "History: a read-only tab showing the workspace's commit graph, each commit's message and the files it touched. Three read-only routes spawn `git` with argv arrays under a pinned env; nothing here can write, stage or check out.",
   "type": "module",
   "main": "lib/index.js",
