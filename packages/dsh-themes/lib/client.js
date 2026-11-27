@@ -254,7 +254,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.35'
+    const PLUGIN_VERSION = '0.1.0-alpha.36'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -1995,14 +1995,20 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
       let tries = 0
 
       const openSettings = () => {
+        // The Settings DOOR on the 0.2.2 line is the account menu's own row
+        // (`openSettings` is one of the props the account seat hands it). That
+        // menu is the "More" block at the foot of the bar, and its Settings row
+        // is what a person clicks by hand - so the band presses the same row
+        // first. The inline trigger is the fallback: a line that renders the
+        // settings seat in the foot (which `whenAccess('settings/describe')`
+        // gates) still has it.
+        if (openAccountRow(['Settings', '设置'])) return
         try {
           const sidebar = document.querySelector('.' + SIDEBAR_CLASS + '_root')
           if (sidebar === null) return
-          // The shipped settings trigger lives in the settings AREA of the foot;
-          // scoping to it first is what keeps this click from landing on some
-          // other dialog opener the sidebar may carry earlier in the DOM (the
-          // 0.2.2 sidebar has more than one `aria-haspopup="dialog"`). The
-          // whole-column search stays as the fallback for a line that moved it.
+          // Scoped to the settings area first: the 0.2.2 sidebar carries more
+          // than one `aria-haspopup="dialog"`, so a whole-column first match can
+          // land on another opener and the button appears dead.
           const area = sidebar.querySelector('.' + SIDEBAR_CLASS + '_settingsArea')
           const trigger = (area === null ? sidebar : area).querySelector('[aria-haspopup="dialog"]')
           if (trigger !== null && typeof trigger.click === 'function') trigger.click()
@@ -2023,6 +2029,7 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
        * listed: the pack ships an English UI, and a Chinese locale would say the
        * same thing in its own words.
        * @param labels - the row labels to try, in order.
+       * @returns whether a row (or the menu that carries it) was found.
        */
       const openAccountRow = (labels) => {
         const findRow = () => {
@@ -2038,13 +2045,13 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
           const open = findRow()
           if (open !== null) {
             open.click()
-            return
+            return true
           }
           const sidebar = document.querySelector('.' + SIDEBAR_CLASS + '_root')
-          if (sidebar === null) return
+          if (sidebar === null) return false
           const area = sidebar.querySelector('.' + SIDEBAR_CLASS + '_settingsArea')
           const trigger = (area === null ? sidebar : area).querySelector('[aria-haspopup="menu"]')
-          if (trigger === null || typeof trigger.click !== 'function') return
+          if (trigger === null || typeof trigger.click !== 'function') return false
           trigger.click()
           // The menu is portalled on the frame after the click.
           const press = () => {
@@ -2053,8 +2060,10 @@ body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(2
           }
           if (typeof requestAnimationFrame === 'function') requestAnimationFrame(press)
           else setTimeout(press, 16)
+          return true
         } catch (err) {
           /* a control that moved is not worth an exception in a click handler */
+          return false
         }
       }
 
