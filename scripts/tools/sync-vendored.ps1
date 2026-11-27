@@ -127,52 +127,52 @@ $vendored = @(
         Patches = @(
             [pscustomobject]@{
                 Label   = 'lift the two-pane cap: the split intent is bounded by the kit own canSplit'
-                Find    = '(0, _deepseek_ai_dsh_client_ui_dockkit.dockPaneIds)(state).length >= 2 || '
+                Find    = '(0,_deepseek_ai_dsh_client_ui_dockkit.dockPaneIds)(state).length>=2||'
                 Replace = ''
             },
             [pscustomobject]@{
                 Label   = 'lift the two-pane cap: an edge drop is bounded by the kit own canSplit, top and bottom included'
-                Find    = (@(
-                        ((T 7) + 'if (zone === "top" || zone === "bottom") return [];'),
-                        ((T 7) + 'if (zone !== "center" && (0, _deepseek_ai_dsh_client_ui_dockkit.dockPaneIds)(state).length >= 2) return [];'),
-                        ''
-                    ) -join "`n")
+                Find    = 'if(zone===`top`||zone===`bottom`)return[];if(zone!==`center`&&(0,_deepseek_ai_dsh_client_ui_dockkit.dockPaneIds)(state).length>=2)return[];'
                 Replace = ''
             },
             [pscustomobject]@{
                 Label   = 'lift the two-pane cap: the dock surface is bounded by the kit own canSplit'
-                Find    = '(0, _deepseek_ai_dsh_client_ui_dockkit.canSplit)(surface.layout) && (0, _deepseek_ai_dsh_client_ui_dockkit.dockPaneIds)(surface.layout).length < 2'
-                Replace = '(0, _deepseek_ai_dsh_client_ui_dockkit.canSplit)(surface.layout)'
+                Find    = '(0,_deepseek_ai_dsh_client_ui_dockkit.canSplit)(surface.layout)&&(0,_deepseek_ai_dsh_client_ui_dockkit.dockPaneIds)(surface.layout).length<2'
+                Replace = '(0,_deepseek_ai_dsh_client_ui_dockkit.canSplit)(surface.layout)'
             },
             [pscustomobject]@{
                 Label   = 'offer every drop band a pane has, not left and right only'
-                Find    = 'dropZones: "horizontal",'
-                Replace = 'dropZones: "edges",'
+                Find    = 'dropZones:`horizontal`,'
+                Replace = 'dropZones:`edges`,'
             },
+            # The find appears TWICE in 0.2.2-rc.5 and both are the same ceiling:
+            # the Split control's disabled reason ("budget") and the action's own
+            # refusal. `Replace` is global on purpose - lifting the cap in one and
+            # not the other leaves a Split button that says it cannot split.
             [pscustomobject]@{
                 Label   = 'lift the two-pane cap: the split command is bounded by the kit own canSplit'
-                Find    = ' || (0, _deepseek_ai_dsh_client_ui_dockkit.dockPaneIds)(layout).length >= 2'
+                Find    = '||(0,_deepseek_ai_dsh_client_ui_dockkit.dockPaneIds)(layout).length>=2'
                 Replace = ''
             },
             [pscustomobject]@{
                 Label   = 'the disabled split hint names the kit own ceiling'
-                Find    = '"dock.splitPaneDisabled": "Two panes is the limit",'
-                Replace = '"dock.splitPaneDisabled": "Four panes is the limit",'
+                Find    = '"dock.splitPaneDisabled":`Two panes is the limit`,'
+                Replace = '"dock.splitPaneDisabled":`Four panes is the limit`,'
             },
             [pscustomobject]@{
                 Label   = 'the Chinese disabled split hint names the same ceiling'
-                Find    = '"dock.splitPaneDisabled": "' + $splitCapTwo + '",'
-                Replace = '"dock.splitPaneDisabled": "' + $splitCapFour + '",'
+                Find    = '"dock.splitPaneDisabled":`' + $splitCapTwo + '`,'
+                Replace = '"dock.splitPaneDisabled":`' + $splitCapFour + '`,'
             },
             [pscustomobject]@{
                 Label   = 'draw the tree the kit plans, not the flat grid that refuses it'
-                Find    = '_deepseek_ai_dsh_client_ui_dockkit.DockLayout, {'
-                Replace = 'DockTree, {'
+                Find    = '_deepseek_ai_dsh_client_ui_dockkit.DockLayout,{'
+                Replace = 'DockTree,{'
             },
             [pscustomobject]@{
                 Label   = 'splice in DockTree (packages/dsh-rightbar/vendor/dock-tree.js) above intentsFor'
-                Find    = (T 2) + 'function intentsFor(sessionId, actions, openTab, closeTab, splitPane) {'
-                Replace = ($dockTreeSource + "`n" + (T 2) + 'function intentsFor(sessionId, actions, openTab, closeTab, splitPane) {')
+                Find    = 'function intentsFor(sessionId,actions,openTab,closeTab,splitPane){'
+                Replace = ($dockTreeSource + "`n" + 'function intentsFor(sessionId,actions,openTab,closeTab,splitPane){')
             },
             # WHAT THE FLAT RENDERER'S TAB HOST GAVE THE DOCKED SURFACE - the second
             # thing the renderer swap above took away with the 2x2, and the reason a
@@ -291,31 +291,17 @@ $vendored = @(
             # asked for" behaviour is preserved.
             [pscustomobject]@{
                 Label   = 'seed the default page when a surface is first materialized, not only on the next action'
-                Find    = @(
-                    ((T 2) + 'function seat(state, sessionId, next) {'),
-                    ''
-                ) -join "`n"
+                Find    = 'function seat(state,sessionId,next){'
                 Replace = @(
-                    ((T 2) + 'function settleSurface(surface, seed) {'),
-                    ((T 3) + 'const counter = counting(surface.minted);'),
-                    ((T 3) + 'const makeTab = (id) => seedRecord(id, seed);'),
-                    ((T 3) + 'const settled = (0, _deepseek_ai_dsh_client_ui_dockkit.planSettle)(surface.layout, counter.mint, surface.layout.expanded ? makeTab : void 0);'),
-                    ((T 3) + 'if (settled.length === 0) return surface;'),
-                    ((T 3) + 'const stepped = (0, _deepseek_ai_dsh_client_ui_dockkit.record)(surface.history, surface.layout, settled);'),
-                    ((T 3) + 'return {'),
-                    ((T 4) + 'layout: stepped.state,'),
-                    ((T 4) + 'history: stepped.history,'),
-                    ((T 4) + 'minted: counter.used()'),
-                    ((T 3) + '};'),
-                    ((T 2) + '}'),
-                    ((T 2) + 'function seat(state, sessionId, next) {'),
+                    'function settleSurface(surface,seed){const counter=counting(surface.minted);const makeTab=id=>seedRecord(id,seed);const settled=(0,_deepseek_ai_dsh_client_ui_dockkit.planSettle)(surface.layout,counter.mint,surface.layout.expanded?makeTab:void 0);if(settled.length===0)return surface;const stepped=(0,_deepseek_ai_dsh_client_ui_dockkit.record)(surface.history,surface.layout,settled);return{layout:stepped.state,history:stepped.history,minted:counter.used()}}',
+                    'function seat(state,sessionId,next){',
                     ''
                 ) -join "`n"
             },
             [pscustomobject]@{
                 Label   = 'materializing a surface settles it, so an already-open bar is not left empty'
-                Find    = ((T 5) + 'd.bySession = seat(d, sessionId, (surface) => surface);')
-                Replace = ((T 5) + 'd.bySession = seat(d, sessionId, (surface) => settleSurface(surface, seed));')
+                Find    = 'd.bySession=seat(d,sessionId,surface=>surface)'
+                Replace = 'd.bySession=seat(d,sessionId,surface=>settleSurface(surface,seed))'
             },
             # The bar's default page was chosen from how many guide entries happened
             # to be registered at the instant of the first seed: with exactly ONE
@@ -325,15 +311,8 @@ $vendored = @(
             # must not depend on a race. It is always the guide's own page.
             [pscustomobject]@{
                 Label   = 'the default page is always the guide, not whichever single entry won the boot race'
-                Find    = @(
-                    ((T 3) + 'const [only, ...others] = tabs.guide();'),
-                    ((T 3) + 'const kind = only !== void 0 && others.length === 0 ? only.kind : GUIDE_KIND;'),
-                    ''
-                ) -join "`n"
-                Replace = @(
-                    ((T 3) + 'const kind = GUIDE_KIND;'),
-                    ''
-                ) -join "`n"
+                Find    = 'const[only,...others]=tabs.guide();const kind=only!==void 0&&others.length===0?only.kind:GUIDE_KIND;'
+                Replace = 'const kind=GUIDE_KIND;'
             }
         )
     },
@@ -348,29 +327,30 @@ $vendored = @(
         Patches = @(
             [pscustomobject]@{
                 Label   = 'declare the pack launcher route and the file-manager catalog ids'
-                # 0.2.0-rc.2 publishes these as BROWSER-RELATIVE forms of the Host
-                # paths (".slice(1)"), so the anchor carries the suffix.
-                Find    = (T 2) + 'const OPEN_IN_APP_OPEN_ROUTE = "/open-in-app/open".slice(1);'
+                # 0.2.2-rc.5 publishes these as BROWSER-RELATIVE forms of the Host
+                # paths ("slice(1)"), built from a `const OPEN_IN_APP_OPEN_PATH`
+                # that the 0.2.2 line introduced, so the anchor names the slice.
+                Find    = 'const OPEN_IN_APP_OPEN_ROUTE=OPEN_IN_APP_OPEN_PATH.slice(1);'
                 # Every element is parenthesized: the comma operator binds tighter
                 # than "+", so bare concatenations would collapse into one line.
                 Replace = (@(
-                        ((T 2) + 'const OPEN_IN_APP_OPEN_ROUTE = "/open-in-app/open".slice(1);'),
-                        ((T 2) + '/** dsh-open-in-app: the pack''s own cross-platform file-browser route. */'),
-                        ((T 2) + 'const NATIVE_OPEN_ROUTE = "/api/dsh-open-in-app/open";'),
-                        ((T 2) + '/** Catalog ids whose launch is a file manager, not an editor or terminal. */'),
-                        ((T 2) + 'const NATIVE_FILE_MANAGER_APPS = new Set(["finder", "explorer", "filemanager"]);')
+                        'const OPEN_IN_APP_OPEN_ROUTE=OPEN_IN_APP_OPEN_PATH.slice(1);',
+                        '/** dsh-open-in-app: the pack''s own cross-platform file-browser route. */',
+                        'const NATIVE_OPEN_ROUTE="/api/dsh-open-in-app/open";',
+                        '/** Catalog ids whose launch is a file manager, not an editor or terminal. */',
+                        'const NATIVE_FILE_MANAGER_APPS=new Set(["finder","explorer","filemanager"]);'
                     ) -join "`n")
             },
             [pscustomobject]@{
-                # The 0.2.0 controller hands the route to its fetcher AS A STRING
+                # The controller hands the route to its fetcher AS A STRING
                 # (the default fetcher is plain `fetch`, which resolves it against
                 # the page origin), so the pack's absolute route rides the same
                 # call - no `new URL(..., hostBase())` wrapper any more.
                 Label   = 'send the file managers through the pack launcher, everything else unchanged'
-                Find    = (T 5) + 'const response = await this.fetcher(OPEN_IN_APP_OPEN_ROUTE, {'
+                Find    = 'const response=await this.fetcher(OPEN_IN_APP_OPEN_ROUTE,{'
                 Replace = (@(
-                        ((T 5) + 'const route = NATIVE_FILE_MANAGER_APPS.has(appId) ? NATIVE_OPEN_ROUTE : OPEN_IN_APP_OPEN_ROUTE;'),
-                        ((T 5) + 'const response = await this.fetcher(route, {')
+                        'const route=NATIVE_FILE_MANAGER_APPS.has(appId)?NATIVE_OPEN_ROUTE:OPEN_IN_APP_OPEN_ROUTE;',
+                        'const response=await this.fetcher(route,{'
                     ) -join "`n")
             }
         )
@@ -391,11 +371,17 @@ function Get-CandidateRoots {
     if (-not $HomeDir) { $HomeDir = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path (Get-HomeDir) '.dsh' } }
     $roots += (Join-Path (Join-Path (Join-Path $HomeDir 'profiles') 'web') 'node_modules')
     # npm's on-demand cache lives in different places per platform: the Windows
-    # Local/AppData roaming folders, and ~/.npm/_npx on macOS/Linux.
+    # Local/AppData roaming folders, and ~/.npm/_npx on macOS/Linux. A PORTABLE
+    # installation is a third place: run-web sets npm_config_cache to
+    # <tree>/.vncode/npm-cache, so the line the launcher provisions sits there and
+    # a re-sync run from that tree must look at it - otherwise the very machine
+    # that just ran the pinned harness reports "no root carrying the pinned line".
     $caches = @()
+    if ($env:npm_config_cache) { $caches += (Join-Path $env:npm_config_cache '_npx') }
     if ($env:LOCALAPPDATA) { $caches += (Join-Path (Join-Path $env:LOCALAPPDATA 'npm-cache') '_npx') }
     if ($env:APPDATA) { $caches += (Join-Path (Join-Path $env:APPDATA 'npm-cache') '_npx') }
     $caches += (Join-Path (Join-Path (Get-HomeDir) '.npm') '_npx')
+    $caches += (Join-Path (Join-Path (Join-Path $repoRoot '.vncode') 'npm-cache') '_npx')
     foreach ($cache in $caches) {
         if (-not (Test-Path $cache)) { continue }
         $hits = Get-ChildItem $cache -Directory -ErrorAction SilentlyContinue |
@@ -416,8 +402,8 @@ function Get-CandidateRoots {
     The harness LINE the pack is pinned to - the same field the tracked checks
     grade the forks against. A re-sync must move the forks to that line and no
     other, because more than one harness generation sits on an ordinary machine:
-    this one carries 0.1.5-rc.1 in the npx cache beside the pinned 0.2.0-rc.2, and
-    the older line's sidebar-right is a different bundle entirely (140 KB against
+    this one carries 0.1.5-rc.1 in the npx cache beside the pinned line, and the
+    older line's sidebar-right is a different bundle entirely (140 KB against
     331 KB, no `DockLayout` JSX at all). A plain "first root that has the file"
     walk finds the OLD one, and the sync would then quietly regenerate every fork
     from a line the pack does not target.
@@ -504,9 +490,25 @@ foreach ($item in $vendored) {
     $source = [System.IO.File]::ReadAllText($sourcePath, [System.Text.Encoding]::UTF8)
     # We only rewrite the module-table id: the CSS tag ids and the guide slot id
     # stay the core ones on purpose, so a vendored copy keeps its identity.
-    $needle = 'id: "' + $item.Core + '"'
-    if ($source.IndexOf($needle) -lt 0) { throw "could not find the module-table id in $sourcePath (layout changed?)" }
-    $rewritten = $source.Replace($needle, 'id: "' + $item.Name + '"')
+    #
+    # The bundle names itself in two spellings across the lines this pack has
+    # forked: `id: "<core>"` up to 0.2.0-rc.2, and a template literal
+    # (`id:` + backtick + <core> + backtick) from the 0.2.1 line on, which is
+    # also the line that minifies with backticks throughout. The rewrite keeps
+    # whichever spelling the source uses - writing double quotes into a bundle
+    # that never used them would be a silent change of the loader's own syntax.
+    $backtick = [char]96
+    $quotedNeedle = 'id: "' + $item.Core + '"'
+    $templateNeedle = 'id:' + $backtick + $item.Core + $backtick
+    if ($source.IndexOf($quotedNeedle) -ge 0) {
+        $rewritten = $source.Replace($quotedNeedle, 'id: "' + $item.Name + '"')
+    }
+    elseif ($source.IndexOf($templateNeedle) -ge 0) {
+        $rewritten = $source.Replace($templateNeedle, 'id:' + $backtick + $item.Name + $backtick)
+    }
+    else {
+        throw "could not find the module-table id in $sourcePath (layout changed?)"
+    }
 
     # The fork's documented patches, applied in order. A Find that no longer
     # matches means the core bundle moved: fail here rather than ship a fork

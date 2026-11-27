@@ -28,7 +28,7 @@ download below.
 ## Supported versions
 
 Supported: `main`, and the harness line pinned in `.dsh-version.json`
-(**0.2.0-rc.2**); any other published line is **not** tested and not claimed.
+(**0.2.2-rc.5**); any other published line is **not** tested and not claimed.
 `dsh-rightbar`, `dsh-rightbar-files` and `dsh-open-in-app` are forks of that line's
 client bundles, so a line bump is deliberate: bump the pin, run
 `scripts/tools/sync-vendored.ps1`, re-verify. The pack targets the **web profile only**,
@@ -199,7 +199,7 @@ should be read as such:
 ## Lock it down
 
 1. **Keep it on loopback**: the pack's launcher or
-   `npx @deepseek-ai/dsh@0.2.0-rc.2 web`, no `--host`, no `--trusted-host`. Loopback
+   `npx @deepseek-ai/dsh@0.2.2-rc.5 web`, no `--host`, no `--trusted-host`. Loopback
    traffic does not cross a firewall, so no firewall rule "fixes" an exposed bind.
 2. **Treat the printed URL as a password**, and stop the harness when you are not using
    it.

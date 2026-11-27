@@ -55,7 +55,7 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
    starts on its own. Engines are vendored under `lib/vendor/` or resolved from
    the harness already on disk.
 8. **CI proves the tree; the checks prove the change.** `.github/workflows/ci.yml` is
-   one job in a `node:22` container - the runtime `package.json` declares - running
+   one job in a `node:24` container - the runtime `package.json` declares - running
    `check-no-secrets.mjs` and `check-scripts.mjs` behind a Node floor assertion. There is
    no compiler, no build and no per-OS matrix, because nothing here is native. **A push
    to `main` starts no CI at all**: commits and pushes are free, and CI runs at the

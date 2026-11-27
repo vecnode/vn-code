@@ -6,7 +6,7 @@
 #  install used by "npx @deepseek-ai/dsh web" (DSH_HOME, else ~/.dsh, profile
 #  "web" by default). DSH Desktop is deliberately NOT a target of this pack.
 #
-#  POSIX shell only. This script needs Node.js (>= 22), npm and npx - never
+#  POSIX shell only. This script needs Node.js (>= 24.9), npm and npx - never
 #  PowerShell; the Windows half is scripts/setup/install-all.ps1, driven by
 #  install.bat.
 #

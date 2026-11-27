@@ -10,7 +10,7 @@
 # vn-code
 
 <p>
-  <img alt="Language: JavaScript" src="https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black"> <img alt="Runtime: Node.js" src="https://img.shields.io/badge/runtime-Node.js-339933?logo=nodedotjs&logoColor=white"> <img alt="License: AGPL-3.0-only" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue"> <img alt="Platforms: Windows | macOS | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey"> <img alt="DeepSeek Harness 0.2.0-rc.2" src="https://img.shields.io/badge/dsh-0.2.0--rc.2-4f8cff">
+  <img alt="Language: JavaScript" src="https://img.shields.io/badge/language-JavaScript-f7df1e?logo=javascript&logoColor=black"> <img alt="Runtime: Node.js" src="https://img.shields.io/badge/runtime-Node.js-339933?logo=nodedotjs&logoColor=white"> <img alt="License: AGPL-3.0-only" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue"> <img alt="Platforms: Windows | macOS | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey"> <img alt="DeepSeek Harness 0.2.2-rc.5" src="https://img.shields.io/badge/dsh-0.2.2--rc.5-4f8cff">
 </p>
 
 <p>

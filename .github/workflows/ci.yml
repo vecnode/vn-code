@@ -4,7 +4,7 @@ name: CI
 #
 # There used to be three operating systems here, because there was a binary to build on
 # each. There is no binary: the pack is plain JavaScript with zero npm dependencies and the
-# launchers are batch, PowerShell and POSIX sh over the pinned `dsh web`. A `node:22`
+# the launchers are batch, PowerShell and POSIX sh over the pinned `dsh web`. A `node:24`
 # container is the whole toolchain, so one job on one runner covers every platform this
 # ships to - and the runtime the checks run on is the one `package.json` declares.
 #
@@ -40,7 +40,7 @@ jobs:
     name: Node checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    container: node:22-bookworm
+    container: node:24-bookworm
     steps:
       # The image is Node and nothing else. `git` is the one addition, for two reasons that
       # are not optional: the checkout below IS git, and check-no-secrets reads the set

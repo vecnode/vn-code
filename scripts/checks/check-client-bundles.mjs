@@ -1073,12 +1073,31 @@ check('preview falls back to the pinned kind', bareCalls[0].kind, 'text')
 // `ctx.shortcuts`. The stub below therefore carries those two services - the
 // alternative was a check that crashes on the first `require`d call and reports
 // nothing about the route split it exists to pin.
+//
+// 0.2.2-rc.5 adds a THIRD apply-time service: the bundle registers five context
+// menus (`ctx.contextMenus.register`) as it applies, so the stub carries that
+// registry too. The resolvers themselves are not driven here - they run when a
+// menu opens - so their collaborators (`ctx.remote.workspaceFiles`,
+// `ctx.sessions.list`, `ctx.sidebarRight*`) are inert stubs that exist so a
+// future bundle that calls one at apply time fails loudly rather than vaguely.
 const openInApp = loadBundle('packages/dsh-open-in-app/lib/client.js', {})
 check('open-in-app bundle id', openInApp.id, 'dsh-open-in-app')
 const oiaRegistered = {}
+const oiaMenus = []
 openInApp.exports.apply({
   get: () => undefined,
-  remote: {},
+  remote: { workspaceFiles: { stat: async () => ({ ok: false }) } },
+  sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
+  sidebarRight: { openResourceIn: () => {}, openTabIn: () => {} },
+  sidebarRightTabs: { get: () => undefined },
+  contextMenus: {
+    register(spec) {
+      oiaMenus.push(spec)
+      return () => {}
+    },
+    notify: () => {},
+    active: () => undefined,
+  },
   slots: {
     inject: (name, fn) => fn(),
     register(spec, component) {
@@ -1091,15 +1110,20 @@ openInApp.exports.apply({
   effect: (fn) => fn(),
   logger: { debug() {}, warn() {} },
 })
+check('open-in-app registers its context menus', oiaMenus.map((spec) => spec.target).join(','), 'workspace,directory,file,url,image,session,sessionHeader')
 check(
   'open-in-app slots',
   Object.keys(oiaRegistered).join(','),
-  'conversation.session.header.utilities,sidebar.right.tab.files.actions,sidebar.right.tab.document.actions,sidebar.right.tab.document.unpreviewable,deliverables.file.actions,deliverables.review.file.actions',
+  'shell.overlay,sidebar.right.tab.files.actions,sidebar.right.tab.document.actions,sidebar.right.tab.document.unpreviewable,deliverables.file.actions,deliverables.review.file.actions',
 )
-const launch = oiaRegistered['conversation.session.header.utilities'].spec.inject().launch
+// 0.2.2-rc.5 moved the header split button into the unified context menus, so the
+// `launch` controller is now handed to the Files-tab action seat (the document
+// actions and the two deliverable lists share that inject). The route split it
+// proves is unchanged: this is the same `controller.launch` the header used.
+const launch = oiaRegistered['sidebar.right.tab.files.actions'].spec.inject().launch
 const calls = []
 globalThis.location = { origin: 'http://127.0.0.1:3099' }
-// The route the bundle hands its fetcher is BROWSER-RELATIVE in 0.2.0-rc.2
+// The route the bundle hands its fetcher is BROWSER-RELATIVE in 0.2.2-rc.5
 // (`open-in-app/open`), and the browser is what resolves it against the page
 // origin - so this double does the same instead of parsing it as absolute, which
 // is what the earlier line held. The pack's own route is absolute and rides the
@@ -3149,14 +3173,17 @@ const dockTreeSource = readFileSync(path.join(repo, 'packages/dsh-rightbar/vendo
 // kit's FloatLayer, the `active` / `expanded` gates, and `keepMounted`.
 check(
   'right bar renders the recursive surface, and the flat renderer only as a fallback',
-  barSource.includes('DockTree, {') &&
+  barSource.includes('DockTree,{') &&
     barSource.includes('const Surface = dockkit.DockSurface;') &&
     barSource.includes('const Float = dockkit.FloatLayer;') &&
     // The flat renderer stays reachable for a kit line that has no surface - and
     // then the top/bottom bands go with it, because it cannot draw a stack.
     barSource.includes('if (typeof Surface !== "function")') &&
+    // The fallback is the FRAGMENT's own line (double-quoted, hand-written); the
+    // shipped render's patched line is the minified backtick form. Both spellings
+    // are asserted because they come from two different places.
     barSource.includes('dropZones: "horizontal"') &&
-    barSource.includes('dropZones: "edges",'),
+    barSource.includes('dropZones:`edges`,'),
 )
 check(
   'right bar keeps the four things the flat renderer provided',
@@ -3175,11 +3202,11 @@ check(
     barSource.includes('typeof keepMounted === "function"') &&
     barSource.includes('dockkit.findTabPane(state, tab.id)'),
 )
-check('right bar hands the limit to the kit', barSource.includes('canSplit: (0, _deepseek_ai_dsh_client_ui_dockkit.canSplit)(surface.layout),'))
+check('right bar hands the limit to the kit', barSource.includes('canSplit:(0,_deepseek_ai_dsh_client_ui_dockkit.canSplit)(surface.layout),'))
 check(
   'right bar names the four-pane ceiling',
-  barSource.includes('"dock.splitPaneDisabled": "Four panes is the limit",') &&
-    barSource.includes('"dock.splitPaneDisabled": "\u5df2\u8fbe\u56db\u683c\u4e0a\u9650",'),
+  barSource.includes('"dock.splitPaneDisabled":`Four panes is the limit`,') &&
+    barSource.includes('"dock.splitPaneDisabled":`\u5df2\u8fbe\u56db\u683c\u4e0a\u9650`,'),
 )
 // WHAT THE FLAT RENDERER'S TAB HOST GAVE THE DOCKED SURFACE, and the two things
 // the renderer swap above took away with the 2x2. Both hang off markup only the
@@ -3275,7 +3302,7 @@ check(
 {
   const vendorComponent = dockTreeSource.slice(dockTreeSource.indexOf('\t\t/**')).replace(/\r\n/g, '\n').trimEnd()
   const from = barSource.indexOf('\t\t/**\n\t\t * The dock renderer')
-  const to = barSource.indexOf('\n\t\tfunction intentsFor(', from)
+  const to = barSource.indexOf('\nfunction intentsFor(', from)
   const forkComponent = from < 0 || to < 0 ? '' : barSource.slice(from, to)
   check(
     'the renderer in the fork is byte-for-byte the vendor fragment',
@@ -6741,6 +6768,11 @@ if (coreThemeBundle === null) {
             ? { get: () => realThemeScope }
             : undefined,
     configForms: { get: () => realThemeScope },
+    // The 0.2.2 `ui-theme` bundle still BUILDS its runtime through the host's
+    // `settingsScope` binder (it reads the row's entry form through it and falls
+    // back to `configForms` elsewhere), so the stub carries both seams: a host
+    // that provides only one of them would apply here and crash in the browser.
+    settingsScope: { bind: () => realThemeScope },
     logger: { debug() {}, warn() {} },
   }
 

@@ -11,10 +11,10 @@ person's own browser, which the launcher finds (Chrome first, the OS opener as t
 
 | | |
 |---|---|
-| `@deepseek-ai/dsh` | `0.2.0-rc.2` (`.dsh-version.json`'s `dsh`) |
-| Forked from | the same `0.2.0-rc.2` line (`.dsh-version.json`'s `vendoredFrom`) |
+| `@deepseek-ai/dsh` | `0.2.2-rc.5` (`.dsh-version.json`'s `dsh`) |
+| Forked from | the same `0.2.2-rc.5` line (`.dsh-version.json`'s `vendoredFrom`) |
 | Install target | the web profile only (`$DSH_HOME/profiles/web`; `$DSH_HOME` defaults to `~/.dsh`) |
-| Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell plus Node.js 22+ with npm/npx - never PowerShell) |
+| Host platforms | Windows (PowerShell 5.1 or 7) and macOS / Linux (POSIX shell plus Node.js 24.9+ with npm/npx - never PowerShell) |
 | Distribution | one artefact, `vncode-<version>.zip` - the repository at the tag. Nothing is compiled, so nothing is per-OS |
 | Plugin code | plain JavaScript and OS-neutral; the only per-OS code is a launcher choosing the host command |
 
@@ -47,12 +47,23 @@ and the keyed seat, so its previews keep working inside the pack's bar.
 
 ## Upgrading the pack when DSH moves
 
-1. Bump `dsh` in `.dsh-version.json`.
+1. Bump `dsh` **and** `vendoredFrom` in `.dsh-version.json` (the launcher reads the pin at
+   run time, so `run-web.bat` itself needs no change).
 2. Re-run `scripts/tools/sync-vendored.ps1` and review the diff: a patched fork fails
-   loudly when the core code it patches has moved.
-3. Re-run the installer with `-Force` to re-add the bundles under the new pin.
+   loudly when the core code it patches has moved. Two measured facts about that diff:
+   - The bundle names itself in two spellings - `id: "<core>"` up to 0.2.0-rc.2 and a
+     template literal (`id:` + backtick) from the 0.2.1 line on; the script accepts both
+     and keeps the source's spelling.
+   - The client bundles are re-minified per line, so JS anchors move even when the logic
+     does not. Measured on 0.2.0-rc.2 -> 0.2.2-rc.5: 12 of the right bar's 14 patches and
+     both `dsh-open-in-app` patches needed re-anchoring; the two patches that match CSS
+     text survived unchanged. Budget for re-anchoring, not for a version bump.
+3. Re-run the installer with `-Force` to re-add the bundles under the new pin (on a
+   machine whose profile is already installed this is a no-op re-registration).
 4. If a core API moved (registry shape, seat names, route registration), adapt
-   the affected package and bump its alpha version.
+   the affected package and bump its alpha version. 0.2.2-rc.5 added a THIRD apply-time
+   service to the forked `dsh-open-in-app` (`ctx.contextMenus`, five menus) and declares
+   Node.js >= 24.9.
 5. Re-run the uninstaller first on machines that should drop the old version.
 
 ## Alpha policy

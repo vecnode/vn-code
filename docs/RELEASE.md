@@ -10,7 +10,7 @@ installation on Windows, macOS and Linux alike, with no second archive and no sh
 `.github/workflows/release.yml`, on `v*` (or `workflow_dispatch` with an existing tag):
 
 1. **gate** - calls `ci.yml` through `workflow_call`, the same workflow a pull request
-   runs. One job, `ubuntu-latest`, a `node:22` container: `git` installed, then
+   runs. One job, `ubuntu-latest`, a `node:24` container: `git` installed, then
    `check-no-secrets.mjs` and `check-scripts.mjs`. A red gate stops the release **before**
    anything is published.
 2. **archive** - the tag itself is archived into `vncode-<version>.zip` and attached. The

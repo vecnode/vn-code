@@ -6,7 +6,7 @@ steps, [RELEASE.md](RELEASE.md) how a release is cut and [BUILD.md](BUILD.md) ho
 
 **A distribution is this repository.** There is no second thing to deploy beside it: the
 pack, the launchers and the docs are the same files on every platform, they need Node.js
-22+ with `npx` and nothing else, and there is nothing to build or ship.
+24.9+ with `npx` and nothing else, and there is nothing to build or ship.
 
 ## What the distribution gets right
 
@@ -57,7 +57,7 @@ pack is not made self-contained by copying it: moving it does not move the insta
 the cache grows about **223 MB per pin, per user**. Installing needs the network twice -
 `npx @deepseek-ai/dsh@<pin>` downloads that closure on first run, and the installer
 bootstraps pnpm into `./tools` with the npm that ships with Node.js, because
-`dsh plugin add` runs pnpm underneath. The target machine needs **Node.js 22+**, and
+`dsh plugin add` runs pnpm underneath. The target machine needs **Node.js 24.9+**, and
 Windows needs PowerShell, which ships with it.
 
 The launcher sets what it can of this. A portable folder points `npm_config_cache` at

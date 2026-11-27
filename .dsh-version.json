@@ -1,7 +1,7 @@
 {
   "comment": "The DeepSeek Harness version line this plugin pack is built and tested against. Plugins are shipped as alpha until the owner promotes them to stable. The installer pins this exact dsh version when driving the CLI. 'vendoredFrom' records the harness line whose client bundles dsh-rightbar / dsh-rightbar-files / dsh-open-in-app were forked from. dsh-vn-master is the pack's master: the bundle layer alone - the pack's final word per row, no browser half.",
-  "dsh": "0.2.0-rc.2",
-  "vendoredFrom": "0.2.0-rc.2",
+  "dsh": "0.2.2-rc.5",
+  "vendoredFrom": "0.2.2-rc.5",
   "platforms": [
     "win32",
     "darwin",
