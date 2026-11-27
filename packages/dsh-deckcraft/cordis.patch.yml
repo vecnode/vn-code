@@ -1,0 +1,18 @@
+# dsh-deckcraft bundle layer (alpha).
+#
+# One row ('deckcraft') owns the whole plugin: its Node half registers FOUR tools
+# that drive the user's own DeckCraft CLI (storytold/deckcraft, MIT OR
+# Apache-2.0) - `deck_status`, `deck_commands`, `deck_run` and `deck_export`.
+# Host-only: a deck is a file in the workspace and the answer is prose plus paths,
+# so there is no route to serve and no browser half to load.
+#
+# Nothing shipped is patched and no core row is disabled: DSH has no slide
+# surface, and DeckCraft is a program the user installs, not an engine this
+# package vendors or downloads.
+#
+# Nothing for scripts/sync-vendored.ps1: no engine is vendored or forked. The
+# `deckcraft-cli` binary is the user's, and this package ships the argv builder,
+# the command-name parser and the output scope.
+- insert:
+    - id: deckcraft
+      name: 'dsh-deckcraft'

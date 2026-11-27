@@ -11,6 +11,6 @@
     "banner": "node scripts/tools/logo/banner.mjs"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24.9"
   }
 }

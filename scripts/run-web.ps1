@@ -168,7 +168,7 @@ function Get-DshPin {
 
 function Assert-Tool($toolName) {
     if (-not (Get-ToolPath -Names (Get-ToolNames -Name $toolName))) {
-        throw "Required tool '$toolName' was not found on PATH. Install Node.js >= 22 first (https://nodejs.org)."
+        throw "Required tool '$toolName' was not found on PATH. Install Node.js >= 24.9 first (https://nodejs.org)."
     }
 }
 

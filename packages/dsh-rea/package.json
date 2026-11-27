@@ -1,0 +1,29 @@
+{
+  "name": "dsh-rea",
+  "version": "0.1.0-alpha.1",
+  "description": "Reverse engineering as a surface: five `rea_*` tools over the user's own REA installation (morluto/rea, MIT) - `rea_status` (what is installed, which commands this REA actually offers, which native providers it can reach), `rea_inspect` (one target -> REA's `--json`, stored as an investigation), `rea_read` (a bounded slice of a stored investigation), `rea_snapshot` (list/export/import an investigation so it is reproducible) and `rea_report` (a Markdown evidence report in the workspace). Host-only, argv-only, target-scoped to the session workspace or an explicitly allowed root. Zero npm dependencies, no engine bundled, no network egress of its own.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-rea.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

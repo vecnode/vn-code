@@ -204,7 +204,7 @@ function Get-Packages {
 
 function Assert-Tool($name) {
     if (-not (Get-ToolPath -Names (Get-ToolNames -Name $name))) {
-        throw "Required tool '$name' was not found on PATH. Install Node.js >= 22 first (https://nodejs.org)."
+        throw "Required tool '$name' was not found on PATH. Install Node.js >= 24.9 first (https://nodejs.org)."
     }
 }
 

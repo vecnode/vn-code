@@ -22,7 +22,7 @@
 #  IN MEMORY, never written to a file, never passed through a shell, and only
 #  handed to a browser after the URL has been checked to be a loopback address.
 #
-#  POSIX shell only: this script needs Node.js (>= 22) with npm/npx - never
+#  POSIX shell only: this script needs Node.js (>= 24.9) with npm/npx - never
 #  PowerShell. The Windows half is `scripts/run-web.bat`, which forwards to
 #  run-web.ps1 beside this file - the entry point there is batch, so a
 #  double-click works, while the watching-and-opening half is PowerShell,

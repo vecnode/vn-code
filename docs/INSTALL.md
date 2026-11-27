@@ -18,7 +18,7 @@ uninstall, with their workers), `console/` (the shared console layer), `tools/`
 
 | | |
 |---|---|
-| Requirements | **Node.js 22+** on every platform, with `npx`. **Windows** runs the launcher on Windows PowerShell 5.1 (shipped) or PowerShell 7; **macOS / Linux** uses a POSIX shell and never PowerShell |
+| Requirements | **Node.js 24.9+** on every platform, with `npx`. **Windows** runs the launcher on Windows PowerShell 5.1 (shipped) or PowerShell 7; **macOS / Linux** uses a POSIX shell and never PowerShell |
 | Install target | the **web profile** only, `$DSH_HOME/profiles/web` (`$DSH_HOME` = env var, else the portable root below, else `~/.dsh`). Overrides: `-DshHome <home>`, `-ProfileName <profile>` |
 | State | the DeepSeek key in `$DSH_HOME/.env` or `$DSH_HOME/.credentials.yaml`; sessions, settings, attachments and the pack's own caches under the same home |
 

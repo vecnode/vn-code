@@ -302,6 +302,11 @@ function checkCi() {
   for (const [file, label] of [[ci, 'ci.yml'], [release, 'release.yml']]) {
     if (!fs.existsSync(file)) fail(`.github/workflows/${label} is missing`)
   }
+  // The runtime the pack declares, read once: the CI container below and this
+  // check's own closing line both name it, so a floor bump has ONE place to land.
+  const declared = JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8')).engines?.node ?? ''
+  const major = /(\d+)/.exec(declared)?.[1] ?? ''
+  if (!major) fail(`package.json declares no engines.node major (found "${declared}")`)
   if (fs.existsSync(ci)) {
     const text = fs.readFileSync(ci, 'utf8')
     if (!text.includes('workflow_call')) {
@@ -313,8 +318,10 @@ function checkCi() {
     }
     // One runtime, and the one the pack declares. The container is what makes "one runner
     // covers every platform" true rather than assumed: there is nothing per-OS to build.
-    if (!/container:\s*node:22/.test(text)) {
-      fail('ci.yml does not run in a node:22 container, so the runtime it proves is not the one package.json declares')
+    // The major is READ from package.json rather than typed here, so the two cannot
+    // drift: a floor bump that forgot the container fails on the next run.
+    if (major && !new RegExp(`container:\\s*node:${major}\\b`).test(text)) {
+      fail(`ci.yml does not run in a node:${major} container, so the runtime it proves is not the one package.json declares (${declared})`)
     }
     if (/cargo|rustup|clippy/.test(text)) {
       fail('ci.yml reaches for a Rust toolchain - this repository has no native code to build')
@@ -337,7 +344,7 @@ function checkCi() {
       fail('release.yml still builds or names a per-OS binary')
     }
   }
-  console.log('check-scripts: ci.yml is a node:22 container, release.yml publishes the repo zip')
+  console.log(`check-scripts: ci.yml is a node:${major} container, release.yml publishes the repo zip`)
 }
 
 // ---------------------------------------------------------------------------

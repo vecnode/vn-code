@@ -6,7 +6,7 @@ ships. The harness is run through `npx` and the pack is loaded from this folder 
 link, so a change is a file save.
 
 That is the rule behind every other page here: a change is proved by RUNNING it, not by
-compiling it, and the only toolchain any machine needs is **Node.js >= 22**.
+compiling it, and the only toolchain any machine needs is **Node.js >= 24.9**.
 
 The one exception is a vendored engine: each keeps its own `vendor/build.mjs` and the
 tracked hashes in its `lib/vendor/VERSION.json`. Regenerate those, never hand-edit them.

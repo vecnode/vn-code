@@ -55,7 +55,7 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
    starts on its own. Engines are vendored under `lib/vendor/` or resolved from
    the harness already on disk.
 8. **CI proves the tree; the checks prove the change.** `.github/workflows/ci.yml` is
-   one job in a `node:22` container - the runtime `package.json` declares - running
+   one job in a `node:24` container - the runtime `package.json` declares - running
    `check-no-secrets.mjs` and `check-scripts.mjs` behind a Node floor assertion. There is
    no compiler, no build and no per-OS matrix, because nothing here is native. **A push
    to `main` starts no CI at all**: commits and pushes are free, and CI runs at the
@@ -150,6 +150,12 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   order including egui/eframe/wgpu apps; every cargo call is `--offline` unless
   `fetch: true`, nothing is installed, and a build is never called read-only
   because `build.rs` runs — host-only, zero npm dependencies),
+  `dsh-rea` (reverse engineering over the user's own REA install: five `rea_*`
+  tools, a workspace-scoped target, stored investigations, an evidence report,
+  five skills; host-only, zero npm dependencies, nothing installed),
+  `dsh-deckcraft` (slides over the user's own DeckCraft CLI: `deck_status`,
+  `deck_commands`, `deck_run`, `deck_export`, three skills; host-only, zero npm
+  dependencies, nothing installed),
   `dsh-browser`, `dsh-themes`, `dsh-cmdbar`, `dsh-modal`, `dsh-skills`,
   `dsh-ui-state`, `dsh-open-in-app`.
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with

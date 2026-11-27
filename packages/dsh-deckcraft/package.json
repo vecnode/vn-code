@@ -1,0 +1,29 @@
+{
+  "name": "dsh-deckcraft",
+  "version": "0.1.0-alpha.1",
+  "description": "Slides from the chat: four `deck_*` tools over the user's own DeckCraft CLI (storytold/deckcraft, MIT OR Apache-2.0) - `deck_status` (the CLI, its version, and whether a running DeckCraft answers the control channel), `deck_commands` (the command ids this build offers, so nothing is hardcoded), `deck_run` (one command or a batch, saved as a `.deckcraft` file in the workspace) and `deck_export` (render slides to PNG into the workspace). Host-only, argv-only, outputs scoped to the session workspace. Zero npm dependencies, no engine bundled, no network egress of its own.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-deck.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}
