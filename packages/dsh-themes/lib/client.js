@@ -430,6 +430,33 @@ html:has([data-dsh-themes-band]) .hHd-Xa_footArea [aria-haspopup="dialog"]{displ
    row keeps the header control as its only way in. */
 html:has([data-dsh-themes-band]) [data-dsh-skills="button"]{display:none}
 html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
+/* SCROLLBARS - across the app, not one pane at a time. The shipped shell styles
+   the thumb (a 2px transparent border and a radius) but never sets a WIDTH, so
+   every list, pane and editor keeps Chromium's 15px native bar. This doubles the
+   thickness - 30px wide, 30px tall - and raises the contrast on the LIGHT page,
+   where a 15px grey sliver on white is the thing people lose.
+   Three facts the rules depend on:
+   - `!important` and the `html ` prefix are deliberate. The shell's own
+     `::-webkit-scrollbar-thumb` rule and the CSS modules a tab mounts later both
+     target the same pseudo-element, and a rule that lost that race would leave
+     the bar at 15px with nothing here able to tell.
+   - `scrollbar-width` is NOT touched: Chromium honours it OVER the webkit
+     pseudo-element, and the shell uses `none` on strips that must stay bare. This
+     changes thickness, never visibility.
+   - The track's `margin` is reset because the shell insets it by 6px; at 30px
+     wide that would leave an 18px track for a 7px thumb border - a 4px sliver.
+     7px of transparent border on each side leaves a 16px thumb, double the
+     default 8px, with the radius carrying the pill. */
+html ::-webkit-scrollbar,::-webkit-scrollbar{width:30px!important;height:30px!important}
+html ::-webkit-scrollbar-track,::-webkit-scrollbar-track{background:transparent!important;margin:0!important}
+html ::-webkit-scrollbar-thumb,::-webkit-scrollbar-thumb{background-color:var(--dsw-alias-border-l2,rgba(127,127,127,.32))!important;border:7px solid transparent!important;border-radius:30px!important;background-clip:content-box!important;min-height:44px}
+html ::-webkit-scrollbar-thumb:hover,::-webkit-scrollbar-thumb:hover{background-color:var(--dsw-alias-label-tertiary,rgba(127,127,127,.5))!important}
+html ::-webkit-scrollbar-corner,::-webkit-scrollbar-corner{background:transparent}
+body:not([data-ds-dark-theme]) ::-webkit-scrollbar-thumb{background-color:rgba(0,0,0,.38)!important}
+body:not([data-ds-dark-theme]) ::-webkit-scrollbar-thumb:hover{background-color:rgba(0,0,0,.6)!important}
+body:not([data-ds-dark-theme]) ::-webkit-scrollbar-track{background:rgba(0,0,0,.05)!important}
+body[data-ds-dark-theme] ::-webkit-scrollbar-thumb{background-color:rgba(255,255,255,.28)!important}
+body[data-ds-dark-theme] ::-webkit-scrollbar-thumb:hover{background-color:rgba(255,255,255,.45)!important}
 `
     const CSS_TAG = 'dsh-themes/themes.css'
     if (typeof document !== 'undefined' && !document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']')) {
