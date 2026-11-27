@@ -254,7 +254,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.33'
+    const PLUGIN_VERSION = '0.1.0-alpha.34'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -432,10 +432,10 @@ html:has([data-dsh-themes-band]) [data-dsh-skills="button"]{display:none}
 html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
 /* SCROLLBARS - across the app, not one pane at a time. The shipped shell styles
    the thumb (a 2px transparent border and a radius) but never sets a WIDTH, so
-   every list, pane and editor keeps Chromium's 15px native bar. This widens it to
-   24px - 60% over the native bar, and 6px down from the 30px first cut, which
-   read as a slab in a narrow pane - and raises the contrast on the LIGHT page,
-   where a 15px grey sliver on white is the thing people lose.
+   every list, pane and editor keeps Chromium's 15px native bar. This sets it to
+   16px on both axes - a hair over the native bar, and 8px under the 24px cut
+   that still read as a slab in a narrow pane - and raises the contrast on the
+   LIGHT page, where a 15px grey sliver on white is the thing people lose.
    Three facts the rules depend on:
    - !important and the "html " prefix are deliberate. The shell's own
      ::-webkit-scrollbar-thumb rule and the CSS modules a tab mounts later both
@@ -444,13 +444,13 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
    - scrollbar-width is NOT touched: Chromium honours it OVER the webkit
      pseudo-element, and the shell uses "none" on strips that must stay bare.
      This changes thickness, never visibility.
-   - The track's margin is reset because the shell insets it by 6px; at 24px
-     wide that would leave an 18px track for a 5px thumb border - an 8px sliver.
-     5px of transparent border on each side leaves a 14px thumb, with the radius
+   - The track's margin is reset because the shell insets it by 6px; at 16px
+     wide that would leave an 18px track for a 4px thumb border - a 4px sliver.
+     4px of transparent border on each side leaves an 8px thumb, with the radius
      carrying the pill. */
-html ::-webkit-scrollbar,::-webkit-scrollbar{width:24px!important;height:24px!important}
+html ::-webkit-scrollbar,::-webkit-scrollbar{width:16px!important;height:16px!important}
 html ::-webkit-scrollbar-track,::-webkit-scrollbar-track{background:transparent!important;margin:0!important}
-html ::-webkit-scrollbar-thumb,::-webkit-scrollbar-thumb{background-color:var(--dsw-alias-border-l2,rgba(127,127,127,.32))!important;border:5px solid transparent!important;border-radius:24px!important;background-clip:content-box!important;min-height:36px}
+html ::-webkit-scrollbar-thumb,::-webkit-scrollbar-thumb{background-color:var(--dsw-alias-border-l2,rgba(127,127,127,.32))!important;border:4px solid transparent!important;border-radius:16px!important;background-clip:content-box!important;min-height:32px}
 html ::-webkit-scrollbar-thumb:hover,::-webkit-scrollbar-thumb:hover{background-color:var(--dsw-alias-label-tertiary,rgba(127,127,127,.5))!important}
 html ::-webkit-scrollbar-corner,::-webkit-scrollbar-corner{background:transparent}
 body:not([data-ds-dark-theme]) ::-webkit-scrollbar-thumb{background-color:rgba(0,0,0,.38)!important}
