@@ -2020,6 +2020,13 @@ check(
   themesSource.includes("sidebar.querySelector('.' + SIDEBAR_CLASS + '_settingsArea')") &&
     themesSource.includes("(area === null ? sidebar : area).querySelector('[aria-haspopup=\"dialog\"]')"),
 )
+// The 0.2.2 Settings door is the account menu's own row; the band presses that
+// row first and falls back to the inline trigger only when no menu is reachable.
+check(
+  'Settings presses the account menu row before the inline trigger',
+  themesSource.includes("if (openAccountRow(['Settings', '\u8bbe\u7f6e'])) return") &&
+    themesSource.indexOf("if (openAccountRow(['Settings'") < themesSource.indexOf("_settingsArea')"),
+)
 // Feedback and Sign in are rows of the shipped account menu: the band opens that
 // menu and presses the row, so the actions stay the account seat's own.
 check(
