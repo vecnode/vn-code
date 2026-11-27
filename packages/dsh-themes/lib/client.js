@@ -254,7 +254,7 @@ window.__ModuleLoader__.load({
     /** The slot id of the Themes occupant in the header utilities list. */
     const THEMES_ID = 'dsh-themes'
     /** Version marker, logged at activation so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.31'
+    const PLUGIN_VERSION = '0.1.0-alpha.32'
     /** The client service (@deepseek-ai/dsh-client-ui-theme) that owns the preference. */
     const THEME_SERVICE = 'theme'
     /**
@@ -436,14 +436,14 @@ html[data-dsh-screenshot] [role=tooltip]{visibility:hidden}
    thickness - 30px wide, 30px tall - and raises the contrast on the LIGHT page,
    where a 15px grey sliver on white is the thing people lose.
    Three facts the rules depend on:
-   - `!important` and the `html ` prefix are deliberate. The shell's own
-     `::-webkit-scrollbar-thumb` rule and the CSS modules a tab mounts later both
+   - !important and the "html " prefix are deliberate. The shell's own
+     ::-webkit-scrollbar-thumb rule and the CSS modules a tab mounts later both
      target the same pseudo-element, and a rule that lost that race would leave
      the bar at 15px with nothing here able to tell.
-   - `scrollbar-width` is NOT touched: Chromium honours it OVER the webkit
-     pseudo-element, and the shell uses `none` on strips that must stay bare. This
-     changes thickness, never visibility.
-   - The track's `margin` is reset because the shell insets it by 6px; at 30px
+   - scrollbar-width is NOT touched: Chromium honours it OVER the webkit
+     pseudo-element, and the shell uses "none" on strips that must stay bare.
+     This changes thickness, never visibility.
+   - The track's margin is reset because the shell insets it by 6px; at 30px
      wide that would leave an 18px track for a 7px thumb border - a 4px sliver.
      7px of transparent border on each side leaves a 16px thumb, double the
      default 8px, with the radius carrying the pill. */
