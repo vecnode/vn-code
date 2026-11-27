@@ -41,6 +41,8 @@ person's own browser, which the launcher finds (Chrome first, the OS opener as t
 | `dsh-modal` | `modal` | the shared `modals` dialog surface |
 | `dsh-ui-state` | `ui-state` | durable UI state on the host: page zoom, theme, dock height and the two column widths |
 | `dsh-open-in-app` | `native-open-in-app` | the OS file browser; disables `ui-open-in-app` |
+| `dsh-rea` | `rea` | reverse engineering over the user's own REA CLI: five `rea_*` tools, a workspace-scoped target, stored investigations and an evidence report |
+| `dsh-deckcraft` | `deckcraft` | slides over the user's own DeckCraft CLI: `deck_commands` / `deck_run` / `deck_export`, with outputs scoped to the workspace |
 
 The shipped document preview row stays enabled: it consumes `sidebarRightTabs`
 and the keyed seat, so its previews keep working inside the pack's bar.

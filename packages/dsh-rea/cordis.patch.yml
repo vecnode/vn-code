@@ -1,0 +1,19 @@
+# dsh-rea bundle layer (alpha).
+#
+# One row ('rea') owns the whole plugin: its Node half registers FIVE tools that
+# drive the user's own REA installation (morluto/rea, MIT) - `rea_status`,
+# `rea_inspect`, `rea_read`, `rea_snapshot` and `rea_report`. Host-only: an
+# investigation is JSON stored on disk and prose for the model, so there is no
+# route to serve and no browser half to load - the package declares no
+# dsh.client, and the boot graph gains one row.
+#
+# Nothing shipped is patched and no core row is disabled: DSH has no reverse
+# engineering surface, and REA is a program the user installs, not an engine this
+# package vendors or downloads.
+#
+# Nothing for scripts/sync-vendored.ps1: no engine is vendored or forked. The
+# `rea` binary is the user's (or `npx rea-agents`), and this package ships the
+# argv builder, the scope guard and the report writer.
+- insert:
+    - id: rea
+      name: 'dsh-rea'

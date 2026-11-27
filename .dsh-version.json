@@ -332,6 +332,41 @@
         "NOTHING is vendored, downloaded or bundled: the engines are the machine's own (resolved from PATH or from the OS install), and lib/win-ocr.ps1 is written here"
       ]
     },
+    "dsh-rea": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "rea"
+      ],
+      "role": "Reverse engineering as a surface: five `rea_*` tools over the user's own REA installation (morluto/rea, MIT) - `rea_status` (the CLI, its version, the command names THIS build offers, and what a native provider still needs), `rea_inspect` (one command against one target, REA's `--json` stored as an investigation), `rea_read` (a stored investigation by summary or by line range), `rea_snapshot` (list/export/import one investigation as a JSON bundle) and `rea_report` (a Markdown evidence report in the workspace). A local target must resolve inside the session workspace or an `allowRoot` given per call; a URL needs `allowUrl:true`. Host-only: one row, no route, no browser half, zero npm dependencies, no engine bundled, nothing installed. See packages/dsh-rea/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the five tools are registered into)",
+        "REA on PATH (`rea`, from `npm install --global rea-agents`) or `DSH_REA_CLI`; the row never runs npx and never installs"
+      ],
+      "requires": [
+        "REA installed by the user - `rea_status` names the command and stops when it is missing",
+        "a native provider (Hopper, Ghidra, IDA or Kuna) for deep analysis; static JavaScript and .NET need none"
+      ],
+      "vendors": [
+        "NOTHING is vendored, downloaded or installed: REA is the user's program, and this package ships the argv builder, the scope guard, the store and the report writer"
+      ]
+    },
+    "dsh-deckcraft": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "deckcraft"
+      ],
+      "role": "Slides from the chat: four `deck_*` tools over the user's own DeckCraft CLI (storytold/deckcraft, MIT OR Apache-2.0, alpha) - `deck_status` (the CLI, its version, DeckCraft's settings folder), `deck_commands` (the dotted command ids THIS build offers, by prefix), `deck_run` (one `id=<JSON>` batch saved as a `.deckcraft` in the workspace) and `deck_export` (`deckcraft-cli render` to PNG images the conversation can look at). DeckCraft's own contract is the API: every button is a command with a stable id, so nothing is hardcoded. Host-only: one row, no route, no browser half, zero npm dependencies, no engine bundled. See packages/dsh-deckcraft/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the four tools are registered into)",
+        "the DeckCraft CLI on PATH (`deckcraft-cli`) or `DSH_DECKCRAFT_CLI`; the row never installs"
+      ],
+      "requires": [
+        "DeckCraft installed by the user (github.com/storytold/deckcraft releases) - `deck_status` names the source and stops when it is missing"
+      ],
+      "vendors": [
+        "NOTHING is vendored, downloaded or installed: DeckCraft is the user's app, and this package ships the argv builder, the command-list parser and the output scope"
+      ]
+    },
     "dsh-wsl": {
       "version": "0.1.0-alpha.1",
       "rows": [

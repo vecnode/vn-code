@@ -150,6 +150,12 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   order including egui/eframe/wgpu apps; every cargo call is `--offline` unless
   `fetch: true`, nothing is installed, and a build is never called read-only
   because `build.rs` runs — host-only, zero npm dependencies),
+  `dsh-rea` (reverse engineering over the user's own REA install: five `rea_*`
+  tools, a workspace-scoped target, stored investigations, an evidence report,
+  five skills; host-only, zero npm dependencies, nothing installed),
+  `dsh-deckcraft` (slides over the user's own DeckCraft CLI: `deck_status`,
+  `deck_commands`, `deck_run`, `deck_export`, three skills; host-only, zero npm
+  dependencies, nothing installed),
   `dsh-browser`, `dsh-themes`, `dsh-cmdbar`, `dsh-modal`, `dsh-skills`,
   `dsh-ui-state`, `dsh-open-in-app`.
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with
