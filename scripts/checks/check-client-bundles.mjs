@@ -1994,18 +1994,40 @@ check(
     themesCss.includes('.dst-button{width:28px;height:28px;box-sizing:border-box;'),
 )
 check(
-  'the band carries four destinations, Skills last',
+  'the band carries six destinations: Settings, Plugins, Media, Skills, Feedback, Sign in',
   themesSource.includes("id: 'settings'") &&
     themesSource.includes("id: 'plugins'") &&
     themesSource.includes("id: 'media'") &&
     themesSource.includes("id: 'skills'") &&
+    themesSource.includes("id: 'feedback'") &&
+    themesSource.includes("id: 'signin'") &&
     themesSource.indexOf("id: 'skills'") > themesSource.indexOf("id: 'media'") &&
-    themesSource.indexOf("id: 'media'") > themesSource.indexOf("id: 'plugins'"),
+    themesSource.indexOf("id: 'media'") > themesSource.indexOf("id: 'plugins'") &&
+    themesSource.indexOf("id: 'feedback'") > themesSource.indexOf("id: 'skills'") &&
+    themesSource.indexOf("id: 'signin'") > themesSource.indexOf("id: 'feedback'"),
 )
 check(
   'the bottom rows are hidden once the band is the navigation',
   themesCss.includes('html:has([data-dsh-themes-band]) .hHd-Xa_panelList{display:none}') &&
-    themesCss.includes('html:has([data-dsh-themes-band]) .hHd-Xa_footArea [aria-haspopup="dialog"]{display:none}'),
+    themesCss.includes('html:has([data-dsh-themes-band]) .hHd-Xa_footArea [aria-haspopup="dialog"]{display:none}') &&
+    themesCss.includes('html:has([data-dsh-themes-band]) .hHd-Xa_settingsArea{display:none}'),
+)
+// Settings' trigger is found inside the foot's settings AREA first: the 0.2.2
+// sidebar carries more than one `aria-haspopup="dialog"`, so a whole-column
+// first match can land on another opener and the button appears dead.
+check(
+  'the Settings button scopes its trigger to the settings area',
+  themesSource.includes("sidebar.querySelector('.' + SIDEBAR_CLASS + '_settingsArea')") &&
+    themesSource.includes("(area === null ? sidebar : area).querySelector('[aria-haspopup=\"dialog\"]')"),
+)
+// Feedback and Sign in are rows of the shipped account menu: the band opens that
+// menu and presses the row, so the actions stay the account seat's own.
+check(
+  'Feedback and Sign in are routed through the account menu rows',
+  themesSource.includes('const openAccountRow = (labels) =>') &&
+    themesSource.includes('document.querySelectorAll(\'[role="menuitem"]\')') &&
+    themesSource.includes("openAccountRow(['Feedback'") &&
+    themesSource.includes("openAccountRow(['Sign in'"),
 )
 check(
   'Skills is driven through the header control that carries the session',
@@ -2030,7 +2052,7 @@ check(
 )
 check(
   'Settings drives the shipped trigger, scoped to this column',
-  themesSource.includes('sidebar.querySelector(\'[aria-haspopup="dialog"]\')'),
+  themesSource.includes("_settingsArea')") && themesSource.includes('.querySelector(\'[aria-haspopup="dialog"]\')'),
 )
 check(
   'Plugins still selects the shell\'s own panel id',
