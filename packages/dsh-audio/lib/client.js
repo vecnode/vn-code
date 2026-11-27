@@ -95,7 +95,7 @@ window.__ModuleLoader__.load({
     /** The tab kind this package owns. */
     const KIND = 'audio'
     /** Version marker shown in the toolbar, so a loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.8'
+    const PLUGIN_VERSION = '0.1.0-alpha.9'
     /** Address grammar owned by @deepseek-ai/dsh-util-workspace-path. */
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
@@ -1799,10 +1799,24 @@ window.__ModuleLoader__.load({
     // 10. Small React helpers
     // =====================================================================
     /** The tab information a pane body was handed, or null when it has none. */
-    function tabInfoNow(props) {
-      if (!props || typeof props.useTabInfo !== 'function') return null
+    /**
+ * The pane seat's tab-info hook, whichever shape it arrived in: `useTabInfo`
+ * (the prop the 0.2.0 seat handed a body) or `hooks.tabInfo` (the hook the
+ * 0.2.1+ seat declares in its inject). A seat that gives neither yields null,
+ * which every body already treats as "this pane has no tab".
+ */
+function tabInfoHookOf(props) {
+  if (!props) return null
+  if (typeof props.useTabInfo === 'function') return props.useTabInfo
+  if (props.hooks && typeof props.hooks.tabInfo === 'function') return props.hooks.tabInfo
+  return null
+}
+
+function tabInfoNow(props) {
+      const useTabInfo = tabInfoHookOf(props)
+      if (useTabInfo === null) return null
       try {
-        const info = props.useTabInfo()
+        const info = useTabInfo()
         return info && info.tab ? info : null
       } catch (err) {
         return null

@@ -4043,7 +4043,7 @@ const indexMarkup = renderToStaticMarkup(h(IndexBody, { sessionId: 'sess-1' }))
 check('index body renders its empty state', indexMarkup.includes('Nothing yet: this conversation has no diagrams and the library is empty.'))
 check(
   'index body offers both engines',
-  indexMarkup.includes('>New Mermaid<') && indexMarkup.includes('>New TikZ<') && indexMarkup.includes('dsh-diagrams 0.1.0-alpha.8'),
+  indexMarkup.includes('>New Mermaid<') && indexMarkup.includes('>New TikZ<') && indexMarkup.includes('dsh-diagrams 0.1.0-alpha.9'),
 )
 // The index is where the LIBRARY becomes visible: the file bar always counts
 // both halves, and the two labelled lists are asserted from the source below
@@ -4930,6 +4930,16 @@ check(
 )
 const imageNoTabMarkup = renderToStaticMarkup(h(ImageBody, { useTabInfo: () => ({ tab: { id: 'tab10', contentId: '' } }), sessionId: 's1' }))
 check('an address-less image tab still renders', imageNoTabMarkup.includes('data-image-state="loading"'))
+// The 0.2.2 pane seat declares its inject as `hooks: { tabInfo }`, so the same
+// hook arrives under `hooks` instead of the `useTabInfo` prop. A body that only
+// knew the prop rendered its "no tab" state on every image - the pane opened,
+// the picture never did. Both shapes must reach the same opening state.
+{
+  const viaHooks = renderToStaticMarkup(h(ImageBody, { hooks: { tabInfo: () => ({ tab: imageTab }) }, sessionId: 's1' }))
+  check('image body reads the hook from `hooks.tabInfo` too', viaHooks.includes('data-image-state="loading"') && viaHooks.includes('s1/shots/hero image.png'))
+  const neither = renderToStaticMarkup(h(ImageBody, { sessionId: 's1' }))
+  check('a seat with neither shape still renders without crashing', neither.length > 0)
+}
 
 // ---------------------------------------------------------------- dsh-video
 //

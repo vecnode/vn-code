@@ -96,7 +96,7 @@ window.__ModuleLoader__.load({
     const EXAMPLE_ROUTE = '/api/dsh-diagrams/example'
     const DOCUMENT_ROUTE = '/api/dsh-diagrams/document'
     /** Version marker shown in the panel footer, so a fresh bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.8'
+    const PLUGIN_VERSION = '0.1.0-alpha.9'
     /**
      * The zoom ladder the diagram tab steps through, the share of the pane a
      * picture occupies at 100%, and the last zoom each tab was left at.
@@ -294,10 +294,24 @@ window.__ModuleLoader__.load({
      * none. `useTabInfo` throws while its tab is not committed, so a body that
      * only wants the visibility flag must not let that take it down.
      */
-    function tabInfoNow(props) {
-      if (!props || typeof props.useTabInfo !== 'function') return null
+    /**
+ * The pane seat's tab-info hook, whichever shape it arrived in: `useTabInfo`
+ * (the prop the 0.2.0 seat handed a body) or `hooks.tabInfo` (the hook the
+ * 0.2.1+ seat declares in its inject). A seat that gives neither yields null,
+ * which every body already treats as "this pane has no tab".
+ */
+function tabInfoHookOf(props) {
+  if (!props) return null
+  if (typeof props.useTabInfo === 'function') return props.useTabInfo
+  if (props.hooks && typeof props.hooks.tabInfo === 'function') return props.hooks.tabInfo
+  return null
+}
+
+function tabInfoNow(props) {
+      const useTabInfo = tabInfoHookOf(props)
+      if (useTabInfo === null) return null
       try {
-        const info = props.useTabInfo()
+        const info = useTabInfo()
         return info && info.tab ? info : null
       } catch (err) {
         return null
