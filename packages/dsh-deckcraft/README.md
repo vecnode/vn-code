@@ -40,6 +40,18 @@ and not into a text box), `deckcraft-commands` (the command contract, batching,
 what to do when one entry fails), `deckcraft-export` (render/PDF/PPTX, and the
 checks that make a deck "done").
 
+## Vendored reference
+
+`skills/deckcraft-deck/reference/academic-presentation-best-practices.pdf` is
+David Hirshleifer's *Best Practices for Academic Presentations* (28 Feb 2026,
+built with Claude), MIT, Copyright (c) 2026 Gabberflast, from
+[`Gabberflast/academic-pptx-skill`](https://github.com/Gabberflast/academic-pptx-skill).
+It is stored **byte-identical** with its `UPSTREAM-LICENSE.txt`, and
+`reference/SOURCE.md` records the URL and the SHA-256. `academic-presentations.md`
+beside it distils the document into the checks a deck is built against;
+`npm run check` re-hashes the PDF and asserts the distillation still cites the
+source.
+
 ## Requirements
 
 - DeckCraft, with its CLI: the per-OS `deckcraft-cli` archive from the

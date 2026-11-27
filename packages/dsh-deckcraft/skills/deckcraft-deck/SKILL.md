@@ -40,6 +40,34 @@ person edits it later. A text box dropped at x=120,y=80 does not.
   look it up, then run it;
 - the save path is inside the workspace (`decks/<name>.deckcraft` by default).
 
+## Academic talks, seminars, defences, grant briefings
+
+Build these against `reference/academic-presentations.md` - this pack's checklist
+distilled from David Hirshleifer's *Best Practices for Academic Presentations*
+(28 Feb 2026, built with Claude), vendored beside it as
+`reference/academic-presentation-best-practices.pdf` from
+<https://github.com/Gabberflast/academic-pptx-skill> (MIT, Copyright (c) 2026
+Gabberflast; `reference/UPSTREAM-LICENSE.txt` and `reference/SOURCE.md` carry the
+licence and the provenance).
+
+The five rules that change a command batch most:
+
+1. **Every title is a sentence stating the takeaway**, not a topic label
+   ("Prior work leaves the mechanism unexplained", never "Literature Review").
+2. **Write the titles first, as a list** and read them in order: they must tell
+   the whole argument (the ghost deck test). Repair the list before building any
+   slide.
+3. **One exhibit per slide**, and mark the finding on it - an arrow, a highlight,
+   an annotation - so the slide works without the narration.
+4. **~40 words of body text per slide**; methods detail, robustness and extra
+   data belong in the appendix. One sans-serif face; body >= 20pt, titles 24-28pt.
+5. **Cite every borrowed claim or figure** at the bottom of its slide (~14pt),
+   and end on a **References** slide plus a **Conclusions** slide that stays up
+   during Q&A - never a "Thank You" slide.
+
+The reference also carries the required deck architecture, the timing budget
+(one slide per minute, maximum), and the eleven common mistakes as a final pass.
+
 ## When the user wants it to look like something
 
 Ask which deck/theme is the reference, then apply that theme and those layouts.

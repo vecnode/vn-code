@@ -6,6 +6,7 @@
 //
 // Run:  node checks/check-deck.mjs
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -114,6 +115,31 @@ for (const name of skills) {
   const front = /^---\nname: ([\w-]+)\ndescription: (.+)\nwhenToUse: (.+)\n---/m.exec(text)
   check(name + ': frontmatter is complete', Boolean(front))
   check(name + ': names itself', front ? front[1] : '', name)
+}
+
+// ------------------------------------------------------- the vendored reference
+// The academic checklist is a PDF we did not write: the source must stay
+// byte-identical to what SOURCE.md records, its MIT licence must be beside it,
+// and the distillation the skill actually reads must still name where it came
+// from. A copied reference that drifts from its citation is worse than none.
+{
+  const reference = path.join(skillsRoot, 'deckcraft-deck', 'reference')
+  const pdf = path.join(reference, 'academic-presentation-best-practices.pdf')
+  const source = path.join(reference, 'SOURCE.md')
+  const distilled = path.join(reference, 'academic-presentations.md')
+  const licence = path.join(reference, 'UPSTREAM-LICENSE.txt')
+  check('the reference PDF ships', existsSync(pdf), true)
+  if (existsSync(pdf) && existsSync(source)) {
+    const recorded = /SHA-256 \| `([0-9a-f]{64})`/.exec(readFileSync(source, 'utf8'))
+    const actual = createHash('sha256').update(readFileSync(pdf)).digest('hex')
+    check('the PDF matches the hash SOURCE.md records', recorded ? recorded[1] : '(no hash in SOURCE.md)', actual)
+    check('SOURCE.md names the repository', readFileSync(source, 'utf8').includes('github.com/Gabberflast/academic-pptx-skill'), true)
+  }
+  check('the upstream MIT licence is beside it', existsSync(licence) && readFileSync(licence, 'utf8').includes('MIT License'), true)
+  check('the distillation cites the source', existsSync(distilled) && readFileSync(distilled, 'utf8').includes('github.com/Gabberflast/academic-pptx-skill'), true)
+  const skillText = readFileSync(path.join(skillsRoot, 'deckcraft-deck', 'SKILL.md'), 'utf8')
+  check('the skill points at the distillation', skillText.includes('reference/academic-presentations.md'), true)
+  check('the skill carries the top rules', skillText.includes('ghost deck test') && skillText.includes('One exhibit per slide'), true)
 }
 
 // --------------------------------------------------------------- live half
