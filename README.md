@@ -20,7 +20,7 @@
 
 </div>
 
-![vncode: the plugin pack, a Node application - the vncode README header](./assets/vncode-banner5.png)
+![vncode: the plugin pack, a Node application - the vncode README header](./assets/vncode-banner6.png)
 
 Cross-platform Node ADE with core [DSH](https://www.deepseek.com/harness/en/) for professional Engineering and Design: every plugin is **Node.js** (plain JavaScript bundles, zero npm dependencies), and so is every launcher - there is no native code in this repository and nothing to compile. The launchers run on **Windows, macOS and Linux**.
 

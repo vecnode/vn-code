@@ -27,7 +27,7 @@ import { readHeader } from './png.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.resolve(here, '..', '..', '..')
-const out = path.join(repo, 'assets', 'vncode-banner5.png')
+const out = path.join(repo, 'assets', 'vncode-banner6.png')
 
 const INK = '#05060A'
 const SIZE = { width: 1280, height: 320 }
