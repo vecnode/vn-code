@@ -177,6 +177,29 @@
         "NOTHING is vendored, downloaded or installed: the daemon is the user's own service, and this package ships the HTTP client, one argv for `ollama --version`, and the arithmetic"
       ]
     },
+    "dsh-comfyui": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "comfyui"
+      ],
+      "rowOverrides": [],
+      "role": "ComfyUI as a surface the agent can BUILD against: seven `comfy_*` tools over the machine's own ComfyUI (Desktop, portable, or a server on loopback) that turn a small readable project spec into a real workflow.json + prompt.json - nodes by KEY, values by NAME, wires by `<key>.<OUTPUT>`, `@bindings` for anything that belongs to a machine - validate them against the live node catalog the server reports (`/object_info`), with ComfyUI's own error vocabulary (required_input_missing, return_type_mismatch, value_not_in_list, dependency_cycle, prompt_no_outputs), queue them (`/prompt`) and report what came out of `/history`, and a `comfy_test` that compiles the whole shipped example library and, when a server answers, runs it - every item reporting the rung it actually reached (v1-structural, v2-schema, v3-queued, v4-executed), so 'it compiles' is never printed as 'it runs'. `comfy_cli` drives the user's own comfy-cli as a SECOND witness: `comfy run --workflow` converts the generated canvas with comfy-cli's own converter, `comfy node deps-in-workflow` names the node packs a graph needs, `comfy launch --background` / `comfy stop` give a server to test against; it never runs `comfy install`, installs a node, downloads a model or removes anything. Four model-free-or-model-bound examples and six skills (the fundamentals, the two workflow dialects and the `control_after_generate` shift that silently moves every later `widgets_values` entry, the HTTP API with the twelve validation error types, comfy-cli across platforms, authoring a node class, and this project dialect). Host-only: one row, no route, no browser half, zero npm dependencies, no bundled engine, nothing started on its own. See packages/dsh-comfyui/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the seven tools are registered into)",
+        "@deepseek-ai/dsh-skill (ctx.skills, resolved lazily; the six skills are also copied into $DSH_HOME/skills by both installers)",
+        "the user's own ComfyUI server on loopback (8188, and the Desktop ports 8000-8003, probed in order)",
+        "the user's own comfy-cli (`comfy`, from `pip install comfy-cli`) for `comfy_cli`, argv-only with a deadline"
+      ],
+      "requires": [
+        "ComfyUI installed by the user (Desktop, portable or a checkout) - `comfy_status` finds it or names where it looked; nothing here installs one",
+        "a RUNNING server for /object_info (the full catalog), for comfy_run and for comfy_test action=run; compiling and validating a project need no server at all",
+        "the model files a graph names for it to run - `comfy_validate` reports a missing one by name and nothing here downloads it",
+        "comfy-cli only for the comfy_cli tool: without it the seven HTTP tools are unaffected and the tool says so with the install line"
+      ],
+      "vendors": [
+        "NOTHING is vendored, downloaded or installed: ComfyUI and comfy-cli are the user's own programs, and this package ships the spec compiler, the canvas/prompt reader, the validator, the HTTP client and eighteen core node signatures transcribed from ComfyUI 0.21.1 (with /object_info always overruling them)"
+      ]
+    },
     "dsh-media": {
       "version": "0.1.0-alpha.4",
       "rows": [

@@ -1,0 +1,45 @@
+{
+  "name": "smoke-video",
+  "title": "Smoke: 30 frames into an MP4",
+  "description": "One image repeated into a one-second clip: Empty Image -> Repeat Image Batch -> Create Video -> Save Video. Still no model and no input file, and it exercises the parts of the API a still image does not: an OPTIONAL input (`Create Video`'s audio, deliberately left unwired) and a node whose output is a VIDEO rather than an IMAGE. If this runs, ffmpeg and the video pack inside ComfyUI work too.",
+  "tags": ["smoke", "no-models", "video"],
+  "requires": {
+    "nodes": ["EmptyImage", "RepeatImageBatch", "CreateVideo", "SaveVideo"],
+    "models": {},
+    "inputFiles": []
+  },
+  "bindings": {},
+  "nodes": [
+    {
+      "key": "empty",
+      "class": "EmptyImage",
+      "title": "Empty Image 512x512",
+      "pos": [40, 120],
+      "widgets": { "width": 512, "height": 512, "batch_size": 1, "color": 3368601 }
+    },
+    {
+      "key": "repeat",
+      "class": "RepeatImageBatch",
+      "title": "Repeat to 30 frames",
+      "pos": [420, 120],
+      "widgets": { "amount": 30 },
+      "wires": { "image": "empty.IMAGE" }
+    },
+    {
+      "key": "video",
+      "class": "CreateVideo",
+      "title": "Create Video (30 fps)",
+      "pos": [800, 120],
+      "widgets": { "fps": 30 },
+      "wires": { "images": "repeat.IMAGE" }
+    },
+    {
+      "key": "save",
+      "class": "SaveVideo",
+      "title": "Save Video",
+      "pos": [1180, 120],
+      "widgets": { "filename_prefix": "dsh-comfyui/smoke", "format": "auto", "codec": "auto" },
+      "wires": { "video": "video.VIDEO" }
+    }
+  ]
+}

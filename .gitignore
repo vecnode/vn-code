@@ -77,6 +77,19 @@ packages/dsh-rust-dev/checks/fixtures/**/target/
 # check removes it itself, and this is the belt for the run that is killed.
 packages/dsh-proto-lab/checks/.tmp/
 
+# A COMFYUI PROJECT FOLDER (`dsh-comfyui`) is workshop material, the same shape as
+# the lab above: `comfy_project` action=new writes `<workspace>/comfyui/<slug>/`
+# (spec, generated canvas, generated prompt, README, build receipt) for a person to
+# edit and run, and a repository that accumulated every graph anyone ever built
+# would stop being a plugin pack. What ships is the compiler and the checked example
+# library under `packages/dsh-comfyui/examples/`, which IS committed.
+#
+# Anchored to the repository root, for the reason the `/dsh-diagrams/` rule below
+# records: an unanchored `comfyui/` would also match any `comfyui/` inside a package.
+# `DSH_COMFYUI_ROOT` points the projects somewhere else entirely; this rule is what
+# keeps the DEFAULT location out of every commit.
+/comfyui/
+
 # The vendoring DOWNLOAD CACHE, the same shape as the diagrams rule further down:
 # `vendor/build.mjs` installs the pinned p5 once into `vendor/node_modules` and
 # reads two published files out of it. What is committed is the generated
@@ -124,3 +137,11 @@ packages/dsh-frontend-craft/vendor/impeccable/.cache/
 Thumbs.db
 .vscode/
 .idea/
+
+# A DEFENSIVE belt for a plugin that resolves its own cache root from
+# `$DSH_HOME`: `dsh-comfyui` caches the node catalog it read from a server under
+# `<home>/dsh-comfyui/schema/`, and a run whose environment had no home once wrote
+# `<package>/.dsh/...` instead. `lib/client.js` now falls back to the OS home and
+# then the temp dir, NEVER the working directory - this rule is the belt for the
+# case where a future change or a stripped environment gets it wrong again.
+packages/*/.dsh/

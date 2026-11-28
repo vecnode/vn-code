@@ -1,0 +1,103 @@
+{
+  "name": "text-to-image",
+  "title": "Text to Image (SD 1.5 + LCM-LoRA, 4 steps)",
+  "description": "The class build: Load Checkpoint -> Load LoRA -> two CLIP Text Encode -> Empty Latent -> KSampler -> VAE Decode -> Save Image. Four steps and cfg 1.5 because the LCM-LoRA is trained for four; a 512px image is 10-25 s on a CPU-only laptop. Every value that belongs to a machine rather than to the graph is a BINDING, so a machine with a different checkpoint rebinds instead of editing the graph: set `bindings.checkpoint` and `bindings.lora` to files that exist in ComfyUI's models/checkpoints and models/loras.",
+  "tags": ["image", "needs-models", "class-example"],
+  "requires": {
+    "nodes": ["CheckpointLoaderSimple", "LoraLoader", "CLIPTextEncode", "EmptyLatentImage", "KSampler", "VAEDecode", "SaveImage"],
+    "models": {
+      "checkpoints": ["v1-5-pruned-emaonly-fp16.safetensors"],
+      "loras": ["lcm-lora-sd15.safetensors"]
+    },
+    "inputFiles": []
+  },
+  "bindings": {
+    "checkpoint": "v1-5-pruned-emaonly-fp16.safetensors",
+    "lora": "lcm-lora-sd15.safetensors",
+    "prompt": "a lighthouse at dusk, 35mm photograph, soft light",
+    "negative": "blurry, extra fingers, text",
+    "width": 512,
+    "height": 512,
+    "steps": 4,
+    "cfg": 1.5,
+    "seed": 42,
+    "sampler": "lcm",
+    "scheduler": "sgm_uniform"
+  },
+  "nodes": [
+    {
+      "key": "ckpt",
+      "class": "CheckpointLoaderSimple",
+      "title": "Load Checkpoint",
+      "pos": [40, 60],
+      "widgets": { "ckpt_name": "@checkpoint" }
+    },
+    {
+      "key": "lora",
+      "class": "LoraLoader",
+      "title": "Load LoRA (LCM)",
+      "pos": [420, 60],
+      "widgets": { "lora_name": "@lora", "strength_model": 1.0, "strength_clip": 1.0 },
+      "wires": { "model": "ckpt.MODEL", "clip": "ckpt.CLIP" }
+    },
+    {
+      "key": "positive",
+      "class": "CLIPTextEncode",
+      "title": "Positive prompt",
+      "pos": [800, 40],
+      "widgets": { "text": "@prompt" },
+      "wires": { "clip": "lora.CLIP" }
+    },
+    {
+      "key": "negative",
+      "class": "CLIPTextEncode",
+      "title": "Negative prompt",
+      "pos": [800, 300],
+      "widgets": { "text": "@negative" },
+      "wires": { "clip": "lora.CLIP" }
+    },
+    {
+      "key": "latent",
+      "class": "EmptyLatentImage",
+      "title": "Empty Latent 512x512",
+      "pos": [800, 560],
+      "widgets": { "width": "@width", "height": "@height", "batch_size": 1 }
+    },
+    {
+      "key": "sampler",
+      "class": "KSampler",
+      "title": "KSampler (4 steps)",
+      "pos": [1200, 200],
+      "widgets": {
+        "seed": "@seed",
+        "steps": "@steps",
+        "cfg": "@cfg",
+        "sampler_name": "@sampler",
+        "scheduler": "@scheduler",
+        "denoise": 1.0
+      },
+      "controlAfterGenerate": { "seed": "fixed" },
+      "wires": {
+        "model": "lora.MODEL",
+        "positive": "positive.CONDITIONING",
+        "negative": "negative.CONDITIONING",
+        "latent_image": "latent.LATENT"
+      }
+    },
+    {
+      "key": "decode",
+      "class": "VAEDecode",
+      "title": "VAE Decode",
+      "pos": [1600, 200],
+      "wires": { "samples": "sampler.LATENT", "vae": "ckpt.VAE" }
+    },
+    {
+      "key": "save",
+      "class": "SaveImage",
+      "title": "Save Image",
+      "pos": [1960, 200],
+      "widgets": { "filename_prefix": "dsh-comfyui/text-to-image" },
+      "wires": { "images": "decode.IMAGE" }
+    }
+  ]
+}
