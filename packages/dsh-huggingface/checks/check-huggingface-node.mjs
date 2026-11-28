@@ -14,7 +14,7 @@
 //     ceiling runs NO download, and an unconfirmed removal is a dry run.
 //
 // Run:  node checks/check-huggingface-node.mjs
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -36,7 +36,8 @@ import {
   selected,
 } from '../lib/hf.js'
 import { CLI_CANDIDATES, parseVersion, resolveCli } from '../lib/cli.js'
-import { buildTools, formatBytes, formatParamCount } from '../lib/tools.js'
+import { estimateVram, modelFields, safetensorsDtype } from '../lib/model.js'
+import { buildTools, fitLines, formatBytes, formatParamCount } from '../lib/tools.js'
 import { SKILL_FILES, apply, createDeps, parseSkillFile, PLUGIN_VERSION, __internals } from '../lib/index.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -84,7 +85,11 @@ function makeCache() {
   put(path.join(alpha, 'blobs', 'f'.repeat(64)), Buffer.alloc(3000, 1))
   put(path.join(alpha, 'blobs', 'e'.repeat(64)), Buffer.alloc(100, 2))
   put(path.join(alpha, 'snapshots', SHA_A, 'model.safetensors'), Buffer.alloc(3000, 1))
-  put(path.join(alpha, 'snapshots', SHA_A, 'config.json'), Buffer.alloc(100, 2))
+  // A REAL config, so the fit arithmetic has the head fields it needs.
+  put(
+    path.join(alpha, 'snapshots', SHA_A, 'config.json'),
+    JSON.stringify({ architectures: ['LlamaForCausalLM'], model_type: 'llama', hidden_size: 4096, num_hidden_layers: 32, num_attention_heads: 32, num_key_value_heads: 8, head_dim: 128, max_position_embeddings: 32768, torch_dtype: 'float16' }),
+  )
   // acme/stub - metadata only
   const stub = path.join(root, 'models--acme--stub')
   put(path.join(stub, 'refs', 'main'), SHA_B + '\n')
@@ -96,7 +101,22 @@ function makeCache() {
   const beta = path.join(root, 'models--acme--beta')
   put(path.join(beta, 'refs', 'main'), 'd'.repeat(40) + '\n')
   put(path.join(beta, 'snapshots', 'd'.repeat(40), 'model.safetensors'), Buffer.alloc(5000, 4))
+  // acme/fp32 - a REAL safetensors header that says F32, with a config that says
+  // nothing about dtype: the header must be what the arithmetic uses.
+  const fp32 = path.join(root, 'models--acme--fp32')
+  put(path.join(fp32, 'refs', 'main'), 'f'.repeat(40) + '\n')
+  put(path.join(fp32, 'snapshots', 'f'.repeat(40), 'model.safetensors'), safetensorsFile('F32', 4000))
+  put(path.join(fp32, 'snapshots', 'f'.repeat(40), 'config.json'), JSON.stringify({ hidden_size: 4096, num_hidden_layers: 32, num_attention_heads: 32, num_key_value_heads: 8, head_dim: 128 }))
   return root
+}
+
+/** A minimal but REAL safetensors file: u64 header length, padded JSON, data. */
+function safetensorsFile(dtype, dataBytes) {
+  const header = JSON.stringify({ weight: { dtype, shape: [Math.round(dataBytes / 4)], data_offsets: [0, dataBytes] } })
+  const padded = header + ' '.repeat((8 - (Buffer.byteLength(header) % 8)) % 8)
+  const prefix = Buffer.alloc(8)
+  prefix.writeBigUInt64LE(BigInt(Buffer.byteLength(padded)), 0)
+  return Buffer.concat([prefix, Buffer.from(padded, 'utf8'), Buffer.alloc(dataBytes, 1)])
 }
 
 // ---------------------------------------------------------------------------
@@ -132,10 +152,10 @@ check('no token at all', tokenPresence({}, false).present, false)
 // ---------------------------------------------------------------------------
 const root = makeCache()
 const scan = scanCache(root)
-check('the scan finds every repo', scan.counts.repos, 4)
+check('the scan finds every repo', scan.counts.repos, 5)
 check('...and marks the directory as present', scan.exists, true)
 check('the count splits complete from metadata-only', scan.counts.stubs, 1)
-check('...with the rest complete', scan.counts.complete, 3)
+check('...with the rest complete', scan.counts.complete, 4)
 check('types are counted separately', scan.counts.byType.dataset, 1)
 check('splitRepoDir reads a model directory', splitRepoDir('models--acme--alpha').id, 'acme/alpha')
 check('splitRepoDir reads a dataset directory', splitRepoDir('datasets--acme--data').type, 'dataset')
@@ -164,13 +184,31 @@ check('...although it has no weight file', dataset.weights, false)
 check('a dataset is still a stub when it is only metadata', describeRepoDir(root, 'datasets--acme--data').stub === false, true)
 
 const filtered = scanCache(root, { type: 'model' })
-check('a type filter drops the others', filtered.counts.repos, 3)
+check('a type filter drops the others', filtered.counts.repos, 4)
 const byName = scanCache(root, { filter: 'alph' })
 check('a text filter selects by id', byName.repos.length === 1 && byName.repos[0].id, 'acme/alpha')
 const limited = scanCache(root, { limit: 2 })
 check('a limit shortens the list', limited.repos.length, 2)
 check('...and is reported as limited', limited.limited, true)
 check('a missing cache root is an answer, not an error', scanCache(path.join(root, 'nope')).exists, false)
+
+// ---------------------------------------------------------------------------
+// The fit arithmetic: exact bytes, because "it fits" is the claim
+// ---------------------------------------------------------------------------
+const FIT_CONFIG = { architectures: ['LlamaForCausalLM'], hidden_size: 4096, num_hidden_layers: 32, num_attention_heads: 32, num_key_value_heads: 8, head_dim: 128, torch_dtype: 'float16' }
+const fitFields = modelFields(FIT_CONFIG)
+check('the fit reads layers', fitFields.layers, 32)
+check('...KV heads (grouped-query attention)', fitFields.kvHeads, 8)
+check('...and head dim', fitFields.headDim, 128)
+const fitEstimate = estimateVram({ weightsBytes: 2_000_000, fields: fitFields, dtype: 'fp16', contexts: [4096] })
+check('KV per token = 2 x layers x kv_heads x head_dim x 2', fitEstimate.kvPerToken, 2 * 32 * 8 * 128 * 2)
+check('...which is 128 KiB for this shape', fitEstimate.kvPerToken, 131_072)
+check('parameters are implied by the bytes', fitEstimate.params, 1_000_000)
+check('the allowance keeps its 512 MiB floor', fitEstimate.overhead, 512 * 1024 * 1024)
+check('total = weights + KV x context + allowance', fitEstimate.vram[0].total, 2_000_000 + 131_072 * 4096 + 512 * 1024 * 1024)
+check('fp32 doubles the KV term', estimateVram({ weightsBytes: 10, fields: fitFields, dtype: 'fp32' }).kvPerToken, 2 * 32 * 8 * 128 * 4)
+check('a config with no head fields reports KV as UNKNOWN', estimateVram({ weightsBytes: 10, fields: modelFields({}) }).kvKnown, false)
+check('a multimodal config is read through text_config', modelFields({ text_config: { num_hidden_layers: 24, num_attention_heads: 16, num_key_value_heads: 4, head_dim: 64 } }).layers, 24)
 
 // ---------------------------------------------------------------------------
 // The CLI: the version trap, and how the binary is found
@@ -338,7 +376,7 @@ const versionOk = { status: 0, stdout: '1.26.1\n', stderr: 'Hint: a new version 
   const { calls, tools } = harness({ HF_HUB_CACHE: root }, () => versionOk)
   const answer = await tool(tools, 'hf_status').execute({})
   check('hf_status reports the CLI', answer.view.cli.bin + ' ' + answer.view.cli.version, 'hf 1.26.1')
-  check('hf_status counts the fixture repos', answer.view.cache.counts.repos, 4)
+  check('hf_status counts the fixture repos', answer.view.cache.counts.repos, 5)
   check('hf_status separates the stub', answer.view.cache.counts.stubs, 1)
   check('hf_status names the stub', answer.view.stubs[0].id, 'acme/stub')
   check('hf_status made exactly ONE process call', calls.length, 1)
@@ -352,7 +390,7 @@ const versionOk = { status: 0, stdout: '1.26.1\n', stderr: 'Hint: a new version 
 {
   const { tools } = harness({ HF_HUB_CACHE: root }, () => ({ status: null, error: 'ENOENT' }))
   const answer = await tool(tools, 'hf_status').execute({})
-  check('with no CLI the cache scan still answers', answer.view.cache.counts.repos, 4)
+  check('with no CLI the cache scan still answers', answer.view.cache.counts.repos, 5)
   check('...and the install line is named', answer.text.includes('pip install -U huggingface_hub'), true)
 }
 
@@ -389,6 +427,32 @@ const versionOk = { status: 0, stdout: '1.26.1\n', stderr: 'Hint: a new version 
   check('hf_repo calls an uncached repo absent', absent.view.local.state, 'absent')
   check('...and the prose says not cached', absent.text.includes('not cached'), true)
   check('...and says nothing was downloaded', absent.text.includes('Nothing was downloaded') || absent.text.includes('hf_download'), true)
+
+  // The FIT is read from the files on disk - no Python, no load.
+  const fitted = await tool(tools, 'hf_repo').execute({ repo: 'acme/alpha', freeBytes: 25_769_803_776, contexts: [4096, 32768] })
+  check('hf_repo estimates the fit from the cached files', fitted.view.fit.available, true)
+  check('...with the KV per token from the config', fitted.view.fit.estimate.kvPerToken, 131_072)
+  check('...and a FITS verdict against free VRAM', fitted.text.includes('FITS'), true)
+  check('...saying yes when it fits', fitted.text.includes('yes'), true)
+  const tight = await tool(tools, 'hf_repo').execute({ repo: 'acme/alpha', freeBytes: 1_000_000, contexts: [4096] })
+  check('...and NO when the free VRAM is too small', tight.text.includes('NO'), true)
+  check('...naming the largest context that does fit', tight.text.includes('none of these fits'), true)
+  const noFit = await tool(tools, 'hf_repo').execute({ repo: 'acme/stub' })
+  check('a metadata-only repo gets no fit estimate', noFit.view.fit.available, false)
+  check('...and the reason is the missing weights', noFit.text.includes('metadata only'), true)
+  const absentFit = await tool(tools, 'hf_repo').execute({ repo: 'acme/not-here' })
+  check('an absent repo has no fit at all', absentFit.view.fit, null)
+
+  // The dtype comes from the FILE, not from the config's claim.
+  const fp32Dir = path.join(root, 'models--acme--fp32', 'snapshots', 'f'.repeat(40))
+  check('a safetensors header reports its own dtype', safetensorsDtype(path.join(fp32Dir, 'model.safetensors')), 'float32')
+  check('a file with no valid header reports none', safetensorsDtype(path.join(root, 'models--acme--alpha', 'snapshots', SHA_A, 'model.safetensors')), '')
+  const fp32Fit = await tool(tools, 'hf_repo').execute({ repo: 'acme/fp32', contexts: [4096] })
+  check('the fit uses the header dtype', fp32Fit.view.fit.estimate.dtype, 'float32')
+  const fp32Bytes = statSync(path.join(fp32Dir, 'model.safetensors')).size
+  check('...so parameters divide by 4 bytes (header bytes included, a rounding error at real sizes)', fp32Fit.view.fit.estimate.params, Math.round(fp32Bytes / 4))
+  check('...and the KV term is 4 bytes per element', fp32Fit.view.fit.estimate.kvPerToken, 2 * 32 * 8 * 128 * 4)
+  check('...and the answer says where the dtype came from', fp32Fit.text.includes('safetensors header'), true)
 
   const stale = await tool(tools, 'hf_repo').execute({ repo: 'acme/beta' })
   check('hf_repo detects a revision that moved', stale.view.local.state, 'stale')

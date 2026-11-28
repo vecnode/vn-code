@@ -34,7 +34,11 @@ Measured on the machine that wrote this: `hf` is **1.26.1**, the cache holds
   the measure named**, which files each consumer would fetch (transformers,
   sentence-transformers, diffusers, GGUF quants, ONNX), and the local verdict —
   `complete`, `stub`, `stale` (cached revision vs the Hub's current `sha`) or
-  `absent`.
+  `absent`. For a repo that is **cached** it also answers the half a download size
+  does not: **WILL IT FIT** — the parameters the weight bytes imply, the KV cache
+  per token from the checkpoint's own attention heads, and a context-by-context
+  VRAM table that says `FITS` against the `freeBytes` you pass. Read from the
+  files, with no model loaded.
 - **`hf_cache`** — `list` (no CLI, no network), `verify`, `prune`, `rm`. An
   **unconfirmed removal is the CLI's own `--dry-run`**, so the answer is a real
   preview with the bytes it would cost; `rm` needs the repo id repeated back and
@@ -62,6 +66,14 @@ directory).
 `used_storage` and is labelled as such. A narrowed selection cannot be measured
 at all: the plan says so instead of inventing a number, and the ceiling is
 applied only to a measured size.
+
+**A checkpoint's dtype is in its safetensors HEADER, not in its config.** The
+parameter estimate and the KV size both divide or multiply by bytes-per-parameter,
+so trusting `config.torch_dtype` — or defaulting to fp16 — misreports a whole
+class of models. MEASURED: `sentence-transformers/all-mpnet-base-v2` states no
+dtype and stores **F32**; assumed fp16 it reported *~219M parameters at 109M* and
+**half** its real 72 KB/token KV cache. Reading the header's own `dtype` field
+fixed both, and the answer names where the dtype came from.
 
 ## How it plugs in
 

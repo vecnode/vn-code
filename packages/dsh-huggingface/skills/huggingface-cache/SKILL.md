@@ -142,6 +142,35 @@ making a blobs-only size rule report zero. `HF_HUB_DISABLE_SYMLINKS=1` forces
 copies deliberately (for example on a network share) and the
 `HF_HUB_DISABLE_SYMLINKS_WARNING=1` variable only silences the notice.
 
+## Will it fit, read from the files
+
+A cached checkpoint can be sized for a LOAD without loading it, because the
+numbers are all on disk:
+
+```
+weights  = the sum of the weight files (a safetensors file is stored at its
+           save dtype, so its size IS its weight bytes)
+params   = weights / bytes-per-parameter      (2 for fp16/bf16, 4 for fp32)
+KV/token = 2 x layers x kv_heads x head_dim x dtype_bytes
+total    = weights + KV/token x context x batch + max(512 MiB, 10% of weights)
+```
+
+`hf_repo` on a cached repo does exactly this: pass `freeBytes` (what the GPU has
+free) and it prints a context table with a `FITS` column; pass `contexts` to
+choose the lengths. The KV term is the one that surprises people - a 32-layer
+model with 8 KV heads at head_dim 128 needs **128 KiB per token**, so 4k is
+512 MiB and 32k is 4 GiB on top of the weights.
+
+**The dtype must come from the file.** A safetensors header carries its own
+`dtype` per tensor, and that is authoritative - `config.torch_dtype` is often
+absent or stale. Measured here: `all-mpnet-base-v2` states nothing and stores
+F32; assuming fp16 reported twice the parameters and half the KV cache. `hf_repo`
+reads the header and says which source it used.
+
+If the repo is NOT cached, there is no estimate - the answer says so rather than
+inventing one from the Hub's storage figure, because the attention heads live in
+the config file that was never downloaded.
+
 ## What a correct size report says
 
 A number is only honest with its method attached:
