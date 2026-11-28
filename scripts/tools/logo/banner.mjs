@@ -53,7 +53,7 @@ const COPY = {
   subhead: 'Node application.',
   // Two rows of about one row's width, so the list reads as a list rather than a
   // paragraph. The first row is the one the hand-made banner already carried.
-  rows: ['PDF, OCR, diagrams, media, lab, editor', 'docker, wsl, research, browser, skills, themes'],
+  rows: ['PDF, OCR, diagrams, media, lab, editor', 'docker, wsl, research, huggingface, skills, themes'],
 }
 
 const rgba = (hex, alpha) => {
