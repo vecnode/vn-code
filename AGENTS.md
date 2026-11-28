@@ -131,6 +131,18 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
   confirmed pull/delete, embeddings with cosine similarity - three skills whose
   examples a check parses/compiles, and a loopback fence that refuses a daemon on
   another machine before any request; host-only, zero npm dependencies),
+  `dsh-comfyui` (ComfyUI as a surface the agent can BUILD against: seven
+  `comfy_*` tools that turn a small readable project spec - nodes by key, values
+  by name, wires by `<key>.<OUTPUT>`, `@bindings` for anything machine-specific -
+  into a real `workflow.json` + `prompt.json`, validate it against the server's
+  own `/object_info` with ComfyUI's own error types, queue it and report what
+  `/history` says came out, and compile/run the whole shipped example library at
+  a stated rung - `comfy_status`, `comfy_nodes`, `comfy_project`,
+  `comfy_validate`, `comfy_run`, `comfy_test`, `comfy_cli` - plus six skills
+  (the fundamentals, the two workflow dialects and the `control_after_generate`
+  shift in `widgets_values`, the HTTP API, comfy-cli across platforms, authoring
+  a node class, this project dialect); host-only, zero npm dependencies, no
+  bundled engine, and `comfy_cli` never installs anything),
   `dsh-research` (a run is a folder with a `passport.json` recording the user's own
   words; nine `rs_*` tools over an append-only claim and source ledger, a claim's
   numbers recorded as a validated `statistic` rather than left in the prose, a
@@ -161,12 +173,12 @@ for its behaviour, `SECURITY.md` before touching credentials or the launcher, an
 - A package may carry its OWN checks under `packages/<name>/checks/`, run with
   `npm run check` in that folder. They travel with the package (which is what
   makes them useful outside this repository) and they are ADDITIONAL to
-  `scripts/checks/`, never a replacement for it: today eleven packages ship their
+  `scripts/checks/`, never a replacement for it: today twelve packages ship their
   own (`dsh-supercollider` with four checks, `dsh-research` with seven,
   `dsh-rust-dev` with two, plus `dsh-diagrams`, `dsh-frontend-craft`,
-  `dsh-proto-lab`, `dsh-ocr`, `dsh-wsl`, `dsh-docker`, `dsh-ollama` and
-  `dsh-image-upscale`), and the pack-wide checks still own the routes, the bundle
-  and the manifest.
+  `dsh-proto-lab`, `dsh-ocr`, `dsh-wsl`, `dsh-docker`, `dsh-ollama`,
+  `dsh-image-upscale` and `dsh-comfyui`), and the pack-wide checks still own the
+  routes, the bundle and the manifest.
 - `scripts/` — the launcher (`run-web.*`), and four folders: `console/` (the shared
   console layer), `setup/` (install and uninstall, which a fresh machine runs once),
   `tools/` (maintainer-only: the fork re-sync for the client bundles this pack vendors)

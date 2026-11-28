@@ -1,0 +1,29 @@
+{
+  "name": "smoke-image",
+  "title": "Smoke: an empty image and a PNG",
+  "description": "The smallest graph that proves a ComfyUI server works end to end: Empty Image -> Save Image. No checkpoint, no LoRA, no input file, no custom node - so if this one runs, the server, the queue, the output folder and this package's compiler are all working, and a failure is never about a missing 2 GB download. Run it with `comfy_test` action=run first on any new machine.",
+  "tags": ["smoke", "no-models"],
+  "requires": {
+    "nodes": ["EmptyImage", "SaveImage"],
+    "models": {},
+    "inputFiles": []
+  },
+  "bindings": {},
+  "nodes": [
+    {
+      "key": "empty",
+      "class": "EmptyImage",
+      "title": "Empty Image 512x512",
+      "pos": [40, 120],
+      "widgets": { "width": 512, "height": 512, "batch_size": 1, "color": 0 }
+    },
+    {
+      "key": "save",
+      "class": "SaveImage",
+      "title": "Save Image",
+      "pos": [440, 120],
+      "widgets": { "filename_prefix": "dsh-comfyui/smoke" },
+      "wires": { "images": "empty.IMAGE" }
+    }
+  ]
+}

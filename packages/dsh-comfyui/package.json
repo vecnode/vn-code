@@ -1,0 +1,30 @@
+{
+  "name": "dsh-comfyui",
+  "version": "0.1.0-alpha.1",
+  "description": "ComfyUI as a surface the agent can BUILD against: seven `comfy_*` tools over the machine's own ComfyUI (Desktop, portable or a server on loopback) that turn a small, readable project spec into a real workflow.json + prompt.json, validate it against the live node catalog the server reports (`/object_info`) with ComfyUI's own error vocabulary, queue it (`/prompt`) and report what came out of `/history`, and a `comfy_test` that compiles the whole shipped example library and, when a server answers, runs it - each item reporting the rung it actually reached (v1-structural, v2-schema, v3-queued, v4-executed). Seven tools: comfy_status, comfy_nodes, comfy_project, comfy_validate, comfy_run, comfy_test and comfy_cli (which drives the user's own comfy-cli as a second test path and never installs anything). Six bundled skills teach the fundamentals, the two workflow formats, the HTTP API as this install has it, comfy-cli across platforms, authoring a node CLASS, and the project dialect. Host-only: one row, no route, no browser half, zero npm dependencies, no bundled engine, nothing started on its own.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "examples",
+    "skills",
+    "checks",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-comfyui-node.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}

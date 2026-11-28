@@ -1,0 +1,120 @@
+{
+  "name": "image-to-image",
+  "title": "Image to Image (denoise 0.55)",
+  "description": "The same graph as text-to-image with three nodes changed: Load Image -> Upscale Image (512, centre crop) -> VAE Encode, and the KSampler denoises that latent instead of an empty one. denoise 0.55 is a repaint, 0.35 is a filter, 0.85 is a new picture in the same pose. The Upscale node is the lesson: remove it and a phone photo takes minutes, because the cost follows the pixel count and nothing else. Needs an image in ComfyUI's input/ folder - set `bindings.inputImage` to its filename.",
+  "tags": ["image", "needs-models", "needs-input", "class-example"],
+  "requires": {
+    "nodes": ["LoadImage", "ImageScale", "CheckpointLoaderSimple", "LoraLoader", "CLIPTextEncode", "VAEEncode", "KSampler", "VAEDecode", "SaveImage"],
+    "models": {
+      "checkpoints": ["v1-5-pruned-emaonly-fp16.safetensors"],
+      "loras": ["lcm-lora-sd15.safetensors"]
+    },
+    "inputFiles": ["example.png"]
+  },
+  "bindings": {
+    "checkpoint": "v1-5-pruned-emaonly-fp16.safetensors",
+    "lora": "lcm-lora-sd15.safetensors",
+    "inputImage": "example.png",
+    "prompt": "warm evening light, painted from a photograph",
+    "negative": "blurry, extra fingers, text",
+    "width": 512,
+    "height": 512,
+    "steps": 4,
+    "cfg": 1.5,
+    "seed": 42,
+    "sampler": "lcm",
+    "scheduler": "sgm_uniform",
+    "denoise": 0.55
+  },
+  "nodes": [
+    {
+      "key": "input",
+      "class": "LoadImage",
+      "title": "Load Image",
+      "pos": [40, 40],
+      "widgets": { "image": "@inputImage" }
+    },
+    {
+      "key": "scale",
+      "class": "ImageScale",
+      "title": "Upscale to 512 (centre crop)",
+      "pos": [400, 40],
+      "widgets": { "upscale_method": "lanczos", "width": "@width", "height": "@height", "crop": "center" },
+      "wires": { "image": "input.IMAGE" }
+    },
+    {
+      "key": "ckpt",
+      "class": "CheckpointLoaderSimple",
+      "title": "Load Checkpoint",
+      "pos": [40, 300],
+      "widgets": { "ckpt_name": "@checkpoint" }
+    },
+    {
+      "key": "lora",
+      "class": "LoraLoader",
+      "title": "Load LoRA (LCM)",
+      "pos": [400, 300],
+      "widgets": { "lora_name": "@lora", "strength_model": 1.0, "strength_clip": 1.0 },
+      "wires": { "model": "ckpt.MODEL", "clip": "ckpt.CLIP" }
+    },
+    {
+      "key": "positive",
+      "class": "CLIPTextEncode",
+      "title": "Positive prompt",
+      "pos": [780, 280],
+      "widgets": { "text": "@prompt" },
+      "wires": { "clip": "lora.CLIP" }
+    },
+    {
+      "key": "negative",
+      "class": "CLIPTextEncode",
+      "title": "Negative prompt",
+      "pos": [780, 540],
+      "widgets": { "text": "@negative" },
+      "wires": { "clip": "lora.CLIP" }
+    },
+    {
+      "key": "encode",
+      "class": "VAEEncode",
+      "title": "VAE Encode",
+      "pos": [780, 40],
+      "wires": { "pixels": "scale.IMAGE", "vae": "ckpt.VAE" }
+    },
+    {
+      "key": "sampler",
+      "class": "KSampler",
+      "title": "KSampler (denoise 0.55)",
+      "pos": [1180, 200],
+      "widgets": {
+        "seed": "@seed",
+        "steps": "@steps",
+        "cfg": "@cfg",
+        "sampler_name": "@sampler",
+        "scheduler": "@scheduler",
+        "denoise": "@denoise"
+      },
+      "controlAfterGenerate": { "seed": "fixed" },
+      "wires": {
+        "model": "lora.MODEL",
+        "positive": "positive.CONDITIONING",
+        "negative": "negative.CONDITIONING",
+        "latent_image": "encode.LATENT"
+      }
+    },
+    {
+      "key": "decode",
+      "class": "VAEDecode",
+      "title": "VAE Decode",
+      "pos": [1580, 200],
+      "wires": { "samples": "sampler.LATENT", "vae": "ckpt.VAE" }
+    },
+    {
+      "key": "save",
+      "class": "SaveImage",
+      "title": "Save Image",
+      "pos": [1940, 200],
+      "widgets": { "filename_prefix": "dsh-comfyui/image-to-image" },
+      "wires": { "images": "decode.IMAGE" }
+    }
+  ]
+}

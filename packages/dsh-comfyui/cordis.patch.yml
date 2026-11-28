@@ -1,0 +1,53 @@
+# dsh-comfyui bundle layer (alpha).
+#
+# One row ('comfyui') owns the whole plugin: its Node half registers SEVEN tools
+# over the machine's own ComfyUI and six bundled skills.
+#
+#   comfy_status    what exists here (Desktop/portable install, base path, the
+#                   venv python, the model folders), which loopback server
+#                   answers, its version and device, and the node catalog's
+#                   state - from the server, from the cache, or the built-in
+#                   core table. Read-only, and nothing is started.
+#   comfy_nodes     the node catalog: categories, one class's exact inputs and
+#                   outputs, or a search by name/type/category.
+#   comfy_project   new | list | show | build | import - a project is a folder
+#                   whose project.json is the SOURCE OF TRUTH and whose
+#                   workflow.json + prompt.json are GENERATED from it.
+#   comfy_validate  the same checks `/prompt` applies, run offline, reported
+#                   with ComfyUI's own error types (required_input_missing,
+#                   return_type_mismatch, value_not_in_list, dependency_cycle,
+#                   prompt_no_outputs) and a file:field path per finding.
+#   comfy_run       queue a compiled prompt on the server and report what the
+#                   history says came out - the one tool that executes work.
+#   comfy_test      compile the shipped example library (and any project in the
+#                   workspace), and with a server RUN it; every item reports the
+#                   rung it reached, so "it compiles" is never printed as
+#                   "it runs".
+#   comfy_cli       the SECOND test path: comfy-cli (`pip install comfy-cli`) as
+#                   `comfy run --workflow <canvas> --wait` (it converts the canvas
+#                   itself), `comfy node deps-in-workflow` (which node packs a graph
+#                   needs), `comfy launch --background` / `comfy stop`, and its own
+#                   `env`/`which` view - which is also a discovery source, because it
+#                   names Desktop installs whose data dirs this row can then check.
+#                   It never runs `comfy install`, installs a node, downloads a model
+#                   or removes anything.
+#
+# Host-only: the answers are graphs, JSON and prose, so there is no route to
+# serve and no browser half to load - the package declares no dsh.client, and
+# the boot graph gains one row. Like dsh-ollama, dsh-docker and dsh-sql-server,
+# not like dsh-research: no UI follows, and none is hidden behind an
+# unregistered route.
+#
+# Nothing shipped is patched and no core row is disabled: core DSH has no
+# ComfyUI surface, no tool reads /object_info, and nothing in the pack can turn
+# a spec into a workflow the app will actually open. The harness's `bash` /
+# `pwsh` tools could POST to 127.0.0.1:8188 by hand, but they cannot report
+# which node class in a graph does not exist, which widget value is not in the
+# server's own list, or which link carries IMAGE into a LATENT slot.
+#
+# Nothing for scripts/sync-vendored.ps1 either: no engine is vendored, forked or
+# downloaded. ComfyUI is the user's own application; this package ships the
+# compiler, the validator, the HTTP client and the example specs.
+- insert:
+    - id: comfyui
+      name: 'dsh-comfyui'
