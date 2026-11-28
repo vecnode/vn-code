@@ -25,7 +25,7 @@ person's own browser, which the launcher finds (Chrome first, the OS opener as t
 | `dsh-vn-master` | `master` | the pack's final layer (installs last). Carries pack-wide row decisions; today it disables the `browser` row (the Browser tab is built and shipped but off, which also removes its routes and tools) and the four feedback rows `ui-message-feedback`, `message-feedback`, `command-feedback`, `session-telemetry-otel` |
 | `dsh-rightbar` | `rightbar` | the right bar, a fork of the shipped bundle; disables `ui-sidebar-right` and `ui-sidebar-files` |
 | `dsh-rightbar-files` | `rightbar-files` | the Files tab on that bar (fork) |
-| `dsh-editor` | `editor` | CodeMirror tab type for text and code, Markdown included, blank documents from "+", Preview/Edit hand-off to the rendered view |
+| `dsh-editor` | `editor` | CodeMirror tab type for text and code, Markdown included, blank documents from "+", Preview/Edit hand-off to the rendered view, and Export PDF to the Desktop |
 | `dsh-gittree` | `gittree` | **History**: read-only commit list with a branch-lane graph; needs `git` on `PATH` |
 | `dsh-image` | `image` | image viewer (PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, SVG, TIFF) |
 | `dsh-docker` | `docker` | Docker or Podman as tools and a tab; needs `docker`/`podman` on `PATH`, and `docker_start` needs Docker Desktop where it is installed |

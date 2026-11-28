@@ -27,6 +27,11 @@
  *     registers the rendered Markdown DOCUMENT body (shadowing the shipped one
  *     through the keyed slot's priority rule), and that body carries an **Edit**
  *     button which hands the same file straight back to this editor. Since
+ *     alpha.16 it also carries **Export PDF**, to the LEFT of Edit: the Node
+ *     half reads the file from disk, renders it to one self-contained HTML page
+ *     and prints that to `~/Desktop/<name>.pdf` with the browser on the machine
+ *     (see lib/export-pdf.js), so the PDF is a document a person can send rather
+ *     than a screenshot of the narrow bar. Since
  *     alpha.8 that shadow body also **undoes what the plain-text scrollport
  *     imposes** on its contents (`white-space:pre` and the mono font stack, see
  *     the `.dse-mdview*` rules): a source newline is a soft break again instead
@@ -63,6 +68,9 @@
  *     workspace-relative path whose parent folder already exists inside the
  *     workspace; an existing target answers 409 instead of overwriting a file
  *     the user never opened;
+ *   - export: POST /api/dsh-editor/export-pdf with `{ session, path }` reads
+ *     that file itself, prints it and answers where the PDF landed; a second
+ *     export of the same name becomes `name (2).pdf`, never a replacement;
  *   - the tab's address already carries the authorizing session
  *     (`dsh-resource://file/session/<sessionId>/<path>`), so the client echoes
  *     only the session id and the workspace-relative path and the Node half
@@ -114,11 +122,12 @@ window.__ModuleLoader__.load({
     /** Keep in sync with lib/index.js. */
     const FILE_ROUTE = '/api/dsh-editor/file'
     const VENDOR_ROUTE = '/api/dsh-editor/vendor'
+    const EXPORT_ROUTE = '/api/dsh-editor/export-pdf'
     /** Address grammar owned by @deepseek-ai/dsh-util-workspace-path. */
     const FILE_PREFIX = 'dsh-resource://file/'
     const SESSION_SEGMENT = 'session/'
     /** Version marker shown on the toolbar so a freshly loaded bundle is easy to verify. */
-    const PLUGIN_VERSION = '0.1.0-alpha.15'
+    const PLUGIN_VERSION = '0.1.0-alpha.16'
     /** The client service dsh-modal provides; resolved lazily, never required. */
     const MODAL_SERVICE = 'modals'
     /** The client service @deepseek-ai/dsh-client-ui-theme provides; resolved lazily too. */
@@ -209,8 +218,11 @@ window.__ModuleLoader__.load({
    and the Edit pill renders in the mono face, unlike every button around it. */
 .dse-mdview{display:flex;flex-direction:column;min-height:100%;box-sizing:border-box}
 .dse-mdviewBar{position:sticky;top:0;z-index:3;display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:6px 8px 0;pointer-events:none}
-.dse-mdviewEdit{pointer-events:auto;display:inline-flex;align-items:center;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:12px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);font-family:var(--dsw-font-family,inherit);font-size:11.5px;padding:0 10px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.12)}
-.dse-mdviewEdit:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
+.dse-mdviewBtn{pointer-events:auto;display:inline-flex;align-items:center;height:24px;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l3,rgba(127,127,127,.3));border-radius:12px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#1f1f1f);font-family:var(--dsw-font-family,inherit);font-size:11.5px;padding:0 10px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.dse-mdviewBtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.12))}
+.dse-mdviewBtn:disabled{opacity:.6;cursor:default}
+.dse-mdviewExport[data-export-state="done"]{color:var(--dsw-alias-state-success-primary,#1a7f37)}
+.dse-mdviewExport[data-export-state="error"]{color:var(--dsw-alias-state-error-primary,#d3382c)}
 .dse-mdviewPaper{flex:1;min-height:0;white-space:normal}
 /* Images (alpha.14): a Markdown image now resolves, so its SIZE matters - a
    2400 px screenshot must not widen the bar. Authored HTML renders through the
@@ -1695,6 +1707,11 @@ window.__ModuleLoader__.load({
     const zhMarkdown = {
       'md.edit': '\u7f16\u8f91',
       'md.editTitle': '\u5728\u7f16\u8f91\u5668\u4e2d\u7f16\u8f91\u6b64\u6587\u4ef6',
+      'md.export': '\u5bfc\u51fa PDF',
+      'md.exportTitle': '\u5c06\u6b64 Markdown \u6587\u4ef6\u5bfc\u51fa\u4e3a\u684c\u9762\u4e0a\u7684 PDF',
+      'md.exporting': '\u6b63\u5728\u5bfc\u51fa\u2026',
+      'md.exportDone': '\u5df2\u4fdd\u5b58 \u2713',
+      'md.exportFailed': '\u5bfc\u51fa\u5931\u8d25',
       'md.copy': '\u590d\u5236',
       'md.copied': '\u5df2\u590d\u5236',
       'md.footnotes': '\u811a\u6ce8',
@@ -1703,6 +1720,11 @@ window.__ModuleLoader__.load({
     const enMarkdown = {
       'md.edit': 'Edit',
       'md.editTitle': 'Edit this file in the editor',
+      'md.export': 'Export PDF',
+      'md.exportTitle': 'Save this Markdown file as a PDF on your Desktop',
+      'md.exporting': 'Exporting\u2026',
+      'md.exportDone': 'Saved \u2713',
+      'md.exportFailed': 'Export failed',
       'md.copy': 'Copy',
       'md.copied': 'Copied',
       'md.footnotes': 'Footnotes',
@@ -1711,7 +1733,7 @@ window.__ModuleLoader__.load({
     /**
      * The rendered Markdown body: the same page the shipped implementation draws
      * (`MarkdownText` inside the `[data-document-markdown]` root the light paper
-     * is scoped to), plus the sticky **Edit** toggle.
+     * is scoped to), plus the sticky **Export PDF** and **Edit** buttons.
      */
     function MarkdownPreviewBody(props) {
       const t = props.t
@@ -1745,6 +1767,19 @@ window.__ModuleLoader__.load({
       // built on every render, which is what keeps a re-render cheap-ish while
       // the parse (the expensive half) stays out of it.
       const blocks = React.useMemo(() => (text === '' ? [] : splitHtmlBlocks(text)), [text])
+      // Export is a route round trip: the button reports busy, then where the
+      // PDF landed (or why it did not), then returns to its own label.
+      const [exportState, setExportState] = React.useState('idle')
+      const [exportNote, setExportNote] = React.useState('')
+      const exportTimer = React.useRef(null)
+      const exportMounted = React.useRef(true)
+      React.useEffect(
+        () => () => {
+          exportMounted.current = false
+          if (exportTimer.current !== null) clearTimeout(exportTimer.current)
+        },
+        [],
+      )
       if (content === null || content === undefined || content.kind !== 'text') return null
       const tabId = info && info.tab && typeof info.tab.id === 'string' ? info.tab.id : ''
       const edit = props.edit
@@ -1756,6 +1791,48 @@ window.__ModuleLoader__.load({
           console.warn('[dsh-editor] could not return to the editor', err && err.message ? err.message : err)
         }
       }
+      const exportPdf = props.exportPdf
+      const scheduleExportReset = () => {
+        if (!exportMounted.current) return
+        if (exportTimer.current !== null) clearTimeout(exportTimer.current)
+        exportTimer.current = setTimeout(() => {
+          setExportState('idle')
+          setExportNote('')
+        }, 4000)
+      }
+      const runExport = () => {
+        if (exportState === 'busy') return
+        const file = parseFileAddress(address)
+        if (typeof exportPdf !== 'function' || file === undefined || file.scope !== 'session' || file.path === '') {
+          setExportState('error')
+          setExportNote('This document is not inside a conversation folder, so it cannot be exported.')
+          scheduleExportReset()
+          return
+        }
+        setExportState('busy')
+        setExportNote('')
+        exportPdf(file.sessionId, file.path)
+          .then((result) => {
+            if (!exportMounted.current) return
+            setExportState('done')
+            setExportNote(typeof result.path === 'string' ? result.path : typeof result.name === 'string' ? result.name : '')
+          })
+          .catch((err) => {
+            if (!exportMounted.current) return
+            setExportState('error')
+            setExportNote(err && err.message ? err.message : String(err))
+          })
+          .finally(scheduleExportReset)
+      }
+      const exportLabel =
+        exportState === 'busy'
+          ? t('md.exporting')
+          : exportState === 'done'
+            ? t('md.exportDone')
+            : exportState === 'error'
+              ? t('md.exportFailed')
+              : t('md.export')
+      const exportTitle = (exportState === 'done' || exportState === 'error') && exportNote !== '' ? exportNote : t('md.exportTitle')
       const resolveImage = (value) => markdownImageUrl(pageBaseUrl(), absolutePath, value)
       // A container's children are blocks in turn, so this recurses. Every HTML
       // run keeps the `dse-mdhtml` wrapper - inside a container too - because
@@ -1791,7 +1868,20 @@ window.__ModuleLoader__.load({
             'button',
             {
               type: 'button',
-              className: 'dse-mdviewEdit',
+              className: 'dse-mdviewBtn dse-mdviewExport',
+              title: exportTitle,
+              'data-markdown-export': true,
+              'data-export-state': exportState,
+              disabled: exportState === 'busy',
+              onClick: runExport,
+            },
+            exportLabel,
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'dse-mdviewBtn dse-mdviewEdit',
               title: t('md.editTitle'),
               'data-markdown-edit': true,
               onClick: backToEditor,
@@ -2483,6 +2573,39 @@ window.__ModuleLoader__.load({
         controller.openResource(address, replace === '' ? { kind: EDITOR_KIND } : { kind: EDITOR_KIND, replaceTab: replace })
       }
 
+      /**
+       * Print one workspace Markdown file to a PDF on the Desktop.
+       *
+       * The tab sends only the session and the workspace-relative path: the Node
+       * half reads the file itself and resolves the folder, so what is printed
+       * is the document ON DISK - not a body this tab could have edited. The
+       * route answers `{ ok, name, path, bytes }`; a refusal becomes an Error
+       * whose message is fit for the button's tooltip.
+       *
+       * @param sessionId - the conversation the file belongs to.
+       * @param filePath - the file's workspace-relative path.
+       */
+      async function exportMarkdownPdf(sessionId, filePath) {
+        const res = await fetch(EXPORT_ROUTE, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ session: sessionId, path: filePath }),
+        })
+        let payload = null
+        try {
+          payload = await res.json()
+        } catch (e) {}
+        if (!res.ok || payload === null || payload.ok !== true) {
+          const message =
+            payload && payload.error && typeof payload.error.message === 'string'
+              ? payload.error.message
+              : 'The export failed (HTTP ' + res.status + ').'
+          throw new Error(message)
+        }
+        return payload
+      }
+
       /** The right bar's navigation controller, or `null` when it is not mounted. */
       function sidebarRightNow() {
         try {
@@ -2576,7 +2699,7 @@ window.__ModuleLoader__.load({
                   key: MARKDOWN_BODY_KEY,
                   priority: DOCUMENT_PRIORITY,
                   locale: MARKDOWN_NS,
-                  inject: () => ({ edit: editFileNow }),
+                  inject: () => ({ edit: editFileNow, exportPdf: exportMarkdownPdf }),
                 },
                 MarkdownPreviewBody,
               ),

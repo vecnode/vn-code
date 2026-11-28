@@ -11,6 +11,7 @@
  *   GET  /api/dsh-editor/file?session=<id>&path=<rel>   read one text file
  *   PUT  /api/dsh-editor/file                           save (or create) one text file
  *   GET  /api/dsh-editor/vendor                         vendored CodeMirror 6 bundle
+ *   POST /api/dsh-editor/export-pdf                     print one Markdown file to a PDF on the Desktop
  *
  * The session id is what the browser tab already carries (its address is
  * `dsh-resource://file/session/<sessionId>/<path>`); the workspace root is
@@ -48,6 +49,8 @@ import { promises as fsp, constants as fsConstants } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
+import { exportMarkdownToPdf } from './export-pdf.js'
+
 export const name = 'dsh-editor'
 
 export const inject = ['connection']
@@ -56,6 +59,7 @@ export const inject = ['connection']
 const API_ROOT = '/api/dsh-editor'
 const FILE_ROUTE = API_ROOT + '/file'
 const VENDOR_ROUTE = API_ROOT + '/vendor'
+const EXPORT_ROUTE = API_ROOT + '/export-pdf'
 
 /** Files above this many bytes are refused (read and write). */
 const MAX_TEXT_BYTES = 2 * 1024 * 1024
@@ -443,6 +447,57 @@ async function handleFile(ctx, request) {
 }
 
 /**
+ * POST /api/dsh-editor/export-pdf — print one Markdown file of one session's
+ * workspace to a PDF in the user's Desktop folder.
+ *
+ * The file is read HERE, from the same containment-checked path the read route
+ * uses, and never from a body the browser could have edited: Export PDF is the
+ * document ON DISK, exactly as the preview reads it. The print itself (its own
+ * self-contained HTML page, the browser on the machine, the Desktop target)
+ * lives in ./export-pdf.js.
+ *
+ * @param ctx - the plugin context, used to resolve the session workspace root.
+ * @param request - the incoming request.
+ * @returns {Promise<Response>} `{ ok, name, path, bytes }`.
+ */
+async function handleExport(ctx, request) {
+  try {
+    let payload
+    try {
+      payload = await request.json()
+    } catch (err) {
+      return fail(400, 'BAD_REQUEST', 'Expected a JSON body.')
+    }
+    const sessionId = typeof payload.session === 'string' ? payload.session : ''
+    const rel = typeof payload.path === 'string' ? payload.path : ''
+    const cwd = await sessionRoot(ctx, sessionId)
+    const target = await resolveInside(cwd, rel)
+    let stats
+    try {
+      stats = await fsp.stat(target)
+    } catch (err) {
+      throw httpError(404, 'NOT_FOUND', 'The file does not exist in the conversation folder.', err)
+    }
+    if (!stats.isFile()) {
+      throw httpError(400, 'NOT_FILE', 'The path is not a regular file.')
+    }
+    if (stats.size > MAX_TEXT_BYTES) {
+      throw httpError(413, 'TOO_LARGE', 'The file is larger than ' + Math.round(MAX_TEXT_BYTES / 1024 / 1024) + ' MiB and was not exported.')
+    }
+    const markdown = decodeText(await fsp.readFile(target))
+    const result = await exportMarkdownToPdf({
+      markdown,
+      filePath: target,
+      rootDir: cwd,
+      title: path.basename(target),
+    })
+    return json(200, { ok: true, name: result.name, path: result.path, bytes: result.bytes })
+  } catch (err) {
+    return readErrorToResponse(err)
+  }
+}
+
+/**
  * The vendored bundle in hand: its bytes, the file stamp they were read at, and
  * the ETag (a hash of the bytes, so it changes exactly when the artifact does).
  *
@@ -538,12 +593,21 @@ export function apply(ctx) {
       requestBody: 'buffered',
       fetch: handleVendor,
     })
+    const offExport = connection.fetch.register({
+      path: EXPORT_ROUTE,
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: (request) => handleExport(ctx, request),
+    })
     return () => {
       try {
         offFile()
       } catch (e) {}
       try {
         offVendor()
+      } catch (e) {}
+      try {
+        offExport()
       } catch (e) {}
       ctx.logger?.debug?.('[dsh-editor] node half disposed')
     }

@@ -639,7 +639,8 @@ const editor = loadBundle('packages/dsh-editor/lib/client.js', {})
 const editorCssTag = editor.document.head.children.filter((tag) => tag.dataset && tag.dataset.pluginCss === 'dsh-editor/editor.css').pop()
 const editorCss = editorCssTag ? editorCssTag.textContent : ''
 check('md paper resets whitespace', editorCss.includes('.dse-mdviewPaper{flex:1;min-height:0;white-space:normal}'))
-check('edit pill keeps the app font', editorCss.includes('var(--dsw-font-family,inherit)') && editorCss.includes('.dse-mdviewEdit{'))
+check('markdown buttons keep the app font', editorCss.includes('var(--dsw-font-family,inherit)') && editorCss.includes('.dse-mdviewBtn{'))
+check('the export button reports its own state', editorCss.includes('.dse-mdviewExport[data-export-state="done"]'))
 // The toolbar IS the tab's top bar (alpha.9): 38px with box-sizing:border-box is
 // the box the shipped Files tab and the document preview use, so this pane's
 // first hairline lands on the y=76 line the 38px docking strip and the
@@ -836,6 +837,7 @@ check('shadow body locale', markdownSeat.spec.locale, 'dsh-editor.markdown')
 check('markdown dictionaries', Object.keys(editorLocales).join(','), 'dsh-editor.markdown')
 const markdownInjected = markdownSeat.spec.inject()
 check('shadow body injects edit', typeof markdownInjected.edit, 'function')
+check('shadow body injects the PDF export', typeof markdownInjected.exportPdf, 'function')
 previewCalls.length = 0
 markdownInjected.edit('dsh-resource://file/session/s1/readme.md', 'tab7')
 check('edit reopens the file in the editor', previewCalls[0].options.kind, 'editor')
@@ -843,6 +845,11 @@ check('edit replaces the preview tab', previewCalls[0].options.replaceTab, 'tab7
 const markdownCopy = {
   'md.edit': 'Edit',
   'md.editTitle': 'Edit this file in the editor',
+  'md.export': 'Export PDF',
+  'md.exportTitle': 'Save this Markdown file as a PDF on your Desktop',
+  'md.exporting': 'Exporting\u2026',
+  'md.exportDone': 'Saved \u2713',
+  'md.exportFailed': 'Export failed',
   'md.copy': 'Copy',
   'md.copied': 'Copied',
   'md.footnotes': 'Footnotes',
@@ -856,10 +863,16 @@ const renderedMarkdown = renderToStaticMarkup(
     resourceAddress: 'dsh-resource://file/session/s1/readme.md',
     useTabInfo: () => ({ tab: { id: 'tab7' } }),
     edit: markdownInjected.edit,
+    exportPdf: () => Promise.resolve({ ok: true, name: 'readme.pdf', path: '/home/me/Desktop/readme.pdf' }),
   }),
 )
 check('rendered body draws the page', renderedMarkdown.includes('data-document-markdown') && renderedMarkdown.includes('# Title'))
 check('rendered body offers Edit', renderedMarkdown.includes('data-markdown-edit') && renderedMarkdown.includes('>Edit<'))
+check('rendered body offers Export PDF', renderedMarkdown.includes('data-markdown-export') && renderedMarkdown.includes('>Export PDF<'))
+check(
+  'Export PDF sits to the LEFT of Edit',
+  renderedMarkdown.indexOf('data-markdown-export') < renderedMarkdown.indexOf('data-markdown-edit'),
+)
 check('rendered body ignores non-text', renderToStaticMarkup(h(MarkdownPreviewBody, { t: markdownT, content: { kind: 'image' } })), '')
 
 // Author and images (alpha.14). The shipped primitive draws authored HTML as
