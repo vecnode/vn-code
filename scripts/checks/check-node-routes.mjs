@@ -205,6 +205,154 @@ check(
   true,
 )
 
+// ------------------------------------------- dsh-editor: Export PDF
+// The rendered Markdown body's Export PDF button is a route round trip, and the
+// PDF is the deliverable: so the RENDERER is asserted on its own (headings,
+// tables, code, Chinese, an embedded local image, and the two things that must
+// NOT be fetched or injected), and then - when this host has a browser - the
+// ROUTE is driven end to end against a scratch workspace and a scratch Desktop.
+const exportRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-editor-export-'))
+const exportSession = 'session-export'
+const exportHandler = await capture(path.join(repo, 'packages/dsh-editor/lib/index.js'), '/api/dsh-editor/export-pdf', {
+  get: (name) => (name === 'sessions' ? { get: (id) => (id === exportSession ? { header: { cwd: exportRoot } } : undefined) } : undefined),
+})
+const postExport = (body) =>
+  exportHandler(
+    new Request('http://x/api/dsh-editor/export-pdf', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    }),
+  )
+const exportCode = async (response) => {
+  const payload = await response.json().catch(() => null)
+  return payload && payload.error ? payload.error.code : payload && payload.ok ? 'ok' : 'http ' + response.status
+}
+
+const exportModule = await import(pathToFileURL(path.join(repo, 'packages/dsh-editor/lib/export-pdf.js')).href)
+const exportInternals = exportModule.__internals
+const exportDir = path.join(exportRoot, 'notes')
+await fsp.mkdir(exportDir)
+const pixelPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+)
+await fsp.writeFile(path.join(exportDir, 'pixel.png'), pixelPng)
+const exportMarkdown = [
+  '# Title 你好',
+  '',
+  'A **bold** sentence with `code` and [a link](https://example.com).',
+  '',
+  '| Left | Right |',
+  '| :--- | ----: |',
+  '| a | 1 |',
+  '',
+  '```js',
+  'const x = 1',
+  '```',
+  '',
+  '![pixel](pixel.png)',
+  '',
+  '![remote](https://example.com/never-fetched.png)',
+  '',
+  '<div align="center">',
+  '',
+  '# Centered',
+  '',
+  '</div>',
+  '',
+  '<details>',
+  '<summary>More</summary>',
+  '',
+  'Shown when printed.',
+  '',
+  '</details>',
+  '',
+  '```html',
+  '<script>alert(1)</script>',
+  '```',
+  '',
+].join('\n')
+const exportHtml = exportModule.buildPrintDocument(exportMarkdown, {
+  title: 'Document title',
+  rootDir: exportRoot,
+  filePath: path.join(exportDir, 'doc.md'),
+})
+check('export renderer: headings, Chinese and links', exportHtml.includes('<h1>Title \u4f60\u597d</h1>') && exportHtml.includes('<strong>bold</strong>') && exportHtml.includes('<a href="https://example.com">a link</a>'))
+check('export renderer: tables with their alignment', exportHtml.includes('<th class="md-align-left">Left</th>') && exportHtml.includes('<td class="md-align-right">1</td>'))
+check('export renderer: fenced code keeps its language', exportHtml.includes('<pre class="language-js"><code>const x = 1</code></pre>'))
+const labelInFence = exportModule.buildPrintDocument('```\n[ref]: https://example.test\n```\n\n[ref]', {})
+check(
+  'export renderer: a reference definition inside a fence stays code',
+  labelInFence.includes('[ref]: https://example.test') && labelInFence.includes('<p>[ref]</p>'),
+)
+check('export renderer: a local image is embedded, never fetched', exportHtml.includes('<img src="data:image/png;base64,'))
+check('export renderer: a remote image keeps its alt text', exportHtml.includes('class="md-altImage">remote<') && exportHtml.includes('never-fetched.png') === false)
+check('export renderer: an authored container keeps its Markdown', exportHtml.includes('<div align="center"><h1>Centered</h1></div>'))
+check('export renderer: a details element is drawn open', exportHtml.includes('<details open>') && exportHtml.includes('Shown when printed.'))
+check('export renderer: a fenced <script> stays text', exportHtml.includes('&lt;script&gt;alert(1)&lt;/script&gt;') && exportHtml.includes('<script>alert(1)</script>') === false)
+check('export renderer: the page is self-contained', exportHtml.startsWith('<!doctype html>') && exportHtml.includes('<style>') && exportHtml.includes('@page'))
+check('export name: a hostile file name cannot leave the folder', exportInternals.exportStem('../weird:name.md'), '..-weird-name')
+check('export name: a dot-only name falls back', exportInternals.exportStem('...'), 'document')
+
+// The Desktop is resolved, not assumed: a Windows profile can be redirected
+// into OneDrive and a Linux desktop can name its own folder. `HOME/Desktop` is
+// enough to prove the candidate walk; `DSH_EDITOR_PDF_DIR` is the override the
+// print checks below rely on.
+const fakeHome = path.join(exportRoot, 'home')
+await fsp.mkdir(path.join(fakeHome, 'Desktop'), { recursive: true })
+check(
+  'export directory: finds this profile\'s Desktop',
+  await exportModule.exportDirectory({ HOME: fakeHome, XDG_CONFIG_HOME: path.join(fakeHome, '.config') }),
+  path.join(fakeHome, 'Desktop'),
+)
+check(
+  'export directory: the override wins',
+  await exportModule.exportDirectory({ DSH_EDITOR_PDF_DIR: path.join(exportRoot, 'chosen') }),
+  path.join(exportRoot, 'chosen'),
+)
+
+check('export needs a session', await exportCode(await postExport({ session: 'nope', path: 'notes/doc.md' })), 'NO_WORKSPACE')
+check('export path stays inside the workspace', await exportCode(await postExport({ session: exportSession, path: '../outside.md' })), 'OUTSIDE_WORKSPACE')
+check('export needs a JSON body', await exportCode(await postExport('not json')), 'BAD_REQUEST')
+check('export of a missing file', await exportCode(await postExport({ session: exportSession, path: 'notes/missing.md' })), 'NOT_FOUND')
+
+// The print half. A host without a Chromium-family browser says so and moves on;
+// this check never installs one and never touches the real Desktop.
+const exportEngine = exportModule.resolvePdfEngine()
+const previousPdfDir = process.env.DSH_EDITOR_PDF_DIR
+const scratchDesktop = path.join(exportRoot, 'desktop')
+await fsp.mkdir(scratchDesktop)
+if (exportEngine === null) {
+  console.log('skip dsh-editor: Export PDF prints  (no Chromium-family browser on this host)')
+} else {
+  process.env.DSH_EDITOR_PDF_DIR = scratchDesktop
+  try {
+    await fsp.writeFile(path.join(exportDir, 'doc.md'), exportMarkdown)
+    const first = await postExport({ session: exportSession, path: 'notes/doc.md' })
+    const firstBody = await first.json()
+    check('export route answers', first.status, 200)
+    check('export route names the PDF after the file', firstBody.name, 'doc.pdf')
+    check('export route answers where it landed', firstBody.path, path.join(scratchDesktop, 'doc.pdf'))
+    const pdf = await fsp.readFile(firstBody.path)
+    check('export route wrote a real PDF', pdf.toString('latin1', 0, 5), '%PDF-')
+    check('export route wrote a non-empty PDF', pdf.length > 1000)
+    // A second export is a NEW file: an export never replaces what is already
+    // in the folder.
+    const second = await postExport({ session: exportSession, path: 'notes/doc.md' })
+    const secondBody = await second.json()
+    check('a second export does not replace the first', secondBody.name, 'doc (2).pdf')
+    check('both PDFs are on disk', (await fsp.stat(firstBody.path)).size > 1000 && (await fsp.stat(secondBody.path)).size > 1000)
+    // A binary file is refused by the text reader the export shares.
+    await fsp.writeFile(path.join(exportDir, 'blob.bin'), Buffer.from([0, 1, 2, 3]))
+    check('export refuses a binary file', await exportCode(await postExport({ session: exportSession, path: 'notes/blob.bin' })), 'NOT_TEXT')
+  } finally {
+    if (previousPdfDir === undefined) delete process.env.DSH_EDITOR_PDF_DIR
+    else process.env.DSH_EDITOR_PDF_DIR = previousPdfDir
+  }
+}
+await fsp.rm(exportRoot, { recursive: true, force: true })
+
 // -------------------------------------------------------- dsh-open-in-app
 const openHandler = await capture(path.join(repo, 'packages/dsh-open-in-app/lib/index.js'), '/api/dsh-open-in-app/open', {})
 const open = (body) =>
