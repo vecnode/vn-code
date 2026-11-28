@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vncode banner</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1280px; height: 320px; overflow: hidden; }
+      body {
+        position: relative;
+        background: #08110d;
+        font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        color: #ffffff;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wash {
+        position: absolute; inset: 0;
+        background:
+          radial-gradient(120% 190% at 88% 118%, rgba(34, 197, 94, 0.42) 0%, rgba(16, 92, 58, 0.22) 34%, rgba(8, 17, 13, 0) 62%),
+          linear-gradient(96deg, #070f0b 0%, #0a1712 42%, #0d2419 72%, #10301f 100%);
+      }
+      .rings { position: absolute; right: -180px; top: -260px; width: 900px; height: 900px; }
+      .rings span {
+        position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        border-radius: 50%; border: 1px solid rgba(74, 222, 128, 0.16);
+      }
+      .rings span:nth-child(1) { width: 210px; height: 210px; border-color: rgba(74, 222, 128, 0.22); }
+      .rings span:nth-child(2) { width: 330px; height: 330px; }
+      .rings span:nth-child(3) { width: 460px; height: 460px; border-color: rgba(74, 222, 128, 0.12); }
+      .rings span:nth-child(4) { width: 600px; height: 600px; border-color: rgba(74, 222, 128, 0.09); }
+      .rings span:nth-child(5) { width: 750px; height: 750px; border-color: rgba(74, 222, 128, 0.07); }
+      .content { position: absolute; left: 72px; top: 64px; }
+      .eyebrow {
+        font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+        font-size: 13px; letter-spacing: 0.42em; text-transform: uppercase;
+        color: #7f968a; font-weight: 500;
+      }
+      h1 {
+        margin-top: 18px;
+        font-size: 62px; line-height: 1.04; font-weight: 700; letter-spacing: -0.015em;
+      }
+      h1 .n { color: #4ade80; }
+      h2 { margin-top: 10px; font-size: 25px; line-height: 1.2; font-weight: 700; color: #f4f7f5; }
+      .stack { margin-top: 12px; font-size: 19px; line-height: 1.42; font-weight: 400; color: #93a89c; }
+    </style>
+  </head>
+  <body>
+    <div class="wash"></div>
+    <div class="rings"><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="content">
+      <p class="eyebrow">VNCODE &middot; ADE</p>
+      <h1><span class="n">35</span> plugins, <span class="n">59</span> skills.</h1>
+      <h2>Node application.</h2>
+      <p class="stack">PDF, OCR, diagrams, media, lab, editor<br />docker, wsl, research, huggingface, skills, themes</p>
+    </div>
+  </body>
+</html>

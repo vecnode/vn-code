@@ -177,6 +177,27 @@
         "NOTHING is vendored, downloaded or installed: the daemon is the user's own service, and this package ships the HTTP client, one argv for `ollama --version`, and the arithmetic"
       ]
     },
+    "dsh-huggingface": {
+      "version": "0.1.0-alpha.1",
+      "rows": [
+        "huggingface"
+      ],
+      "rowOverrides": [],
+      "role": "The Hugging Face Hub as a surface the agent can interrogate before it downloads: five `hf_*` tools over the machine's own `hf` CLI and the cache on disk - `hf_status` (the CLI and its version, the cache root with the variable that chose it, every repo with BYTE-EXACT sizes, and the split between complete repos and metadata-only stubs), `hf_search` (models / datasets / spaces, ranked), `hf_repo` (one repo's licence, gated flag, architecture, parameter count, weight with the MEASURE named, the files each consumer would fetch, and whether the local copy is complete / stub / stale / absent), `hf_cache` (list without any CLI, plus verify / prune / rm, where an UNCONFIRMED removal is the CLI's own --dry-run, rm needs the repo id repeated back and prune the word \"prune\") and `hf_download` (the only bytes-moving call: the weight first, a byte ceiling it will not cross, the repo id repeated back, and the bytes the cache actually GAINED) - plus two bundled skills (the CLI, the cache layout) whose examples the package check parses. The cache scan walks the directory tree because the CLI's own JSON answers \"17.9G\" and \"3 months ago\", and it is what makes the finding reportable: MEASURED on this machine, 42 of 49 cached repos are a config.json and nothing else. Auth is reported as a PRESENCE only: no token is ever read, echoed or accepted as an argument. Host-only: one row, no route, no browser half, zero npm dependencies, no bundled engine, no socket. See packages/dsh-huggingface/README.md.",
+      "uses": [
+        "@deepseek-ai/dsh-tools (the registry the five tools are registered into)",
+        "@deepseek-ai/dsh-skill (ctx.skills, resolved lazily; the two skills are also copied into $DSH_HOME/skills by both installers)",
+        "the user's own `hf` CLI from huggingface_hub (`DSH_HF_CLI` pins a binary PATH does not carry), argv-only with a deadline and a byte cap per stream"
+      ],
+      "requires": [
+        "`hf` installed for everything except the cache scan, `hf_cache` action list and `hf_repo` in offline mode - `hf_status` names the install line when it is missing",
+        "a person to accept a gated repo's licence in a browser before any token can fetch it - `hf_repo` names the page",
+        "`HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1` is HONOURED: search, info and download refuse before a process starts"
+      ],
+      "vendors": [
+        "NOTHING is vendored, downloaded or installed: `hf` is the user's own program, the cache is the user's own directory, and this package ships the cache scanner, the argv builder and the JSON reader"
+      ]
+    },
     "dsh-comfyui": {
       "version": "0.1.0-alpha.1",
       "rows": [

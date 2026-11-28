@@ -1,0 +1,30 @@
+# dsh-huggingface bundle layer (alpha).
+#
+# One row ('huggingface') owns the whole plugin: its Node half registers FIVE
+# tools over the machine's own `hf` CLI and the cache on this disk - `hf_status`
+# (the CLI, the cache root, the repos on disk with BYTE-EXACT sizes, and an auth
+# PRESENCE that never reads the token), `hf_search` (models / datasets / spaces
+# by query, author, tag or sort), `hf_repo` (one repo's card, licence, gated
+# flag, siblings with sizes, the consumers that would fetch them, and whether
+# this disk already holds it at the current revision), `hf_cache` (scan, verify,
+# prune, rm - the writes confirmed by repeating the target) and `hf_download`
+# (the only bytes-moving call: a projected size first, a byte ceiling, and the
+# repo id repeated back).
+#
+# Host-only: the answer is a table and a verdict, so there is no route to serve
+# and no browser half to load - the package declares no dsh.client, and the boot
+# graph gains one row. The same shape as dsh-ollama and dsh-image-upscale.
+#
+# Nothing shipped is patched and no core row is disabled: core DSH can call a
+# URL and can read a directory listing, but nothing in it reconciles the Hub's
+# file tree against a cache layout (`blobs` / `snapshots` / `refs`), and nothing
+# tells a reader that "cached" on this machine means metadata only for forty of
+# the fifty repos that look present.
+#
+# Nothing for scripts/sync-vendored.ps1 either: no engine is vendored, forked or
+# bundled. `hf` is the user's own program (huggingface_hub's CLI) and the cache
+# is the user's own directory; this package ships the cache scanner, the argv
+# builder and the JSON reader.
+- insert:
+    - id: huggingface
+      name: 'dsh-huggingface'
