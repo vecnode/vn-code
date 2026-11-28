@@ -1,0 +1,29 @@
+{
+  "name": "dsh-huggingface",
+  "version": "0.1.0-alpha.1",
+  "description": "The Hugging Face Hub as a surface the agent can interrogate before it downloads: five `hf_*` tools that reconcile the Hub's own file tree against the cache on THIS disk - what a repo weighs, which files a consumer would fetch, whether it is gated, whether it is already cached and at which revision - with byte-exact local sizes the CLI's JSON does not give, a cache that distinguishes 'cached' from 'complete', and a download that names its size and needs the repo id repeated back. Host-only: zero npm dependencies, no bundled engine, nothing fetched without `confirm`.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "checks",
+    "skills",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node checks/check-huggingface-node.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "AGPL-3.0-only"
+}
