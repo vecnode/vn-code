@@ -192,7 +192,7 @@ is worth using instead of shelling out when the question is one of these:
 |---|---|
 | `hf_status` | is `hf` here, which version, where the cache is, what is in it (complete vs metadata-only) |
 | `hf_search` | what exists, ranked, with licence and gated flags |
-| `hf_repo` | what ONE repo weighs, what a consumer would fetch, whether this disk already has it, at which revision |
+| `hf_repo` | what ONE repo weighs, what a consumer would fetch, whether this disk already has it, at which revision — and for a cached repo, whether it will FIT (KV arithmetic, `freeBytes`) |
 | `hf_cache` | list / verify / prune / rm, with an unconfirmed removal being a dry run |
 | `hf_download` | fetch, after reporting the size and taking the repo id back as `confirm` |
 

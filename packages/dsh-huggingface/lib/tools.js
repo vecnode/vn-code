@@ -25,6 +25,7 @@ import path from 'node:path'
 import { HfError, messageOf } from './errors.js'
 import { CAPS, validateCache, validateDownload, validateRepo, validateSearch } from './validate.js'
 import { describeRepoDir, repoDirName, scanCache } from './cache.js'
+import { estimateVram, modelFields, readCheckpoint } from './model.js'
 import { offlineOf, resolveCacheRoot, tokenPresence } from './paths.js'
 import { resolveCli } from './cli.js'
 import {
@@ -119,7 +120,7 @@ function localState(root, type, id) {
   if (directory === null) return null
   const entry = describeRepoDir(root, directory)
   if (entry === null) return null
-  return { bytes: entry.bytes, files: entry.files, revision: entry.revision, weights: entry.weights, stub: entry.stub, layout: entry.layout, modifiedMs: entry.modifiedMs }
+  return { dir: entry.path, bytes: entry.bytes, files: entry.files, revision: entry.revision, weights: entry.weights, stub: entry.stub, layout: entry.layout, modifiedMs: entry.modifiedMs }
 }
 
 /** The local verdict for one repo against the Hub's current revision. */
@@ -146,6 +147,78 @@ export function weightLine(info) {
   }
   if (info.totalSource === 'file sizes') return formatBytes(info.totalBytes) + ' in ' + info.files.length + ' file(s) (LOWER BOUND: ' + info.unknownSizes + ' had no reported size)'
   return 'size not reported'
+}
+
+/**
+ * What the cached checkpoint would cost to LOAD, or why it cannot be said.
+ *
+ * Only files on disk are read: a repo that is not cached, or is metadata only,
+ * has no weight bytes to size, and inventing them from the Hub's figure would be
+ * a claim about a model nobody has.
+ *
+ * @returns `{ available, reason?, fields?, estimate? }` or null when there is no
+ *   local checkpoint at all.
+ */
+export function fitOf(local, spec, options = {}) {
+  if (local === null || typeof local.dir !== 'string') return null
+  if (local.stub === true || local.weights === false) {
+    return { available: false, reason: 'this copy is metadata only - there are no weight files to size' }
+  }
+  // A cache repo's root holds `snapshots/<rev>/`; a local checkout holds the
+  // files directly. The config and the weights live in the SNAPSHOT, so that is
+  // what is read - the root would find neither.
+  const snapshot = typeof local.revision === 'string' && local.revision !== '' ? path.join(local.dir, 'snapshots', local.revision) : null
+  const target = snapshot !== null && existsSync(path.join(snapshot, 'config.json')) ? snapshot : local.dir
+  const checkpoint = readCheckpoint(target)
+  if (checkpoint.config === null) {
+    return { available: false, reason: checkpoint.warnings[0] ?? 'no config.json in this snapshot, so the attention heads are unknown' }
+  }
+  const fields = modelFields(checkpoint.config)
+  const wanted = String(options.dtype ?? 'auto').toLowerCase()
+  // Order matters: what the FILE holds beats what the config claims, because the
+  // bytes-per-parameter is the divisor for the parameter count and the KV size.
+  const dtype = wanted === 'auto' ? checkpoint.fileDtype || fields.torchDtype || 'float16' : options.dtype
+  const dtypeSource = wanted !== 'auto' ? 'asked for' : checkpoint.fileDtype !== '' ? 'from the safetensors header' : fields.torchDtype !== '' ? 'from config.json' : 'defaulted to fp16'
+  const contexts = Array.isArray(options.contexts) && options.contexts.length > 0 ? options.contexts : [4096, 8192, 32768]
+  const estimate = estimateVram({ weightsBytes: checkpoint.weightsBytes, fields, dtype, contexts })
+  return { available: true, fields, estimate, weightsBytes: checkpoint.weightsBytes, dtypeSource, warnings: checkpoint.warnings }
+}
+
+/** The fit section, as lines - shared by the online and offline answers. */
+export function fitLines(fit, freeBytes) {
+  const lines = []
+  if (fit === null || fit.available !== true) {
+    lines.push('Fit: not estimated - ' + (fit !== null && fit.reason ? fit.reason : 'nothing on disk to size') + '.')
+    return lines
+  }
+  const estimate = fit.estimate
+  const free = typeof freeBytes === 'number' && Number.isFinite(freeBytes) ? freeBytes : null
+  lines.push('Fit - from the ' + formatBytes(fit.weightsBytes) + ' of weights on disk, no model loaded:')
+  const facts = []
+  if (estimate.params !== null) facts.push('~' + formatParamCount(estimate.params) + ' params at ' + estimate.dtype + (fit.dtypeSource ? ' (' + fit.dtypeSource + ')' : ''))
+  if (estimate.kvKnown) facts.push('KV ' + formatBytes(estimate.kvPerToken) + '/token')
+  if (facts.length > 0) lines.push('  ' + facts.join(' \u00b7 '))
+  if (!estimate.kvKnown) lines.push('  KV cache: UNKNOWN - this config does not state its attention heads, so only the weights are sized')
+  lines.push('  allowance: ' + formatBytes(estimate.overhead) + ' (activations and fragmentation: 10% of the weights, with a 512 MB floor)')
+  if (estimate.vram.length > 0) {
+    const headers = ['CONTEXT', 'WEIGHTS', 'KV CACHE', 'TOTAL']
+    if (free !== null) headers.push('FITS ' + formatBytes(free))
+    lines.push(
+      table(
+        headers,
+        estimate.vram.map((row) => {
+          const cells = [String(row.context), formatBytes(row.weights), formatBytes(row.kv), formatBytes(row.total)]
+          if (free !== null) cells.push(row.total <= free ? 'yes' : 'NO')
+          return cells
+        }),
+      ),
+    )
+    if (free !== null) {
+      const fitting = estimate.vram.filter((row) => row.total <= free)
+      lines.push(fitting.length > 0 ? '  largest context that fits ' + formatBytes(free) + ': ' + fitting[fitting.length - 1].context : '  none of these fits in ' + formatBytes(free) + ': a smaller dtype or a shorter context is the answer')
+    }
+  }
+  return lines
 }
 
 /** Build the tools. @param deps - `{ env, runner, now, cache, log }`. */
@@ -282,7 +355,8 @@ export function buildTools(deps) {
     name: 'hf_repo',
     description: [
       'Describe ONE Hub repo before anything is fetched: licence, gated status (and the page that accepts it), downloads and likes, the architecture and parameter count when the card reports them, the file list, the repo weight AS THE HUB REPORTS IT, which files each CONSUMER would actually fetch (transformers, sentence-transformers, diffusers, llama.cpp/Ollama quants, ONNX), and whether THIS machine already holds it - complete, metadata-only, at an older revision, or absent.',
-      'This is the tool that answers "how big is it and do I already have it" without downloading a byte. MEASURED: this CLI line gives no per-file sizes (its `--expand siblings` carries only names), so the weight is the Hub\'s `used_storage` - labelled as such rather than summed from files that were never sized.',
+      'For a repo that IS cached, it goes one step further and answers the question the download size only half-answers: WILL IT FIT. It reads the cached `config.json` and the weight files and reports the parameters those bytes imply plus the KV-cache arithmetic - `2 x layers x kv_heads x head_dim x dtype_bytes` PER TOKEN - as a table of context lengths against total VRAM. Pass `freeBytes` (what your GPU has free) and each row says FITS or not; pass `contexts` to choose the lengths. No model is loaded, so the answer costs nothing.',
+      'This is the tool that answers "how big is it, do I already have it, and can I run it" without downloading a byte. MEASURED: this CLI line gives no per-file sizes (its `--expand siblings` carries only names), so the weight is the Hub\'s `used_storage` - labelled as such rather than summed from files that were never sized. The FIT estimate is the opposite: it is read from the files on disk, and is absent rather than guessed when the repo is not cached.',
       'With no network (or in offline mode) it reports what is on disk and says the Hub side was not asked.',
     ].join('\n'),
     parameters: {
@@ -293,6 +367,9 @@ export function buildTools(deps) {
         repo: { type: 'string', description: 'A Hub id as `org/name`, e.g. "sentence-transformers/all-mpnet-base-v2".' },
         type: { type: 'string', enum: ['model', 'dataset', 'space'], description: 'Repo kind. Default model.' },
         revision: { type: 'string', description: 'A branch, tag or commit to describe instead of the default branch.' },
+        freeBytes: { type: 'number', description: 'VRAM you actually have free, in bytes. Each fit row then says FITS or not. Omit and the sizes are reported without a verdict.' },
+        contexts: { type: 'array', items: { type: 'number' }, description: 'Context lengths to size, up to 6. Default 4096, 8192, 32768.' },
+        dtype: { type: 'string', enum: ['auto', 'bf16', 'fp16', 'fp32'], description: 'The dtype a load would use. Default: what config.json says, else fp16.' },
       },
     },
     output: OUTPUT,
@@ -302,6 +379,7 @@ export function buildTools(deps) {
         const spec = validateRepo(args)
         const cacheRoot = resolveCacheRoot(deps.env)
         const local = localState(cacheRoot.root, spec.type, spec.repo)
+        const fit = fitOf(local, spec, { dtype: args.dtype, contexts: args.contexts })
         const offline = offlineOf(deps.env)
         if (offline) {
           const verdict = localVerdict(local, '')
@@ -310,9 +388,13 @@ export function buildTools(deps) {
             lines.push('  ' + formatBytes(local.bytes) + ' in ' + local.files + ' file(s), revision ' + (local.revision === '' ? 'unknown' : local.revision.slice(0, 12)) + ', layout ' + local.layout)
             if (local.weights === false) lines.push('  No weight file is present: this copy cannot be loaded, and a load would need the network this machine has turned off.')
           }
+          if (fit !== null) {
+            lines.push('')
+            lines.push(...fitLines(fit, args.freeBytes))
+          }
           lines.push('')
           lines.push('Unset HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE to ask the Hub about the licence, sizes and current revision.')
-          return { text: lines.join('\n'), view: { ok: true, offline: true, repo: { id: spec.repo, type: spec.type }, local: { ...verdict, entry: local } } }
+          return { text: lines.join('\n'), view: { ok: true, offline: true, repo: { id: spec.repo, type: spec.type }, local: { ...verdict, entry: local }, fit } }
         }
         const answer = await runHf(deps, buildInfoArgv, spec, { timeoutMs: CAPS.readTimeoutMs })
         const info = normalizeInfo(answer.data, spec)
@@ -340,6 +422,10 @@ export function buildTools(deps) {
         lines.push('')
         lines.push('Local: ' + verdict.label)
         if (verdict.state === 'complete' && local !== null) lines.push('  revision ' + local.revision.slice(0, 12) + ' \u00b7 layout ' + local.layout + ' \u00b7 ' + local.files + ' file(s)')
+        if (fit !== null) {
+          lines.push('')
+          lines.push(...fitLines(fit, args.freeBytes))
+        }
         if (consumers.length > 0) {
           lines.push('')
           lines.push('What a consumer would fetch:')
@@ -387,6 +473,7 @@ export function buildTools(deps) {
               files: info.files,
             },
             local: { ...verdict, entry: local },
+            fit,
             consumers,
           },
         }
